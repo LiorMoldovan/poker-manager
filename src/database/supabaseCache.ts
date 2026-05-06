@@ -1885,6 +1885,23 @@ export async function setMyVoteChangeNotifsRpc(groupId: string, enabled: boolean
   if (error) throw error;
 }
 
+// Returns the push-subscriber player names of every super-admin who has
+// a registered subscription in the given group. Used by the training
+// notification helpers to address super-admins on report submissions
+// and on 100-question milestones. Defined in migrations 055 and 056
+// (idempotent CREATE OR REPLACE — both files install the same function).
+export async function getSuperAdminPlayerNamesInGroupRpc(groupId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc('get_super_admin_player_names_in_group', {
+    p_group_id: groupId,
+  });
+  if (error) {
+    console.warn('get_super_admin_player_names_in_group failed:', error);
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+  return (data as unknown[]).filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
 export async function claimPollNotificationsRpc(
   pollId: string,
   kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled',

@@ -80,7 +80,7 @@ Shown when a group member has no linked player. Filters out already-linked playe
 
 ## Per-Group API Keys
 
-Each group stores its own Gemini and ElevenLabs API keys in the `settings` table. Owner manages them in Settings > AI tab.
+Each group stores its own Gemini and ElevenLabs API keys in the `settings` table. Owner manages them in Settings > Services tab (tab id `'ai'`; renamed from "AI" in v5.43.3).
 
 Key flow:
 ```

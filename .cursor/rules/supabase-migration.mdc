@@ -75,7 +75,7 @@ Every table has `group_id`. RLS policies enforce isolation. `getGroupId()` from 
 ## API Key Flow
 
 ```
-Owner sets keys in Settings > AI tab
+Owner sets keys in Settings > Services tab (tab id `'ai'`)
   → Saved to `settings` table (gemini_api_key / elevenlabs_api_key)
   → Cache maps via toSettings/settingsToRow (includes API key fields)
   → Client reads via getSettings()?.geminiApiKey

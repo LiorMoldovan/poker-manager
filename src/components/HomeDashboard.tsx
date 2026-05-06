@@ -985,24 +985,37 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
         applicable[(start + i) % applicable.length]);
 
   const body = (
-    // `minmax(0, 1fr)` (instead of plain `1fr`) prevents a track
-    // from growing past its share when a long currency value like
-    // `₪123,456` is wider than the equal-width slice. Column count
-    // tracks `picked.length` for the rare case (brand-new player)
-    // where fewer than 4 tiles are applicable.
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(${Math.max(picked.length, 1)}, minmax(0, 1fr))`,
-      gap: '0.4rem',
-    }}>
-      {picked.map(tile => (
-        <StatTile
-          key={tile.key}
-          label={tile.label}
-          value={tile.value}
-          accent={tile.accent}
-        />
-      ))}
+    // Two-part body, ordered by past → present → future narrative:
+    //   1. (subtitle above body, in HomeCard) — lifetime records (past)
+    //   2. stat tiles                          — current snapshot (present)
+    //   3. milestone badge                     — next goal (future)
+    //
+    // Milestone pill renders LAST so it acts as a "next up" footer /
+    // CTA rather than mid-card interruption. Visually loud elements
+    // (the indigo gradient) land at the bottom as a crescendo, which
+    // gives the card a calm-loud-calm rhythm instead of pulling the
+    // eye away from the stat tiles before they're absorbed.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+      {/* `minmax(0, 1fr)` (instead of plain `1fr`) prevents a track
+          from growing past its share when a long currency value like
+          `₪123,456` is wider than the equal-width slice. Column count
+          tracks `picked.length` for the rare case (brand-new player)
+          where fewer than 4 tiles are applicable. */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${Math.max(picked.length, 1)}, minmax(0, 1fr))`,
+        gap: '0.4rem',
+      }}>
+        {picked.map(tile => (
+          <StatTile
+            key={tile.key}
+            label={tile.label}
+            value={tile.value}
+            accent={tile.accent}
+          />
+        ))}
+      </div>
+      {milestone && <MilestoneBadge text={milestone} />}
     </div>
   );
 
@@ -1013,59 +1026,61 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
       icon="📊"
       title={t('home.personal.title')}
       subtitle={subtitle}
-      // Milestone hint sits in the title row's accessory slot so it
-      // shares space with the heading instead of opening a new line
-      // above the tiles. HomeCard's title row has `flexWrap: 'wrap'`
-      // already, so the badge gracefully drops to its own line on
-      // very narrow screens if the title needs the full width.
-      accessory={milestone ? <MilestoneBadge text={milestone} /> : undefined}
       body={body}
       onClick={onClick}
     />
   );
 }
 
-// Visual "achievement chip" for the next-milestone hint. Styled to
-// feel different from every other line on the dashboard without
-// reading as a warning — earlier amber tones felt alarm-like, so
-// we shifted to a soft indigo gradient (informational / "goal"
-// vibe). Tabular numerals so the count never jiggles between
-// glyph widths.
+// Footer bar for the "next milestone" hint. Earlier iterations
+// rendered this as a saturated indigo pill (border-radius: 999,
+// strong gradient, bold text), which clashed with the rest of
+// the card — the StatTile grid uses 8 px radius and a quiet
+// translucent wash, and the card itself uses 12 px radius. A
+// full-pill chip with a loud gradient was the loudest element
+// on the card, even though "next goal" is the *least* important
+// signal here (an achievement, not a current stat).
 //
-// Rendered on its own dedicated row inside PersonalCard's body
-// (between the title row and the stat tiles), not in the title
-// accessory slot. Earlier we tried squeezing it next to the
-// "הסטטיסטיקה שלך" heading with `justifyContent: 'space-between'`,
-// but the badge always crowded the title — either ellipsis-clipping
-// "הסטטיסטיקה שלך" or making the milestone text so cryptic
-// (`187/200 משחקים`) that its meaning was lost. A dedicated row
-// wins on every axis: title is never truncated, badge can be
-// fully descriptive ("עוד 13 משחקים ל-200"), and any milestone
-// length (including profit currency strings) fits cleanly.
+// Current design intentionally echoes the StatTile vocabulary
+// so the card reads as a single coherent surface:
+//   - 8 px radius          → matches StatTile
+//   - translucent wash     → same density family as StatTile bg
+//   - soft indigo accent   → preserves the "this is a goal"
+//                            semantic (indigo = forward-looking)
+//                            without screaming for attention
+//   - full-width bar       → anchors the bottom of the card and
+//                            mirrors the width of the tile grid
+//                            above, instead of orphaning a chip
+//                            at one end of an empty row
+//   - text size + weight   → calibrated to sit between the muted
+//                            subtitle and the bold tile values
+//
+// Tabular numerals so the count never jiggles between glyph
+// widths as the player approaches the milestone day-to-day.
 function MilestoneBadge({ text }: { text: string }) {
   return (
     <div style={{
-      alignSelf: 'flex-start',
-      display: 'inline-flex',
+      display: 'flex',
       alignItems: 'center',
-      gap: '0.4rem',
-      padding: '0.35rem 0.7rem',
-      borderRadius: 999,
-      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.10) 0%, rgba(129, 140, 248, 0.18) 100%)',
-      border: '1px solid rgba(129, 140, 248, 0.28)',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.15)',
+      gap: '0.45rem',
+      width: '100%',
+      padding: '0.4rem 0.6rem',
+      borderRadius: 8,
+      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(99, 102, 241, 0.03) 100%)',
+      border: '1px solid rgba(129, 140, 248, 0.18)',
       fontFeatureSettings: '"tnum"',
-      maxWidth: '100%',
     }}>
-      <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>🎯</span>
+      <span style={{ fontSize: '0.85rem', lineHeight: 1, flexShrink: 0 }}>🎯</span>
       <span style={{
-        fontSize: '0.78rem',
-        fontWeight: 700,
-        color: '#c7d2fe',
-        letterSpacing: '0.015em',
-        whiteSpace: 'nowrap',
+        fontSize: '0.72rem',
+        fontWeight: 600,
+        color: '#a5b4fc',
+        letterSpacing: '0.01em',
+        flex: 1,
+        minWidth: 0,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
       }}>
         {text}
       </span>
@@ -1522,7 +1537,19 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
                 textAlign: isRTL ? 'right' : 'left',
                 fontWeight: isMe ? 700 : 600,
                 color: isMe ? ME_NAME_COLOR : 'var(--text)',
-                overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 0,
+                // Name is the only cell allowed to wrap. Numeric
+                // cells stay `nowrap` (inherited from dataCellStyle)
+                // so digits never split, but the player-name cell
+                // overrides nowrap → if the row can't fit a long
+                // name on a single line, it breaks onto a second
+                // line inside this cell instead of getting ellipsis-
+                // clipped (which used to swallow names like
+                // "שגיא אחיין"). `wordBreak: break-word` allows the
+                // break to happen mid-name on extreme cases without
+                // pushing the row wider.
+                whiteSpace: 'normal',
+                wordBreak: 'break-word',
+                lineHeight: 1.2,
               }}>
                 <span style={{ marginInlineEnd: '0.35rem' }}>{medals[i]}</span>
                 {p.name}

@@ -249,26 +249,66 @@ function buildPollClosesAtLine(poll: GamePoll): string | null {
   return `ההצבעה נסגרת בעוד ${formatReminderRemainingHebrew(stamps[0] - now)}`;
 }
 
-// Decide between a single shared "מיקום – {loc}" line below the
+// Per-date "X confirmed" tally line, NBSP-indented under the bullet.
+// Hidden entirely when no one's RSVP'd "yes" yet for that date — keeps
+// freshly-opened polls clean (every bullet bare) and progressively
+// reveals state as votes come in. Singular vs plural agreement matters
+// in Hebrew: "אישר שחקן אחד" (m. sg. + counted noun) vs the bare
+// plural "אישרו N" for 2+. The text leads with the Hebrew verb so the
+// bidi resolver anchors the line as RTL on the very first strong
+// character, avoiding the digit-Hebrew-digit-Hebrew-digit shuffling
+// that some clients render awkwardly.
+function buildPerDateYesTally(yesCount: number, target: number): string | null {
+  if (yesCount === 0) return null;
+  // Three-NBSP indent so the tally visually nests under the bullet
+  // even though `white-space: normal` collapses regular leading spaces
+  // in the email's HTML body.
+  const indent = '\u00a0\u00a0\u00a0';
+  if (yesCount === 1) {
+    return `${indent}✅ אישר שחקן אחד מתוך ${target}`;
+  }
+  return `${indent}✅ אישרו ${yesCount} מתוך ${target}`;
+}
+
+// Decide between a single shared "מיקום - {loc}" line below the
 // bullets vs. inline per-date locations. Most groups schedule every
 // proposed date at the same default location (the host's home), so
 // repeating the name on every bullet is noise. When dates do differ
 // — a rare case where the admin set a custom per-date location —
 // we fall back to the inline-per-bullet form so each date stays
-// unambiguous.
+// unambiguous. Each bullet may be followed by a NBSP-indented
+// "✅ אישרו N מתוך target" line whenever that date already has
+// yes-votes — gives recipients an at-a-glance sense of which slot
+// the group is trending toward.
 function buildDatesAndLocationBlock(poll: GamePoll): { dateLines: string; locationLine: string } {
+  // Pre-compute yes counts per date so the bullet builder is O(N)
+  // instead of doing a votes-filter inside the loop.
+  const yesByDateId = new Map<string, number>();
+  for (const v of poll.votes) {
+    if (v.response !== 'yes') continue;
+    yesByDateId.set(v.dateId, (yesByDateId.get(v.dateId) ?? 0) + 1);
+  }
+
+  const renderBullet = (d: GamePollDate, withInlineLocation: boolean): string => {
+    const head = withInlineLocation
+      ? formatDateBullet(d, poll.defaultLocation)
+      : `• ${formatHebrewDateTime(d)}`;
+    const tally = buildPerDateYesTally(
+      yesByDateId.get(d.id) ?? 0,
+      poll.targetPlayerCount,
+    );
+    return tally ? `${head}\n${tally}` : head;
+  };
+
   const allShareDefault =
     !!poll.defaultLocation &&
     poll.dates.every(d => !d.location || d.location === poll.defaultLocation);
+
   if (allShareDefault) {
-    const dateLines = poll.dates
-      .map(d => `• ${formatHebrewDateTime(d)}`)
-      .join('\n');
-    return { dateLines, locationLine: `מיקום – ${poll.defaultLocation}` };
+    const dateLines = poll.dates.map(d => renderBullet(d, false)).join('\n');
+    return { dateLines, locationLine: `מיקום - ${poll.defaultLocation}` };
   }
-  const dateLines = poll.dates
-    .map(d => formatDateBullet(d, poll.defaultLocation))
-    .join('\n');
+  const dateLines = poll.dates.map(d => renderBullet(d, true)).join('\n');
   return { dateLines, locationLine: '' };
 }
 
@@ -284,9 +324,18 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
   const link = emailVoteLink(poll);
   const ctaBlock = link ? `\n\n${I}👉 להצבעה: ${link}` : '';
 
+  // Push body picks singular vs plural based on the proposed-date count
+  // ("הוצע תאריך אחד" vs "הוצעו N תאריכים"). Polls almost always have
+  // ≥ 2 dates so the singular branch is rare, but it's the right thing
+  // when an admin opens a vote on a single anchor date.
+  const datesCount = poll.dates.length;
+  const pushBody = datesCount === 1
+    ? 'הוצע תאריך אחד. היכנסו והצביעו 📅'
+    : `הוצעו ${datesCount} תאריכים. היכנסו והצביעו 📅`;
+
   return {
     pushTitle: subject,
-    pushBody: `הוצעו ${poll.dates.length} תאריכים. היכנסו והצביעו 📅`,
+    pushBody,
     emailSubject: subject,
     emailBody: (name) =>
       emailGreeting(name) +
@@ -319,6 +368,13 @@ export function buildExpandedMessage(poll: GamePoll): BuiltMessage {
   };
 }
 
+// At-target confirmation — fires when an admin pins a date AND the seat
+// target is already met at that moment. Same recipient experience as
+// the post-pin "target filled" follow-up (date locked, table full), so
+// the body uses the same NBSP-indented details "card" with the 📅/📍/👥
+// trio. Subject and push title stay distinct ("נסגר!" vs "המשחק מלא")
+// so the two flows remain identifiable in email logs and on the lock
+// screen.
 export function buildConfirmedMessage(
   poll: GamePoll,
   confirmedDate: GamePollDate,
@@ -327,7 +383,27 @@ export function buildConfirmedMessage(
   const loc = confirmedDate.location || poll.defaultLocation;
   const dateLineCompact = formatHebrewDateTime(confirmedDate);
   const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
-  const locLine = loc ? `מיקום - ${loc}\n` : '';
+
+  const yesCount = yesNames.length;
+  // Player count phrase: same Hebrew counted-noun shape as the sibling
+  // "date is set" templates so all four read consistently.
+  let confirmedLine: string;
+  if (yesCount === 0) {
+    confirmedLine = '0 שחקנים אישרו';
+  } else if (yesCount === 1) {
+    confirmedLine = `שחקן אחד אישר: ${yesNames[0]}.`;
+  } else {
+    confirmedLine = `${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.`;
+  }
+
+  // Two-NBSP indent for the details card. Same trick as the sibling
+  // builders — the email-RTL wrapper uses `white-space: normal` and
+  // would otherwise collapse the leading whitespace.
+  const I = '\u00a0\u00a0';
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 לפרטים: ${link}` : '';
+
   return {
     pushTitle: '✅ המשחק נסגר!',
     // Push body stays compact — small notification surface, every char
@@ -336,12 +412,12 @@ export function buildConfirmedMessage(
     emailSubject: '✅ נסגר! ניפגש בערב פוקר 🃏',
     emailBody: (name) =>
       emailGreeting(name) +
-      'נבחר תאריך — המשחק נסגר 🎉\n\n' +
-      `${dateLineVerbose}\n` +
+      'הצבעת ערב הפוקר נסגרה — ניפגש 🎉\n\n' +
+      `${I}📅 ${dateLineVerbose}\n` +
       locLine +
-      `${yesNames.length} שחקנים אישרו: ${yesNames.join(', ')}` +
-      emailCtaBlock(poll, 'לפרטים') +
-      '\n\nתגיעו בזמן!',
+      `${I}👥 ${confirmedLine}` +
+      ctaBlock +
+      '\n\nנתראה על השולחן! 🃏\n\n— Poker Manager',
   };
 }
 
@@ -479,6 +555,11 @@ export function buildConfirmedBelowTargetYesMessage(
     emailSubject: subject,
     emailBody: (name) => {
       const youRegistered = gender(name) === 'female' ? 'את רשומה' : 'אתה רשום';
+      // Whole email is singular 2nd-person — match it on the trailing
+      // "guest recruitment" nudge too. `verbForName('updateImp', name)`
+      // resolves to "עדכן" / "עדכני" via the player's stored gender;
+      // the pronoun "לך" is gender-flexible, so only the verb branches.
+      const updateVerb = verbForName('updateImp', name);
       return (
         emailGreeting(name) +
         'נבחר תאריך לערב הפוקר 🎯\n' +
@@ -487,7 +568,7 @@ export function buildConfirmedBelowTargetYesMessage(
         locLine +
         `${I}👥 ${confirmedLine}\n` +
         `🪑 ${seatsPhrase}\n\n` +
-        'אם יש לכם אורח שרוצה להצטרף — תעדכנו 🤝' +
+        `אם יש לך אורח שמתאים לו להצטרף — ${updateVerb} 🤝` +
         ctaBlock +
         '\n\n— Poker Manager'
       );
@@ -605,7 +686,8 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
       emailGreeting(name) +
       'ערב הפוקר בוטל 😔' +
       reasonLine +
-      '\n\nנתראה בפעם הבאה! 🃏',
+      '\n\nנתראה בפעם הבאה! 🃏' +
+      '\n\n— Poker Manager',
   };
 }
 
@@ -615,13 +697,15 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
 // independently gated by group settings — the WhatsApp share buttons +
 // in-app banners always work regardless.
 // Per-kind email allowlist — emails are reserved for the events members
-// genuinely shouldn't miss. Noisy / informational kinds (creation,
-// expanded, vote_change) are push-only. Introduced in v5.43 to keep us
-// inside the EmailJS free quota; push fan-out remains unchanged for every
-// kind so subscribers still get realtime updates if they have push set up.
-// Layered ON TOP of the group-level `scheduleEmailsEnabled` toggle — both
-// must be true for an email to go out.
+// genuinely shouldn't miss. `expanded` and `vote_change` stay push-only:
+// expanded is a state-transition broadcast that adds little over the
+// invitation, and vote_change fires on every RSVP cast / change which
+// would flood the EmailJS quota. `creation` IS in the allowlist — open
+// polls are important enough that the invitation goes out as both push
+// and email. Layered ON TOP of the group-level `scheduleEmailsEnabled`
+// toggle — both must be true for an email to go out.
 const EMAIL_ALLOWLIST: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
+  'creation',
   'confirmed',
   'target_filled',
   'cancellation',
@@ -963,7 +1047,10 @@ function formatReminderRemainingHebrew(ms: number): string {
   const hours = Math.floor((totalMin - days * 60 * 24) / 60);
   const minutes = totalMin - days * 60 * 24 - hours * 60;
   if (days >= 1) {
-    return hours > 0 ? `${days} ימים ${hours} שע׳` : `${days} ימים`;
+    // Hebrew counted-noun: 1 day uses the singular construct
+    // "יום אחד", 2+ uses the cardinal-then-plural "{N} ימים".
+    const dayWord = days === 1 ? 'יום אחד' : `${days} ימים`;
+    return hours > 0 ? `${dayWord} ${hours} שע׳` : dayWord;
   }
   if (hours >= 1) {
     return minutes > 0 ? `${hours} שע׳ ${minutes} דק׳` : `${hours} שע׳`;
@@ -1002,43 +1089,57 @@ function buildReminderDeadlineLine(poll: GamePoll): string | null {
   return null;
 }
 
-// Per-date current state. We render every response bucket (yes / maybe /
-// no) so the recipient can see the live trend at a glance — important
-// context when they're deciding whether to commit. `maybe` is conditional
-// on poll.allowMaybe (some groups disable it). Lines start with the date
-// (which is a Hebrew weekday name produced by formatHebrewDateTime), so
-// each line's first strong directional character is RTL — bidi resolves
-// the whole line as RTL automatically. Counters inside the line are
-// numeric and render correctly within the RTL context.
+// Per-date current state. We surface ONLY the yes-count per date — the
+// maybe / no buckets used to render here too, but the email is meant to
+// nudge the recipient to commit, not to dump the full vote breakdown.
+// Layout: bullet (`• {date}`) followed by an NBSP-indented
+// `✅ אישרו N מתוך target` line whenever that date has any yes-votes.
+// Singular vs plural agreement matters in Hebrew — "אישר שחקן אחד מתוך 7"
+// for N=1, "אישרו N מתוך 7" for 2+. Dates with zero yes-votes show as
+// a bare bullet (no second line) so the body stays clean and never
+// shouts "0/7" at the reader.
 //
-// `recipientName` (when provided) gets a personal Hebrew greeting at the
-// top — turns the email from a faceless broadcast into a personal nudge
-// without changing any of the live state below.
+// Per-date location is intentionally dropped: virtually every group
+// shares the default location across all proposed dates, so repeating
+// it on every line is noise. The recipient already knows the location
+// from the original invitation; this email is about completing votes.
+//
+// `recipientName` (when provided) gets a personal Hebrew greeting at
+// the top AND drives gender-aware imperative on the closing line —
+// `השלם` (m.) / `השלימי` (f.) via `verbForName('completeImp', …)` so
+// the whole body stays singular 2nd-person and grammatically agrees.
 function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string {
   const target = poll.targetPlayerCount;
   const stateLines = poll.dates.map(d => {
-    let yes = 0, maybe = 0, no = 0;
-    for (const v of poll.votes) {
-      if (v.dateId !== d.id) continue;
-      if (v.response === 'yes') yes++;
-      else if (v.response === 'maybe') maybe++;
-      else if (v.response === 'no') no++;
-    }
-    const loc = d.location ? ` — ${d.location}` : '';
-    const tally: string[] = [`✅ ${yes}/${target}`];
-    if (poll.allowMaybe && maybe > 0) tally.push(`🤔 ${maybe}`);
-    if (no > 0) tally.push(`❌ ${no}`);
-    return `• ${formatHebrewDateTime(d)}${loc}\n  ${tally.join(' · ')}`;
-  }).join('\n\n');
+    const head = `• ${formatHebrewDateTime(d)}`;
+    const tally = buildPerDateYesTally(
+      poll.votes.reduce(
+        (n, v) => n + (v.dateId === d.id && v.response === 'yes' ? 1 : 0),
+        0,
+      ),
+      target,
+    );
+    return tally ? `${head}\n${tally}` : head;
+  }).join('\n');
 
-  // Generic disclaimer covering ALL THREE recipient cases the picker
-  // pulls in: ghosts (zero votes), partial voters (missing at least
-  // one date), and maybe-voters (answered every date but at least one
-  // is "אעדכן" — i.e. still not a final answer). The wording asks the
-  // recipient to confirm/finalize their answer rather than claiming
-  // "you haven't voted", so it reads correctly for any of the three.
+  // Generic intro covering ALL THREE recipient cases the picker pulls
+  // in: ghosts (zero votes), partial voters (missing at least one
+  // date), and maybe-voters (answered every date but at least one is
+  // "אעדכן" — i.e. still not a final answer). The closing imperative
+  // is gender-aware singular via `completeImp`, so the body reads
+  // consistently in 2nd-person regardless of the recipient.
   const greeting = recipientName ? `היי ${recipientName},\n\n` : '';
-  const intro = 'זו תזכורת להצבעה על המשחק הבא. אם עוד לא הצבעת, הצבעת רק על חלק מהתאריכים, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית — בבקשה היכנסו והשלימו את ההצבעה.';
+  const completeVerb = verbForName('completeImp', recipientName ?? '');
+  // Split into three readable blocks: an opening header, the
+  // conditions (single line — the recipient just needs to recognise
+  // their case), and the call-to-action on its own line so it stands
+  // out at the bottom of the paragraph.
+  const intro =
+    'זו תזכורת להצבעה על המשחק הבא.'
+    + '\n\n'
+    + 'אם עוד לא הצבעת, הצבעת רק על חלק מהתאריכים, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית —'
+    + '\n'
+    + `בבקשה ${completeVerb} את ההצבעה.`;
   const deadlineLine = buildReminderDeadlineLine(poll);
   const deadlineBlock = deadlineLine ? `\n\n${deadlineLine}` : '';
   const stateHeader = '📊 מצב ההצבעה כרגע:';

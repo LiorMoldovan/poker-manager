@@ -86,7 +86,7 @@ Validate with `npx tsc --noEmit` and ReadLints on ALL modified files. For algori
 Roles are `admin` and `member` (the `viewer` role was removed in migration 007). The **owner** (group creator, `groups.created_by`) has extra powers beyond a regular admin — only the owner can modify other admins, transfer ownership, regenerate invite codes, manage API keys, and access training/activity tabs. This is enforced in SQL RPCs via `groups.created_by` checks and in the UI via `isOwner` boolean.
 
 ### 11. Per-Group API Keys
-Each group stores its own `gemini_api_key` and `elevenlabs_api_key` in the `settings` table (mapped via `toSettings`/`settingsToRow` in `supabaseCache.ts`). The client reads keys from group settings and sends them in proxy requests. Vercel Edge Functions check: (1) key from request body, (2) env var fallback, (3) return error. **NEVER hardcode API keys.** Owner manages keys in Settings > AI tab.
+Each group stores its own `gemini_api_key` and `elevenlabs_api_key` in the `settings` table (mapped via `toSettings`/`settingsToRow` in `supabaseCache.ts`). The client reads keys from group settings and sends them in proxy requests. Vercel Edge Functions check: (1) key from request body, (2) env var fallback, (3) return error. **NEVER hardcode API keys.** Owner manages keys in Settings > Services tab (tab id is still `'ai'` internally — only the user-facing label changed in v5.43.3).
 
 ## Architecture
 
@@ -150,7 +150,7 @@ Silent tracking of all user sessions. Device fingerprint + screens visited + dur
 | Remove owner | Nobody | RPC raises exception |
 | Transfer ownership | Owner only | `transfer_ownership` RPC |
 | Regenerate invite code | Owner only | `regenerate_invite_code` RPC |
-| Manage API keys | Owner only | UI: `ownerOnly: true` on AI tab |
+| Manage API keys | Owner only | UI: `ownerOnly: true` on Services tab (tab id `'ai'`) |
 | Training/Activity tabs | Owner only | UI: `isOwner` gate + RLS |
 | Delete player with games | Nobody | UI: `playerHasGames()` check blocks delete |
 | Link to already-linked player | Nobody | Partial unique index + RPC check |

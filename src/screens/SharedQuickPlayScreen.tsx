@@ -31,6 +31,10 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/trainingData';
+import {
+  notifySuperAdminsOfReports,
+  notifySuperAdminsOfMilestone,
+} from '../utils/trainingReportNotifications';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -311,9 +315,28 @@ const SharedQuickPlayScreen = () => {
       console.error('[training] directWriteSession unexpected failure:', err, { playerName: name });
     });
 
-    // Reports are persisted via directWriteSession above; admins review them
-    // in Settings → Training tab. Email fan-out to super-admins was retired
-    // in v5.43 to keep us inside the EmailJS free quota.
+    // Reports are persisted via directWriteSession above; super-admins
+    // also get a one-shot push so they can review the flagged questions
+    // promptly (Settings → Training tab). Email fan-out was retired in
+    // v5.43 to stay inside the EmailJS free quota.
+    if (finalReports.length > 0) {
+      notifySuperAdminsOfReports({ reports: finalReports, reporterName: name }).catch(err => {
+        console.warn('[training] notifySuperAdminsOfReports failed:', err);
+      });
+    }
+
+    // Milestone push: informs super-admins that a player crossed N×100
+    // questions so they can review (or, when no Gemini key is set,
+    // manually regenerate) the coaching insights for that player.
+    if (crossedMilestone) {
+      notifySuperAdminsOfMilestone({
+        playerName: name,
+        milestone: crossedMilestone,
+        hasApiKey: !!getGeminiApiKey(),
+      }).catch(err => {
+        console.warn('[training] notifySuperAdminsOfMilestone failed:', err);
+      });
+    }
 
     if (!resultsToUse) {
       setShowSummary(true);

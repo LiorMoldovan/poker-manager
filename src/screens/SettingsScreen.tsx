@@ -32,7 +32,7 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, type EmailUsageResponse } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
 import { verbForName } from '../utils/hebrewGender';
 import {
@@ -105,6 +105,17 @@ const SettingsScreen = () => {
   // setInterval polling, per the project's no-cache rule.
   const [emailUsage, setEmailUsage] = useState<EmailUsageResponse | null>(null);
   const [showEmailRecent, setShowEmailRecent] = useState(false);
+  // EmailJS quota config editor (super-admin). Lets the operator seed
+  // the baseline + cap + reset day from the UI instead of dealing with
+  // env vars. Persisted to `system_config` via SECURITY DEFINER RPCs.
+  const [showQuotaEditor, setShowQuotaEditor] = useState(false);
+  const [quotaEditor, setQuotaEditor] = useState<{
+    resetDay: string;
+    monthlyCap: string;
+    baselineUsed: string;
+    baselineCycleStart: string;
+  }>({ resetDay: '', monthlyCap: '', baselineUsed: '', baselineCycleStart: '' });
+  const [quotaEditorSaving, setQuotaEditorSaving] = useState(false);
 
   // AI Status state
   const [, setAiStatus] = useState<AIStatusData | null>(null);
@@ -711,7 +722,7 @@ const SettingsScreen = () => {
     { id: 'chips', label: t('settings.tabChips'), icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'game', label: t('settings.tabGame'), icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
-    { id: 'ai', label: t('settings.tabAI'), icon: '🤖', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
+    { id: 'ai', label: t('settings.tabAI'), icon: '🔌', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
@@ -1885,100 +1896,6 @@ const SettingsScreen = () => {
 
         return (
           <>
-            {/* Per-Group API Keys */}
-            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('settings.ai.apiKeys')}</h2>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  {t('settings.ai.keysHelp')}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', direction: 'ltr' }}>
-                  <div>
-                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
-                      {t('settings.ai.geminiKey')}
-                    </label>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input
-                        type="password"
-                        value={settings.geminiApiKey || ''}
-                        onChange={e => setSettings({ ...settings, geminiApiKey: e.target.value })}
-                        placeholder={t('settings.ai.geminiPlaceholder')}
-                        style={{
-                          flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
-                          background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
-                          fontFamily: 'monospace',
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          saveSettings(settings);
-                          setSaved(true);
-                          setTimeout(() => setSaved(false), 2000);
-                        }}
-                        style={{
-                          padding: '0.5rem 0.75rem', borderRadius: '6px',
-                          border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
-                          color: '#10B981', fontSize: '0.75rem',
-                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                        }}
-                      >
-                        {t('common.save')}
-                      </button>
-                    </div>
-                  </div>
-                  {isSuperAdmin && (
-                    <div>
-                      <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
-                        {t('settings.ai.elevenLabsKey')}
-                      </label>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <input
-                          type="password"
-                          value={settings.elevenlabsApiKey || ''}
-                          onChange={e => setSettings({ ...settings, elevenlabsApiKey: e.target.value })}
-                          placeholder={t('settings.ai.elevenLabsPlaceholder')}
-                          style={{
-                            flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
-                            background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
-                            fontFamily: 'monospace',
-                          }}
-                        />
-                        <button
-                          onClick={() => {
-                            saveSettings(settings);
-                            setSaved(true);
-                            setTimeout(() => setSaved(false), 2000);
-                          }}
-                          style={{
-                            padding: '0.5rem 0.75rem', borderRadius: '6px',
-                            border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
-                            color: '#10B981', fontSize: '0.75rem',
-                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                          }}
-                        >
-                          {t('common.save')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            {/* API Key Setup Guide */}
-            {!settings.geminiApiKey && (
-              <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem', borderInlineStart: '3px solid #6366f1' }}>
-                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>📖 איך להשיג מפתח Gemini?</h2>
-                <ol style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0', paddingInlineStart: '1.2rem', lineHeight: 1.8 }}>
-                  <li>היכנס ל-<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#818cf8' }}>Google AI Studio</a></li>
-                  <li>לחץ על <strong style={{ color: 'var(--text)' }}>Create API Key</strong></li>
-                  <li>העתק את המפתח והדבק בשדה למעלה</li>
-                  <li>לחץ שמור — וזהו!</li>
-                </ol>
-                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.5rem 0 0', opacity: 0.7 }}>
-                  המפתח בחינם עד 1,500 בקשות ביום — מספיק לגמרי לערבי פוקר
-                </p>
-              </div>
-            )}
-
             {/* Game Readiness Card */}
             <div className="card" style={{ padding: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -2330,6 +2247,18 @@ const SettingsScreen = () => {
               const loggingSinceStr = loggingSince
                 ? new Date(loggingSince).toLocaleDateString(loggingSinceLoc, { day: 'numeric', month: 'short', year: 'numeric' })
                 : null;
+              // EmailJS-cache provenance. When `usedSource` is 'emailjs'
+              // the headline number is derived from EmailJS's own
+              // /history API — caches locally so we beat their 7-day
+              // retention. The "last synced" line tells the operator
+              // when the local cache was last refreshed against EmailJS.
+              const usedSource = emailUsage?.usedSource ?? 'self_log';
+              // Note: emailjsLastSyncedAt was used in the previous design
+              // where EmailJS API was the primary source. Since v5.43.3
+              // the self-log (with operator-supplied baseline) is the
+              // primary; the EmailJS cache is only a cross-check, so the
+              // sync timestamp surfaces in the in-sync line below
+              // instead of the source caption.
               // Sort kinds by count desc for the breakdown — most-frequent at the top.
               const kindEntries = Object.entries(perKind).sort((a, b) => b[1] - a[1]);
               // Translation key map. Falls back to the raw kind string for any
@@ -2342,8 +2271,164 @@ const SettingsScreen = () => {
               const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
               return (
                 <div className="card" style={{ padding: '1rem' }}>
-                  <h2 className="card-title" style={{ margin: '0 0 0.75rem' }}>{t('settings.ai.emailJsUsage')}</h2>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
+                    <h2 className="card-title" style={{ margin: 0 }}>{t('settings.ai.emailJsUsage')}</h2>
+                    {/* Inline quota config editor toggle. Super-admin
+                        opens this to seed the baseline (e.g. 86 from
+                        the EmailJS dashboard), set the monthly cap,
+                        and the cycle reset day — no env-var changes
+                        required. Persisted to `system_config`. */}
+                    <button
+                      onClick={async () => {
+                        if (!showQuotaEditor) {
+                          // Pre-fill with whatever's currently configured.
+                          const cfg = await proxyGetEmailQuotaConfig();
+                          setQuotaEditor({
+                            resetDay: cfg?.resetDay ? String(cfg.resetDay) : '',
+                            monthlyCap: cfg?.monthlyCap ? String(cfg.monthlyCap) : '',
+                            baselineUsed: cfg?.baseline ? String(cfg.baseline.used) : '',
+                            baselineCycleStart: cfg?.baseline ? cfg.baseline.cycleStart.slice(0, 10) : '',
+                          });
+                        }
+                        setShowQuotaEditor(s => !s);
+                      }}
+                      style={{
+                        fontSize: '0.65rem',
+                        padding: '0.25rem 0.55rem',
+                        background: 'rgba(99, 102, 241, 0.12)',
+                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                        borderRadius: '6px',
+                        color: '#a5b4fc',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {showQuotaEditor ? t('common.cancel') : `🔧 ${t('settings.ai.emailQuotaEdit')}`}
+                    </button>
+                  </div>
+                  {showQuotaEditor && (
+                    <div style={{
+                      padding: '0.75rem', marginBottom: '0.75rem',
+                      borderRadius: '8px', border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                    }}>
+                      <p style={{ margin: '0 0 0.5rem', fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        {t('settings.ai.emailQuotaEditHelp')}
+                      </p>
+                      <div style={{ display: 'grid', gap: '0.45rem' }}>
+                        <label style={{ fontSize: '0.7rem', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span>{t('settings.ai.emailQuotaCap')}</span>
+                          <input
+                            type="number" min={1} placeholder="200"
+                            value={quotaEditor.monthlyCap}
+                            onChange={e => setQuotaEditor(s => ({ ...s, monthlyCap: e.target.value }))}
+                            style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem' }}
+                          />
+                        </label>
+                        <label style={{ fontSize: '0.7rem', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span>{t('settings.ai.emailQuotaResetDay')}</span>
+                          <input
+                            type="number" min={1} max={31} placeholder="19"
+                            value={quotaEditor.resetDay}
+                            onChange={e => setQuotaEditor(s => ({ ...s, resetDay: e.target.value }))}
+                            style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem' }}
+                          />
+                        </label>
+                        <label style={{ fontSize: '0.7rem', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span>{t('settings.ai.emailQuotaBaselineUsed')}</span>
+                          <input
+                            type="number" min={0} placeholder="86"
+                            value={quotaEditor.baselineUsed}
+                            onChange={e => setQuotaEditor(s => ({ ...s, baselineUsed: e.target.value }))}
+                            style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem' }}
+                          />
+                        </label>
+                        <label style={{ fontSize: '0.7rem', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span>{t('settings.ai.emailQuotaBaselineCycleStart')}</span>
+                          <input
+                            type="date"
+                            value={quotaEditor.baselineCycleStart}
+                            onChange={e => setQuotaEditor(s => ({ ...s, baselineCycleStart: e.target.value }))}
+                            style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem' }}
+                          />
+                        </label>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', justifyContent: 'flex-end' }}>
+                        <button
+                          disabled={quotaEditorSaving}
+                          onClick={async () => {
+                            setQuotaEditorSaving(true);
+                            try {
+                              const updates: Parameters<typeof proxySetEmailQuotaConfig>[0] = {};
+                              if (quotaEditor.monthlyCap.trim()) updates.monthlyCap = Number(quotaEditor.monthlyCap);
+                              if (quotaEditor.resetDay.trim()) updates.resetDay = Number(quotaEditor.resetDay);
+                              if (quotaEditor.baselineUsed.trim() && quotaEditor.baselineCycleStart) {
+                                // takenAt = now (rows from this point onward count as new sends)
+                                updates.baseline = {
+                                  used: Number(quotaEditor.baselineUsed),
+                                  takenAt: new Date().toISOString(),
+                                  cycleStart: new Date(quotaEditor.baselineCycleStart + 'T00:00:00Z').toISOString(),
+                                };
+                              } else if (!quotaEditor.baselineUsed.trim() && !quotaEditor.baselineCycleStart) {
+                                // Both blank → clear baseline (next cycle, no seed needed)
+                                updates.baseline = null;
+                              }
+                              const res = await proxySetEmailQuotaConfig(updates);
+                              if (res.ok) {
+                                setShowQuotaEditor(false);
+                                // Refresh the Usage card.
+                                const fresh = await proxyEmailUsage();
+                                setEmailUsage(fresh);
+                              }
+                            } finally {
+                              setQuotaEditorSaving(false);
+                            }
+                          }}
+                          style={{ padding: '0.4rem 0.85rem', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.15)', color: '#10B981', fontSize: '0.75rem', cursor: 'pointer' }}
+                        >
+                          {quotaEditorSaving ? '…' : t('common.save')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div>
+                    {/* Quota warning banner — shows when usage crosses
+                        80% / 95% / 100%. The server fires a push at the
+                        same thresholds (api/send-email.ts), so this
+                        banner is the in-app visual companion that
+                        always shows regardless of push permissions. */}
+                    {usedPct >= 80 && (
+                      <div
+                        role="alert"
+                        style={{
+                          marginBottom: '0.75rem',
+                          padding: '0.6rem 0.75rem',
+                          borderRadius: 8,
+                          background: usedPct >= 100
+                            ? 'rgba(239, 68, 68, 0.18)'
+                            : usedPct >= 95
+                              ? 'rgba(239, 68, 68, 0.12)'
+                              : 'rgba(245, 158, 11, 0.12)',
+                          border: `1px solid ${usedPct >= 95 ? 'rgba(239,68,68,0.45)' : 'rgba(245,158,11,0.45)'}`,
+                          color: usedPct >= 95 ? '#FCA5A5' : '#FCD34D',
+                          fontSize: '0.72rem',
+                          lineHeight: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                        }}
+                      >
+                        <span style={{ fontSize: '0.95rem' }}>
+                          {usedPct >= 100 ? '🚫' : usedPct >= 95 ? '🔴' : '⚠️'}
+                        </span>
+                        <span>
+                          {usedPct >= 100
+                            ? t('settings.ai.emailQuotaFull', { used: used.toLocaleString(), limit: limit.toLocaleString() })
+                            : usedPct >= 95
+                              ? t('settings.ai.emailQuotaCritical', { used: used.toLocaleString(), remaining: remaining.toLocaleString() })
+                              : t('settings.ai.emailQuotaWarning', { pct: Math.round(usedPct), remaining: remaining.toLocaleString() })}
+                        </span>
+                      </div>
+                    )}
                     {/* Monthly quota bar */}
                     <div style={{ marginBottom: '0.75rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
@@ -2363,22 +2448,51 @@ const SettingsScreen = () => {
                       {resetDate && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                           {t('settings.ai.emailResetLine', { date: resetDate, perDay: avgPerDay })}
+                          {/* If the operator hasn't set EMAILJS_QUOTA_RESET_DAY,
+                              EmailJS's actual reset day (signup-anniversary,
+                              shown on dashboard) won't match what we display.
+                              Surface it loudly so the operator either sets the
+                              env var or knows the date is calendar-month. */}
+                          {emailUsage?.resetDaySource === 'default' && (
+                            <span style={{ color: '#F59E0B', marginInlineStart: '0.4rem' }}>
+                              · {t('settings.ai.emailResetDefault')}
+                            </span>
+                          )}
                         </div>
                       )}
                       {/* Honesty block: the "limit" is a configured default, not a
-                          live read from EmailJS (their Free tier exposes no usage
-                          API), and the "used" count only reflects sends made
-                          AFTER our audit log started recording. Without this
-                          context the card looks fabricated to anyone who knows
-                          they sent emails before logging began. */}
+                          live read from EmailJS (they don't expose plan info via
+                          API), and the headline number is labelled with its
+                          actual source — EmailJS's own /history API (cached
+                          locally) when available, otherwise our self-log as
+                          fallback. Without this context the card looks
+                          fabricated to anyone who's ever clicked through to
+                          their actual EmailJS dashboard. */}
                       {emailUsage && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.45 }}>
-                          {loggingSinceStr
-                            ? t('settings.ai.emailLoggingSince', { date: loggingSinceStr })
-                            : t('settings.ai.emailNoLogsYet')}
+                          {/* Source provenance.
+                              - baseline_plus_self_log: operator-confirmed
+                                EmailJS-dashboard reading at cycle start +
+                                every send since. Active for the partial
+                                first cycle.
+                              - self_log: pure email_usage_log count. From
+                                the second cycle onward (audit log
+                                covers the whole cycle natively). */}
+                          {usedSource === 'baseline_plus_self_log' && emailUsage.baselineApplied
+                            ? t('settings.ai.emailSourceBaseline', {
+                                baseline: emailUsage.baselineApplied.toLocaleString(),
+                                tracked: (emailUsage.used - emailUsage.baselineApplied).toLocaleString(),
+                              })
+                            : (loggingSinceStr
+                                ? t('settings.ai.emailSourceSelfLog', { date: loggingSinceStr })
+                                : t('settings.ai.emailNoLogsYet'))}
                           {' · '}
+                          {/* Source provenance for the limit:
+                              'config'  = stored in system_config (UI-edited, the preferred path)
+                              'env'     = legacy env var fallback
+                              'default' = neither set; we used 200. Nudge with a warning color. */}
                           {limitSource === 'default'
-                            ? t('settings.ai.emailLimitDefault')
+                            ? <span style={{ color: '#F59E0B' }}>{t('settings.ai.emailLimitDefault')}</span>
                             : t('settings.ai.emailLimitFromEnv')}
                           {' · '}
                           <a
@@ -2588,6 +2702,103 @@ const SettingsScreen = () => {
                 </button>
               </div>
             </div>
+
+            {/* Per-Group API Keys (config — moved to bottom of tab so live
+                quota/usage cards lead the page; configuration is a one-time
+                setup task that doesn't need top billing). */}
+            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('settings.ai.apiKeys')}</h2>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  {t('settings.ai.keysHelp')}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', direction: 'ltr' }}>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
+                      {t('settings.ai.geminiKey')}
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input
+                        type="password"
+                        value={settings.geminiApiKey || ''}
+                        onChange={e => setSettings({ ...settings, geminiApiKey: e.target.value })}
+                        placeholder={t('settings.ai.geminiPlaceholder')}
+                        style={{
+                          flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                          background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
+                          fontFamily: 'monospace',
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          saveSettings(settings);
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2000);
+                        }}
+                        style={{
+                          padding: '0.5rem 0.75rem', borderRadius: '6px',
+                          border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                          color: '#10B981', fontSize: '0.75rem',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        {t('common.save')}
+                      </button>
+                    </div>
+                  </div>
+                  {isSuperAdmin && (
+                    <div>
+                      <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
+                        {t('settings.ai.elevenLabsKey')}
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <input
+                          type="password"
+                          value={settings.elevenlabsApiKey || ''}
+                          onChange={e => setSettings({ ...settings, elevenlabsApiKey: e.target.value })}
+                          placeholder={t('settings.ai.elevenLabsPlaceholder')}
+                          style={{
+                            flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                            background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
+                            fontFamily: 'monospace',
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            saveSettings(settings);
+                            setSaved(true);
+                            setTimeout(() => setSaved(false), 2000);
+                          }}
+                          style={{
+                            padding: '0.5rem 0.75rem', borderRadius: '6px',
+                            border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                            color: '#10B981', fontSize: '0.75rem',
+                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                          }}
+                        >
+                          {t('common.save')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            {/* API Key Setup Guide (only when no key configured — first-run
+                onboarding companion to the API Keys card right above). */}
+            {!settings.geminiApiKey && (
+              <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem', borderInlineStart: '3px solid #6366f1' }}>
+                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>📖 איך להשיג מפתח Gemini?</h2>
+                <ol style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0', paddingInlineStart: '1.2rem', lineHeight: 1.8 }}>
+                  <li>היכנס ל-<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#818cf8' }}>Google AI Studio</a></li>
+                  <li>לחץ על <strong style={{ color: 'var(--text)' }}>Create API Key</strong></li>
+                  <li>העתק את המפתח והדבק בשדה למעלה</li>
+                  <li>לחץ שמור — וזהו!</li>
+                </ol>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.5rem 0 0', opacity: 0.7 }}>
+                  המפתח בחינם עד 1,500 בקשות ביום — מספיק לגמרי לערבי פוקר
+                </p>
+              </div>
+            )}
           </>
         );
       })()}

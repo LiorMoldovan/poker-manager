@@ -24,6 +24,7 @@ import {
   deletePollRpc,
   subscribeToPollChangesRpc, unsubscribeFromPollChangesRpc,
   getMyPollChangeSubscriptionsRpc, getPollChangeRecipientsRpc,
+  getSuperAdminPlayerNamesInGroupRpc,
   getMyVoteChangeNotifsRpc, setMyVoteChangeNotifsRpc,
   type PollChangeRecipient,
 } from './supabaseCache';
@@ -1572,6 +1573,9 @@ export const getMyPollChangeSubscriptions = (): Promise<string[]> =>
 
 export const getPollChangeRecipients = (pollId: string): Promise<PollChangeRecipient[]> =>
   getPollChangeRecipientsRpc(pollId);
+
+export const getSuperAdminPlayerNamesInGroup = (groupId: string): Promise<string[]> =>
+  getSuperAdminPlayerNamesInGroupRpc(groupId);
 
 export type { PollChangeRecipient };
 

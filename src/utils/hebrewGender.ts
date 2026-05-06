@@ -55,6 +55,8 @@ const VERB_KEYS = [
   'willUpdate',  // יעדכן / תעדכן — RSVP maybe
   'declined',    // סירב / סירבה — RSVP no
   'invited',     // מוזמן / מוזמנת — passive participle (invited to ...)
+  'updateImp',   // עדכן / עדכני — imperative ("let us know")
+  'completeImp', // השלם / השלימי — imperative ("complete the vote")
 ] as const;
 
 export type VerbKey = typeof VERB_KEYS[number];
@@ -66,10 +68,12 @@ const VERBS: Record<Language, LangVerbs> = {
     joined:     { male: 'הצטרף',   female: 'הצטרפה' },
     sent:       { male: 'שלח',     female: 'שלחה' },
     opened:     { male: 'פתח',     female: 'פתחה' },
-    confirmed:  { male: 'אישר',    female: 'אישרה' },
-    willUpdate: { male: 'יעדכן',   female: 'תעדכן' },
-    declined:   { male: 'סירב',    female: 'סירבה' },
-    invited:    { male: 'מוזמן',   female: 'מוזמנת' },
+    confirmed:   { male: 'אישר',    female: 'אישרה' },
+    willUpdate:  { male: 'יעדכן',   female: 'תעדכן' },
+    declined:    { male: 'סירב',    female: 'סירבה' },
+    invited:     { male: 'מוזמן',   female: 'מוזמנת' },
+    updateImp:   { male: 'עדכן',    female: 'עדכני' },
+    completeImp: { male: 'השלם',    female: 'השלימי' },
   },
   en: {
     won:        { male: 'won',         female: 'won' },
@@ -77,10 +81,12 @@ const VERBS: Record<Language, LangVerbs> = {
     joined:     { male: 'joined',      female: 'joined' },
     sent:       { male: 'sent',        female: 'sent' },
     opened:     { male: 'opened',      female: 'opened' },
-    confirmed:  { male: 'confirmed',   female: 'confirmed' },
-    willUpdate: { male: 'will update', female: 'will update' },
-    declined:   { male: 'declined',    female: 'declined' },
-    invited:    { male: 'invited',     female: 'invited' },
+    confirmed:   { male: 'confirmed',   female: 'confirmed' },
+    willUpdate:  { male: 'will update', female: 'will update' },
+    declined:    { male: 'declined',    female: 'declined' },
+    invited:     { male: 'invited',     female: 'invited' },
+    updateImp:   { male: 'let us know', female: 'let us know' },
+    completeImp: { male: 'complete',    female: 'complete' },
   },
 };
 

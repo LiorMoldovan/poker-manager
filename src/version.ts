@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.43.2';
+export const APP_VERSION = '5.44.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,25 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.44.0',
+    date: '2026-05-06',
+    changes: [
+      '🎯 Email quota uses real billing-cycle window',
+      '🛠 Quota config UI-editable (no env vars needed)',
+      '🌱 Seed baseline from EmailJS dashboard via UI',
+      '🔌 Settings tab "AI" → "Services"',
+      '⬆️ Live usage cards moved to top, config below',
+      '🚨 Push alerts at 80% / 95% / 100% email quota',
+      '🟠 In-app warning banner when quota nearly full',
+      '🩹 Localhost: usage card reads Supabase directly',
+      '🚩 Training reports push super-admins (no email)',
+      '🎓 100-question milestone pings super-admins',
+      '🎯 Personal-card milestone pill moved to footer',
+      '🏷 Leaderboard names wrap instead of clipping',
+      '✍️ Hebrew gendered imperatives for RSVP nudges',
+    ],
+  },
   {
     version: '5.43.2',
     date: '2026-05-06',

@@ -1,4 +1,5 @@
 import { verifySupabaseAuth } from './_auth';
+import { computeCycleWindow, getCurrentCycleUsage, getMonthlyCap } from './_emailUsage';
 
 export const config = { runtime: 'edge' };
 
@@ -59,6 +60,134 @@ async function logEmailSend(
     });
   } catch (err) {
     console.error('[send-email] log_email_send failed:', err);
+  }
+}
+
+// ─── Quota threshold alerts ─────────────────────────────────────────────
+// Computes the current EmailJS billing cycle window from
+// EMAILJS_QUOTA_RESET_DAY (same logic as api/email-usage.ts), counts
+// rows in `email_usage_log` for that cycle, and fires a push to all
+// super-admin push subscribers when usage crosses 80% / 95% / 100% of
+// EMAILJS_MONTHLY_CAP for the FIRST time this cycle. Subsequent sends
+// past the same threshold are no-ops — `try_record_quota_alert` uses
+// (cycle_start, threshold) as a unique key.
+//
+// Why not push for every send past 80%?
+//   That would be a notification storm. Each threshold gets exactly
+//   one alert per cycle: enough to catch the operator's attention,
+//   not enough to make them mute the channel.
+const QUOTA_ALERT_THRESHOLDS = [80, 95, 100] as const;
+
+async function checkAndAlertQuotaThresholds(
+  req: Request,
+  authHeader: string,
+  groupId: string | null,
+): Promise<void> {
+  // Resolve cap + cycle from system_config (UI-editable) with env-var
+  // fallback. Same precedence the Usage card uses, so the threshold
+  // trigger fires at the same number the operator sees on screen.
+  const cap = await getMonthlyCap(authHeader);
+  const limit = cap.cap;
+  const cycle = await computeCycleWindow(authHeader);
+
+  const usage = await getCurrentCycleUsage(authHeader, cycle);
+  if (!usage) return;
+  const used = usage.used;
+  const usedPct = (used / limit) * 100;
+
+  // Find the highest threshold we've crossed. We only alert the
+  // top one — once we hit 95% there's no point also pinging about
+  // 80%; the push body says "you hit X%" with the most current data.
+  let crossedThreshold: number | null = null;
+  for (const threshold of QUOTA_ALERT_THRESHOLDS) {
+    if (usedPct >= threshold) crossedThreshold = threshold;
+  }
+  if (crossedThreshold === null) return;
+
+  // Try to record the alert. If another send already alerted this
+  // threshold for this cycle, the RPC returns false and we skip.
+  let isNewAlert = false;
+  try {
+    const cycleStartIso = cycle.start.toISOString().slice(0, 10);
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/try_record_quota_alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        cycle_start_d: cycleStartIso,
+        threshold_v: crossedThreshold,
+      }),
+    });
+    if (!r.ok) return;
+    isNewAlert = (await r.json()) === true;
+  } catch {
+    return;
+  }
+  if (!isNewAlert) return;
+
+  // Fetch super-admin push subscriber names for the owner group
+  // (the only group permitted to send via this Edge Function).
+  const ownerGroupId = process.env.OWNER_GROUP_ID;
+  if (!ownerGroupId) return;
+  let targets: string[] = [];
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_super_admin_player_names_in_group`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({ p_group_id: ownerGroupId }),
+    });
+    if (!r.ok) return;
+    targets = (await r.json()) as string[];
+  } catch {
+    return;
+  }
+  if (!Array.isArray(targets) || targets.length === 0) return;
+
+  // Compose a human, accurate notification. We name the threshold
+  // (80% / 95% / 100%) and include the live count so the recipient
+  // doesn't have to open the app to know the severity.
+  const remaining = Math.max(limit - used, 0);
+  const isCritical = crossedThreshold >= 95;
+  const isFull = crossedThreshold >= 100;
+  const title = isFull
+    ? '🚫 מכסת מיילים מלאה'
+    : isCritical
+      ? '⚠️ מכסת מיילים קריטית'
+      : '⚠️ מכסת מיילים מתקרבת לסיום';
+  const cycleEndDate = cycle.end.toISOString().slice(0, 10);
+  const body = isFull
+    ? `נוצלו ${used}/${limit} מיילים החודש. שליחת מיילים נוספים תיכשל עד ${cycleEndDate}.`
+    : `נוצלו ${used}/${limit} מיילים (${Math.round(usedPct)}%). נותרו ${remaining} עד ${cycleEndDate}.`;
+
+  // Forward to /api/send-push using the caller's JWT. URL is built
+  // from the incoming request so it works in both dev and prod
+  // without hardcoding the deployment hostname.
+  void groupId; // eslint placeholder: groupId may be useful for future per-group quota logic
+  try {
+    const pushUrl = new URL('/api/send-push', req.url).toString();
+    await fetch(pushUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        groupId: ownerGroupId,
+        title,
+        body,
+        targetPlayerNames: targets,
+        url: '/settings?tab=ai',
+      }),
+    });
+  } catch (err) {
+    console.error('[send-email] quota push failed:', err);
   }
 }
 
@@ -187,6 +316,23 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     await logEmailSend(authHeader, groupId, to, safeKind, subject, true, res.status, null, usedTemplateId);
+
+    // ─── Quota threshold push alert ───────────────────────────────────
+    // After every successful send, check if we just crossed an alert
+    // threshold (80%, 95%, 100%) for the current EmailJS billing
+    // cycle. The dedup table guarantees one alert per threshold per
+    // cycle, so this loop is safe to run on every send.
+    //
+    // MUST be awaited — Vercel Edge Functions tear down the worker the
+    // moment we return, same lesson logEmailSend taught us. The added
+    // latency is one count query (always) plus one push send (only on
+    // the rare boundary-crossing send) — acceptable overhead for the
+    // accuracy guarantee.
+    try {
+      await checkAndAlertQuotaThresholds(req, authHeader, groupId);
+    } catch (err) {
+      console.error('[send-email] quota alert check failed:', err);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: JSON_HEADERS,
