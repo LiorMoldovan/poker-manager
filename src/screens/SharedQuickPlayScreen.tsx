@@ -32,6 +32,7 @@ import {
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/trainingData';
 import { proxySendBroadcastEmail } from '../utils/apiProxy';
+import { verbForName } from '../utils/hebrewGender';
 import { supabase } from '../database/supabaseClient';
 
 const fixCardBidi = (text: string): string =>
@@ -325,7 +326,13 @@ const SharedQuickPlayScreen = () => {
           const subject = finalReports.length > 1
             ? `🎯 ${finalReports.length} דיווחים חדשים מאימון`
             : `🎯 דיווח חדש מאימון`;
-          const message = `היי 👋\n\n${name} פתח/ה ${finalReports.length === 1 ? 'דיווח' : `${finalReports.length} דיווחים`} על שאלות אימון:\n\n${reasons}\n\nאפשר לראות ולטפל בלשונית "אימון" בהגדרות כשיש זמן 🙏`;
+          // Gender-aware verb: "ליאור פתח" (male) vs "מיכל פתחה"
+          // (female), looked up against the player roster by name.
+          const openedVerb = verbForName('opened', name);
+          const reportsNoun = finalReports.length === 1
+            ? 'דיווח'
+            : `${finalReports.length} דיווחים`;
+          const message = `היי 👋\n\n${name} ${openedVerb} ${reportsNoun} על שאלות אימון:\n\n${reasons}\n\nאפשר לראות ולטפל בלשונית "אימון" בהגדרות כשיש זמן 🙏`;
           for (const email of emails) {
             if (email) {
               proxySendBroadcastEmail({ to: email, subject, message, senderName: 'Poker Training' }).catch(() => {});

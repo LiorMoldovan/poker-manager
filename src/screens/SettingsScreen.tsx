@@ -33,6 +33,7 @@ import {
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail } from '../utils/apiProxy';
+import { verbForName } from '../utils/hebrewGender';
 import {
   previewScheduleEmail,
   previewAllScheduleEmails,
@@ -631,10 +632,16 @@ const SettingsScreen = () => {
 
         if (ownerEmail) {
           const catLabel = t(`report.categories.${reportCategory}` as 'report.categories.bug');
+          // Gender-aware verb based on the reporter's `Player.gender`.
+          // Falls back to male form if the reporter isn't in the player
+          // roster (rare — auth users without a linked Player).
+          const sentVerb = verbForName('sent', authPlayerName);
+          const subjectActor = authPlayerName || 'מישהו';
+          const bodyActor = authPlayerName || 'משתמש';
           await proxySendBroadcastEmail({
             to: ownerEmail,
-            subject: `📩 ${authPlayerName || 'מישהו'} שלח/ה דיווח חדש`,
-            message: `היי 👋\n\n${authPlayerName || 'משתמש'} שלח/ה דיווח חדש:\n\n📌 ${catLabel}\n${reportText.trim()}\n\nאפשר לבדוק את זה בלשונית "דיווחים" בהגדרות כשנוח 🙏`,
+            subject: `📩 ${subjectActor} ${sentVerb} דיווח חדש`,
+            message: `היי 👋\n\n${bodyActor} ${sentVerb} דיווח חדש:\n\n📌 ${catLabel}\n${reportText.trim()}\n\nאפשר לבדוק את זה בלשונית "דיווחים" בהגדרות כשנוח 🙏`,
             senderName: 'Poker Manager',
           });
         }

@@ -9,6 +9,7 @@ import {
   getPollChangeRecipients,
 } from '../database/storage';
 import { proxySendPush, proxySendBroadcastEmail } from './apiProxy';
+import { verbForName, type VerbKey } from './hebrewGender';
 
 type NotificationKind =
   | 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'vote_change'
@@ -193,7 +194,7 @@ export function buildConfirmedMessage(
       'הצבעת ערב הפוקר נסגרה — ניפגש 🎉\n\n' +
       `📅 ${dateLine}\n` +
       locLine +
-      `👥 ${yesNames.length} שחקנים מאושרים: ${yesNames.join(', ')}` +
+      `👥 ${yesNames.length} שחקנים שאישרו: ${yesNames.join(', ')}` +
       emailCtaBlock(poll, 'לפרטים') +
       '\n\nנתראה על השולחן! 🃏',
   };
@@ -221,7 +222,7 @@ export function buildTargetFilledMessage(
       'נסגרה השורה — המשחק מלא 🎉\n\n' +
       `📅 ${dateLine}\n` +
       locLine +
-      `👥 ${yesNames.length} שחקנים מאושרים: ${yesNames.join(', ')}` +
+      `👥 ${yesNames.length} שחקנים שאישרו: ${yesNames.join(', ')}` +
       emailCtaBlock(poll, 'לפרטים') +
       '\n\nנתראה על השולחן! 🃏',
   };
@@ -261,7 +262,7 @@ export function buildConfirmedBelowTargetYesMessage(
       'נבחר תאריך לערב הפוקר 🎯\nאתם רשומים, אבל עוד חסרים שחקנים כדי לסגור.\n\n' +
       `📅 ${dateLine}\n` +
       locLine +
-      `👥 ${yesCount}/${poll.targetPlayerCount} מאושרים — ${missingPhrase}\n\n` +
+      `👥 ${yesCount}/${poll.targetPlayerCount} שאישרו — ${missingPhrase}\n\n` +
       'אם מכירים מישהו שיכול להצטרף, תפיצו את הלינק 🤝' +
       emailCtaBlock(poll, 'לפרטים'),
   };
@@ -288,7 +289,7 @@ export function buildConfirmedBelowTargetOthersMessage(
       'נקבע תאריך לערב הפוקר! עוד יש מקומות פנויים — אם זה מתאים לכם, אנחנו רוצים אתכם בפנים 🤝\n\n' +
       `📅 ${dateLine}\n` +
       locLine +
-      `👥 ${yesCount}/${poll.targetPlayerCount} מאושרים — ${seatsPhrase}\n\n` +
+      `👥 ${yesCount}/${poll.targetPlayerCount} שאישרו — ${seatsPhrase}\n\n` +
       'ההצבעה כעת רק על התאריך הזה.' +
       emailCtaBlock(poll, 'לאישור הגעה'),
   };
@@ -381,16 +382,17 @@ async function dispatch(
     try {
       const info = await getPlayerEmailForNotification(poll.groupId, name);
       if (!info?.email) return;
-      // Force RTL paragraph direction with a leading RLM (U+200F). The
-      // marker is invisible and zero-width but, as the first strong
-      // directional character, tells the email client's bidi algorithm
-      // to resolve the whole message as RTL — even when the first
-      // VISIBLE character is an emoji, digit, or English name.
-      const rtlBody = `\u200F${msg.emailBody(name)}`;
+      // RTL alignment is handled centrally in `proxySendBroadcastEmail`
+      // — it wraps the body in an HTML `<div dir="rtl" ...>` block
+      // which forces right-to-left paragraph alignment in every email
+      // client. We used to prepend a U+200F RLM here, but that only
+      // steered paragraph-level bidi resolution and didn't override
+      // the EmailJS template's `text-align: left` CSS, which left
+      // some clients still aligned to the left.
       const ok = await proxySendBroadcastEmail({
         to: info.email,
         subject: msg.emailSubject,
-        message: rtlBody,
+        message: msg.emailBody(name),
         senderName: 'Poker Manager',
       });
       if (!ok) console.warn(`[schedule-notify/${kind}] email failed for ${name}`);
@@ -532,10 +534,16 @@ export async function sendTargetFilledNotifications(poll: GamePoll): Promise<voi
 // idempotent and the worst case is a duplicate ping — far better than
 // missing a real cast/change.
 
-const RESPONSE_LABEL: Record<RsvpResponse, string> = {
-  yes: 'אישר',
-  maybe: 'יעדכן',
-  no: 'סירב',
+// RSVP response → Hebrew verb (past-tense for yes/no, future-tense for
+// maybe). All three are gender-bound — "אישר" is male, "אישרה" is
+// female. The actual conjugation is done per-voter at message-build
+// time via `verbForName`; this map only declares which semantic verb
+// to look up. Keeps the notification copy gender-correct (see
+// rule: stop emitting `/ה` slash-forms).
+const RESPONSE_VERB_KEY: Record<RsvpResponse, VerbKey> = {
+  yes: 'confirmed',
+  maybe: 'willUpdate',
+  no: 'declined',
 };
 
 export function buildVoteEventMessage(
@@ -547,7 +555,12 @@ export function buildVoteEventMessage(
 ): BuiltMessage {
   const date = poll.dates.find(d => d.id === vote.dateId);
   const dateLine = date ? formatHebrewDateTime(date) : '';
-  const responseLabel = RESPONSE_LABEL[vote.response] ?? vote.response;
+  // Gender-aware: "ליאור אישר" (male) vs "מיכל אישרה" (female). Verb
+  // tracks the voter, NOT the admin proxy editor — the proxy tag below
+  // already credits the editor separately, the verb describes what
+  // *the voter* is on record as.
+  const verbKey = RESPONSE_VERB_KEY[vote.response];
+  const responseLabel = verbKey ? verbForName(verbKey, voterName) : vote.response;
   const proxyTag = changedByName && changedByName !== voterName
     ? ` (ע״י ${changedByName})`
     : '';
@@ -563,7 +576,7 @@ export function buildVoteEventMessage(
   const yesCount = poll.votes.filter(
     v => v.dateId === vote.dateId && v.response === 'yes',
   ).length;
-  const stateLine = `📊 ${yesCount}/${poll.targetPlayerCount} מאושרים לתאריך זה`;
+  const stateLine = `📊 ${yesCount}/${poll.targetPlayerCount} שאישרו לתאריך זה`;
   return {
     pushTitle: title,
     pushBody: summary,
@@ -780,20 +793,14 @@ export async function sendReminderNotifications(
       if (!info?.email) return;
       // Per-recipient body: greeting uses the player's name, everything
       // else (deadline / state / cta) is identical for every recipient.
+      // RTL alignment is applied centrally inside
+      // `proxySendBroadcastEmail` (HTML wrapper with `dir="rtl"`).
       const baseBody = buildReminderEmailBody(poll, name);
       const fullBody = `${baseBody}${cta}`;
-      // Force RTL paragraph direction with a leading RLM (Right-to-Left
-      // Mark, U+200F). It's invisible and zero-width, but as the first
-      // strong directional character it tells the email client's Unicode
-      // bidi algorithm to resolve the whole paragraph as RTL — even in
-      // clients that would otherwise default to LTR. Critical for emails
-      // whose first visible character could be punctuation, an emoji,
-      // or a digit.
-      const rtlBody = `\u200F${fullBody}`;
       const ok = await proxySendBroadcastEmail({
         to: info.email,
         subject: TITLE_REMINDER,
-        message: rtlBody,
+        message: fullBody,
         senderName: 'Poker Manager',
       });
       if (!ok) console.warn(`[schedule-notify/reminder] email failed for ${name}`);

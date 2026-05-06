@@ -236,6 +236,58 @@ export async function proxySendEmail(payload: {
   }
 }
 
+// Wraps a Hebrew (or any RTL) plain-text message in an HTML block
+// that forces right-to-left paragraph alignment in EVERY email
+// client. This supersedes the older "prepend a U+200F RLM" trick —
+// that mark only steered paragraph-level bidi resolution; it did
+// NOT override the EmailJS template's `text-align: left` CSS, which
+// is exactly why some users still saw Hebrew bodies hugging the
+// left edge of the message pane.
+//
+// How it works:
+//   * `dir="rtl"` flips the block's bidi base direction to RTL.
+//   * Inline `text-align: right` wins over any template-level CSS
+//     (inline styles beat external stylesheets in email clients
+//     that strip <style> blocks — most do).
+//   * `unicode-bidi: plaintext` lets the bidi algorithm honour each
+//     paragraph's own first strong character, so embedded LTR runs
+//     (URLs, English names, numbers) render correctly inside the
+//     RTL block instead of being force-flipped.
+//   * `\n` → `<br>` so paragraph breaks survive HTML rendering
+//     while plain-text fallback views (rare, but Outlook on
+//     Windows still renders some clients as plaintext) still see
+//     the original newlines if the wrapper is stripped.
+//   * Strip a leading U+200F if the caller still adds one — the
+//     mark is harmless but pointless once we're emitting explicit
+//     `dir="rtl"`, and removing it keeps the body byte-clean.
+//
+// EmailJS template requirement: the broadcast template
+// (`template_broadcast`) MUST render `{{message}}` as raw HTML
+// (the EmailJS default). If it ever gets reconfigured to
+// HTML-escape the placeholder, recipients will see literal `<div…>`
+// tags instead of the wrapped layout — that's a template-side
+// regression, not a code regression.
+function wrapHebrewEmailForRTL(message: string): string {
+  const sanitized = message.replace(/^\u200F/, '');
+  // We escape `<` / `>` only on the chance the body itself contains
+  // angle brackets (e.g. a player name "<Bob>"); the wrapper's own
+  // tags are concatenated *after* escaping the body, so they stay
+  // intact. `&` is intentionally NOT escaped because email bodies
+  // commonly contain ampersands in URL query strings, and double-
+  // escaping `&amp;` from a working URL would break the link.
+  const escaped = sanitized
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const html = escaped.replace(/\n/g, '<br>');
+  return (
+    '<div dir="rtl" style="text-align: right; direction: rtl; '
+    + 'unicode-bidi: plaintext; font-family: Arial, Helvetica, sans-serif; '
+    + 'line-height: 1.5; white-space: normal;">'
+    + html
+    + '</div>'
+  );
+}
+
 export async function proxySendBroadcastEmail(payload: {
   to: string;
   subject: string;
@@ -247,7 +299,10 @@ export async function proxySendBroadcastEmail(payload: {
     const res = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        message: wrapHebrewEmailForRTL(payload.message),
+      }),
     });
     return res.ok;
   } catch {

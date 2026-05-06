@@ -23,9 +23,10 @@ import { useNavigate } from 'react-router-dom';
 import type { PlayerStats } from '../types';
 import { getAllPolls, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
-import { useTranslation, type TranslationKey } from '../i18n';
+import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 import { getSharedProgress } from '../utils/pokerTraining';
+import { verbForName } from '../utils/hebrewGender';
 
 // ─── Design tokens ──────────────────────────────────────────────────────
 // Every dashboard card MUST consume these instead of hard-coding sizes,
@@ -44,7 +45,6 @@ const STACK_GAP = '0.6rem'; // distance between cards
 // StatisticsScreen / SharedTrainingScreen so the current player is
 // rendered in the same blue tint everywhere.
 const ME_BG = 'rgba(59, 130, 246, 0.14)';
-const ME_BORDER = 'rgba(59, 130, 246, 0.45)';
 const ME_NAME_COLOR = '#60a5fa';
 
 // Profit tints, reused across cards to keep wins / losses uniform.
@@ -217,10 +217,19 @@ interface HomeCardProps {
   accessory?: React.ReactNode;
   // Below-row content slot — stat-tile grids, podium rows, etc.
   body?: React.ReactNode;
-  // 'success' tints the card with a green gradient. Reserved for the
-  // single primary CTA on screen so we don't end up with a wall of
-  // green that loses its meaning.
-  accent?: 'default' | 'success';
+  // Accent colors map to game-situation states so the card reads at
+  // a glance:
+  //   'default'  → neutral surface, no tint
+  //   'success'  → green, used for "good thing ahead" (StartNewGame
+  //                CTA, confirmed game with seats filled)
+  //   'warning'  → amber, used for "needs your attention" (confirmed
+  //                game still missing players, recruitment ask)
+  //   'info'     → blue, used for "decision pending" (open poll
+  //                awaiting votes)
+  // We intentionally do NOT tie accent to "today vs tomorrow"
+  // urgency — that's already conveyed by the countdown pill, and a
+  // red card every game-day would be visually exhausting.
+  accent?: 'default' | 'success' | 'warning' | 'info';
   onClick?: () => void;
   as?: 'div' | 'button';
 }
@@ -237,15 +246,31 @@ function HomeCard({
   onClick,
   as = 'div',
 }: HomeCardProps) {
-  const accentStyle: React.CSSProperties = accent === 'success'
-    ? {
-      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.04))',
-      border: '1px solid rgba(16, 185, 129, 0.42)',
+  const accentStyle: React.CSSProperties = (() => {
+    switch (accent) {
+      case 'success':
+        return {
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.04))',
+          border: '1px solid rgba(16, 185, 129, 0.42)',
+        };
+      case 'warning':
+        return {
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.20), rgba(245, 158, 11, 0.04))',
+          border: '1px solid rgba(245, 158, 11, 0.45)',
+        };
+      case 'info':
+        return {
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(59, 130, 246, 0.04))',
+          border: '1px solid rgba(59, 130, 246, 0.42)',
+        };
+      case 'default':
+      default:
+        return {
+          background: 'var(--surface)',
+          border: '1px solid transparent',
+        };
     }
-    : {
-      background: 'var(--surface)',
-      border: '1px solid transparent',
-    };
+  })();
 
   const wrapStyle: React.CSSProperties = {
     ...accentStyle,
@@ -271,12 +296,28 @@ function HomeCard({
           <div style={{
             display: 'flex', alignItems: 'center', gap: '0.5rem',
             justifyContent: 'space-between',
+            // `flexWrap: 'wrap'` lets the accessory drop to a second
+            // line on narrow screens (e.g. <360 px) when the title +
+            // pills together would force the title to ellipsis-clip.
+            // The title is the primary meaning of the card — clipping
+            // it to fit pills is the worst trade-off. With wrap on,
+            // both stay readable: title takes line 1, pills wrap to
+            // line 2 right-aligned (in RTL flex order). When there's
+            // enough room everything stays on a single line as
+            // before, so desktop is unaffected.
+            flexWrap: 'wrap',
+            rowGap: '0.3rem',
           }}>
             <span style={{
               fontSize: TITLE_SIZE,
               fontWeight: TITLE_WEIGHT,
               color: 'var(--text)',
               minWidth: 0,
+              // `flex: 1` claims any remaining space on the current
+              // line — when the accessory fits beside it the title
+              // grows to fill the gap, keeping the layout balanced;
+              // when wrap kicks in the title gets a full-width line.
+              flex: 1,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -393,19 +434,38 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
       missingSeats = Math.max(0, poll.targetPlayerCount - yesCount);
     }
 
-    // Subtitle is a single inline line. NO redundant emojis (the title
-    // already carries 🎯) — the dot separator is enough.
+    // Subtitle is a single inline line. The location gets a 📍
+    // prefix to match how location is rendered everywhere else in
+    // the app (HistoryScreen cards, schedule notification emails,
+    // newGame/settings labels). Without it, a host like "אייל"
+    // looks identical to a player name in the same row — the icon
+    // makes the meaning unambiguous at a glance.
+    //
+    // Each segment is `whiteSpace: 'nowrap'` so on narrow screens
+    // the line either fits intact or breaks cleanly between
+    // segments — never mid-phrase, never leaving a "·" stranded at
+    // the start of the next line.
     const subtitle = dateLabel ? (
       <>
-        {dateLabel}
+        <span style={{ whiteSpace: 'nowrap' }}>{dateLabel}</span>
         {location && (
-          <>
+          <span style={{ whiteSpace: 'nowrap' }}>
             <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
-            {location}
-          </>
+            📍 {location}
+          </span>
         )}
       </>
     ) : t('home.schedule.confirmedHelper');
+
+    // Accent encodes the game situation:
+    //   missing seats → amber (recruitment is the most urgent action)
+    //   filled        → green (anticipation, all set)
+    // The countdown pill stays green either way — it's about
+    // *timing*, not status — and reads cleanly against both card
+    // accents. The missing-seats pill switches to amber so it
+    // visually reinforces the card-level warning instead of
+    // competing with it on indigo.
+    const accent: 'warning' | 'success' = missingSeats > 0 ? 'warning' : 'success';
 
     const accessory = (countdown || missingSeats > 0) ? (
       <>
@@ -415,7 +475,7 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
             text={missingSeats === 1
               ? t('home.schedule.missingOne')
               : t('home.schedule.missingMany', { n: missingSeats })}
-            tone="info"
+            tone="warning"
           />
         )}
       </>
@@ -429,11 +489,16 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
         title={t('home.schedule.confirmedTitle')}
         subtitle={subtitle}
         accessory={accessory}
+        accent={accent}
         onClick={onClick}
       />
     );
   }
 
+  // Open / expanded poll → blue accent: a decision is pending and
+  // tapping the card lets members cast their vote. Distinct from the
+  // confirmed-game greens / amber so users can tell at a glance
+  // whether the night is set or still being decided.
   return (
     <HomeCard
       order={order}
@@ -441,6 +506,7 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
       icon="🗳"
       title={t('home.schedule.openTitle')}
       subtitle={t('home.schedule.openHelper')}
+      accent="info"
       onClick={onClick}
     />
   );
@@ -472,18 +538,61 @@ interface PersonalCardProps extends SectionProps {
 }
 
 function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
-  // Animate the headline numbers from 0 → final on first paint.
-  const games = useCountUp(stats.gamesPlayed);
-  const winPct = useCountUp(Math.round(stats.winPercentage));
-  const total = useCountUp(Math.round(stats.totalProfit));
-  const streakMag = useCountUp(Math.abs(stats.currentStreak));
+  // ── Animate every potential tile value from 0 → final ──────────
+  // Rules of hooks demand a stable hook count, so we run useCountUp
+  // for EVERY tile the rotation pool may surface today — even if a
+  // given day's pick uses only 4 of them. The cost is trivial
+  // (single rAF per value, finishes in ~600 ms) and avoids the
+  // complexity of a custom array-aware hook.
+  const cuGames = useCountUp(stats.gamesPlayed);
+  const cuWinPct = useCountUp(Math.round(stats.winPercentage));
+  const cuTotal = useCountUp(Math.round(stats.totalProfit));
+  const cuWins = useCountUp(stats.winCount);
+  const cuStreakMag = useCountUp(Math.abs(stats.currentStreak));
+  const cuBestNight = useCountUp(Math.round(stats.biggestWin));
+  const cuAvgGame = useCountUp(Math.round(stats.avgProfit));
+  const cuLongestStreak = useCountUp(stats.longestWinStreak);
+  const lastProfit = stats.lastGameResults?.[0]?.profit ?? 0;
+  const cuLastGame = useCountUp(Math.round(lastProfit));
+  const last3 = stats.lastGameResults?.slice(0, 3) ?? [];
+  const last3AvgRaw = last3.length >= 3
+    ? Math.round(last3.reduce((s, g) => s + g.profit, 0) / last3.length)
+    : 0;
+  const cuLast3 = useCountUp(last3AvgRaw);
+
   const streakSign = stats.currentStreak >= 0 ? 1 : -1;
   const hasStreak = Math.abs(stats.currentStreak) >= 1;
 
-  // Subtitle: prefer the records line if any wins exist, else the
-  // streak summary. We do NOT duplicate streak info (it's already a
-  // tile) — when records aren't available the subtitle just falls back
-  // to a generic encouragement.
+  // ── "Big total loss" guard ─────────────────────────────────────
+  // The home dashboard is a landing page — seeing a giant red
+  // negative number every single visit is demoralizing for players
+  // on a long losing arc. So when the cumulative loss is *sustained*
+  // and *meaningful*, we hide the total tile and surface the player's
+  // win count instead (always non-negative, always something to be
+  // proud of).
+  //
+  // We deliberately keep the rule conservative so casual minus values
+  // stay visible — the user explicitly said small/honest losses are
+  // fine, only "big" totals should be hidden:
+  //
+  //   1. totalProfit < -500    → loss is meaningful in absolute terms
+  //   2. abs(loss) > 2 × best  → loss is meaningful relative to this
+  //                              player's stakes (a ₪200-buy-in
+  //                              player and a ₪2000-buy-in player
+  //                              have different "big")
+  //   3. winCount > 0          → there is something to substitute
+  //                              with (showing "Wins: 0" would be
+  //                              even more demoralizing than the
+  //                              loss itself)
+  const isBigLoss =
+    stats.totalProfit < -500 &&
+    stats.winCount > 0 &&
+    Math.abs(stats.totalProfit) > stats.biggestWin * 2;
+
+  // Subtitle: prefer the records line if any wins exist, else a
+  // generic encouragement. Records line is always positive (uses
+  // biggestWin / longestWinStreak), so it stays encouraging even
+  // for players in rough patches.
   const hasRecords = stats.biggestWin > 0 || stats.longestWinStreak > 0;
   const subtitle = hasRecords
     ? t('home.personal.records', {
@@ -492,25 +601,153 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
     })
     : t('home.personal.encouragement');
 
+  // ── Tile pool with daily rotation ─────────────────────────────
+  // Goal: the home card should feel alive — different "lens" on the
+  // player's stats every day instead of a static four-tile readout
+  // they've memorized after one visit. We build a pool of every
+  // reasonable tile, filter to those whose data exists for THIS
+  // player, then deterministically pick 4 based on (day-of-year +
+  // player-name hash). Same player + same UTC day = identical
+  // picks, so the layout is stable through a session and only
+  // refreshes when the day rolls over. Different players see
+  // staggered rotations from the name hash, so two people on the
+  // same day don't see the same combo.
+  //
+  // The pool is intentionally heterogeneous (anchors + records +
+  // recent form + cumulative) so any 4-tile slice tells a coherent
+  // story. With ~10 applicable tiles for a typical player, there
+  // are enough combinations to make the rotation feel fresh for
+  // weeks before repeating.
+  type Tile = {
+    key: string;
+    label: string;
+    value: string;
+    accent?: 'win' | 'loss';
+  };
+
+  const signedAccent = (n: number): 'win' | 'loss' | undefined =>
+    n > 0 ? 'win' : n < 0 ? 'loss' : undefined;
+
+  const pool: { tile: Tile; applicable: boolean }[] = [
+    {
+      tile: { key: 'games', label: t('home.personal.games'), value: String(cuGames) },
+      applicable: true,
+    },
+    {
+      tile: { key: 'winPct', label: t('home.personal.winRate'), value: `${cuWinPct}%` },
+      applicable: true,
+    },
+    {
+      tile: {
+        key: 'total', label: t('home.personal.total'),
+        value: formatCurrency(cuTotal),
+        accent: signedAccent(cuTotal),
+      },
+      // Big-loss guard: hide the total tile entirely from the pool
+      // when sustained loss is meaningful. The wins tile below
+      // takes its place automatically because it's still applicable.
+      applicable: !isBigLoss,
+    },
+    {
+      tile: {
+        key: 'wins', label: t('home.personal.wins'),
+        value: String(cuWins),
+        accent: cuWins > 0 ? 'win' : undefined,
+      },
+      applicable: stats.winCount > 0,
+    },
+    {
+      tile: {
+        key: 'streak', label: t('home.personal.streakLabel'),
+        value: hasStreak
+          ? `${streakSign > 0 ? '+' : '−'}${cuStreakMag}`
+          : '—',
+        accent: hasStreak ? (streakSign > 0 ? 'win' : 'loss') : undefined,
+      },
+      applicable: hasStreak,
+    },
+    {
+      tile: {
+        key: 'bestNight', label: t('home.personal.bestNight'),
+        value: formatCurrency(cuBestNight),
+        accent: 'win',
+      },
+      applicable: stats.biggestWin > 0,
+    },
+    {
+      tile: {
+        key: 'avgGame', label: t('home.personal.avgGame'),
+        value: formatCurrency(cuAvgGame),
+        accent: signedAccent(cuAvgGame),
+      },
+      applicable: stats.gamesPlayed >= 1,
+    },
+    {
+      tile: {
+        key: 'longestStreak', label: t('home.personal.longestWinStreak'),
+        value: String(cuLongestStreak),
+        accent: cuLongestStreak > 0 ? 'win' : undefined,
+      },
+      applicable: stats.longestWinStreak > 0,
+    },
+    {
+      tile: {
+        key: 'lastGame', label: t('home.personal.lastGame'),
+        value: formatCurrency(cuLastGame),
+        accent: signedAccent(cuLastGame),
+      },
+      applicable: (stats.lastGameResults?.length ?? 0) > 0,
+    },
+    {
+      tile: {
+        key: 'last3Avg', label: t('home.personal.last3Avg'),
+        value: formatCurrency(cuLast3),
+        accent: signedAccent(cuLast3),
+      },
+      applicable: last3.length >= 3,
+    },
+  ];
+
+  const applicable = pool.filter(p => p.applicable).map(p => p.tile);
+  // Deterministic daily rotation. Day-of-year provides the day-to-day
+  // shift, name hash ensures different players don't see the exact
+  // same picks on the same day. UTC-based so a group spread across
+  // timezones rolls over together.
+  const TILES_TO_SHOW = 4;
+  const daySeed = Math.floor(Date.now() / 86_400_000);
+  const nameSeed = (stats.playerName || '')
+    .split('')
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const start = applicable.length > 0
+    ? (daySeed + nameSeed) % applicable.length
+    : 0;
+  const picked = applicable.length <= TILES_TO_SHOW
+    ? applicable
+    : Array.from({ length: TILES_TO_SHOW }, (_, i) =>
+        applicable[(start + i) % applicable.length]);
+
   const body = (
     // `minmax(0, 1fr)` (instead of plain `1fr`) prevents a track
     // from growing past its share when a long currency value like
     // `₪123,456` is wider than the equal-width slice. Without this,
     // a single big number would stretch its tile and squeeze the
-    // others on small screens.
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.4rem' }}>
-      <StatTile label={t('home.personal.games')} value={String(games)} />
-      <StatTile label={t('home.personal.winRate')} value={`${winPct}%`} />
-      <StatTile
-        label={t('home.personal.total')}
-        value={formatCurrency(total)}
-        accent={total > 0 ? 'win' : total < 0 ? 'loss' : undefined}
-      />
-      <StatTile
-        label={t('home.personal.streakLabel')}
-        value={hasStreak ? `${streakSign > 0 ? '+' : '−'}${streakMag}` : '—'}
-        accent={hasStreak ? (streakSign > 0 ? 'win' : 'loss') : undefined}
-      />
+    // others on small screens. Column count tracks `picked.length`
+    // for the rare case (brand-new player) where fewer than 4 tiles
+    // are applicable — we'd rather show 2 wide tiles than 2 normal
+    // + 2 empty.
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${Math.max(picked.length, 1)}, minmax(0, 1fr))`,
+      gap: '0.4rem',
+    }}>
+      {picked.map(tile => (
+        <StatTile
+          key={tile.key}
+          label={tile.label}
+          value={tile.value}
+          accent={tile.accent}
+        />
+      ))}
     </div>
   );
 
@@ -670,32 +907,42 @@ function LastGameCard({ order, step, t, gameDate, gamePlayers, playerName, daysS
     }
   }
 
+  // Each segment after the first is wrapped in a single
+  // `whiteSpace: 'nowrap'` span that bundles the separator dot with
+  // its content. Without this, the browser can break a line right
+  // before/after the dot — leaving a lonely "·" at the start of
+  // line 2 on narrow screens, which reads like a typo. Bundling
+  // also prevents a segment like "מנצח: ליאור" from splitting
+  // across lines mid-phrase.
+  const sep = (
+    <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
+  );
   const subtitle = (
     <>
-      {dateLabel}
+      <span style={{ whiteSpace: 'nowrap' }}>{dateLabel}</span>
       {winnerName && (
-        <>
-          <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {sep}
           {t('home.lastGame.winner', { name: winnerName })}
-        </>
+        </span>
       )}
       {myPlaceText && (
-        <>
-          <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
-          <span style={{ fontWeight: 600 }}>{myPlaceText}</span>
-        </>
+        <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+          {sep}
+          {myPlaceText}
+        </span>
       )}
       {profitText && (
-        <>
-          <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
-          <span style={{ color: profitColor, fontWeight: 600 }}>{profitText}</span>
-        </>
+        <span style={{ whiteSpace: 'nowrap', color: profitColor, fontWeight: 600 }}>
+          {sep}
+          {profitText}
+        </span>
       )}
       {absentText && (
-        <>
-          <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
-          <span style={{ color: absentColor, fontWeight: 600 }}>{absentText}</span>
-        </>
+        <span style={{ whiteSpace: 'nowrap', color: absentColor, fontWeight: 600 }}>
+          {sep}
+          {absentText}
+        </span>
       )}
     </>
   );
@@ -722,10 +969,19 @@ interface LeaderboardProps extends SectionProps {
 }
 
 function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onClick }: LeaderboardProps) {
-  const top3 = useMemo(() => {
+  const { top3, monthLabel } = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+
+    // Localized "May 2026" / "מאי 2026" for the card subtitle. Uses
+    // the document language so RTL Hebrew vs LTR English both look
+    // native.
+    const monthLabel = now.toLocaleDateString(
+      typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en-US' : 'he-IL',
+      { month: 'long', year: 'numeric' },
+    );
+
     const monthGameIds = new Set(
       games
         .filter(g => g.status === 'completed')
@@ -735,19 +991,45 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
         })
         .map(g => g.id),
     );
-    if (monthGameIds.size === 0) return [];
-    const byPlayer = new Map<string, { name: string; profit: number; games: number }>();
+    if (monthGameIds.size === 0) {
+      return {
+        top3: [] as { name: string; profit: number; games: number; wins: number }[],
+        monthLabel,
+      };
+    }
+
+    // Aggregate this month's stats per player. "wins" follows the
+    // same definition used everywhere else in the app
+    // (`PlayerStats.winCount` in `storage.ts`): a game ending in
+    // POSITIVE PROFIT, not just a 1st-place finish. The previous
+    // 1st-place-only counter produced misleading 0% rates for 2nd/
+    // 3rd-place podium players who still ended profitable — the
+    // monthly leaderboard sorts by total profit, so a player with
+    // a single 2nd-place +₪84 night legitimately had a "winning
+    // night" that should count.
+    const byPlayer = new Map<string, { name: string; profit: number; games: number; wins: number }>();
     for (const gp of gamePlayers) {
       if (!monthGameIds.has(gp.gameId)) continue;
-      const cur = byPlayer.get(gp.playerName) ?? { name: gp.playerName, profit: 0, games: 0 };
+      const cur = byPlayer.get(gp.playerName) ?? { name: gp.playerName, profit: 0, games: 0, wins: 0 };
       cur.profit += gp.profit;
       cur.games += 1;
+      if (gp.profit > 0) cur.wins += 1;
       byPlayer.set(gp.playerName, cur);
     }
-    return [...byPlayer.values()]
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 3);
+
+    return {
+      top3: [...byPlayer.values()].sort((a, b) => b.profit - a.profit).slice(0, 3),
+      monthLabel,
+    };
   }, [games, gamePlayers]);
+
+  // Title carries the month inline ("מובילי החודש · מאי 2026")
+  // instead of a separate subtitle line — the user wants the period
+  // labelled in the heading, not as supplementary copy. We keep the
+  // full localized "monthLabel" rather than a short form so the year
+  // is visible too (matters in January when "מאי" alone could be
+  // last year's results coming back into the rolling window).
+  const titleWithMonth = `${t('home.leaderboard.title')} · ${monthLabel}`;
 
   if (top3.length === 0) {
     return (
@@ -755,7 +1037,7 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
         order={order}
         step={step}
         icon="🏅"
-        title={t('home.leaderboard.title')}
+        title={titleWithMonth}
         subtitle={t('home.leaderboard.empty')}
         onClick={onClick}
       />
@@ -763,48 +1045,151 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
   }
 
   const medals = ['🥇', '🥈', '🥉'];
+  // ── Table layout ─────────────────────────────────────────────
+  // We render the top-3 as a real <table> mirroring the column
+  // structure on `StatisticsScreen` (# / שחקן / רווח / ממוצע /
+  // מש׳ / נצ%). This makes the dashboard leaderboard feel like a
+  // miniature of the full stats table — same headers, same numeric
+  // alignment, same shorthand — so the user can scan it the same
+  // way and tapping the card to drill into the full screen feels
+  // continuous instead of "different design over there".
+  //
+  // Notes:
+  // - `tableLayout: 'fixed'` would give us tighter column control
+  //   but breaks for variable-length Hebrew names; we let the
+  //   browser do auto layout and use `whiteSpace: 'nowrap'` on
+  //   numeric cells to prevent wrapping.
+  // - Column header alignment uses `isRTL` so English mirrors
+  //   correctly, matching the StatisticsScreen convention.
+  // - Numeric columns get `fontFeatureSettings: 'tnum'` (tabular
+  //   numerals) so the digits line up vertically across rows even
+  //   though we're not using a fixed grid.
+  // - The "self" row keeps the same blue accent we use everywhere
+  //   else for the current player — the cell-level background
+  //   spans the full row because every cell carries the same color
+  //   (table rows can't take a `background` cleanly across
+  //   borders).
+  const isRTL = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+  const numAlign: 'right' | 'left' = 'right';
+
+  const headerCellStyle: React.CSSProperties = {
+    fontSize: '0.65rem',
+    fontWeight: 600,
+    color: 'var(--text-muted)',
+    padding: '0.25rem 0.3rem',
+    whiteSpace: 'nowrap',
+  };
+  const dataCellStyle: React.CSSProperties = {
+    fontSize: '0.78rem',
+    padding: '0.35rem 0.3rem',
+    whiteSpace: 'nowrap',
+    fontFeatureSettings: '"tnum"',
+  };
+
   const body = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-      {top3.map((p, i) => {
-        const isMe = playerName !== null && p.name === playerName;
-        return (
-          <div
-            key={p.name}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.35rem 0.5rem', borderRadius: 7,
-              background: isMe ? ME_BG : 'rgba(255,255,255,0.025)',
-              border: isMe ? `1px solid ${ME_BORDER}` : '1px solid rgba(255,255,255,0.04)',
-            }}
-          >
-            <span style={{ fontSize: '0.95rem', flexShrink: 0 }}>{medals[i]}</span>
-            <span style={{
-              flex: 1,
-              // `min-width: 0` is required for a flex child with
-              // `text-overflow: ellipsis` to actually shrink below its
-              // intrinsic content width. Without it a long Hebrew name
-              // would push the profit pill off-card on a narrow screen.
-              minWidth: 0,
-              fontSize: '0.78rem', fontWeight: isMe ? 700 : 600,
-              color: isMe ? ME_NAME_COLOR : 'var(--text)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {p.name}
-            </span>
-            <span style={{
-              fontSize: '0.78rem', fontWeight: 700, fontFeatureSettings: '"tnum"',
-              color: p.profit > 0 ? WIN_COLOR : p.profit < 0 ? LOSS_COLOR : 'var(--text-muted)',
-              flexShrink: 0,
-            }}>
-              {/* No '+' prefix — green color + medal podium already
-                  signal "winning". Negative values still get a native
-                  '−' from the formatter so losses are unambiguous. */}
-              {formatCurrency(p.profit)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <table style={{
+      width: '100%',
+      borderCollapse: 'collapse',
+      tableLayout: 'auto',
+    }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+          <th style={{ ...headerCellStyle, textAlign: isRTL ? 'right' : 'left', width: 24 }}>
+            {t('stats.rankCol')}
+          </th>
+          <th style={{ ...headerCellStyle, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('stats.playerCol')}
+          </th>
+          <th style={{ ...headerCellStyle, textAlign: numAlign }}>
+            {t('stats.profitCol')}
+          </th>
+          <th style={{ ...headerCellStyle, textAlign: numAlign }}>
+            {t('stats.avgCol')}
+          </th>
+          <th style={{ ...headerCellStyle, textAlign: numAlign }}>
+            {t('stats.gamesCol')}
+          </th>
+          <th style={{ ...headerCellStyle, textAlign: numAlign }}>
+            {t('stats.winRateCol')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {top3.map((p, i) => {
+          const isMe = playerName !== null && p.name === playerName;
+          const pct = p.games > 0 ? Math.round((p.wins / p.games) * 100) : 0;
+          const avg = p.games > 0 ? Math.round(p.profit / p.games) : 0;
+          // Per-cell background paints the row uniformly even
+          // though `<tr>` can't reliably take a background under
+          // every browser when borders are involved.
+          const rowBg = isMe ? ME_BG : 'transparent';
+          const profitColor = p.profit > 0 ? WIN_COLOR : p.profit < 0 ? LOSS_COLOR : 'var(--text-muted)';
+          const avgColor = avg > 0 ? WIN_COLOR : avg < 0 ? LOSS_COLOR : 'var(--text-muted)';
+          return (
+            <tr
+              key={p.name}
+              style={{
+                borderBottom: i < top3.length - 1 ? '1px solid var(--border)' : 'none',
+              }}
+            >
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: isRTL ? 'right' : 'left',
+                color: 'var(--text-muted)',
+                fontWeight: 600,
+              }}>
+                {i + 1}
+              </td>
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: isRTL ? 'right' : 'left',
+                fontWeight: isMe ? 700 : 600,
+                color: isMe ? ME_NAME_COLOR : 'var(--text)',
+                overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 0,
+              }}>
+                <span style={{ marginInlineEnd: '0.35rem' }}>{medals[i]}</span>
+                {p.name}
+              </td>
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: numAlign,
+                color: profitColor,
+                fontWeight: 700,
+              }}>
+                {formatCurrency(p.profit)}
+              </td>
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: numAlign,
+                color: avgColor,
+              }}>
+                {formatCurrency(avg)}
+              </td>
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: numAlign,
+                color: 'var(--text-muted)',
+              }}>
+                {p.games}
+              </td>
+              <td style={{
+                ...dataCellStyle,
+                background: rowBg,
+                textAlign: numAlign,
+                color: 'var(--text-muted)',
+              }}>
+                {pct}%
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 
   return (
@@ -812,7 +1197,7 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
       order={order}
       step={step}
       icon="🏅"
-      title={t('home.leaderboard.title')}
+      title={titleWithMonth}
       body={body}
       onClick={onClick}
     />
@@ -828,9 +1213,10 @@ interface TriviaProps extends SectionProps {
 }
 
 function TriviaCard({ order, step, t, games, gamePlayers, playerStats }: TriviaProps) {
+  const { language } = useTranslation();
   const trivia = useMemo(
-    () => buildTriviaList(games, gamePlayers, playerStats, t),
-    [games, gamePlayers, playerStats, t],
+    () => buildTriviaList(games, gamePlayers, playerStats, t, language),
+    [games, gamePlayers, playerStats, t, language],
   );
 
   // Initial pick is a deterministic daily rotation — same fact for the
@@ -892,6 +1278,7 @@ function buildTriviaList(
   gamePlayers: ReturnType<typeof getAllGamePlayers>,
   playerStats: PlayerStats[],
   t: SectionProps['t'],
+  language: Language,
 ): { icon: string; text: string }[] {
   const list: { icon: string; text: string }[] = [];
   const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
@@ -969,7 +1356,14 @@ function buildTriviaList(
     }
     const topWinner = [...wins.entries()].sort((a, b) => b[1] - a[1])[0];
     if (topWinner && topWinner[1] >= 2) {
-      list.push({ icon: '👑', text: t('home.trivia.mostWins', { name: topWinner[0], count: topWinner[1] }) });
+      list.push({
+        icon: '👑',
+        text: t('home.trivia.mostWins', {
+          name: topWinner[0],
+          verb: verbForName('won', topWinner[0], language),
+          count: topWinner[1],
+        }),
+      });
     }
   }
 
@@ -1122,18 +1516,48 @@ function buildTriviaList(
     }
   }
 
-  // ── 15. Average players per game THIS YEAR. Useful for sizing
-  //         conversations ("we usually run 7-8") and surfaces a
-  //         non-obvious aggregate.
+  // ── 15. Player-count insights THIS YEAR. We deliberately do NOT
+  //         surface a fractional average ("7.3 players around the
+  //         table") because it's an artificial number nobody can
+  //         act on. Instead we publish two facts that ARE
+  //         informative:
+  //           a) Mode — the table size you actually run most often
+  //              ("we're a 7-handed group"), with the count so the
+  //              dominance is visible. Skipped if no size repeats
+  //              (no clear "usual" yet) or if the leader is barely
+  //              ahead.
+  //           b) Max — the biggest table assembled this year, but
+  //              only if it crosses 8 (a 7-handed group hosting 11
+  //              is a story; a 7-handed group hosting 7 is not).
   if (yearGameIds.size >= 3) {
-    const avg = yearGP.length / yearGameIds.size;
-    if (avg > 0) {
-      // One decimal — "7" feels like an exact target while "7.3"
-      // signals "averaged across many games", which is the point.
-      const rounded = Math.round(avg * 10) / 10;
+    const sizeFreq = new Map<number, number>();
+    let maxSize = 0;
+    for (const gameId of yearGameIds) {
+      const players = playersByGame.get(gameId);
+      if (!players) continue;
+      const size = players.length;
+      if (size === 0) continue;
+      sizeFreq.set(size, (sizeFreq.get(size) ?? 0) + 1);
+      if (size > maxSize) maxSize = size;
+    }
+    const sortedSizes = [...sizeFreq.entries()].sort((a, b) => b[1] - a[1]);
+    if (sortedSizes.length > 0) {
+      const [topSize, topCount] = sortedSizes[0];
+      // Require the mode to repeat AT LEAST twice — "happened once"
+      // isn't a "most common" claim. We don't gate on dominance
+      // over the runner-up because trivia is allowed to overlap
+      // (multiple sizes can each be common in a small dataset).
+      if (topCount >= 2) {
+        list.push({
+          icon: '🪑',
+          text: t('home.trivia.mostCommonSize', { players: topSize, count: topCount }),
+        });
+      }
+    }
+    if (maxSize >= 8) {
       list.push({
-        icon: '🎲',
-        text: t('home.trivia.avgGameSize', { avg: rounded.toFixed(1) }),
+        icon: '👥',
+        text: t('home.trivia.biggestTable', { players: maxSize }),
       });
     }
   }
@@ -1209,7 +1633,11 @@ function buildTriviaList(
   if (lossStreakLeader.streak >= 3) {
     list.push({
       icon: '🥶',
-      text: t('home.trivia.longestLossStreak', { name: lossStreakLeader.name, n: lossStreakLeader.streak }),
+      text: t('home.trivia.longestLossStreak', {
+        name: lossStreakLeader.name,
+        verb: verbForName('lost', lossStreakLeader.name, language),
+        n: lossStreakLeader.streak,
+      }),
     });
   }
 
@@ -1253,7 +1681,14 @@ function buildTriviaList(
   if (newest) {
     const daysAgo = Math.floor((Date.now() - newest.firstGameMs) / 86_400_000);
     if (daysAgo >= 1 && daysAgo <= 90 && firstSeen.size >= 4) {
-      list.push({ icon: '🌟', text: t('home.trivia.newestPlayer', { name: newest.name, days: daysAgo }) });
+      list.push({
+        icon: '🌟',
+        text: t('home.trivia.newestPlayer', {
+          name: newest.name,
+          verb: verbForName('joined', newest.name, language),
+          days: daysAgo,
+        }),
+      });
     }
   }
 
@@ -1286,6 +1721,7 @@ function buildTriviaList(
         icon: '🎯',
         text: t('home.trivia.bestWinRate', {
           name: topRate.name,
+          verb: verbForName('won', topRate.name, language),
           pct: Math.round(topRate.pct),
           games: topRate.games,
         }),
@@ -1303,6 +1739,213 @@ function buildTriviaList(
       icon: '📚',
       text: t('home.trivia.totalAllTimeGames', { count: allTimeGameCount }),
     });
+  }
+
+  // ── 23. Latest game's MVP. Recency hook — anchors the dashboard
+  //         to "last night" so the card feels current even if no
+  //         other stat moved. We pick the most recent completed
+  //         game and the player with the highest positive profit
+  //         in it. Falls back to scanning `gamePlayers` if the
+  //         latest game predates the year-scoped index built above.
+  const latestGame = games
+    .filter(g => g.status === 'completed')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  if (latestGame) {
+    const ps = playersByGame.get(latestGame.id)
+      ?? gamePlayers.filter(gp => gp.gameId === latestGame.id);
+    if (ps.length > 0) {
+      let mvp = ps[0];
+      for (const p of ps) if (p.profit > mvp.profit) mvp = p;
+      if (mvp.profit > 0) {
+        list.push({
+          icon: '⭐',
+          text: t('home.trivia.lastGameMvp', {
+            name: mvp.playerName,
+            verb: verbForName('won', mvp.playerName, language),
+            profit: formatCurrency(mvp.profit),
+          }),
+        });
+      }
+    }
+  }
+
+  // ── 24. Best average profit per game THIS YEAR. Different angle
+  //         from #1 (biggest single win) — rewards consistency over
+  //         a single lucky night. Requires ≥ 4 games to qualify so
+  //         a one-shot +500 outlier can't crown themselves.
+  if (yearGameIds.size >= 4) {
+    const totals = new Map<string, { profit: number; games: number }>();
+    for (const gp of yearGP) {
+      const e = totals.get(gp.playerName) ?? { profit: 0, games: 0 };
+      e.profit += gp.profit;
+      e.games++;
+      totals.set(gp.playerName, e);
+    }
+    let topAvg = { name: '', avg: 0, games: 0 };
+    for (const [name, e] of totals) {
+      if (e.games < 4) continue;
+      const avg = e.profit / e.games;
+      if (avg > topAvg.avg) topAvg = { name, avg, games: e.games };
+    }
+    if (topAvg.avg >= 30) {
+      list.push({
+        icon: '📈',
+        text: t('home.trivia.bestAvgPerGame', {
+          name: topAvg.name,
+          avg: formatCurrency(Math.round(topAvg.avg)),
+          games: topAvg.games,
+        }),
+      });
+    }
+  }
+
+  // ── 25. Longest win streak in the group's HISTORY. Distinct from
+  //         #8 (current streak): this is the all-time record across
+  //         every completed game, regardless of recency, anchoring
+  //         the "legendary moments" framing. We only surface it when
+  //         it's strictly larger than the current streak leader so
+  //         the two facts don't echo each other on the same dataset.
+  let bestStreakEver = { name: '', streak: 0 };
+  for (const ps of playerStats) {
+    if (ps.longestWinStreak > bestStreakEver.streak) {
+      bestStreakEver = { name: ps.playerName, streak: ps.longestWinStreak };
+    }
+  }
+  if (bestStreakEver.streak >= 3 && bestStreakEver.streak > streakLeader.streak) {
+    list.push({
+      icon: '🏔️',
+      text: t('home.trivia.longestWinStreakEver', {
+        name: bestStreakEver.name,
+        n: bestStreakEver.streak,
+      }),
+    });
+  }
+
+  // ── 26. Top duo THIS YEAR. The pair of players who shared the
+  //         most tables together. Emergent rivalry / partnership
+  //         framing — gives a different lens than individual stats.
+  //         O(p²) per game where p is players-per-game, but p is
+  //         small (≤ 12 in practice) so this is cheap.
+  if (yearGameIds.size >= 4) {
+    const pairCounts = new Map<string, { a: string; b: string; n: number }>();
+    for (const gameId of yearGameIds) {
+      const ps = playersByGame.get(gameId);
+      if (!ps || ps.length < 2) continue;
+      // Sort names for a stable map key so (A,B) and (B,A) collapse
+      // into the same bucket.
+      const names = ps.map(p => p.playerName).sort();
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          const key = `${names[i]}|${names[j]}`;
+          const cur = pairCounts.get(key) ?? { a: names[i], b: names[j], n: 0 };
+          cur.n++;
+          pairCounts.set(key, cur);
+        }
+      }
+    }
+    let topPair: { a: string; b: string; n: number } | null = null;
+    for (const v of pairCounts.values()) {
+      if (topPair === null || v.n > topPair.n) topPair = v;
+    }
+    if (topPair && topPair.n >= 4) {
+      list.push({
+        icon: '🤝',
+        text: t('home.trivia.topDuo', {
+          a: topPair.a,
+          b: topPair.b,
+          count: topPair.n,
+        }),
+      });
+    }
+  }
+
+  // ── 27. Top chaser THIS YEAR — highest avg rebuys per game.
+  //         Different from #9 (single-game record) and #10 (group
+  //         total): this is the player who CONSISTENTLY chases.
+  //         Gating: ≥ 4 games and ≥ 1.0 avg keeps the bar
+  //         meaningful (one wild night doesn't crown a chaser).
+  if (yearGameIds.size >= 4) {
+    const tally = new Map<string, { rebuys: number; games: number }>();
+    for (const gp of yearGP) {
+      const e = tally.get(gp.playerName) ?? { rebuys: 0, games: 0 };
+      e.rebuys += gp.rebuys;
+      e.games++;
+      tally.set(gp.playerName, e);
+    }
+    let topChaser = { name: '', avg: 0, games: 0 };
+    for (const [name, e] of tally) {
+      if (e.games < 4) continue;
+      const avg = e.rebuys / e.games;
+      if (avg > topChaser.avg) topChaser = { name, avg, games: e.games };
+    }
+    if (topChaser.avg >= 1.0) {
+      list.push({
+        icon: '🪙',
+        text: t('home.trivia.topChaser', {
+          name: topChaser.name,
+          avg: topChaser.avg.toFixed(1),
+          games: topChaser.games,
+        }),
+      });
+    }
+  }
+
+  // ── 28. Best debut THIS YEAR. The player whose first-ever game
+  //         in the group resulted in the biggest profit, scoped to
+  //         debuts from this year so the framing stays "fresh".
+  //         `firstSeen` is built earlier (#20) — we reuse it here
+  //         to find which players debuted this year, then look up
+  //         their first-game profit via `playersByGame`.
+  let bestDebut = { name: '', profit: 0 };
+  for (const [name, firstTs] of firstSeen) {
+    if (firstTs < yearStart) continue;
+    // Locate the actual game record matching the player's first-
+    // appearance timestamp. Multiple games can share a date (rare
+    // double-headers), so we verify the player participated.
+    for (const g of games) {
+      if (g.status !== 'completed') continue;
+      if (new Date(g.date).getTime() !== firstTs) continue;
+      const ps = playersByGame.get(g.id);
+      if (!ps) continue;
+      const me = ps.find(p => p.playerName === name);
+      if (!me) continue;
+      if (me.profit > bestDebut.profit) bestDebut = { name, profit: me.profit };
+      break;
+    }
+  }
+  if (bestDebut.profit >= 100) {
+    list.push({
+      icon: '🎉',
+      text: t('home.trivia.bestDebut', {
+        name: bestDebut.name,
+        verb: verbForName('won', bestDebut.name, language),
+        profit: formatCurrency(bestDebut.profit),
+      }),
+    });
+  }
+
+  // ── 29. Game cadence THIS YEAR. Group-level fact: how often the
+  //         group hits the table. Computed as the average gap
+  //         between consecutive completed-game dates within the
+  //         year. Cap at 60 days so unusual one-off entries don't
+  //         claim "every 200 days" as a rhythm.
+  if (yearGameIds.size >= 4) {
+    const sortedDates = [...yearGameIds]
+      .map(id => games.find(gg => gg.id === id)?.date)
+      .filter((d): d is string => Boolean(d))
+      .map(d => new Date(d).getTime())
+      .filter(ts => !Number.isNaN(ts))
+      .sort((a, b) => a - b);
+    if (sortedDates.length >= 4) {
+      const span = sortedDates[sortedDates.length - 1] - sortedDates[0];
+      const avgDays = Math.round(span / 86_400_000 / (sortedDates.length - 1));
+      if (avgDays >= 1 && avgDays <= 60) {
+        list.push({
+          icon: '⏱',
+          text: t('home.trivia.cadence', { days: avgDays }),
+        });
+      }
+    }
   }
 
   return list;
@@ -1323,11 +1966,22 @@ function TrainingCard({ order, step, t, playerName, stats, onClick }: TrainingCa
   // other dashboard card follows, AND would risk visual collisions
   // with other cards that already use 🏆 / 🔥. The personalization
   // lives in the subtitle copy where it belongs.
-  const { title: message, sub } = useMemo(
+  //
+  // We also intentionally drop the variant's `sub` field. The earlier
+  // design joined title + sub with " · " into a long line ("ליאור,
+  // 92% דיוק · 75% נצחונות · 11 אימונים · ממוצע 67 למשחק"), which
+  // wraps to two lines on mobile widths and breaks the dashboard's
+  // single-line-subtitle rhythm. The title alone already carries the
+  // personalized hook (name + key insight) — sub was supplementary
+  // stats that belong on the deeper Statistics screen, not the home
+  // landing card. `sub` stays on the function's return type for the
+  // moment so the variant pool stays compatible with any future
+  // revival, but it's not surfaced anywhere in the UI.
+  const { title: message } = useMemo(
     () => buildTrainingMessage(playerName, stats),
     [playerName, stats],
   );
-  const subtitle = sub ? `${message} · ${sub}` : message;
+  const subtitle = message;
 
   // No accessory button — the whole card is clickable, which is the
   // app-wide pattern (Schedule, LastGame, Personal, Leaderboard all
@@ -1461,10 +2115,18 @@ function buildTrainingMessage(
 
 // ─── Pill ───────────────────────────────────────────────────────────────
 
-function Pill({ text, tone }: { text: string; tone: 'success' | 'info' }) {
-  const palette = tone === 'success'
-    ? { bg: 'rgba(16, 185, 129, 0.18)', fg: WIN_COLOR, border: 'rgba(16, 185, 129, 0.4)' }
-    : { bg: 'rgba(99, 102, 241, 0.16)', fg: '#a5b4fc', border: 'rgba(99, 102, 241, 0.4)' };
+function Pill({ text, tone }: { text: string; tone: 'success' | 'info' | 'warning' }) {
+  const palette = (() => {
+    switch (tone) {
+      case 'success':
+        return { bg: 'rgba(16, 185, 129, 0.18)', fg: WIN_COLOR, border: 'rgba(16, 185, 129, 0.4)' };
+      case 'warning':
+        return { bg: 'rgba(245, 158, 11, 0.20)', fg: '#fbbf24', border: 'rgba(245, 158, 11, 0.45)' };
+      case 'info':
+      default:
+        return { bg: 'rgba(99, 102, 241, 0.16)', fg: '#a5b4fc', border: 'rgba(99, 102, 241, 0.4)' };
+    }
+  })();
   return (
     <span style={{
       fontSize: '0.65rem', fontWeight: 700,

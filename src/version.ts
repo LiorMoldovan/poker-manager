@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.40.0';
+export const APP_VERSION = '5.41.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,25 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.41.0',
+    date: '2026-05-06',
+    changes: [
+      '📊 Personal card rotates highlights daily',
+      '🛡 Big total losses hidden on home card',
+      '🎲 Trivia: 7 new fact categories',
+      '🏅 Leaderboard now a real table',
+      '📈 Leaderboard adds avg + games columns',
+      '✅ Leaderboard win% bug fix',
+      '🎨 Schedule card colored by status',
+      '📍 Location icon on schedule subtitle',
+      '✏️ Gender-aware Hebrew verbs everywhere',
+      '✉️ Hebrew emails align right-to-left',
+      '📝 Copy: שאישרו, מיקום',
+      '📱 Mobile: pills wrap below title',
+      '📱 Mobile: separator dots stay attached',
+    ],
+  },
   {
     version: '5.40.0',
     date: '2026-05-06',

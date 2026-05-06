@@ -1023,19 +1023,21 @@ function generateLowData(
   if (uniqueGamesInPeriod === 1 && participants.length > 0) {
     const winner = participants.find(p => p.totalProfit > 0);
     if (winner) {
+      const wonVerb = isPlayerFemale(winner.name) ? 'ניצחה' : 'ניצח';
       items.push({
         emoji: '🎉', category: 'season', sentiment: 'positive',
         title: `המשחק הראשון ב${periodLabel}!`,
-        description: `${winner.name} ניצח במשחק הראשון עם ${fmt(winner.totalProfit)}. התחלה מעולה!`,
+        description: `${winner.name} ${wonVerb} במשחק הראשון עם ${fmt(winner.totalProfit)}. התחלה מעולה!`,
         priority: 70,
       });
     }
     const loser = participants.find(p => p.totalProfit < 0);
     if (loser && participants.length > 1) {
+      const lostVerb = isPlayerFemale(loser.name) ? 'הפסידה' : 'הפסיד';
       items.push({
         emoji: '💪', category: 'drama', sentiment: 'negative',
         title: 'הזדמנות להתהפך!',
-        description: `${loser.name} הפסיד ${Math.abs(Math.round(loser.totalProfit))} במשחק הראשון. הפעם הזדמנות לחזור לפלוס!`,
+        description: `${loser.name} ${lostVerb} ${Math.abs(Math.round(loser.totalProfit))} במשחק הראשון. הפעם הזדמנות לחזור לפלוס!`,
         priority: 65,
       });
     }

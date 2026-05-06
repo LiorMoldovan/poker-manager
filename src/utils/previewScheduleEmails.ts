@@ -41,7 +41,7 @@ function makeSyntheticPoll(): { poll: GamePoll; pinned: GamePollDate; sampleVote
   };
   const iso = now.toISOString();
   const dates: GamePollDate[] = [
-    { id: 'date-thu', pollId: 'preview-poll', proposedDate: inDays(2), proposedTime: '21:00', location: 'דירת ליאור', createdAt: iso },
+    { id: 'date-thu', pollId: 'preview-poll', proposedDate: inDays(2), proposedTime: '21:00', location: 'מיקום ליאור', createdAt: iso },
     { id: 'date-fri', pollId: 'preview-poll', proposedDate: inDays(3), proposedTime: '21:00', location: null,         createdAt: iso },
     { id: 'date-sat', pollId: 'preview-poll', proposedDate: inDays(4), proposedTime: '21:00', location: null,         createdAt: iso },
   ];
@@ -66,7 +66,7 @@ function makeSyntheticPoll(): { poll: GamePoll; pinned: GamePollDate; sampleVote
     confirmedAt: now.toISOString(),
     confirmedGameId: null,
     note: null,
-    defaultLocation: 'דירת ליאור',
+    defaultLocation: 'מיקום ליאור',
     allowMaybe: true,
     cancellationReason: 'אמיר חולה — נדחה לשבוע הבא',
     votingLockedAt: null,
@@ -147,11 +147,13 @@ async function sendOne(
   // and don't get mistaken for live poll mail. Index keeps them ordered
   // even when sent in parallel.
   const subject = `[preview/${index + 1}-${variant}] ${msg.emailSubject}`;
-  const body = `\u200F${msg.emailBody('ליאור')}`;
+  // RTL wrapping is applied centrally in `proxySendBroadcastEmail`,
+  // so the preview behaves IDENTICALLY to a real send — same
+  // `<div dir="rtl">` block, same alignment in the inbox.
   const ok = await proxySendBroadcastEmail({
     to: toEmail,
     subject,
-    message: body,
+    message: msg.emailBody('ליאור'),
     senderName: 'Poker Manager',
   });
   return { variant, ok };
