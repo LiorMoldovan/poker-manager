@@ -1031,14 +1031,25 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
 // we shifted to a soft indigo gradient (informational / "goal"
 // vibe). Tabular numerals so the count never jiggles between
 // glyph widths.
+//
+// Rendered on its own dedicated row inside PersonalCard's body
+// (between the title row and the stat tiles), not in the title
+// accessory slot. Earlier we tried squeezing it next to the
+// "הסטטיסטיקה שלך" heading with `justifyContent: 'space-between'`,
+// but the badge always crowded the title — either ellipsis-clipping
+// "הסטטיסטיקה שלך" or making the milestone text so cryptic
+// (`187/200 משחקים`) that its meaning was lost. A dedicated row
+// wins on every axis: title is never truncated, badge can be
+// fully descriptive ("עוד 13 משחקים ל-200"), and any milestone
+// length (including profit currency strings) fits cleanly.
 function MilestoneBadge({ text }: { text: string }) {
   return (
     <div style={{
       alignSelf: 'flex-start',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.3rem',
-      padding: '0.25rem 0.55rem',
+      gap: '0.4rem',
+      padding: '0.35rem 0.7rem',
       borderRadius: 999,
       background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.10) 0%, rgba(129, 140, 248, 0.18) 100%)',
       border: '1px solid rgba(129, 140, 248, 0.28)',
@@ -1046,9 +1057,9 @@ function MilestoneBadge({ text }: { text: string }) {
       fontFeatureSettings: '"tnum"',
       maxWidth: '100%',
     }}>
-      <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>🎯</span>
+      <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>🎯</span>
       <span style={{
-        fontSize: '0.74rem',
+        fontSize: '0.78rem',
         fontWeight: 700,
         color: '#c7d2fe',
         letterSpacing: '0.015em',
@@ -1083,7 +1094,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
     const remaining = target - stats.gamesPlayed;
     if (remaining > 0 && remaining <= 30) {
       candidates.push({
-        text: t('home.personal.milestoneGames', { current: stats.gamesPlayed, target }),
+        text: t('home.personal.milestoneGames', { remaining, target }),
         ratio: remaining / target,
       });
       break; // only the next one in this category matters
@@ -1096,7 +1107,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
     const remaining = target - stats.winCount;
     if (remaining > 0 && remaining <= 15) {
       candidates.push({
-        text: t('home.personal.milestoneWins', { current: stats.winCount, target }),
+        text: t('home.personal.milestoneWins', { remaining, target }),
         ratio: remaining / target,
       });
       break;
@@ -1114,7 +1125,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
       if (remaining > 0 && remaining <= 5000) {
         candidates.push({
           text: t('home.personal.milestoneProfit', {
-            current: formatCurrency(Math.round(stats.totalProfit)),
+            remaining: formatCurrency(Math.round(remaining)),
             target: formatCurrency(target),
           }),
           ratio: remaining / target,

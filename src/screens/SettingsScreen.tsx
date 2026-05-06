@@ -2391,6 +2391,31 @@ const SettingsScreen = () => {
                           </a>
                         </div>
                       )}
+                      {/* EmailJS upstream cross-check (last 7 days). Visible
+                          only when the /history API is reachable; if the
+                          private key isn't configured we silently hide this
+                          line — there's no useful info to show. The 7-day
+                          window matches EmailJS Free-tier retention, so
+                          this works on every plan. */}
+                      {emailUsage?.emailjsAvailable && (() => {
+                        const eUsed = emailUsage.emailjsLast7d ?? 0;
+                        const our7d = emailUsage.ourLast7d ?? 0;
+                        const sync = emailUsage.inSync ?? 'unknown';
+                        const color = sync === 'ok' ? '#10B981' : sync === 'gap' ? '#F59E0B' : 'var(--text-muted)';
+                        const icon = sync === 'ok' ? '✓' : sync === 'gap' ? '⚠' : '·';
+                        const label = sync === 'gap'
+                          ? t('settings.ai.emailJsGap', { emailjs: eUsed, ours: our7d })
+                          : t('settings.ai.emailJsInSync', { count: eUsed });
+                        return (
+                          <div style={{
+                            fontSize: '0.6rem', color, marginTop: '0.3rem', lineHeight: 1.45,
+                            display: 'flex', alignItems: 'baseline', gap: '0.3rem',
+                          }}>
+                            <span style={{ fontWeight: 700 }}>{icon}</span>
+                            <span>{label}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Stats row */}

@@ -398,6 +398,18 @@ export interface EmailUsageResponse {
   perDay: Array<{ date: string; count: number }>;
   recent: EmailUsageEntry[];
   failed: number;
+  // ── EmailJS upstream cross-check (last 7 days max — Free-tier retention).
+  // emailjsAvailable is false when the EMAILJS_PRIVATE_KEY env var isn't
+  // configured or the EmailJS API call failed; in that case the comparison
+  // line is hidden client-side. ourLast7d is computed from per_day so the
+  // two numbers are window-aligned. inSync is a 3-state so the UI can
+  // distinguish "no data yet" from a genuine gap.
+  emailjsAvailable?: boolean;
+  emailjsLast7d?: number | null;
+  emailjsLast7dFailed?: number | null;
+  emailjsError?: string | null;
+  ourLast7d?: number;
+  inSync?: 'unknown' | 'ok' | 'gap';
 }
 
 export async function proxyEmailUsage(): Promise<EmailUsageResponse | null> {
