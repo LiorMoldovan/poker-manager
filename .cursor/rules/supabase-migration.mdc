@@ -8,18 +8,23 @@ alwaysApply: false
 
 ## ⚡ Use The Supabase MCP First
 
-You have live read access to this project's Supabase DB via an MCP server (configured in `.cursor/mcp.json`, registered as `supabase` — or the legacy `project-0-Poker Game-supabase` if present). Server runs read-only as `supabase_read_only_user` against project `ursjltxklmxmapfvkttj`. **Always inspect the live DB before authoring a migration or diagnosing a bug.** Do NOT ask the user to run `SELECT` queries you can run yourself.
+You have live **read AND write** access to this project's Supabase DB via an MCP server (configured in `.cursor/mcp.json`, registered as `supabase` — or the legacy `project-0-Poker Game-supabase` if present). Server runs against project `ursjltxklmxmapfvkttj` with full DB privileges. **Always inspect the live DB before authoring a migration or diagnosing a bug.** Do NOT ask the user to run `SELECT` queries you can run yourself.
 
 - `list_tables` (with `verbose: true`) — current schema, columns, FKs, PKs, RLS state
-- `execute_sql` — any read query. Use to inspect:
+- `execute_sql` — any **read** query. Use to inspect:
   - RLS policies: `select * from pg_policies where tablename = '<t>'`
   - Function bodies: `select pg_get_functiondef('<fn>'::regproc)`
   - Triggers: `select * from pg_trigger where tgrelid = '<t>'::regclass`
   - Sample rows / counts to confirm assumptions
+- `apply_migration` — apply a `supabase/0XX-*.sql` file you just authored (file on disk = audit trail).
 - `list_migrations` — what's already applied
 - `get_logs` / `get_advisors` — debugging + security/perf hints
 
-**Workflow**: inspect live state → author `supabase/0XX-*.sql` → user applies → verify with `execute_sql`. See `AGENTS.md` "Supabase MCP" section for full rules. **Do not call `apply_migration`** — migrations go through the numbered SQL file workflow below.
+**Workflow**: inspect live state → author `supabase/0XX-*.sql` (always — never invent schema inside `execute_sql`) → confirm with user if risky → apply via `apply_migration` → verify with `execute_sql`. See `AGENTS.md` "Supabase MCP" + "Confirm Before Risky Actions" sections for full rules.
+
+**`execute_sql` is read-only by discipline, not by config.** Don't run DDL/DML through it — use a numbered migration file every time so the change is reviewable in git.
+
+**Risky changes need explicit user confirmation before apply** (DROP / DELETE without WHERE / role grants / RLS toggles / column renames or removals). When in doubt, ASK with `AskQuestion` rather than guess.
 
 **If the MCP is missing**: tell the user to verify `.cursor/mcp.json` and reload Cursor. Do not silently revert to "ask the user to run queries."
 

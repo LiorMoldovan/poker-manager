@@ -1,0 +1,48 @@
+---
+description: Vite dev server policy — auto-starts on folder open; agent should never spawn a duplicate
+alwaysApply: true
+---
+
+# Dev Server Policy
+
+## How it starts
+
+The Vite dev server is auto-started by `.vscode/tasks.json` (`runOn: folderOpen`,
+label `dev: vite`) and serves on **http://localhost:5173/**. `.vscode/settings.json`
+sets `task.allowAutomaticTasks: "on"` so Cursor doesn't prompt every reload.
+First-ever open in a fresh Cursor install may still prompt the user once
+("Allow Automatic Tasks") — they accept, and it sticks.
+
+`vite.config.ts` declares port `3000` but on this Windows machine that
+port is held in an excluded range (`EACCES: permission denied ::1:3000`),
+which is why the task pins `--port 5173`.
+
+## Rules for the agent
+
+1. **Do not run `npm run dev` or `npx vite` reflexively.** The auto-task
+   already owns the server. Spawning another instance produces port
+   conflicts and confused log streams.
+2. **Before any "start the server" request, check first**: list the
+   `terminals/` folder and look for an active `npx vite` / `vite` /
+   `npm run dev` process. If one is running, tell the user it's already
+   up and link to http://localhost:5173/.
+3. **If the server has died** (no terminal process, or the terminal file
+   shows a non-zero exit), restart it the same way the task does:
+   `npx vite --port 5173` from the workspace root, backgrounded
+   (`block_until_ms: 0`). Do not change the port.
+4. **Never edit `vite.config.ts` to "fix" the port** unless the user
+   explicitly asks. The port mismatch with config is intentional and
+   documented above; changing the config affects every collaborator.
+5. **HMR is fine.** Most code changes hot-reload; you don't need to
+   restart the server after edits. Restart only on `vite.config.ts` /
+   `package.json` changes or when HMR is visibly broken.
+
+## Verifying the server is actually serving
+
+If you're unsure whether the auto-task started, the cheapest signal is:
+
+```powershell
+Test-NetConnection localhost -Port 5173 -InformationLevel Quiet
+```
+
+`True` = server is listening. `False` = restart it.

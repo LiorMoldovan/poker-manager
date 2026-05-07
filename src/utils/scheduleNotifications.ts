@@ -669,6 +669,21 @@ function resolveConfirmedBelowTargetOthers(
   }
   for (const v of poll.votes) ids.add(v.playerId);
   for (const id of yesOnPinned) ids.delete(id);
+  // Also drop anyone who explicitly voted NO on the pinned date — they
+  // already told us this date doesn't work for them, so the
+  // "join us, חסר אחד" recruitment email is just noise to them and
+  // burns quota. They still get push (the channel they didn't opt out
+  // of) and can see the live date in the app. A maybe-vote stays in
+  // the audience because "maybe" implies undecided, where a nudge
+  // CAN flip them. Cancellation/reminder/etc. flows are unaffected —
+  // a no-voter still gets the cancellation email if the poll is
+  // cancelled, because that's the state they actually need.
+  const noOnPinned = new Set(
+    poll.votes
+      .filter(v => v.dateId === poll.confirmedDateId && v.response === 'no')
+      .map(v => v.playerId)
+  );
+  for (const id of noOnPinned) ids.delete(id);
   return Array.from(ids);
 }
 
@@ -697,15 +712,23 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
 // independently gated by group settings — the WhatsApp share buttons +
 // in-app banners always work regardless.
 // Per-kind email allowlist — emails are reserved for the events members
-// genuinely shouldn't miss. `expanded` and `vote_change` stay push-only:
-// expanded is a state-transition broadcast that adds little over the
-// invitation, and vote_change fires on every RSVP cast / change which
-// would flood the EmailJS quota. `creation` IS in the allowlist — open
-// polls are important enough that the invitation goes out as both push
-// and email. Layered ON TOP of the group-level `scheduleEmailsEnabled`
-// toggle — both must be true for an email to go out.
+// genuinely shouldn't miss. `vote_change` stays push-only because it
+// fires on every RSVP cast / change and would flood the EmailJS quota.
+// `expanded` IS in the allowlist (added v5.44.2) — when a poll opens up
+// to permanent_guests + guests after the 48h delay, those members are
+// often less engaged with push and rely on email to even know the
+// invitation came through. Skipping email for `expanded` was the
+// original v5.43.0 cut, but it muted the most important moment for
+// non-permanent members. Quota-wise it costs ~9 emails per expansion
+// (6 perm_guest + ~3 linked guests in this group), still well inside
+// the 200/mo cap. `creation` is in the allowlist for the same reason —
+// open polls are important enough that the invitation goes out as both
+// push and email. Layered ON TOP of the group-level
+// `scheduleEmailsEnabled` toggle — both must be true for an email to
+// go out.
 const EMAIL_ALLOWLIST: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
   'creation',
+  'expanded',
   'confirmed',
   'target_filled',
   'cancellation',
@@ -717,6 +740,15 @@ async function dispatch(
   kind: NotificationKind,
   msg: BuiltMessage,
   recipientNames: string[],
+  options?: {
+    // When set, push goes to `recipientNames` but email is restricted
+    // to this narrower list. Used by `sendTargetFilledNotifications` to
+    // celebrate the fill via push for ALL yes-voters while only emailing
+    // the NEW yes-voter(s) who didn't already get the
+    // `confirmed-below-target-yes` email at pin time. Saves up to 6
+    // duplicate emails per messy poll (v5.44.2 quota optimization).
+    emailRecipientNames?: string[];
+  },
 ): Promise<void> {
   if (recipientNames.length === 0) {
     console.log(`[schedule-notify/${kind}] no recipients, skipping`);
@@ -753,7 +785,16 @@ async function dispatch(
     return;
   }
 
-  await Promise.allSettled(recipientNames.map(async (name) => {
+  const emailNames = options?.emailRecipientNames ?? recipientNames;
+  if (emailNames.length === 0) {
+    console.log(`[schedule-notify/${kind}] email skipped (no fresh recipients after dedup)`);
+    return;
+  }
+  if (emailNames.length < recipientNames.length) {
+    console.log(`[schedule-notify/${kind}] email deduped: ${recipientNames.length} push, ${emailNames.length} email`);
+  }
+
+  await Promise.allSettled(emailNames.map(async (name) => {
     try {
       const info = await getPlayerEmailForNotification(poll.groupId, name);
       if (!info?.email) return;
@@ -764,14 +805,14 @@ async function dispatch(
       // steered paragraph-level bidi resolution and didn't override
       // the EmailJS template's `text-align: left` CSS, which left
       // some clients still aligned to the left.
-      const ok = await proxySendBroadcastEmail({
+      const r = await proxySendBroadcastEmail({
         to: info.email,
         subject: msg.emailSubject,
         message: msg.emailBody(name),
         senderName: 'Poker Manager',
         kind: notificationKindToEmailKind(kind),
       });
-      if (!ok) console.warn(`[schedule-notify/${kind}] email failed for ${name}`);
+      if (!r.ok) console.warn(`[schedule-notify/${kind}] email failed for ${name}: ${r.error || 'unknown'}`);
     } catch (err) {
       console.warn(`[schedule-notify/${kind}] email error for ${name}:`, err);
     }
@@ -878,22 +919,49 @@ export async function sendCancellationNotifications(poll: GamePoll): Promise<voi
 //     claimed by the at-target confirmed flow).
 export async function sendTargetFilledNotifications(poll: GamePoll): Promise<void> {
   if (poll.status !== 'confirmed' || !poll.confirmedDateId) return;
-  const yesPlayerIds = Array.from(new Set(
-    poll.votes
-      .filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes')
-      .map(v => v.playerId)
-  ));
+  const yesVotes = poll.votes.filter(
+    v => v.dateId === poll.confirmedDateId && v.response === 'yes'
+  );
+  const yesPlayerIds = Array.from(new Set(yesVotes.map(v => v.playerId)));
   if (yesPlayerIds.length < poll.targetPlayerCount) return;
   const claimed = await claimPollNotifications(poll.id, 'target_filled');
   if (!claimed) return;
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
   if (!confirmedDate) return;
   const yesNames = playerNamesForIds(yesPlayerIds);
+
+  // Email-dedup: anyone whose yes-vote on the pinned date predates the
+  // confirmed broadcast already received the `confirmed-below-target-yes`
+  // email at pin time ("we picked Friday — חסר אחד"). Emailing them again
+  // a day later with "המשחק מלא" is redundant copy on the same context;
+  // push still fires for everyone (the celebratory buzz is the point).
+  // Only the NEW yes-voter(s) — whose vote was cast after the confirm
+  // broadcast — get the email so they know they're now in the game.
+  // Falls back to "email everyone" when:
+  //   * The poll was confirmed AT-target (no `confirmed-below-target-yes`
+  //     ever sent — that path preempts target_filled, so we don't reach
+  //     here in practice, but defensive).
+  //   * `confirmedNotificationsSentAt` is null (legacy polls predating the
+  //     timestamp field, or polls where the confirm dispatch failed —
+  //     better to over-email than to silently drop a "you're in" message).
+  const cutoffMs = poll.confirmedNotificationsSentAt
+    ? new Date(poll.confirmedNotificationsSentAt).getTime()
+    : null;
+  const emailIds = cutoffMs == null
+    ? yesPlayerIds
+    : Array.from(new Set(
+        yesVotes
+          .filter(v => new Date(v.votedAt).getTime() > cutoffMs)
+          .map(v => v.playerId)
+      ));
+  const emailNames = playerNamesForIds(emailIds);
+
   await dispatch(
     poll,
     'target_filled',
     buildTargetFilledMessage(poll, confirmedDate, yesNames),
     yesNames,
+    { emailRecipientNames: emailNames },
   );
 }
 
@@ -1198,13 +1266,13 @@ export async function sendReminderNotifications(
       // `proxySendBroadcastEmail` (HTML wrapper with `dir="rtl"`).
       const baseBody = buildReminderEmailBody(poll, name);
       const fullBody = `${baseBody}${cta}`;
-      const ok = await proxySendBroadcastEmail({
+      const r = await proxySendBroadcastEmail({
         to: info.email,
         subject: TITLE_REMINDER,
         message: fullBody,
         senderName: 'Poker Manager',
       });
-      if (!ok) console.warn(`[schedule-notify/reminder] email failed for ${name}`);
+      if (!r.ok) console.warn(`[schedule-notify/reminder] email failed for ${name}: ${r.error || 'unknown'}`);
     } catch (err) {
       console.warn(`[schedule-notify/reminder] email error for ${name}:`, err);
     }

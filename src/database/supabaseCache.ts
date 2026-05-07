@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
+import { isObserverMode } from '../auth/observerMode';
 
 // ── Cache state ──
 
@@ -1930,12 +1931,25 @@ export async function savePushSubscription(
   playerName: string | null,
   subscription: PushSubscription
 ): Promise<void> {
+  // In super-admin observer mode the active group_id is one the user
+  // isn't a member of. Auto-registering their browser into that
+  // group's push roster would (a) leak their presence and (b) cause
+  // them to receive every notification the target group ever sends
+  // until they remember to unsubscribe. Bail before any Supabase write.
+  if (isObserverMode()) return;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const keys = subscription.toJSON().keys;
   if (!keys?.p256dh || !keys?.auth) return;
 
-  const { error } = await supabase.from('push_subscriptions').upsert({
+  // Upsert the current subscription. The unique key (user_id, endpoint)
+  // collapses re-saves of the SAME endpoint, but browsers/FCM mint a new
+  // endpoint on every permission re-grant, SW reinstall, cache clear,
+  // etc. Without the cleanup below those stale rows pile up forever
+  // (in production we saw users with 30–46 dead endpoints, and Sefi had
+  // both "ספי" and "ספי טורס" rows from a rename) — every push send
+  // then targets all of them.
+  const { error: upsertError } = await supabase.from('push_subscriptions').upsert({
     group_id: groupId,
     user_id: user.id,
     player_name: playerName,
@@ -1943,7 +1957,21 @@ export async function savePushSubscription(
     keys_p256dh: keys.p256dh,
     keys_auth: keys.auth,
   }, { onConflict: 'user_id,endpoint' });
-  if (error) console.warn('Failed to save push subscription:', error);
+  if (upsertError) {
+    console.warn('Failed to save push subscription:', upsertError);
+    return;
+  }
+
+  // Keep exactly one active subscription per (user_id, group_id): drop
+  // any row for this user in this group whose endpoint isn't the one we
+  // just saved. The browser only has one live push subscription per
+  // origin at a time, so the others are guaranteed dead.
+  const { error: pruneError } = await supabase.from('push_subscriptions')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('group_id', groupId)
+    .neq('endpoint', subscription.endpoint);
+  if (pruneError) console.warn('Failed to prune stale push subscriptions:', pruneError);
 }
 
 export async function deletePushSubscription(endpoint: string): Promise<void> {
@@ -1952,12 +1980,13 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
   if (error) console.warn('Failed to delete push subscription:', error);
 }
 
-export async function getGroupPushSubscribers(groupId: string): Promise<{ playerName: string | null; endpoint: string }[]> {
+export async function getGroupPushSubscribers(groupId: string): Promise<{ userId: string | null; playerName: string | null; endpoint: string }[]> {
   const { data, error } = await supabase.from('push_subscriptions')
-    .select('player_name, endpoint')
+    .select('user_id, player_name, endpoint')
     .eq('group_id', groupId);
   if (error) { console.warn('Failed to fetch push subs:', error); return []; }
   return (data || []).map(r => ({
+    userId: (r.user_id as string | null) ?? null,
     playerName: r.player_name as string | null,
     endpoint: r.endpoint as string,
   }));

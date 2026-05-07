@@ -33,6 +33,17 @@ export default function GroupSwitcher() {
   const memberCountLabel = (count: number) =>
     count === 1 ? t('groupSwitcher.oneMember') : t('groupSwitcher.members', { count: String(count) });
 
+  // Super-admin observer entries: every group on the platform that the
+  // user isn't a member of. Clicking one switches the active group_id
+  // (auth + cache) without ever inserting a group_members row, so the
+  // target group's existing members never see the super admin in their
+  // own member lists / activity log / push roster (writes to those
+  // tables are suppressed via observerMode flag).
+  const memberGroupIds = new Set(multiGroup.memberships.map(m => m.groupId));
+  const observerGroups = multiGroup.isSuperAdmin
+    ? (multiGroup.allGroups ?? []).filter(g => !memberGroupIds.has(g.groupId))
+    : [];
+
   const handleSwitch = (groupId: string) => {
     if (groupId === activeGroupId) {
       setModalOpen(false);
@@ -101,7 +112,15 @@ export default function GroupSwitcher() {
     );
   }
 
-  const currentGroupName = multiGroup.memberships.find(m => m.groupId === activeGroupId)?.groupName ?? '';
+  // Fall back to the observer-groups list when the active group isn't
+  // in the user's memberships — happens whenever a super admin has
+  // switched into someone else's group. Without this fallback the
+  // header chip read as an empty string in observer mode.
+  const currentGroupName =
+    multiGroup.memberships.find(m => m.groupId === activeGroupId)?.groupName
+    ?? observerGroups.find(g => g.groupId === activeGroupId)?.groupName
+    ?? '';
+  const isCurrentlyObserving = multiGroup.isObservingNonMember;
 
   return (
     <>
@@ -130,6 +149,24 @@ export default function GroupSwitcher() {
             fontFamily: 'Outfit, sans-serif',
           }}
         >
+          {/* Observer-mode tag in the header bar — only the super
+              admin themself sees this, and it's the only way for them
+              to remember "I'm not in my own group right now". The
+              target group's members never load this component with
+              observer state, so they can't see it. */}
+          {isCurrentlyObserving && (
+            <span
+              title={t('groupSwitcher.observerHint')}
+              style={{
+                fontSize: '0.55rem', fontWeight: 700,
+                padding: '0.1rem 0.35rem', borderRadius: '4px',
+                background: 'rgba(168,85,247,0.18)', color: '#a855f7',
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              👁 {t('groupSwitcher.observerBadge')}
+            </span>
+          )}
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>
             {currentGroupName}
           </span>
@@ -322,6 +359,82 @@ export default function GroupSwitcher() {
                   </div>
                 );
               })}
+
+              {/* Observer-mode section: every other group on the
+                  platform, super-admin only. Rendered as a flat list
+                  with a single-line label so there's no chance of a
+                  regular member mistaking a "👁 observer" entry for
+                  their own group. The selectable rows mirror the
+                  membership entries above visually but use a purple
+                  accent (vs. the indigo "active" highlight) and skip
+                  the role badge / overflow menu (no leave/delete on
+                  someone else's group). */}
+              {observerGroups.length > 0 && (
+                <>
+                  <div style={{
+                    margin: '0.5rem 0.25rem 0.3rem',
+                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  }}>
+                    <span style={{ flex: 1, height: 1, background: 'var(--border)', opacity: 0.5 }} />
+                    <span style={{
+                      fontSize: '0.55rem', fontWeight: 700, color: '#a855f7',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      👁 {t('groupSwitcher.observerSection', { count: String(observerGroups.length) })}
+                    </span>
+                    <span style={{ flex: 1, height: 1, background: 'var(--border)', opacity: 0.5 }} />
+                  </div>
+                  {observerGroups.map(g => {
+                    const isActive = g.groupId === activeGroupId;
+                    return (
+                      <div key={g.groupId} style={{
+                        animation: 'contentFadeIn 0.25s ease-out backwards',
+                      }}>
+                        <button
+                          onClick={() => handleSwitch(g.groupId)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '0.75rem',
+                            width: '100%', padding: '0.6rem 0.75rem',
+                            background: isActive ? 'rgba(168,85,247,0.1)' : 'transparent',
+                            border: isActive ? '1px solid rgba(168,85,247,0.35)' : '1px solid transparent',
+                            borderRadius: '10px',
+                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                            textAlign: isRTL ? 'right' : 'left',
+                          }}
+                        >
+                          <span style={{
+                            width: '32px', height: '32px', borderRadius: '8px',
+                            background: isActive ? '#a855f7' : 'rgba(168,85,247,0.15)',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.85rem', flexShrink: 0,
+                            color: isActive ? 'white' : '#a855f7',
+                          }}>
+                            {isActive ? '✓' : '👁'}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{
+                              display: 'block',
+                              fontWeight: 600, fontSize: '0.85rem',
+                              color: isActive ? '#a855f7' : 'var(--text)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>
+                              {g.groupName}
+                            </span>
+                            <span style={{
+                              display: 'block',
+                              fontSize: '0.6rem', color: 'var(--text-muted)',
+                              marginTop: '0.1rem',
+                            }}>
+                              {memberCountLabel(g.memberCount)}
+                            </span>
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
 
             {/* Footer: Create / Join */}

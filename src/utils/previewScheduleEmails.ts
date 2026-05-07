@@ -137,12 +137,24 @@ export const SCHEDULE_EMAIL_VARIANTS: ScheduleEmailVariantId[] = [
   'vote-change',
 ];
 
+// Result includes the underlying error string + HTTP status when the
+// send fails, so the in-app tester can show the operator the real
+// reason ("EmailJS: quota exceeded", "Forbidden — group not allowed")
+// instead of a generic "❌ שגיאה בשליחה" toast.
+export interface PreviewSendResult {
+  variant: ScheduleEmailVariantId;
+  ok: boolean;
+  error?: string;
+  status?: number;
+  reason?: 'email_disabled' | 'forbidden' | 'http_error' | 'network_error';
+}
+
 async function sendOne(
   toEmail: string,
   variant: ScheduleEmailVariantId,
   msg: BuiltMessage,
   index: number,
-): Promise<{ variant: ScheduleEmailVariantId; ok: boolean }> {
+): Promise<PreviewSendResult> {
   // Tag the subject so multiple previews in a single inbox stay sortable
   // and don't get mistaken for live poll mail. Index keeps them ordered
   // even when sent in parallel.
@@ -150,14 +162,20 @@ async function sendOne(
   // RTL wrapping is applied centrally in `proxySendBroadcastEmail`,
   // so the preview behaves IDENTICALLY to a real send — same
   // `<div dir="rtl">` block, same alignment in the inbox.
-  const ok = await proxySendBroadcastEmail({
+  const r = await proxySendBroadcastEmail({
     to: toEmail,
     subject,
     message: msg.emailBody('ליאור'),
     senderName: 'Poker Manager',
     kind: 'preview',
   });
-  return { variant, ok };
+  return {
+    variant,
+    ok: r.ok,
+    ...(r.error ? { error: r.error } : {}),
+    ...(r.status != null ? { status: r.status } : {}),
+    ...(r.reason ? { reason: r.reason } : {}),
+  };
 }
 
 function isValidEmail(s: string): boolean {
@@ -173,7 +191,7 @@ function isValidEmail(s: string): boolean {
 export async function previewScheduleEmail(
   toEmail: string,
   variant: ScheduleEmailVariantId,
-): Promise<{ variant: ScheduleEmailVariantId; ok: boolean }> {
+): Promise<PreviewSendResult> {
   if (!isValidEmail(toEmail)) {
     throw new Error('previewScheduleEmail: pass a valid email address');
   }
@@ -189,12 +207,12 @@ export async function previewScheduleEmail(
 // and is gentler on the EmailJS endpoint.
 export async function previewAllScheduleEmails(
   toEmail: string,
-): Promise<Array<{ variant: ScheduleEmailVariantId; ok: boolean }>> {
+): Promise<PreviewSendResult[]> {
   if (!isValidEmail(toEmail)) {
     throw new Error('previewAllScheduleEmails: pass a valid email address');
   }
   const variants = buildVariants();
-  const results: Array<{ variant: ScheduleEmailVariantId; ok: boolean }> = [];
+  const results: PreviewSendResult[] = [];
   for (let i = 0; i < variants.length; i++) {
     const v = variants[i];
     results.push(await sendOne(toEmail, v.id, v.build(), i));

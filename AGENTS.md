@@ -19,11 +19,11 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 | Styling | Inline React styles + CSS variables (dark theme) |
 | Font | Outfit (Google Fonts) |
 
-## Supabase MCP — Use It Before Writing SQL
+## Supabase MCP — Read AND Write Enabled
 
-**You have direct read access to the live Supabase DB via an MCP server.** It is configured in `.cursor/mcp.json` (which is gitignored — contains a Supabase Personal Access Token). The server is registered with Cursor under the name **`supabase`** (or possibly `project-0-Poker Game-supabase` for legacy account-level installs). Use whichever name is in your available MCP tools list — they both expose the same tools and project (`ursjltxklmxmapfvkttj`).
+**You have direct read AND write access to the live Supabase DB via an MCP server.** It is configured in `.cursor/mcp.json` (which is gitignored — contains a Supabase Personal Access Token). The server is registered under the name **`supabase`** (or `project-0-Poker Game-supabase` for legacy account-level installs). Use whichever name appears in your available MCP tools list — they expose the same tools and project (`ursjltxklmxmapfvkttj`).
 
-The server runs in **`--read-only`** mode, so you can freely run any `SELECT` / introspection without risk. Connected user is `supabase_read_only_user`.
+The server is **NOT** in `--read-only` mode any more. The access token has full DB privileges. **With great power…** — see "Confirm Before Risky Actions" critical rule below. When in doubt, ASK the user.
 
 ### Always inspect the live DB before:
 - Writing a new `supabase/0XX-*.sql` migration (check current schema, defaults, RLS, existing functions/triggers — don't infer from old SQL files)
@@ -34,21 +34,25 @@ The server runs in **`--read-only`** mode, so you can freely run any `SELECT` / 
 | Tool | Use for |
 |------|---------|
 | `list_tables` | Inspect current schema (set `verbose: true` for columns + FKs + PKs + RLS) |
-| `execute_sql` | Any read query (`SELECT`, `EXPLAIN`). Use for RLS (`pg_policies`), functions (`pg_get_functiondef`), triggers (`pg_trigger`), sample rows |
+| `execute_sql` | Any read query (`SELECT`, `EXPLAIN`). Use for RLS (`pg_policies`), functions (`pg_get_functiondef`), triggers (`pg_trigger`), sample rows. **NEVER** use for ad-hoc DDL/DML — every schema change goes through the numbered file workflow below. |
+| `apply_migration` | Apply a `supabase/0XX-*.sql` file you just authored. **Allowed**, but only after the file is written to disk (audit trail) and you've shown the user what's in it. |
 | `list_migrations` | What's applied to the live DB |
 | `get_logs` | Postgres / API / Auth / Realtime / Edge Function logs |
 | `get_advisors` | Security + performance advisors (RLS gaps, missing indexes) |
 | `list_branches`, `list_edge_functions`, `generate_typescript_types`, `search_docs` | Other introspection |
-| `apply_migration` | **DO NOT CALL.** Migrations go through the numbered SQL file workflow (user applies them; preserves audit trail per `supabase-migration` rule) |
 
 ### Required workflow for any DB-touching task
-1. **Inspect** the live state with `list_tables` / `execute_sql`.
-2. **Author** the migration as `supabase/0XX-name.sql`.
-3. User applies it.
-4. **Verify** with `execute_sql` (new columns exist, defaults set, policies active, sample rows correct).
+1. **Inspect** live state with `list_tables` / `execute_sql`.
+2. **Author** the migration as `supabase/0XX-name.sql` (the file IS the audit trail — never skip this step, even for "small" changes).
+3. **Confirm** with the user if the change is risky (see Critical Rule "Confirm Before Risky Actions" — drops, deletes, irreversible RLS/role changes, anything touching production data).
+4. **Apply** via `apply_migration` (or paste the file body, same result). Routine schema additions / function replacements with `CREATE OR REPLACE` / idempotent `IF NOT EXISTS` don't need a confirm prompt — just apply.
+5. **Verify** with `execute_sql` (new columns exist, defaults set, policies active, function bodies match, sample queries return what the UI expects).
 
-### Anti-pattern (real past failure — do NOT repeat)
-Reading `supabase/*.sql` and `schema.sql` to infer the live state, then asking the user "can you run this SELECT?" The MCP answers instantly. Asking the user to be a query relay wastes their time and erodes trust.
+### Anti-patterns (real past failures — do NOT repeat)
+- Reading `supabase/*.sql` and `schema.sql` to infer the live state, then asking the user "can you run this SELECT?" The MCP answers instantly.
+- Inventing schema changes inside an `execute_sql` call (no file → no audit trail → impossible to review later).
+- Applying a destructive migration (DROP, DELETE without WHERE, role change, RLS removal) without explicit user confirmation.
+- Saying "done" after `apply_migration` without running a verification SELECT.
 
 ### If the MCP is unavailable
 If neither `supabase` nor `project-0-Poker Game-supabase` appears in your tools, tell the user: "the Supabase MCP is not registered in this session — please check `.cursor/mcp.json` exists with a valid `SUPABASE_ACCESS_TOKEN` and reload Cursor (`Ctrl+Shift+P → Developer: Reload Window`)." Do not silently fall back to "ask the user to run queries."
@@ -57,6 +61,27 @@ If neither `supabase` nor `project-0-Poker Game-supabase` appears in your tools,
 
 ### 1. Never Commit Without Permission
 Do NOT commit, push, or merge unless the user explicitly asks. When they say "merge" / "push" / "push to BB", execute the full pipeline: bump version in `src/version.ts` → commit → push → Vercel deploys automatically.
+
+### 1b. Confirm Before Risky Actions — When In Doubt, ASK
+The user has explicitly said: "if you have a concern or question mark you should confirm with me, don't take risks just save me headache." Take this seriously. If you're not sure something is safe, ask BEFORE doing it. The cost of one extra question is minutes; the cost of a bad write to production is hours of cleanup and lost trust.
+
+**ALWAYS pause and ask the user first when:**
+- Running a SQL statement that could be destructive: `DROP TABLE`, `DROP FUNCTION`, `DROP POLICY`, `DELETE` without a tight `WHERE`, `TRUNCATE`, `ALTER … DROP COLUMN`, `REVOKE`, `DISABLE ROW LEVEL SECURITY`, anything that mutates user data (e.g. `UPDATE` on `groups`/`players`/`games`/`game_polls`/etc.).
+- Changing RLS policies, role grants, or auth flow on a production table.
+- Renaming or removing an existing column, function, or trigger that the live app might still call.
+- Force-pushing, amending pushed commits, rewriting git history, deleting branches, or running anything destructive in git you weren't explicitly asked to run.
+- Rotating secrets, deleting Vercel env vars, or changing OAuth/Supabase project settings.
+- Replacing or deleting more than ~50 lines of existing code in one go without prior alignment.
+- Making "while I'm in here" tangential changes you weren't asked for.
+
+**It's fine — and expected — to proceed without asking when:**
+- Adding a new `supabase/0XX-*.sql` file with idempotent `CREATE OR REPLACE` / `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` and applying it via `apply_migration`.
+- Authoring new code in new files, or extending existing functions in obvious bug-fix ways.
+- Running any read-only inspection (`SELECT`, `pg_get_functiondef`, `list_tables`, etc.).
+
+**How to ask:** use the `AskQuestion` tool with concrete options whenever there's a meaningful fork in scope. A 3-option AskQuestion costs the user one tap and protects them from a wrong-direction sprint.
+
+If the answer to "could this surprise the user or be hard to undo?" is anything other than a confident no — ask.
 
 ### 2. Hebrew RTL
 All user-facing text in Hebrew. Use `direction: 'rtl'` on containers. Use `gap` not `marginRight` in flex layouts.

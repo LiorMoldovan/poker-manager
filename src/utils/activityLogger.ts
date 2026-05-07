@@ -1,6 +1,7 @@
 import { ActivityLogEntry, DeviceFingerprint, PermissionRole } from '../types';
 import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
+import { isObserverMode } from '../auth/observerMode';
 
 const DEVICE_ID_KEY = 'poker_device_id';
 const MAX_LOG_ENTRIES = 1000;
@@ -100,8 +101,15 @@ export const getDeviceInfo = (): string => {
   return `${device} / ${os} / ${browser}`;
 };
 
+// `/` renders NewGameScreen but acts as the Home dashboard for everyone;
+// `/new-game` is the admin-only game-creation action screen. The two
+// were previously conflated under the label "New Game" because that was
+// the original purpose of `/`. Activity rows from before this rename
+// still contain the string "New Game" for `/` visits — see the optional
+// backfill SQL in the rollout notes.
 const ROUTE_NAMES: Record<string, string> = {
-  '/': 'New Game',
+  '/': 'Home',
+  '/new-game': 'New Game',
   '/statistics': 'Statistics',
   '/history': 'History',
   '/settings': 'Settings',
@@ -187,6 +195,13 @@ const markPushed = (): void => {
 };
 
 export const logActivity = async (role: PermissionRole, playerName?: string, userId?: string, initialScreens: string[] = []): Promise<void> => {
+  // Observer mode = a super admin has switched into a group they
+  // aren't a member of. Writing to that group's activity_log would
+  // leak their presence (their visits would show up in the target
+  // group's "Activity" tab). Bail entirely — no INSERT, no buffer,
+  // no session timestamp — so updateSessionActivity also has nothing
+  // to flush later.
+  if (isObserverMode()) return;
   const entry: ActivityLogEntry = {
     deviceId: getDeviceId(),
     role,
@@ -260,8 +275,21 @@ export const updateSessionActivity = async (
   keepalive = false
 ): Promise<void> => {
   if (!currentSessionTimestamp) return;
+  // See logActivity: don't pollute an observed group's activity log.
+  // We still need the early return here because a session could have
+  // been started before observer mode was entered (the timestamp
+  // sticks around in module state).
+  if (isObserverMode()) return;
 
-  if (JSON.stringify(screens) === JSON.stringify(lastPushedScreens)) return;
+  // Two reasons to push: the visited-screen set changed (navigation),
+  // or this is a forced flush (tab close / sign out via `keepalive`).
+  // Previously this guard was `sameScreens → return` *before* checking
+  // keepalive, so a quick session that opened a single screen and
+  // closed without navigating never persisted its duration — the DB
+  // row stayed at the `session_duration: 0` it was inserted with,
+  // which surfaced in Settings as "< 1 min" forever.
+  const screensChanged = JSON.stringify(screens) !== JSON.stringify(lastPushedScreens);
+  if (!screensChanged && !keepalive) return;
 
   const buffered = loadSessionBuffer();
   if (buffered && buffered.timestamp === currentSessionTimestamp) {

@@ -24,10 +24,27 @@ export interface GroupMembership {
   memberCount: number;
 }
 
+// Lightweight group descriptor used by the super-admin observer-mode
+// switcher. Mirrors the subset of GroupMembership the GroupSwitcher
+// actually renders, minus the member-only fields (role/playerName/etc.)
+// because those are meaningless when the caller isn't a member.
+export interface AllGroupsEntry {
+  groupId: string;
+  groupName: string;
+  trainingEnabled: boolean;
+  memberCount: number;
+  inviteCode: string | null;
+  createdBy: string | null;
+}
+
 interface AuthState {
   user: User | null;
   session: Session | null;
   memberships: GroupMembership[];
+  // Every group on the platform, populated only when the user is a
+  // super admin (loaded once after `super_admins` is confirmed). Empty
+  // for everyone else.
+  allGroups: AllGroupsEntry[];
   activeGroupId: string | null;
   isSuperAdmin: boolean;
   loading: boolean;
@@ -43,6 +60,7 @@ export function useSupabaseAuth() {
     user: null,
     session: null,
     memberships: [],
+    allGroups: [],
     activeGroupId: null,
     isSuperAdmin: false,
     loading: true,
@@ -50,6 +68,42 @@ export function useSupabaseAuth() {
 
   const membership = state.memberships.find(m => m.groupId === state.activeGroupId) ?? null;
   const activeGroupId = state.activeGroupId;
+  // Active group is "observed" when the super admin has switched into
+  // a group they aren't a member of. The rest of the app uses this to
+  // (a) treat the user as owner-equivalent in that group and (b)
+  // suppress activity-log / push-subscription writes that would leak
+  // their presence back to the target group's members.
+  const isObservingNonMember =
+    !!state.activeGroupId &&
+    state.isSuperAdmin &&
+    !state.memberships.some(m => m.groupId === state.activeGroupId);
+
+  const fetchAllGroupsForSuperAdmin = useCallback(async () => {
+    const { data, error } = await supabase.rpc('list_all_groups_for_super_admin');
+    if (error) {
+      console.warn('list_all_groups_for_super_admin failed:', error.message);
+      return;
+    }
+    const rows = (data ?? []) as Array<{
+      group_id: string;
+      group_name: string;
+      training_enabled: boolean;
+      member_count: number;
+      invite_code: string | null;
+      created_by: string | null;
+    }>;
+    setState(prev => ({
+      ...prev,
+      allGroups: rows.map(r => ({
+        groupId: r.group_id,
+        groupName: r.group_name,
+        trainingEnabled: r.training_enabled,
+        memberCount: r.member_count,
+        inviteCode: r.invite_code,
+        createdBy: r.created_by,
+      })),
+    }));
+  }, []);
 
   const checkSuperAdmin = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -57,8 +111,10 @@ export function useSupabaseAuth() {
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
-    setState(prev => ({ ...prev, isSuperAdmin: !!data }));
-  }, []);
+    const isSA = !!data;
+    setState(prev => ({ ...prev, isSuperAdmin: isSA }));
+    if (isSA) fetchAllGroupsForSuperAdmin();
+  }, [fetchAllGroupsForSuperAdmin]);
 
   const fetchMemberships = useCallback(async (userId: string, switchToGroupId?: string) => {
     const { data, error } = await supabase
@@ -125,7 +181,15 @@ export function useSupabaseAuth() {
 
   const switchGroup = useCallback((groupId: string) => {
     setState(prev => {
-      if (!prev.memberships.some(m => m.groupId === groupId)) return prev;
+      // Members can switch to any of their own memberships. Super
+      // admins additionally get to switch into groups they aren't part
+      // of (observer mode) — gated on both `isSuperAdmin` and the
+      // target appearing in `allGroups`, so revoking the
+      // `super_admins` row immediately disables this path even if the
+      // client still thinks it has the privilege.
+      const isMembership = prev.memberships.some(m => m.groupId === groupId);
+      const isObservable = prev.isSuperAdmin && prev.allGroups.some(g => g.groupId === groupId);
+      if (!isMembership && !isObservable) return prev;
       return { ...prev, activeGroupId: groupId };
     });
   }, []);
@@ -378,6 +442,9 @@ export function useSupabaseAuth() {
     session: state.session,
     membership,
     memberships: state.memberships,
+    activeGroupId,
+    allGroups: state.allGroups,
+    isObservingNonMember,
     isSuperAdmin: state.isSuperAdmin,
     loading: state.loading,
     signIn,

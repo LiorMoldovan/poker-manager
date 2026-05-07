@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-07 — `boolean`-returning network helpers eat the only useful info
+
+**Incident**: Lior triggered the email-preview tester from Settings → Notifications and saw "❌ שגיאה בשליחה". He had no way to tell which of the 5+ possible failure modes (group-not-allowed, EmailJS quota, template misconfig, EmailJS down, network throw) actually fired. The proxy returned `false`, the UI substituted a generic Hebrew label, and even the F12 console was empty because the catch block was `catch {}`.
+
+**Root cause**: `proxySendBroadcastEmail` and `proxySendEmail` in `src/utils/apiProxy.ts` returned a bare `Promise<boolean>`. The Edge Function does send a structured `{ error: { message } }` body on every non-2xx — we just threw it away. Empty `catch {}` blocks finished the job by hiding network/CORS errors entirely. UI then had nothing to render except the hard-coded fallback.
+
+**Lesson**: Network helpers that wrap a fetch should return `{ ok, error?, status? }` (or richer), not a `boolean`. Always read the response body on non-OK and log the error to console so future failures self-diagnose from F12 alone. `catch {}` is forbidden in any code path that can fail in production — at minimum `console.error` the caught value. The user-visible error string MUST include the underlying server message + HTTP status; the generic Hebrew fallback is only acceptable when the proxy genuinely has nothing to surface.
+
+**Session**: 2026-05-07 (Email-error visibility chat).
+
+---
+
 ## 2026-05-07 — Audit existing knowledge before bootstrapping anything that claims to honor it
 
 **Incident**: While bootstrapping the agent-memory system, I read 5 of 13 `.cursor/rules/*.mdc` files (the always-applied ones already in my context) plus `AGENTS.md`, then designed and committed the system. Lior asked: "did you refer to everything we already had?" Answer was no — I'd skipped 8 rules. Materially the design didn't suffer (the missed rules are domain-specific), but I missed `schedule-poll-dates.mdc` as the canonical promotion example, and I committed a system claiming to "complement existing knowledge" without exhaustively reading that knowledge.

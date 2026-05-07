@@ -1,0 +1,59 @@
+---
+description: When in doubt, ASK. Confirm before risky or destructive actions (DB writes, git history, secrets, large refactors).
+alwaysApply: true
+---
+
+# Confirm Before Risky Actions — When In Doubt, ASK
+
+The user has explicit standing instruction: **"if you have a concern or question mark you should confirm with me, don't take risks just save me headache."** This rule is the policy that backs that promise.
+
+The cost of one extra clarifying question is seconds. The cost of a bad write to a production DB, a force-push that nukes work, or an unwanted schema drop is hours of cleanup and trust erosion. **Default to asking.**
+
+## ALWAYS pause and ask the user first when:
+
+### Database writes
+- Any SQL that could be destructive: `DROP TABLE`, `DROP FUNCTION`, `DROP TRIGGER`, `DROP POLICY`, `TRUNCATE`, `DELETE` without a tight `WHERE`, `ALTER … DROP COLUMN`, `REVOKE`, `DISABLE ROW LEVEL SECURITY`.
+- Any `UPDATE` that mutates user data on `groups`, `players`, `games`, `game_polls`, `game_poll_votes`, `settings`, `notifications`, `paid_settlements`, etc.
+- Changing RLS policies, role grants, or auth flow on a production table.
+- Renaming or removing an existing column, function, RPC, or trigger that the live app might still call.
+- Inventing schema changes inside an `execute_sql` call instead of authoring a `supabase/0XX-*.sql` file (always file → apply, never ad-hoc).
+
+### Git / deployment
+- Force-push to any branch, especially `main`.
+- Amending commits that have already been pushed.
+- Rewriting git history (rebase, reset --hard, branch delete with unmerged commits).
+- Pushing without an explicit user request.
+- Merging or deleting branches you weren't asked to touch.
+
+### Secrets, env, infra
+- Rotating or deleting API tokens / Supabase keys / VAPID keys.
+- Editing or removing Vercel environment variables.
+- Changing OAuth redirect URIs, Supabase auth providers, or any auth-adjacent setting.
+- Touching `.cursor/mcp.json` or any other config that holds credentials.
+
+### Code scope
+- Replacing or deleting more than ~50 lines of existing code in a single edit without prior alignment on the approach.
+- Making "while I'm in here" tangential changes you weren't asked for.
+- Renaming public APIs, RPC names, or props that other code depends on.
+- Anything that could change data semantics (e.g. zero-sum logic, settlement algorithm, profit calculation).
+
+## It's fine — and expected — to proceed without asking when:
+
+- Adding a new `supabase/0XX-*.sql` file with idempotent constructs (`CREATE OR REPLACE`, `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) and applying it.
+- Authoring new code in new files; or extending existing functions in obvious bug-fix ways consistent with the asked task.
+- Running any read-only inspection (`SELECT`, `pg_get_functiondef`, `list_tables`, `git status`, `git diff`, log reads).
+- Fixing typos, lint errors, or TS errors you introduced in this turn.
+- Following an explicit instruction the user already gave in this conversation.
+
+## How to ask
+
+Use the `AskQuestion` tool with concrete options whenever there's a meaningful fork in scope. A 3-option `AskQuestion` costs the user one tap and protects them from a wrong-direction sprint. Bad form: a wall of prose ending with "let me know what you'd like." Good form: 2–4 distinct options, each one immediately actionable.
+
+If the answer to "could this surprise the user or be hard to undo?" is anything other than a confident **no** — ask.
+
+## Anti-pattern (do NOT repeat)
+
+- "I'll just go ahead and DROP this old policy since it looks unused" → wrong. Confirm first.
+- "While fixing the bug I also refactored the surrounding 200 lines" → wrong. Stay scoped.
+- "I ran an UPDATE to fix the bad row directly via execute_sql" → wrong. Author a migration file (or ask for permission to do a one-off data fix).
+- "I'm 90% sure this is safe so I'll skip asking" → wrong. 90% means ASK.

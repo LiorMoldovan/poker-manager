@@ -64,7 +64,7 @@ const he = {
   'home.personal.avgGame': 'ממוצע למשחק',
   'home.personal.lastGame': 'משחק אחרון',
   'home.personal.longestWinStreak': 'רצף ארוך',
-  'home.personal.last3Avg': '3 אחרונים',
+  'home.personal.last3Avg': 'ממוצע 3 אחרונים',
   'home.personal.streakWins': '{n} ניצחונות ברצף',
   'home.personal.streakLosses': '{n} הפסדים ברצף',
   'home.personal.streakNone': 'בלי רצף פעיל',
@@ -264,6 +264,9 @@ const he = {
   'groupSwitcher.confirmDelete': 'מחק לצמיתות',
   'groupSwitcher.manageGroups': 'ניהול קבוצות',
   'groupSwitcher.manageGroupsDesc': 'צור קבוצה חדשה או הצטרף לקבוצה קיימת',
+  'groupSwitcher.observerSection': 'מצב צופה — {count} קבוצות',
+  'groupSwitcher.observerBadge': 'צופה',
+  'groupSwitcher.observerHint': 'אתה צופה בקבוצה זו כסופר-אדמין. הפעולות שלך אינן רשומות בקבוצה.',
 
   // ── Group Management ──
   'groupMgmt.details': '🏠 פרטי קבוצה',
@@ -1871,7 +1874,7 @@ const en: Record<keyof typeof he, string> = {
   'home.personal.avgGame': 'Avg / game',
   'home.personal.lastGame': 'Last game',
   'home.personal.longestWinStreak': 'Long streak',
-  'home.personal.last3Avg': 'Last 3',
+  'home.personal.last3Avg': 'Avg last 3',
   'home.personal.streakWins': '{n} wins in a row',
   'home.personal.streakLosses': '{n} losses in a row',
   'home.personal.streakNone': 'No active streak',
@@ -2071,6 +2074,9 @@ const en: Record<keyof typeof he, string> = {
   'groupSwitcher.confirmDelete': 'Delete Permanently',
   'groupSwitcher.manageGroups': 'Manage Groups',
   'groupSwitcher.manageGroupsDesc': 'Create a new group or join an existing one',
+  'groupSwitcher.observerSection': 'Observer mode — {count} groups',
+  'groupSwitcher.observerBadge': 'Observer',
+  'groupSwitcher.observerHint': "You're viewing this group as a super admin. Your actions aren't recorded in this group.",
 
   // ── Group Management ──
   'groupMgmt.details': '🏠 Group Details',

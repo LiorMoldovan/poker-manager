@@ -197,11 +197,27 @@ const SettingsScreen = () => {
     groups: GlobalGroup[];
     orphaned_groups: { id: string; name: string; created_at: string; created_by: string }[];
   }
+  // Member detail rows surfaced when a super-admin expands a group
+  // card. Fetched lazily (per-group) by `get_group_members_for_super_admin`
+  // — see `supabase/059-super-admin-group-members.sql` — so we only
+  // pay the join cost for groups the admin actually drills into.
+  interface GroupMemberDetail {
+    user_id: string | null;
+    role: 'admin' | 'member';
+    player_id: string | null;
+    linked_player_name: string | null;
+    email: string | null;
+    joined_at: string;
+  }
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSubTab, setGlobalSubTab] = useState<'mine' | 'others'>('mine');
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  // Per-group cache: undefined = never fetched, [] = fetched & empty,
+  // 'loading' = in-flight, 'error:<msg>' = failed. Stored as a plain
+  // object (not Map) so React notices the reference change.
+  const [groupMembersCache, setGroupMembersCache] = useState<Record<string, GroupMemberDetail[] | 'loading' | `error:${string}`>>({});
 
   const loadGlobalStats = useCallback(async () => {
     if (!isSuperAdmin) return;
@@ -353,19 +369,18 @@ const SettingsScreen = () => {
     return () => { cancelled = true; };
   }, [isSuperAdmin]);
 
-  const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
+  const [pushSubscribers, setPushSubscribers] = useState<{ userId: string | null; playerName: string | null; endpoint: string }[]>([]);
 
   const refreshPushSubscribers = useCallback(() => {
     const gid = getGroupId();
     if (!gid) return;
     getGroupPushSubscribers(gid).then(subs => {
-      // Dedup by player so the headline count agrees with the chip
-      // list directly below (which is also keyed by playerName). One
-      // player who has enabled push on phone + laptop + tablet would
-      // otherwise show as 3 separate rows here, making "N שחקנים"
-      // larger than the actual roster.
-      const uniquePlayers = new Set(subs.map(s => s.playerName || '?'));
-      setPushSubscriberCount(uniquePlayers.size);
+      // Dedup by user_id — that's the stable identity. Earlier this
+      // was keyed on playerName, which double-counted users whose
+      // display name changed (e.g. "ספי" vs "ספי טורס" — same user_id,
+      // different label captured at subscribe-time).
+      const uniqueUsers = new Set(subs.map(s => s.userId || `name:${s.playerName || '?'}`));
+      setPushSubscriberCount(uniqueUsers.size);
       setPushSubscribers(subs);
     });
   }, []);
@@ -392,6 +407,28 @@ const SettingsScreen = () => {
       loadGlobalStats();
     }
   }, [activeTab, isSuperAdmin, globalStats, globalLoading, globalError, loadGlobalStats]);
+
+  // Lazy-fetch the member list for a group when its card is expanded.
+  // Skips if we already have data (or an in-flight request) to avoid
+  // re-querying on every collapse/expand cycle. Keyed on the group id
+  // so each card has its own cache slot.
+  useEffect(() => {
+    if (!expandedGroupId || !isSuperAdmin) return;
+    if (groupMembersCache[expandedGroupId] !== undefined) return;
+    const gid = expandedGroupId;
+    setGroupMembersCache(prev => ({ ...prev, [gid]: 'loading' }));
+    (async () => {
+      const { data, error } = await supabase.rpc('get_group_members_for_super_admin', {
+        target_group_id: gid,
+      });
+      setGroupMembersCache(prev => ({
+        ...prev,
+        [gid]: error
+          ? (`error:${error.message}` as const)
+          : ((data ?? []) as GroupMemberDetail[]),
+      }));
+    })();
+  }, [expandedGroupId, isSuperAdmin, groupMembersCache]);
 
   // Auto-load GitHub backups when backup tab is selected
   useEffect(() => {
@@ -3426,6 +3463,97 @@ const SettingsScreen = () => {
                                   {isExpanded && (
                                     <div style={{ padding: '0 0.75rem 0.75rem' }}>
                                       {renderStatCards(g)}
+
+                                      {/* Member roster — answers "who are
+                                          these N people?" without leaving
+                                          the screen. Loaded lazily per
+                                          card; see groupMembersCache + the
+                                          dedicated effect above. */}
+                                      {(() => {
+                                        const cacheEntry = groupMembersCache[g.id];
+                                        if (cacheEntry === undefined || cacheEntry === 'loading') {
+                                          return (
+                                            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', padding: '0.4rem 0', opacity: 0.7 }}>
+                                              {language === 'he' ? 'טוען חברים…' : 'Loading members…'}
+                                            </div>
+                                          );
+                                        }
+                                        if (typeof cacheEntry === 'string' && cacheEntry.startsWith('error:')) {
+                                          return (
+                                            <div style={{ fontSize: '0.62rem', color: '#EF4444', padding: '0.4rem 0' }}>
+                                              {language === 'he' ? 'טעינת חברים נכשלה' : 'Failed to load members'}: {cacheEntry.slice('error:'.length)}
+                                            </div>
+                                          );
+                                        }
+                                        const members = cacheEntry as GroupMemberDetail[];
+                                        if (members.length === 0) {
+                                          return (
+                                            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', padding: '0.4rem 0', opacity: 0.7 }}>
+                                              {language === 'he' ? 'אין חברים' : 'No members'}
+                                            </div>
+                                          );
+                                        }
+                                        return (
+                                          <div style={{ marginBottom: '0.5rem' }}>
+                                            <div style={{
+                                              fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-muted)',
+                                              textTransform: 'uppercase', letterSpacing: '0.05em',
+                                              margin: '0.3rem 0 0.3rem',
+                                            }}>
+                                              👥 {language === 'he' ? `חברים (${members.length})` : `Members (${members.length})`}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                              {members.map(m => {
+                                                const joinedStr = new Date(m.joined_at).toLocaleDateString(
+                                                  language === 'he' ? 'he-IL' : 'en-US',
+                                                  { day: '2-digit', month: '2-digit', year: '2-digit' },
+                                                );
+                                                const display = m.linked_player_name
+                                                  ?? m.email
+                                                  ?? (language === 'he' ? '(ללא שם)' : '(no name)');
+                                                return (
+                                                  <div
+                                                    key={m.user_id ?? `${m.email}-${m.joined_at}`}
+                                                    style={{
+                                                      display: 'flex', justifyContent: 'space-between',
+                                                      alignItems: 'center', gap: '0.5rem',
+                                                      padding: '0.3rem 0.45rem', borderRadius: '6px',
+                                                      background: 'var(--background)',
+                                                      border: '1px solid var(--border)',
+                                                    }}
+                                                  >
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', minWidth: 0 }}>
+                                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
+                                                        <span style={{
+                                                          fontSize: '0.5rem', fontWeight: 700, padding: '0.05rem 0.25rem',
+                                                          borderRadius: '4px',
+                                                          background: m.role === 'admin' ? 'rgba(99,102,241,0.18)' : 'rgba(100,100,100,0.18)',
+                                                          color: m.role === 'admin' ? '#818cf8' : 'var(--text-muted)',
+                                                          textTransform: 'uppercase', letterSpacing: '0.04em',
+                                                        }}>
+                                                          {m.role}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                          {display}
+                                                        </span>
+                                                      </div>
+                                                      {m.email && m.linked_player_name && (
+                                                        <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                          {m.email}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+                                                      {joinedStr}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', opacity: 0.7 }}>
                                           {t('settings.superAdmin.createdLabel')} {new Date(g.created_at).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')}
@@ -3505,18 +3633,26 @@ const SettingsScreen = () => {
               {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
             </p>
             {pushSubscribers.length > 0 && (() => {
-              const seen = new Map<string, string>();
+              // Dedup chips by user_id (stable identity), not playerName
+              // (mutable label). Using the name caused a single user to
+              // render multiple chips after a rename — e.g. Sefi appeared
+              // as both "ספי" and "ספי טורס". Falls back to name when
+              // user_id is somehow missing.
+              const seen = new Map<string, { name: string; icon: string }>();
               for (const s of pushSubscribers) {
-                const name = s.playerName || '?';
-                if (seen.has(name)) continue;
+                const key = s.userId || `name:${s.playerName || '?'}`;
+                if (seen.has(key)) continue;
                 const isFCM = s.endpoint.includes('fcm.googleapis.com') || s.endpoint.includes('firebase');
                 const isMozilla = s.endpoint.includes('mozilla');
-                seen.set(name, isFCM ? '📱' : isMozilla ? '🦊' : '💻');
+                seen.set(key, {
+                  name: s.playerName || '?',
+                  icon: isFCM ? '📱' : isMozilla ? '🦊' : '💻',
+                });
               }
               return (
                 <div style={{ margin: '0 0 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                  {[...seen.entries()].map(([name, icon]) => (
-                    <span key={name} style={{
+                  {[...seen.entries()].map(([key, { name, icon }]) => (
+                    <span key={key} style={{
                       fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
                       background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
                       color: '#10B981',
@@ -3715,17 +3851,20 @@ const SettingsScreen = () => {
                       .map(m => ({ email: m.email!, name: m.playerName || m.displayName || '' }));
 
                     let emailSent = 0;
+                    let lastEmailErr: string | null = null;
                     for (const { email } of emails) {
-                      const ok = await proxySendBroadcastEmail({
+                      const r = await proxySendBroadcastEmail({
                         to: email,
                         subject: `🃏 הודעה מ${authPlayerName || 'הקבוצה'}`,
                         message: pushMsg.trim(),
                         senderName: authPlayerName || 'Poker Manager',
                         kind: 'broadcast',
                       });
-                      if (ok) emailSent++;
+                      if (r.ok) emailSent++;
+                      else if (r.error) lastEmailErr = r.error;
                     }
-                    results.push(`📧 ${emailSent}/${emails.length}`);
+                    const failBadge = emailSent === emails.length ? '' : ` (${lastEmailErr || 'failed'})`;
+                    results.push(`📧 ${emailSent}/${emails.length}${failBadge}`);
                   }
 
                   const allOk = results.every(r => !r.includes('❌') && !r.includes(' 0/'));
@@ -3896,14 +4035,14 @@ const SettingsScreen = () => {
                     const { supabase: sb } = await import('../database/supabaseClient');
                     const { data: { user } } = await sb.auth.getUser();
                     if (!user?.email) { setPushResult('📧 ❌ No email'); return; }
-                    const ok = await proxySendBroadcastEmail({
+                    const r = await proxySendBroadcastEmail({
                       to: user.email,
                       subject: '🧪 Poker Manager - בדיקה',
                       message: language === 'he' ? 'הודעת בדיקה' : 'Test message',
                       senderName: authPlayerName,
                       kind: 'preview',
                     });
-                    setPushResult(ok ? '📧 ✅' : '📧 ❌');
+                    setPushResult(r.ok ? '📧 ✅' : `📧 ❌ ${r.error || r.reason || 'failed'}`);
                   } catch (err) {
                     setPushResult(`📧 ❌ ${err instanceof Error ? err.message : 'Error'}`);
                   } finally {
@@ -4028,15 +4167,34 @@ const SettingsScreen = () => {
                       const sent = results.filter(r => r.ok).length;
                       const total = results.length;
                       const ok = sent === total;
-                      setEmailPreviewResult(`${ok ? '✓' : '⚠'} ${t('push.previewSentAll', { sent, total })}`);
+                      // Surface the first underlying failure reason — for the
+                      // "all" run we get N independent results and any one
+                      // of them might fail for a different cause; showing
+                      // the first one is enough to point the operator at
+                      // the right place (env var, EmailJS quota, template).
+                      const firstFail = results.find(r => !r.ok);
+                      const reasonSuffix = firstFail?.error
+                        ? ` — ${firstFail.error}${firstFail.status ? ` (${firstFail.status})` : ''}`
+                        : '';
+                      setEmailPreviewResult(`${ok ? '✓' : '⚠'} ${t('push.previewSentAll', { sent, total })}${reasonSuffix}`);
                     } else {
                       const r = await previewScheduleEmail(target, emailPreviewVariant);
-                      setEmailPreviewResult(r.ok
-                        ? `✓ ${t('push.previewSent', { variant: r.variant })}`
-                        : `❌ ${t('push.previewError')}`);
+                      if (r.ok) {
+                        setEmailPreviewResult(`✓ ${t('push.previewSent', { variant: r.variant })}`);
+                      } else {
+                        // Show the actual server message + HTTP status so
+                        // future failures self-explain. Falls back to the
+                        // generic Hebrew label if the proxy didn't surface
+                        // a string (shouldn't happen with the new contract,
+                        // but defensive — UI should never render `undefined`).
+                        const detail = r.error
+                          ? `${r.error}${r.status ? ` (${r.status})` : ''}`
+                          : t('push.previewError');
+                        setEmailPreviewResult(`❌ ${t('push.previewError')} — ${detail}`);
+                      }
                     }
                   } catch (err) {
-                    console.warn('previewScheduleEmail failed:', err);
+                    console.error('previewScheduleEmail threw:', err);
                     setEmailPreviewResult(`❌ ${err instanceof Error ? err.message : t('push.previewError')}`);
                   } finally {
                     setEmailPreviewSending(false);

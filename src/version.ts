@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.44.1';
+export const APP_VERSION = '5.44.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.44.2',
+    date: '2026-05-07',
+    changes: [
+      '📧 Email tester shows real error reason',
+      '📧 Guests get email when poll expands',
+      '🎯 No duplicate "המשחק מלא" email after below-target pin',
+      '🤐 Skip recruitment email to no-voters on pinned date',
+      '🔒 Auto-lock voting when seat target filled',
+      '👁 Super-admin cross-group observer mode (foundation)',
+    ],
+  },
   {
     version: '5.44.1',
     date: '2026-05-07',

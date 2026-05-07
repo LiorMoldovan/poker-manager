@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 're
 import { PermissionRole } from './types';
 import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
+import { setObserverMode } from './auth/observerMode';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
 import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, flushAllPendingSyncs } from './database/supabaseCache';
@@ -514,12 +515,42 @@ function SupabaseApp() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showPushNudge, setShowPushNudge] = useState(false);
 
-  const groupId = auth.membership?.groupId ?? null;
-  const realRole = auth.membership?.role ?? null;
-  const realIsOwner = auth.membership?.isOwner ?? false;
+  // For super admins, `activeGroupId` may point to a group the user
+  // isn't a member of (observer mode). The cache, RLS, and every
+  // group-scoped read/write key off this id; `auth.membership` falls
+  // back to null in that case, so we use auth.activeGroupId directly.
+  const groupId = auth.activeGroupId ?? null;
+  const isObservingNonMember = auth.isObservingNonMember;
+  // In observer mode the super admin acts as owner-equivalent. The
+  // existing membership-derived role/owner flags are null because
+  // there's no group_members row, so we synthesize them.
+  const realRole: PermissionRole | null = isObservingNonMember
+    ? 'admin'
+    : (auth.membership?.role ?? null);
+  const realIsOwner = isObservingNonMember
+    ? true
+    : (auth.membership?.isOwner ?? false);
   const realIsSuperAdmin = auth.isSuperAdmin;
-  const trainingEnabled = auth.membership?.trainingEnabled ?? false;
-  const playerName = auth.membership?.playerName ?? null;
+  // training_enabled is fetched on the all-groups list for super admins,
+  // so even when observing we can show the right state.
+  const observedGroupMeta = isObservingNonMember
+    ? auth.allGroups.find(g => g.groupId === auth.activeGroupId) ?? null
+    : null;
+  const trainingEnabled = isObservingNonMember
+    ? (observedGroupMeta?.trainingEnabled ?? false)
+    : (auth.membership?.trainingEnabled ?? false);
+  // No linked player in an observed group. Surface a synthetic name so
+  // existing UI code that reads `playerName` doesn't crash on null.
+  const playerName = isObservingNonMember
+    ? '👁 Super Admin'
+    : (auth.membership?.playerName ?? null);
+
+  // Keep the non-React observerMode flag in sync so activityLogger and
+  // savePushSubscription (called from outside React's tree) can read
+  // it. Effect runs on every render where the value flipped.
+  useEffect(() => {
+    setObserverMode(isObservingNonMember);
+  }, [isObservingNonMember]);
 
   // ── "View As" preview (super admin only) ──
   // Lets the real super admin see the app exactly as a member / regular
@@ -957,8 +988,16 @@ function SupabaseApp() {
       refreshMembership: auth.refreshMembership,
       triggerGroupWizard,
       userEmail: auth.user?.email ?? '',
+      // Surfaced for super admins so the GroupSwitcher can render
+      // platform-wide groups (the ones the user isn't a member of) as
+      // observer entries. `realIsSuperAdmin` is the source of truth —
+      // not the View-As-overlaid role — because observer privileges
+      // are tied to the actual super_admins row, not a UI preview.
+      isSuperAdmin: realIsSuperAdmin,
+      allGroups: auth.allGroups,
+      isObservingNonMember,
     },
-  }), [role, isOwner, isSuperAdmin, realIsSuperAdmin, viewAsRole, cycleViewAs, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard]);
+  }), [role, isOwner, isSuperAdmin, realIsSuperAdmin, viewAsRole, cycleViewAs, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard, isObservingNonMember]);
 
   if (auth.loading) {
     return (
@@ -978,7 +1017,12 @@ function SupabaseApp() {
     return <AuthScreen onSignIn={auth.signIn} onSignUp={auth.signUp} onGoogleSignIn={auth.signInWithGoogle} />;
   }
 
-  if (!auth.membership) {
+  // Show the group setup gate only when the user truly has no
+  // memberships. A super admin who's observing a non-member group has
+  // `auth.membership === null` (no row in group_members for the active
+  // group) but `auth.memberships.length > 0` for their own groups —
+  // they should NOT be bounced to the setup screen.
+  if (auth.memberships.length === 0) {
     return (
       <GroupSetupScreen
         userEmail={auth.user.email ?? ''}

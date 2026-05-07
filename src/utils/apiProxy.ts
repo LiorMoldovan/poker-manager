@@ -237,6 +237,49 @@ export type EmailKind =
   // Catch-all for anything that doesn't fit the above
   | 'broadcast';
 
+// Result shape for the email proxies. Keeping `ok` as the headline
+// flag (so the existing "boolean truthiness" pattern at call sites
+// keeps working when destructured), but surfacing the actual server
+// error message + HTTP status when something fails — the user-facing
+// toast and the F12 console can now name the real cause instead of
+// just "❌ שגיאה בשליחה". `reason` distinguishes client-side
+// short-circuits (group not allowed, server forbade us) from upstream
+// failures (HTTP / network) so the UI can render different copy.
+export type EmailSendResult = {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  reason?: 'email_disabled' | 'forbidden' | 'http_error' | 'network_error';
+};
+
+// Pulls a human-readable error string from a non-OK fetch Response.
+// Tries JSON first (Edge Function returns `{ error: { message } }` /
+// `{ error: 'string' }`); falls back to plain text. Always returns
+// something — never null — so the caller can hand it straight to a UI.
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const j = await res.json().catch(() => null) as unknown;
+      if (j && typeof j === 'object') {
+        const errField = (j as { error?: unknown }).error;
+        if (typeof errField === 'string') return errField;
+        if (errField && typeof errField === 'object') {
+          const m = (errField as { message?: unknown }).message;
+          if (typeof m === 'string' && m) return m;
+        }
+        const topMsg = (j as { message?: unknown }).message;
+        if (typeof topMsg === 'string' && topMsg) return topMsg;
+      }
+    }
+    const txt = await res.text().catch(() => '');
+    if (txt) return txt.slice(0, 300);
+  } catch {
+    // fall through
+  }
+  return `HTTP ${res.status}`;
+}
+
 export async function proxySendEmail(payload: {
   to: string;
   subject: string;
@@ -246,10 +289,10 @@ export async function proxySendEmail(payload: {
   gameDate?: string;
   payLink?: string;
   kind?: EmailKind;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
   if (!isEmailEnabledForCurrentGroup()) {
     notifyEmailDisabled(payload.kind);
-    return false;
+    return { ok: false, reason: 'email_disabled', error: 'Email sending is disabled for this group' };
   }
   try {
     const auth = await getAuthHeaders();
@@ -263,14 +306,22 @@ export async function proxySendEmail(payload: {
       // Defense in depth: VITE_OWNER_GROUP_ID was misconfigured but the server
       // still rejected. Fire the same event so the UI surfaces the situation.
       notifyEmailDisabled(payload.kind);
-      return false;
+      const error = await extractErrorMessage(res);
+      return { ok: false, status: 403, reason: 'forbidden', error };
     }
-    if (res.ok && typeof window !== 'undefined') {
+    if (!res.ok) {
+      const error = await extractErrorMessage(res);
+      console.error(`[proxySendEmail] ${res.status} ${error}`);
+      return { ok: false, status: res.status, reason: 'http_error', error };
+    }
+    if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('email-sent'));
     }
-    return res.ok;
-  } catch {
-    return false;
+    return { ok: true, status: res.status };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[proxySendEmail] network/throw:', err);
+    return { ok: false, reason: 'network_error', error: msg };
   }
 }
 
@@ -332,10 +383,10 @@ export async function proxySendBroadcastEmail(payload: {
   message: string;
   senderName?: string;
   kind?: EmailKind;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
   if (!isEmailEnabledForCurrentGroup()) {
     notifyEmailDisabled(payload.kind);
-    return false;
+    return { ok: false, reason: 'email_disabled', error: 'Email sending is disabled for this group' };
   }
   try {
     const auth = await getAuthHeaders();
@@ -352,14 +403,22 @@ export async function proxySendBroadcastEmail(payload: {
     });
     if (res.status === 403) {
       notifyEmailDisabled(payload.kind);
-      return false;
+      const error = await extractErrorMessage(res);
+      return { ok: false, status: 403, reason: 'forbidden', error };
     }
-    if (res.ok && typeof window !== 'undefined') {
+    if (!res.ok) {
+      const error = await extractErrorMessage(res);
+      console.error(`[proxySendBroadcastEmail] ${res.status} ${error}`);
+      return { ok: false, status: res.status, reason: 'http_error', error };
+    }
+    if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('email-sent'));
     }
-    return res.ok;
-  } catch {
-    return false;
+    return { ok: true, status: res.status };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[proxySendBroadcastEmail] network/throw:', err);
+    return { ok: false, reason: 'network_error', error: msg };
   }
 }
 
