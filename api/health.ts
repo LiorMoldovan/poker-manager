@@ -94,6 +94,17 @@ const log = (msg, color) => {
   checks['EMAILJS_TEMPLATE_ID'] = process.env.EMAILJS_TEMPLATE_ID || 'fallback: template_vbxffkb';
   checks['EMAILJS_PUBLIC_KEY'] = process.env.EMAILJS_PUBLIC_KEY || 'fallback: Yv-mOZmcYpLll4olj';
   checks['EMAILJS_PRIVATE_KEY'] = process.env.EMAILJS_PRIVATE_KEY ? `set (${process.env.EMAILJS_PRIVATE_KEY.length} chars)` : 'MISSING';
+  // OWNER_GROUP_ID gates every /api/send-email call — if it's missing or
+  // doesn't match the user's group, every send returns 500 / 403 with no
+  // row in email_usage_log. Surface here (last 8 chars only) so we can
+  // diagnose without exposing the full UUID.
+  const ogi = process.env.OWNER_GROUP_ID;
+  checks['OWNER_GROUP_ID'] = ogi
+    ? `set (…${ogi.slice(-12)}, len ${ogi.length})`
+    : 'MISSING — every /api/send-email returns 500';
+  checks['EMAILJS_BROADCAST_TEMPLATE_ID'] = process.env.EMAILJS_BROADCAST_TEMPLATE_ID || 'fallback: template_broadcast';
+  checks['EMAILJS_MONTHLY_CAP'] = process.env.EMAILJS_MONTHLY_CAP || 'fallback (system_config or 200)';
+  checks['EMAILJS_QUOTA_RESET_DAY'] = process.env.EMAILJS_QUOTA_RESET_DAY || 'fallback (system_config or 1)';
 
   const authHeader = req.headers.get('Authorization');
   if (authHeader?.startsWith('Bearer ')) {
