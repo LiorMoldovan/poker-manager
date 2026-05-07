@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.44.2';
+export const APP_VERSION = '5.44.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.44.3',
+    date: '2026-05-07',
+    changes: [
+      '🩹 Fix garbled broadcast emails (revert HTML wrap)',
+      '📧 Hebrew bodies render plain text again, RTL intact',
+    ],
+  },
   {
     version: '5.44.2',
     date: '2026-05-07',

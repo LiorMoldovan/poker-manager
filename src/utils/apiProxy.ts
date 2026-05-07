@@ -325,56 +325,32 @@ export async function proxySendEmail(payload: {
   }
 }
 
-// Wraps a Hebrew (or any RTL) plain-text message in an HTML block
-// that forces right-to-left paragraph alignment in EVERY email
-// client. This supersedes the older "prepend a U+200F RLM" trick —
-// that mark only steered paragraph-level bidi resolution; it did
-// NOT override the EmailJS template's `text-align: left` CSS, which
-// is exactly why some users still saw Hebrew bodies hugging the
-// left edge of the message pane.
+// Pass-through. We send the broadcast body to EmailJS exactly as the
+// builders produce it — plain text with `\n` paragraph breaks. The
+// EmailJS template `template_broadcast` is configured in **Plain Text**
+// content-type mode (verified May 7 2026 from the dashboard), so any
+// HTML we send would arrive in the recipient's inbox as literal `<tag>`
+// text instead of a rendered layout.
 //
-// How it works:
-//   * `dir="rtl"` flips the block's bidi base direction to RTL.
-//   * Inline `text-align: right` wins over any template-level CSS
-//     (inline styles beat external stylesheets in email clients
-//     that strip <style> blocks — most do).
-//   * `unicode-bidi: plaintext` lets the bidi algorithm honour each
-//     paragraph's own first strong character, so embedded LTR runs
-//     (URLs, English names, numbers) render correctly inside the
-//     RTL block instead of being force-flipped.
-//   * `\n` → `<br>` so paragraph breaks survive HTML rendering
-//     while plain-text fallback views (rare, but Outlook on
-//     Windows still renders some clients as plaintext) still see
-//     the original newlines if the wrapper is stripped.
-//   * Strip a leading U+200F if the caller still adds one — the
-//     mark is harmless but pointless once we're emitting explicit
-//     `dir="rtl"`, and removing it keeps the body byte-clean.
+// History: v5.41.0 wrapped the message in a `<div dir="rtl" …>` block
+// to force RTL alignment on email clients that ignored the older
+// `\u200F` RLM trick. That assumed the template was in HTML mode. It
+// wasn't — the wrap silently shipped raw HTML to every broadcast email
+// for ~24h before the operator caught it (single side-by-side test in
+// Gmail mobile). Reverted in v5.44.3.
 //
-// EmailJS template requirement: the broadcast template
-// (`template_broadcast`) MUST render `{{message}}` as raw HTML
-// (the EmailJS default). If it ever gets reconfigured to
-// HTML-escape the placeholder, recipients will see literal `<div…>`
-// tags instead of the wrapped layout — that's a template-side
-// regression, not a code regression.
-function wrapHebrewEmailForRTL(message: string): string {
-  const sanitized = message.replace(/^\u200F/, '');
-  // We escape `<` / `>` only on the chance the body itself contains
-  // angle brackets (e.g. a player name "<Bob>"); the wrapper's own
-  // tags are concatenated *after* escaping the body, so they stay
-  // intact. `&` is intentionally NOT escaped because email bodies
-  // commonly contain ampersands in URL query strings, and double-
-  // escaping `&amp;` from a working URL would break the link.
-  const escaped = sanitized
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  const html = escaped.replace(/\n/g, '<br>');
-  return (
-    '<div dir="rtl" style="text-align: right; direction: rtl; '
-    + 'unicode-bidi: plaintext; font-family: Arial, Helvetica, sans-serif; '
-    + 'line-height: 1.5; white-space: normal;">'
-    + html
-    + '</div>'
-  );
+// Hebrew RTL alignment is handled by the email client's bidi algorithm
+// using the first strong character of each paragraph. Gmail (web +
+// mobile), Apple Mail, and Outlook all render the plain-text body
+// correctly without any wrapping. If a future client misbehaves, the
+// fix is to flip `template_broadcast` to HTML mode in EmailJS *first*,
+// then re-introduce the wrapper — never the other way around.
+//
+// Leading U+200F (RLM) is stripped because some legacy callers still
+// prepend it; the mark is invisible but adds a byte to every send and
+// doesn't help with the plain-text path.
+function prepareBroadcastBody(message: string): string {
+  return message.replace(/^\u200F/, '');
 }
 
 export async function proxySendBroadcastEmail(payload: {
@@ -396,7 +372,7 @@ export async function proxySendBroadcastEmail(payload: {
       headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({
         ...payload,
-        message: wrapHebrewEmailForRTL(payload.message),
+        message: prepareBroadcastBody(payload.message),
         groupId,
         kind: payload.kind ?? 'broadcast',
       }),

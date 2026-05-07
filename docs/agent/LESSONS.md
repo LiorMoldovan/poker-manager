@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-07 — Don't ship HTML to a third-party template without verifying its content-type mode
+
+**Incident**: v5.41.0 (May 6) added `wrapHebrewEmailForRTL` in `src/utils/apiProxy.ts` to fix Hebrew left-alignment in some clients by wrapping the broadcast body in `<div dir="rtl" style="…">…<br>…</div>`. The code comment confidently asserted "EmailJS templates render `{{message}}` as raw HTML by default — that's the EmailJS default." It is NOT the default for templates created in Plain Text mode. The user's `template_broadcast` was (and had always been) in Plain Text mode, so every broadcast email since v5.41.0 arrived in inboxes as literal `<div dir="rtl"…><br>…</div>` text instead of a rendered RTL block. The user discovered this ~24h later via the in-app preview tester and rightly called it "garbage emails". Reverted in v5.44.3 to a pass-through.
+
+**Root cause**: I made an assumption about a third-party system's default behavior that was both unverified AND undocumented inside the system we control. EmailJS templates have a Plain-Text vs HTML toggle that lives ONLY in the dashboard (no API exposes it, no env var captures it, no Vercel setting reflects it). Our code treated "the template renders HTML" as a guaranteed invariant when it was actually a fragile out-of-band assumption that no one in the codebase could see or verify without dashboard access. The comment even acknowledged the dependency ("MUST render as raw HTML") — but a comment is documentation, not a guard. There was no test, no health check, and no startup assertion that would catch the template being in the "wrong" mode. The other half of the failure: low broadcast volume meant the regression went unnoticed for a full day.
+
+**Lesson**: Never send HTML (or any non-trivial format) to a third-party template engine without first verifying the template's render mode in that system AND documenting the dependency in a way the next change author cannot miss. Concretely: (1) before adding any HTML wrapping to an EmailJS broadcast send, the code change MUST include a manual-test checklist confirming the template is in HTML mode and the rendered output looks correct in at least one real client; (2) prefer the format the third-party template natively expects (here: plain text with `\n` newlines — Hebrew bidi handles RTL alignment in every modern client without help); (3) when an out-of-band invariant is unavoidable, surface it loudly — a comment at the call site is not enough; add a `/api/health` check, a startup log line, or a CI assertion that the operator will actually see; (4) after any change to email send formatting, send ONE preview to your own inbox and eyeball it before merging — the in-app tester literally exists for this and it's a 30-second sanity check that would have caught this immediately.
+
+**Session**: 2026-05-07 (broadcast-email-rendering revert chat).
+
+---
+
 ## 2026-05-07 — `boolean`-returning network helpers eat the only useful info
 
 **Incident**: Lior triggered the email-preview tester from Settings → Notifications and saw "❌ שגיאה בשליחה". He had no way to tell which of the 5+ possible failure modes (group-not-allowed, EmailJS quota, template misconfig, EmailJS down, network throw) actually fired. The proxy returned `false`, the UI substituted a generic Hebrew label, and even the F12 console was empty because the catch block was `catch {}`.
