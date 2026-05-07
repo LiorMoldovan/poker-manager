@@ -1,0 +1,69 @@
+---
+description: Agent memory system — start/end rituals, where session knowledge lives, what to write where
+alwaysApply: true
+---
+
+# Agent Memory
+
+This project keeps a small living memory in `docs/agent/` so a fresh chat doesn't re-discover what previous chats already figured out. **You are required to participate in it.**
+
+## The three files
+
+| File | Purpose | Update style |
+|---|---|---|
+| `docs/agent/CONTEXT.md` | 30-second orientation: what's in flight, recent themes, things not in `AGENTS.md` or rules | Refreshed in place (overwrite) |
+| `docs/agent/SESSIONS.md` | Chronological journal of agent sessions, newest first | Append-only at the top |
+| `docs/agent/LESSONS.md` | Hard-won lessons from real incidents — never generic best practices | Append at the bottom, only when earned |
+
+These complement (don't duplicate) `AGENTS.md` (project map) and `.cursor/rules/*.mdc` (standing rules).
+
+## Start ritual — MANDATORY on first user message of a chat
+
+Before issuing **any** other tool call (other than reading these three files), you must:
+
+1. Read `docs/agent/CONTEXT.md` in full.
+2. Read `docs/agent/SESSIONS.md` — at minimum the top 3 entries, more if relevant to the user's request.
+3. Read `docs/agent/LESSONS.md` in full (it's small by design).
+
+Then, in your first reply to Lior, include a single concise line acknowledging state, e.g.:
+
+> Session loaded — current state: WIP on push-subscriber dedup (`supabaseCache.ts` + `SettingsScreen.tsx`), `main` at v5.44.0.
+
+Keep it to one line. Do not lecture back the contents.
+
+**Exceptions** (skip the ritual): purely conversational messages with no engineering intent ("hi", "thanks", "what's the weather"). When in doubt, do the ritual.
+
+## End ritual — MANDATORY when wrapping up
+
+Trigger the end ritual when **any** of these happen:
+
+- Lior says "session end", "wrap up", "we're done", "that's it for today", or similar.
+- You commit and/or push (the merge pipeline from `git-workflow.mdc`).
+- The user explicitly accepts a piece of work as complete and moves to a different topic.
+
+Do all that apply:
+
+1. **Append a new entry to `SESSIONS.md`** (at the top, under the header). Use the existing format: date, asked, did, learned, next. Keep it tight — bullets, not prose. Skip if the chat was a single drive-by tweak with nothing to remember.
+2. **Refresh `CONTEXT.md` in place** if state changed materially: new version on `main`, new in-flight work, new SQL migrations pending, new themes emerged. Update the "Last refreshed" date. **Do not append — overwrite.** Stale CONTEXT is worse than missing CONTEXT.
+3. **Add to `LESSONS.md`** *only* if a real incident produced a real lesson — a bug we didn't catch, a wrong assumption we made, a wasted hour. Use the format defined in that file. **Do not invent lessons** to look productive. An empty LESSONS section after a clean session is the correct outcome.
+4. Briefly tell Lior what you logged (one line per file touched).
+
+## What does NOT belong in agent memory
+
+- Generic best practices ("always run tsc") → these are `.cursor/rules/`.
+- Project architecture and file maps → these are `AGENTS.md`.
+- User-facing release notes → these are `src/version.ts` CHANGELOG.
+- API documentation, schema reference → live next to the code or in `supabase/`.
+- Commit-message-level detail → `git log` already has it.
+
+If you find yourself writing the same thing in two places, stop and pick one. Documentation sprawl is the enemy.
+
+## Promoting a lesson to a rule
+
+When a lesson in `LESSONS.md` is cited 3+ times across sessions or otherwise becomes "how we work":
+
+1. Create or extend a `.cursor/rules/*.mdc` file with the rule.
+2. Replace the lesson body with a one-line pointer: `Promoted to .cursor/rules/<name>.mdc on YYYY-MM-DD.`
+3. Note the promotion in the active session entry.
+
+This keeps `LESSONS.md` from bloating and gets durable wisdom into the always-loaded rule set where it actually shapes behavior.
