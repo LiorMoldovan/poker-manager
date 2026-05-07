@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.44.3';
+export const APP_VERSION = '5.44.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.44.4',
+    date: '2026-05-07',
+    changes: [
+      '🩹 Fix duplicate "— Poker Manager" signature in emails',
+    ],
+  },
   {
     version: '5.44.3',
     date: '2026-05-07',

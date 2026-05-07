@@ -344,8 +344,7 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
       (locationLine ? `📍 ${locationLine}\n\n` : '') +
       `${I}🎯 יעד: ${poll.targetPlayerCount} שחקנים` +
       (deadline ? `\n${I}⏳ ${deadline}` : '') +
-      ctaBlock +
-      '\n\n— Poker Manager',
+      ctaBlock,
   };
 }
 
@@ -417,7 +416,7 @@ export function buildConfirmedMessage(
       locLine +
       `${I}👥 ${confirmedLine}` +
       ctaBlock +
-      '\n\nנתראה על השולחן! 🃏\n\n— Poker Manager',
+      '\n\nנתראה על השולחן! 🃏',
   };
 }
 
@@ -479,7 +478,7 @@ export function buildTargetFilledMessage(
       `${I}👥 ${confirmedLine}` +
       seatsLine +
       ctaBlock +
-      '\n\nנתראה על השולחן! 🃏\n\n— Poker Manager',
+      '\n\nנתראה על השולחן! 🃏',
   };
 }
 
@@ -569,8 +568,7 @@ export function buildConfirmedBelowTargetYesMessage(
         `${I}👥 ${confirmedLine}\n` +
         `🪑 ${seatsPhrase}\n\n` +
         `אם יש לך אורח שמתאים לו להצטרף — ${updateVerb} 🤝` +
-        ctaBlock +
-        '\n\n— Poker Manager'
+        ctaBlock
       );
     },
   };
@@ -643,8 +641,7 @@ export function buildConfirmedBelowTargetOthersMessage(
       `${I}👥 ${confirmedLine}\n` +
       `🪑 ${seatsPhrase}\n\n` +
       'ההצבעה כעת רק על התאריך הזה.' +
-      ctaBlock +
-      '\n\n— Poker Manager',
+      ctaBlock,
   };
 }
 
@@ -701,8 +698,7 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
       emailGreeting(name) +
       'ערב הפוקר בוטל 😔' +
       reasonLine +
-      '\n\nנתראה בפעם הבאה! 🃏' +
-      '\n\n— Poker Manager',
+      '\n\nנתראה בפעם הבאה! 🃏',
   };
 }
 
