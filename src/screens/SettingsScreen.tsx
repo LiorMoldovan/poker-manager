@@ -1394,7 +1394,7 @@ const SettingsScreen = () => {
                   fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                 }}
               >
-                + {t('settings.chips.add')}
+                {t('settings.chips.add')}
               </button>
             )}
           </div>
