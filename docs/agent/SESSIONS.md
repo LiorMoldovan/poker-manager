@@ -6,6 +6,44 @@
 
 ---
 
+## 2026-05-08 — Home/schedule UX polish + new-group teaser + activity log accuracy (v5.45.0)
+
+**Asked**: A long iterative polish session against the home dashboard, the schedule card, the schedule tab empty state, and the settings activity log. Multiple discrete bugs surfaced via DOM dumps from an established group AND a brand-new test group:
+- Activity log session card showed "⏱ < 1 דק׳" forever for a parked user, even after 6+ minutes on the same screen.
+- "New Game" chip kept appearing in activity log though `/new-game` is now functionally "Home" (user explicitly: forward-fix only, do NOT backfill old rows).
+- May 7 confirmed poll lingered as "ערב פוקר נקבע" on home dashboard hours after the game completed.
+- Empty schedule card was a dead "🗓 אין הצבעה פעילה לחצו לצפייה בלוח הזמנים" — uninviting.
+- Then: redundant subtitle, double calendar icon, wrong navigation (admin → create-poll modal instead of schedule tab), "מי בפנים?" in wrong slot, awkward "לוח הזמנים" wording.
+- "👀 צפייה בלבד" card on member home was bureaucratic noise, especially in a fresh group.
+- Monthly leaderboard in fresh group said "אין עדיין מספיק משחקים" — wrong, there are ZERO not "not enough".
+- After the leaderboard fix, fresh-group home was nearly empty — needed a real onboarding teaser.
+
+**Did**:
+- **Activity log live duration** (`activityLogger.ts` + `SettingsScreen.tsx`): dropped the `screensChanged` early-return guard that prevented `session_duration` updates for parked users, exported `getCurrentSessionTimestamp()`, added a 60s ticker on the Activity tab, and switched the displayed duration to `Math.max(storedMin, liveMin)` for the viewer's own session (matched by `deviceId` + `currentSessionTimestamp`). Killed the 2 unused-symbol TS errors that were lingering on `main`.
+- **Forward-only "New Game" → "Home" rename**: changed `ROUTE_NAMES['/new-game']` to `'Home'` so new entries are correct; old rows age out naturally per user's explicit instruction.
+- **Stale confirmed-poll on home**: reverted an interim 4h display hack, made `!confirmedGameId` the single source of truth, added an admin-only self-heal `useEffect` in `HomeDashboard` that backfills `confirmedGameId` for orphan polls by matching against completed games (±6h) using `linkPollToGame`, and proactively auto-links in `NewGameScreen.startGameWithForecast` when the regular New Game flow creates a game without going through the poll's "Start Scheduled Game" button. `inFlightLinksRef` dedupes the brief window before realtime cache updates.
+- **Schedule card empty state copy**: rewrote `home.schedule.emptyTitle` / `emptyHelper` HE+EN to a forward-looking "מי בפנים לערב הבא?" / "ההצבעה הבאה תיפתח בקרוב · לחצו לצפייה בהצבעות" pattern; dropped the `recentPastPoll` prop + 5 stale translation keys that were referencing the removed "yesterday/days ago" subtitle. Removed the redundant 🗓 emoji (HomeCard already renders the icon). Fixed `goSchedule` to always navigate to `/settings?tab=schedule` (no more accidental admin→create-poll-modal jump).
+- **Schedule tab empty state**: rebuilt to show three states (auto-create ON → "next poll opens at <day> <date> <time>"; OFF + has history → "no active poll right now"; brand-new → original onboarding explainer). Added `computeNextScheduledTrigger` forward walker. Empty state now renders whenever there's no active poll, not only when the entire history is empty.
+- **Linked-game-completed → archive**: `shouldArchive` now also takes `completedGameIds` and archives any poll whose `confirmedGameId` lives in that set. Cleans up polls that resolved via an early game with future-dated alternatives still on the calendar.
+- **Monthly leaderboard fixes** (`HomeDashboard.LeaderboardCard`): copy `אין עדיין מספיק משחקים החודש` → `אין עדיין משחקים החודש` (plus EN equivalent — drop the misleading "not enough" threshold). Hide the entire card when zero completed games exist (brand-new group).
+- **New-group home teaser** (`NewGroupTeaserCard` in `HomeDashboard`): blue-accent HomeCard rendered after `ScheduleCard` when no completed games exist anywhere in the group. Body lists 4 feature previews (🏆 / 📊 / 🏅 / 📈) so a fresh-group landing page actually conveys what the app does. Visible to all roles. Disappears the instant the group's first game completes.
+- **Removed redundant member-only "view only" card** from `NewGameScreen` and its 2 translation keys — the dashboard teaser supersedes it for all roles.
+- **Super-admin observer foundation surfaced**: `App.tsx` PermissionContext now exposes `isSuperAdmin` / `allGroups` / `isObservingNonMember`, `useSupabaseAuth` initializes `allGroups: []` in the signed-out state. This kills the 9 pre-existing TS errors flagged in the previous CONTEXT.md.
+- Bumped to v5.45.0, 6-bullet changelog. Pushed to `main`.
+
+**Learned**:
+- The user is sensitive to Hebrew quality. First pass at "ערב הפוקר האחרון" subtitle copy was grammatically awkward and got the "your Hebrew is not good — improve it" pushback. Lesson: when writing user-facing Hebrew teaser copy, default to checking dual forms ("שלשום"), avoid bare prepositions ("ל" without infinitive), and prefer warm forward-looking verbs over formal/scheduling words. Also: don't repeat info already shown in adjacent cards (e.g. last-game subtitle was redundant with `LastGameCard`).
+- Iterative DOM-dump-driven polish is incredibly efficient for catching wording/UX issues — the user pastes the rendered HTML, you see exactly what they see, fix it, they paste the next one. Faster than asking "what's the issue?".
+- When a fix makes the screen LESS informative (e.g. hiding leaderboard for fresh groups), check what's left on screen before claiming done — a near-empty home page is a regression even if each individual card is technically correct. The "what's coming" teaser idea came from this.
+- "Forward-only" is a recurring user preference for cleanups: never backfill rows, never auto-fix existing data, just ensure new data is correct. Old labels age out organically. (Already in `LESSONS.md`? Worth a check — if it shows up again it might warrant a rule promotion.)
+- `StrReplace` reliability dropped a few times mid-session — likely racing with HMR / editor auto-save. Mitigation: re-read the affected section before retrying, and use larger surrounding context for uniqueness.
+
+**Next**:
+- After push, ask Lior to refresh and verify: (a) leaderboard card hidden in fresh group, (b) new-group teaser appears with the 4 feature previews, (c) activity log session minutes advance live without leaving the page, (d) schedule tab empty state shows the correct text for his auto-create config.
+- Watch the "schedule auto-archive on game completion" rule on Lior's actual data — first time the rule fires in production it may surface a poll that he didn't expect to disappear.
+
+---
+
 ## 2026-05-08 — Permanent fix for completed-game roster wipes (v5.44.6)
 
 **Asked**: For the second weekend in a row, the just-completed game shows in History/Statistics for a few minutes and then "loses" all its players (card shows `0 שחקנים • 0 קניות`, the games row stays). User explicitly: "this is in production, I can't login after every game to fix deletion issues — solve it once and for all."

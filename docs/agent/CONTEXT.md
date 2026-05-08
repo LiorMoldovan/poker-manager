@@ -1,24 +1,21 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-08 (post completed-game-roster-wipe permanent fix)
+> **Last refreshed**: 2026-05-08 (post v5.45.0 — home/schedule UX polish + new-group teaser + activity log live duration)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.44.5` (commit `cac3101`).
-- **Pending push (this session, 5.44.6)**: SQL migrations `050` (block direct delete on completed `game_players`) + `051` (fix migration-043's broken cascade detection) + version bump. Once pushed, `main` will be at `5.44.6`. Both migrations are already APPLIED to the live DB via `apply_migration` (with full sandbox-rollback verification of all 5 cases: cascade-on-completed/cascade-on-live/single-on-live/single-on-completed/bulk-on-live).
-- **Branch**: `main`.
-- **In flight (uncommitted, NOT mine, do not include in 5.44.6 commit)**:
-  - `src/screens/SettingsScreen.tsx` + `src/utils/activityLogger.ts` — live wall-clock session-duration WIP. Has 2 TS errors (`getDeviceId` declared but never read; `currentSessionTs` declared but never read). Carry forward into a future session.
-- **Pre-existing TS errors on `main` (NOT mine, NOT in scope)**:
-  - 9 errors in `src/components/GroupSwitcher.tsx` + `src/hooks/useSupabaseAuth.ts` from the v5.44.2 super-admin observer-mode foundation. `isSuperAdmin` / `allGroups` / `isObservingNonMember` are referenced but missing from `AuthState`. Verified these are present on commit `cac3101` BEFORE any of my work — production has compiled with these errors for 24+ hours and the user hasn't reported runtime fallout.
-- **Migrations applied to live DB this session**: `050_block_completed_game_player_delete`, `051_fix_bulk_delete_cascade_detection`. Files on disk: `supabase/050-…sql`, `supabase/051-…sql`.
+- **Version on `main`**: `5.45.0` (commit `703ed2e`).
+- **Branch**: `main`. Working tree clean.
+- **No in-flight WIP.** The previous session's lingering WIP in `SettingsScreen.tsx` + `activityLogger.ts` (live wall-clock session duration) was finished and shipped in `5.45.0`. The 9 pre-existing TS errors in `GroupSwitcher.tsx` + `useSupabaseAuth.ts` (super-admin observer foundation, originally from v5.44.2) were also resolved this session — `PermissionContext` now exposes `isSuperAdmin` / `allGroups` / `isObservingNonMember` and `useSupabaseAuth` initializes `allGroups: []` in the signed-out state. `npx tsc --noEmit` passes with zero errors as of push.
+- **No pending SQL migrations.** All migrations through `051` are applied to the live DB.
 
 ## Active themes (last ~10 versions)
 
-- **Data-integrity hardening** (v5.44.6, this session): row-level `BEFORE DELETE` guard on `game_players` for completed games + parent-existence-based cascade detection in the existing bulk-delete guard. Plus restoration of 7 wiped player rows for the 2026-05-07 game from auto game-end backup.
+- **Home/schedule UX polish + new-group onboarding** (v5.45.0, this session): home dashboard now has a forward-looking teaser for brand-new groups; schedule card empty state rewritten as a poll teaser with correct navigation; schedule tab empty state shows the next auto-create anchor (day + date + time); polls auto-link to games and auto-archive when their game completes; activity log shows live session minutes without waiting for the next DB push.
+- **Data-integrity hardening** (v5.44.6): row-level `BEFORE DELETE` guard on `game_players` for completed games + parent-existence-based cascade detection. SQL migrations `050` + `051`. Resolved a 5-day-latent bug in 043 where `pg_trigger_depth()` returned the wrong value in AFTER-STATEMENT context.
 - **Notification volume tuning** (v5.43.x → v5.44.0): cut email types, EmailJS quota system, push-only for chatty events. Owner manages quota config in Settings → Services.
 - **Home dashboard rebuild** (v5.38–v5.41): pure dashboard with deep-links, gender-aware verbs, RTL emails, mobile polish.
 - **Schedule / poll system** (v5.37): poll reminders, join-request banner with player linking on accept.
@@ -36,6 +33,8 @@
 - `temp_prompt.txt`, `pool-full-dump.txt`, `*.cjs` validation scripts in repo root are intentional dev artifacts. Don't delete unprompted.
 - `Poker results.xlsx` and `poker-export-*.xlsx` are real user data exports. Treat as sensitive — never commit modifications.
 - **`pg_trigger_depth()` does NOT increment for FK CASCADE in AFTER-STATEMENT trigger context** — see `LESSONS.md` 2026-05-08. It DOES work in BEFORE-ROW context. Migration 043 was authored on the wrong assumption and was latently broken for 5 days. When designing trigger logic that needs to distinguish cascade from direct delete, use parent-existence check, not `pg_trigger_depth()`.
+- **"Forward-only" is the user's default cleanup preference**: when fixing labels, route names, classifications, or any displayed-from-historical-data field, change the WRITE path so new entries are correct and let old rows age out. Never backfill, never auto-fix existing rows. (Surfaced again in v5.45.0 around the activity log "/new-game" → "Home" rename.)
+- **Hebrew copy needs care**: dual forms ("שלשום"), avoid bare prepositions ("ל" without infinitive), prefer warm forward-looking verbs over formal/scheduling words. The user pushes back hard on awkward Hebrew. When in doubt, prefer simple, inviting phrasing over technically-correct-but-stiff phrasing.
 
 ## Where the agent memory lives
 
