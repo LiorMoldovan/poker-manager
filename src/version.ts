@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.44.6';
+export const APP_VERSION = '5.45.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.45.0',
+    date: '2026-05-08',
+    changes: [
+      '🃏 New-group "what\'s coming" home teaser',
+      '🗓 Schedule empty state shows next auto-poll',
+      '🔗 Polls auto-link to completed games',
+      '📦 Polls archive once their game finishes',
+      '⏱ Live session minutes in activity log',
+      '🩹 Cleaner schedule + leaderboard empty copy',
+    ],
+  },
   {
     version: '5.44.6',
     date: '2026-05-08',

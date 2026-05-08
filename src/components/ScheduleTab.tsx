@@ -29,7 +29,7 @@ import {
   sendVoteChangeNotifications,
 } from '../utils/scheduleNotifications';
 import { supabase } from '../database/supabaseClient';
-import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings } from '../types';
+import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game } from '../types';
 import PollCard from './PollCard';
 
 // Render a modal as a direct child of <body>. This is critical for
@@ -195,6 +195,29 @@ const computePreviousScheduledTrigger = (
   return candidate.getTime();
 };
 
+// Forward-walking sibling of computePreviousScheduledTrigger: returns the
+// NEXT (day-of-week, HH:MM) occurrence strictly after `now`. Used by the
+// "no active poll, next one auto-opens at…" teaser in the empty state.
+// If today matches the weekday but the time has already passed, this
+// rolls forward to the same weekday next week (correct — the auto-create
+// effect already fired for today's anchor).
+const computeNextScheduledTrigger = (
+  day: number, time: string, now: Date
+): number => {
+  const [hStr = '18', mStr = '00'] = (time || '18:00').split(':');
+  const h = Math.max(0, Math.min(23, parseInt(hStr, 10) || 0));
+  const m = Math.max(0, Math.min(59, parseInt(mStr, 10) || 0));
+  const candidate = new Date(now);
+  candidate.setHours(h, m, 0, 0);
+  for (let i = 0; i < 8; i++) {
+    if (candidate.getDay() === day && candidate.getTime() > now.getTime()) {
+      return candidate.getTime();
+    }
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate.getTime();
+};
+
 const ARCHIVE_DAYS = 30;
 
 // A poll is "finished" once nothing actionable can happen on it: cancelled,
@@ -243,6 +266,12 @@ const isPastDatedPoll = (p: GamePoll, todayStartTs: number): boolean => {
 //     already passed, nothing left to do" rule — applies to ANY status,
 //     including open/expanded/confirmed-without-game; once the date is
 //     in the past the poll is dead weight regardless), OR
+//   * its linked game (`confirmedGameId`) is already completed and
+//     visible in History — once chips are counted and the game is
+//     finalized, the poll has done its job regardless of where the
+//     proposed dates sit on the calendar (covers the common case of a
+//     poll with future-dated alternatives that's already been resolved
+//     by an early game), OR
 //   * it's a finished poll (cancelled / expired / confirmed-with-game-
 //     started) AND there's at least one actionable poll alongside it
 //     (the "we've moved on" signal), OR
@@ -252,8 +281,10 @@ const shouldArchive = (
   p: GamePoll,
   hasActionable: boolean,
   todayStartTs: number,
+  completedGameIds: Set<string>,
 ): boolean => {
   if (isPastDatedPoll(p, todayStartTs)) return true;
+  if (p.confirmedGameId && completedGameIds.has(p.confirmedGameId)) return true;
   if (!isFinishedPoll(p)) return false;
   if (hasActionable) return true;
   const created = new Date(p.createdAt).getTime();
@@ -277,7 +308,7 @@ interface DraftDate {
 const DEFAULT_GAME_TIME = '21:00';
 
 export default function ScheduleTab() {
-  const { t, isRTL } = useTranslation();
+  const { t, isRTL, language } = useTranslation();
   const { role, isOwner, isSuperAdmin, playerName } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
@@ -297,6 +328,15 @@ export default function ScheduleTab() {
 
   const [polls, setPolls] = useState<GamePoll[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  // Games are loaded so the active/archive partition can react when a
+  // poll's linked game (`confirmedGameId`) flips to `completed` — at
+  // that point the poll should auto-archive regardless of date proximity.
+  const [games, setGames] = useState<Game[]>([]);
+  // Settings are mirrored into local state so the empty-state teaser
+  // re-renders when an admin toggles `scheduleAutoCreateEnabled` —
+  // the cache emits a `supabase-cache-updated` event on settings
+  // writes, which `useRealtimeRefresh` picks up via `reload`.
+  const [settings, setSettings] = useState<Settings>(() => getSettings());
   const [now, setNow] = useState(Date.now());
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -317,6 +357,8 @@ export default function ScheduleTab() {
   const reload = useCallback(() => {
     setPolls(getAllPolls());
     setPlayers(getAllPlayers());
+    setGames(getAllGames());
+    setSettings(getSettings());
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
@@ -508,13 +550,28 @@ export default function ScheduleTab() {
   // the memo only re-evaluates on poll change or midnight rollover.
   const dayBucket = Math.floor(now / (24 * 60 * 60 * 1000));
 
+  // Set of completed game IDs, indexed for O(1) lookup inside the
+  // partition memo. Recomputes whenever the games list changes — i.e.
+  // when a game finishes the chip-entry flow and flips to `completed`,
+  // any poll linked to it (via `confirmedGameId`) auto-archives on the
+  // next render.
+  const completedGameIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const g of games) {
+      if (g.status === 'completed') ids.add(g.id);
+    }
+    return ids;
+  }, [games]);
+
   // Partition polls into active vs archive.
   // Two-pass: first detect whether any poll is actionable (voting open or
   // start-game pending) AND has a future date, then route each poll
-  // through shouldArchive with that signal plus today's start-of-day
-  // timestamp (used by the past-dated rule). This implements both the
-  // "new poll → previous round's finished polls collapse to history" UX
-  // and the "the game date already passed → archive" auto-cleanup.
+  // through shouldArchive with that signal, today's start-of-day
+  // timestamp (used by the past-dated rule), and the set of completed
+  // game IDs (used by the linked-game-completed rule). This implements
+  // the "new poll → previous round's finished polls collapse to history"
+  // UX, the "the game date already passed → archive" auto-cleanup, and
+  // the "the game already finished → archive" tidiness rule.
   const { activePolls, archivePolls } = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -529,7 +586,7 @@ export default function ScheduleTab() {
     const a: GamePoll[] = [];
     const h: GamePoll[] = [];
     for (const p of polls) {
-      if (shouldArchive(p, hasActionable, todayStartTs)) h.push(p);
+      if (shouldArchive(p, hasActionable, todayStartTs, completedGameIds)) h.push(p);
       else a.push(p);
     }
     return { activePolls: a, archivePolls: h };
@@ -537,7 +594,7 @@ export default function ScheduleTab() {
     // signal that today rolled over; the memo body still uses
     // `new Date()` for the actual timestamp.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polls, dayBucket]);
+  }, [polls, dayBucket, completedGameIds]);
 
   // ── Auto-create-poll schedule (migration 050) ──
   // When the toggle is on and "now" is at-or-after the most recent
@@ -808,18 +865,60 @@ export default function ScheduleTab() {
         )}
       </div>
 
-      {/* Empty state — CTA lives in the header to keep a single
-          create button across both empty and populated states. */}
-      {activePolls.length === 0 && archivePolls.length === 0 && (
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
-            {t('schedule.empty.heading')}
+      {/* Empty state — rendered whenever there's no active poll
+          (regardless of archive count). Copy is picked three ways:
+            1. Auto-schedule ON → teaser revealing the next anchor
+               (day-of-week + date + time). Date/time is what members
+               actually want to see; the abstract "stay tuned" without
+               specifics felt useless. Computed live from settings, so
+               toggling the config in Settings → Game updates the card
+               on the next reload tick.
+            2. Auto-schedule OFF + has history → neutral "no active
+               poll right now" message. No future date promised.
+            3. Auto-schedule OFF + brand-new group → keep the original
+               onboarding explainer (HOW polls work). Loses no
+               educational value for first-time admins.
+          The CTA ("First poll" / "Poll") still lives in the header to
+          keep a single create button across all states. */}
+      {activePolls.length === 0 && (() => {
+        const autoEnabled = settings.scheduleAutoCreateEnabled === true;
+        const hasHistory = archivePolls.length > 0;
+        const heading = autoEnabled
+          ? t('schedule.empty.autoEnabledHeading')
+          : hasHistory
+            ? t('schedule.empty.idleHeading')
+            : t('schedule.empty.heading');
+        let explainer: string;
+        if (autoEnabled) {
+          // Compute the next (day-of-week, HH:MM) anchor strictly after
+          // now, format the localized day name, date, and time, then
+          // interpolate. Date format follows the locale's natural style:
+          // Hebrew uses numeric DD.MM, English uses "MMM DD".
+          const day = settings.scheduleAutoCreateDay ?? 0;
+          const time = settings.scheduleAutoCreateTime ?? '18:00';
+          const next = new Date(computeNextScheduledTrigger(day, time, new Date()));
+          const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+          const dayName = t(`home.trivia.dayOfWeek.${dayKeys[next.getDay()]}` as TranslationKey);
+          const date = language === 'he'
+            ? next.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
+            : next.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+          explainer = t('schedule.empty.autoEnabledExplainer', { dayName, date, time });
+        } else if (hasHistory) {
+          explainer = t('schedule.empty.idleExplainer');
+        } else {
+          explainer = t('schedule.empty.explainer');
+        }
+        return (
+          <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
+              {heading}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              {explainer}
+            </div>
           </div>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            {t('schedule.empty.explainer')}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Active polls */}
       {activePolls.map(poll => (

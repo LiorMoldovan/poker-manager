@@ -234,6 +234,9 @@ interface PermissionContextType {
     refreshMembership: () => void;
     triggerGroupWizard: () => void;
     userEmail: string;
+    isSuperAdmin: boolean;
+    allGroups: import('./hooks/useSupabaseAuth').AllGroupsEntry[];
+    isObservingNonMember: boolean;
   };
 }
 

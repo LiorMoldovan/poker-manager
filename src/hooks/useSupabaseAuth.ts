@@ -218,7 +218,7 @@ export function useSupabaseAuth() {
         }
       } else {
         membershipFetchedFor = null;
-        setState({ user: null, session: null, memberships: [], activeGroupId: null, isSuperAdmin: false, loading: false });
+        setState({ user: null, session: null, memberships: [], allGroups: [], activeGroupId: null, isSuperAdmin: false, loading: false });
       }
     });
 
@@ -255,7 +255,7 @@ export function useSupabaseAuth() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setState({ user: null, session: null, memberships: [], activeGroupId: null, isSuperAdmin: false, loading: false });
+    setState({ user: null, session: null, memberships: [], allGroups: [], activeGroupId: null, isSuperAdmin: false, loading: false });
   }, []);
 
   const createGroup = useCallback(async (groupName: string) => {

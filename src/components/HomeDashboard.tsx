@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PlayerStats } from '../types';
-import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers } from '../database/storage';
+import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, linkPollToGame } from '../database/storage';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
@@ -206,6 +206,10 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   const allGamePlayers = getAllGamePlayers();
 
   // Most relevant active poll: confirmed-pending-game wins over open.
+  // `!p.confirmedGameId` is the single source of truth — once a poll
+  // is linked to its game, the card disappears from Home regardless
+  // of how the admin started the game (poll button OR regular flow).
+  // The auto-link effect below maintains this invariant.
   const activePoll = useMemo(
     () =>
       polls.find(p => p.status === 'confirmed' && !p.confirmedGameId)
@@ -213,6 +217,48 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
       ?? null,
     [polls],
   );
+
+
+  // Self-healing link: any confirmed poll without a confirmed_game_id
+  // gets matched against completed games by start time (±6 hours). When
+  // the admin started the game from the regular New Game flow instead
+  // of the poll's "Start Scheduled Game" button, the linkage step in
+  // `startGameWithForecast` was skipped (it depends on a UI ref that
+  // wasn't set), leaving the poll orphaned and the home card stuck.
+  // Running here means: the moment the admin returns to the dashboard
+  // after completing such a game, we backfill the link, the realtime
+  // cache refreshes, and the card disappears on its own. Admin-only
+  // because `link_poll_to_game` requires admin role server-side; the
+  // RPC is idempotent (`WHERE confirmed_game_id IS NULL`) so retries
+  // and concurrent dashboard mounts are safe.
+  // The `inFlightLinksRef` set dedupes the brief window between the
+  // RPC firing and the realtime cache update — without it, a quick
+  // re-render (e.g. the user clicks something else on the dashboard)
+  // would re-trigger the same RPC for the same orphan poll multiple
+  // times. Pure local-state hygiene; the server is already idempotent.
+  const inFlightLinksRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isAdmin) return;
+    const orphans = polls.filter(p => p.status === 'confirmed' && !p.confirmedGameId);
+    if (orphans.length === 0) return;
+    const SIX_H_MS = 6 * 60 * 60 * 1000;
+    const completedGames = allGames.filter(g => g.status === 'completed');
+    for (const poll of orphans) {
+      if (inFlightLinksRef.current.has(poll.id)) continue;
+      const date = poll.dates.find(d => d.id === poll.confirmedDateId);
+      if (!date?.proposedDate) continue;
+      const pollStartMs = new Date(`${date.proposedDate}T${date.proposedTime || '20:00'}`).getTime();
+      if (Number.isNaN(pollStartMs)) continue;
+      const match = completedGames.find(g => Math.abs(new Date(g.date).getTime() - pollStartMs) <= SIX_H_MS);
+      if (!match) continue;
+      inFlightLinksRef.current.add(poll.id);
+      linkPollToGame(poll.id, match.id)
+        .catch(err => {
+          inFlightLinksRef.current.delete(poll.id); // allow retry on next render
+          console.warn('home: auto-link orphan poll → game failed (will retry next mount)', err);
+        });
+    }
+  }, [polls, allGames, isAdmin]);
 
   const lastGame = useMemo(() => {
     const completed = allGames
@@ -234,19 +280,18 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
     return Math.max(0, Math.floor(ms / 86_400_000));
   }, [myStats]);
 
-  // Admin shortcut: when there's no active poll, the empty-state
-  // schedule card jumps straight into "create poll" instead of
-  // dropping the admin on the Schedule tab landing where they'd
-  // need a second tap on the `+` button. The deep-link is consumed
-  // and stripped by ScheduleTab on mount. Members and admins with
-  // an existing poll keep the regular tab-landing behaviour.
+  // Always land on the Schedule tab itself — never auto-open the
+  // create-poll modal. The previous shortcut (admin + no active poll
+  // → `?action=create-poll`) was a UX mismatch with the empty card's
+  // teaser copy ("מי בפנים? ההצבעה הבאה תיפתח בקרוב — לחצו לצפייה
+  // בלוח הזמנים"): the user reasonably expects to *see* the schedule,
+  // not to be dropped straight into a write-action modal that
+  // members can't use anyway. Admins who do want to start a new poll
+  // tap the `+` button on the Schedule tab itself — one extra tap,
+  // worth it for predictable navigation.
   const goSchedule = () => {
     hapticTap();
-    if (isAdmin && !activePoll) {
-      navigate('/settings?tab=schedule&action=create-poll');
-    } else {
-      navigate('/settings?tab=schedule');
-    }
+    navigate('/settings?tab=schedule');
   };
   const goLastGame = () => { if (lastGame) { hapticTap(); navigate(`/game/${lastGame.id}`, { state: { from: 'home' } }); } };
   const goNewGame = () => { hapticTap(); navigate('/new-game'); };
@@ -331,6 +376,17 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         playerName={playerName}
         onClick={goSchedule}
       />
+      {/* Brand-new group teaser — only renders when zero games have
+          been completed. Sits right after the Schedule card so the
+          poll teaser (if any) stays the primary CTA, and the
+          "what's coming" preview reinforces it instead of competing
+          with it. Disappears automatically after the first completed
+          game, which is exactly when the LastGame / Personal /
+          Leaderboard cards start carrying real content of their
+          own. */}
+      {!allGames.some(g => g.status === 'completed') && (
+        <NewGroupTeaserCard order={next()} step={STEP} t={t} />
+      )}
       {lastGame && (
         <LastGameCard
           order={next()}
@@ -404,6 +460,25 @@ interface HomeCardProps {
   accent?: 'default' | 'success' | 'warning' | 'info';
   onClick?: () => void;
   as?: 'div' | 'button';
+  // How many lines the subtitle is allowed to occupy before
+  // ellipsis-clipping. Defaults to 2 — the safe cap for free-form
+  // text like a long location or trivia line.
+  //
+  // Cards whose subtitle is composed of MULTIPLE structured nowrap
+  // segments (e.g. the LastGame card: date · winner · place · profit)
+  // MUST pass `0` to disable the clamp entirely. Critical reason:
+  // JSX strips whitespace between sibling elements, so when the
+  // segments are sibling `<span>`s with `whiteSpace: 'nowrap'` and
+  // no whitespace text node between them, CSS has NO soft-wrap
+  // opportunity between the spans — they all flow on a single line
+  // and overflow horizontally past the card edge in RTL. The clamp
+  // mode (`-webkit-box` + `overflow: hidden`) silently clips that
+  // horizontal overflow, so the user just sees the trailing segment
+  // disappear with no visible cue (no ellipsis, no scroll). When
+  // clamp is `0`, the subtitle uses `flex; flex-wrap: wrap` instead
+  // so each child segment becomes its own flex item with a
+  // guaranteed wrap point between them.
+  subtitleClamp?: number;
 }
 
 function HomeCard({
@@ -417,6 +492,7 @@ function HomeCard({
   accent = 'default',
   onClick,
   as = 'div',
+  subtitleClamp = 2,
 }: HomeCardProps) {
   const accentStyle: React.CSSProperties = (() => {
     switch (accent) {
@@ -513,12 +589,25 @@ function HomeCard({
               color: 'var(--text-muted)',
               marginTop: '0.2rem',
               lineHeight: 1.45,
-              // Cap subtitle at 2 lines so a long fact / location can't
-              // distort the card height. ellipsis on overflow.
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
+              ...(subtitleClamp > 0 ? {
+                // Cap at N lines — used for free-form text where a
+                // long line should be ellipsised rather than blow up
+                // the card height.
+                display: '-webkit-box',
+                WebkitLineClamp: subtitleClamp,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              } : {
+                // No clamp — used for structured multi-segment
+                // subtitles. Flex-wrap guarantees a wrap point
+                // between sibling segments so nowrap spans can't
+                // overflow horizontally past the card edge on narrow
+                // screens. See `subtitleClamp` prop docs for why
+                // this matters.
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'baseline',
+              }),
             }}>
               {subtitle}
             </div>
@@ -562,6 +651,63 @@ function StartNewGameCta({ order, step, t, onClick }: SectionProps & { onClick: 
   );
 }
 
+// ─── 1b. New-group teaser (zero completed games) ────────────────────────
+//
+// Renders ONLY in a brand-new group that has never completed a game.
+// In that state the rest of the dashboard is sparse — LastGame /
+// Personal / Leaderboard all gate on data and render nothing — leaving
+// just a Schedule card + (optional) Trivia. This card fills the gap
+// with a preview of what's coming, so users immediately understand
+// what the home screen will look like once they start playing rather
+// than seeing a near-empty page and wondering if the app works.
+//
+// Visible to ALL roles (member, admin, super admin) because the
+// "what does this app do?" question applies to everyone in a fresh
+// group, not just members. Disappears the moment the group's first
+// game is marked completed.
+function NewGroupTeaserCard({ order, step, t }: SectionProps) {
+  const features: TranslationKey[] = [
+    'home.newGroup.feature1',
+    'home.newGroup.feature2',
+    'home.newGroup.feature3',
+    'home.newGroup.feature4',
+  ];
+  const body = (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.35rem',
+      paddingTop: '0.4rem',
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      {features.map(key => (
+        <div
+          key={key}
+          style={{
+            fontSize: '0.78rem',
+            color: 'var(--text)',
+            opacity: 0.85,
+            lineHeight: 1.45,
+          }}
+        >
+          {t(key)}
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <HomeCard
+      order={order}
+      step={step}
+      icon="🃏"
+      title={t('home.newGroup.title')}
+      subtitle={t('home.newGroup.subtitle')}
+      accent="info"
+      body={body}
+    />
+  );
+}
+
 // ─── 2. Schedule ────────────────────────────────────────────────────────
 
 interface ScheduleCardProps extends SectionProps {
@@ -580,6 +726,14 @@ interface ScheduleCardProps extends SectionProps {
 
 function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }: ScheduleCardProps) {
   if (!poll) {
+    // Empty state is purely forward-looking — a teaser inviting the
+    // viewer to come back when the next vote opens. We deliberately
+    // do NOT mention the most recent past poker night here: the
+    // LastGameCard directly below already surfaces that ("המשחק
+    // האחרון: יום חמישי 7.5 · מנצח: …"), so duplicating it on this
+    // card was redundant and made the dashboard read as backwards-
+    // looking. Card click already routes to the schedule polls page,
+    // so the CTA in the subtitle is honored.
     return (
       <HomeCard
         order={order}
@@ -1307,7 +1461,7 @@ function LastGameCard({ order, step, t, gameDate, gamePlayers, playerName, daysS
   // also prevents a segment like "מנצח: ליאור" from splitting
   // across lines mid-phrase.
   const sep = (
-    <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
+    <span style={{ marginInline: '0.25rem', opacity: 0.6 }}>·</span>
   );
   const subtitle = (
     <>
@@ -1346,6 +1500,13 @@ function LastGameCard({ order, step, t, gameDate, gamePlayers, playerName, daysS
       icon="🏆"
       title={t('home.lastGame.title')}
       subtitle={subtitle}
+      // 4 structured nowrap segments — disable the clamp so HomeCard
+      // uses flex-wrap layout instead of `-webkit-box` clipping.
+      // With clamp on, JSX-stripped whitespace between segments
+      // means there's no soft-wrap opportunity between the spans
+      // and the trailing "הרווח שלך" segment overflows past the
+      // card's left edge in RTL and gets silently clipped.
+      subtitleClamp={0}
       onClick={onClick}
     />
   );
@@ -1361,10 +1522,15 @@ interface LeaderboardProps extends SectionProps {
 }
 
 function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onClick }: LeaderboardProps) {
-  const { top3, monthLabel } = useMemo(() => {
+  const { top3, monthLabel, hasAnyCompletedGames } = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    // "Has the group ever played?" — used below to hide the card entirely
+    // for brand-new groups, where the very concept of a monthly leaderboard
+    // is meaningless. We compute this once here (instead of an extra
+    // .some() further down) so the early-return path stays cheap.
+    const hasAnyCompletedGames = games.some(g => g.status === 'completed');
 
     // Localized "May 2026" / "מאי 2026" for the card subtitle. Uses
     // the document language so RTL Hebrew vs LTR English both look
@@ -1387,6 +1553,7 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
       return {
         top3: [] as { name: string; profit: number; games: number; wins: number }[],
         monthLabel,
+        hasAnyCompletedGames,
       };
     }
 
@@ -1412,8 +1579,17 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
     return {
       top3: [...byPlayer.values()].sort((a, b) => b.profit - a.profit).slice(0, 3),
       monthLabel,
+      hasAnyCompletedGames,
     };
   }, [games, gamePlayers]);
+
+  // Brand-new group with zero completed games ever → don't render the
+  // leaderboard at all. Showing "מובילי החודש · אין עדיין משחקים החודש"
+  // for a group that has never played is misleading copy AND wasted
+  // dashboard real estate. The card reappears the moment the first
+  // game is completed (which is exactly when "leaderboard" becomes a
+  // real concept for that group).
+  if (!hasAnyCompletedGames) return null;
 
   // Title carries the month inline ("מובילי החודש · מאי 2026")
   // instead of a separate subtitle line — the user wants the period

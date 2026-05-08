@@ -4,7 +4,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame, getAllPolls } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
@@ -493,10 +493,31 @@ const NewGameScreen = () => {
       updateGame(game.id, { periodMarkers });
     }
 
-    // If this game was launched from a confirmed poll ("Start Scheduled
-    // Game"), link the poll → game now. Best-effort: a failed link doesn't
-    // abort the game flow, but is logged so admins can retry from the poll.
-    const linkPollId = pollLinkIdRef.current;
+    // Link the new game to its originating confirmed poll. Two paths:
+    //   1. The admin clicked the poll's "Start Scheduled Game" button —
+    //      `pollLinkIdRef` is set, use it directly. (Pre-existing flow.)
+    //   2. The admin started the game from the regular New Game flow
+    //      (Home dashboard or Settings) — `pollLinkIdRef` is null. We
+    //      still want the linkage, so look up any confirmed poll whose
+    //      scheduled start time is within ±6h of `game.date` and link
+    //      that one. Without this, `confirmed_game_id` stays NULL and
+    //      Home keeps showing a stale "ערב פוקר נקבע" card forever
+    //      (HomeDashboard's auto-link effect would eventually catch it
+    //      on next dashboard mount, but doing it here is immediate).
+    // The RPC is idempotent (`WHERE confirmed_game_id IS NULL`) so a
+    // double-link from path 2 + the dashboard heal is harmless.
+    const linkPollId = pollLinkIdRef.current ?? (() => {
+      const SIX_H_MS = 6 * 60 * 60 * 1000;
+      const gameMs = new Date(game.date).getTime();
+      const match = getAllPolls().find(p => {
+        if (p.status !== 'confirmed' || p.confirmedGameId) return false;
+        const d = p.dates.find(x => x.id === p.confirmedDateId);
+        if (!d?.proposedDate) return false;
+        const ms = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`).getTime();
+        return !Number.isNaN(ms) && Math.abs(ms - gameMs) <= SIX_H_MS;
+      });
+      return match?.id ?? null;
+    })();
     if (linkPollId) {
       pollLinkIdRef.current = null;
       linkPollToGame(linkPollId, game.id).catch(err => {
@@ -1771,14 +1792,12 @@ const NewGameScreen = () => {
             hasActiveGame={!!activeGame}
           />
 
-          {isMember && !trainingEnabled && (
-            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👀</div>
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
-                צפייה בלבד — רק מנהלים יכולים ליצור משחקים
-              </p>
-            </div>
-          )}
+          {/* The brand-new-group "what's coming" teaser used to live here
+              as a member-only card. It now lives inside HomeDashboard
+              (NewGroupTeaserCard) so it shows for ALL roles — admins
+              and super admins also benefit from a preview when they
+              first land in a fresh group, and there's no longer a need
+              to maintain two parallel empty-state messages. */}
         </>
       )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { usePendingVote } from '../hooks/usePendingVote';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -42,7 +42,7 @@ import {
   type ScheduleEmailVariantId,
 } from '../utils/previewScheduleEmails';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
-import { fetchActivityLog } from '../utils/activityLogger';
+import { fetchActivityLog, getDeviceId, getCurrentSessionTimestamp } from '../utils/activityLogger';
 import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingData';
 import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -400,6 +400,27 @@ const SettingsScreen = () => {
       loadActivityLog();
     }
   }, [activeTab]);
+
+  // 60-second ticker that re-renders the Activity tab while it's open.
+  // Drives the live elapsed-time computation for the user's own current
+  // session (see `lastSessionMin` derivation in the expanded card).
+  // Without this, the displayed duration would only update when the
+  // user collapsed and re-expanded their card, which is exactly the
+  // "still says < 1 דק׳ after 5 minutes" symptom Lior reported. Tied
+  // to the activity tab so we don't tick uselessly on other tabs.
+  const [, setActivityNowTick] = useState(0);
+  useEffect(() => {
+    if (activeTab !== 'activity') return;
+    const id = setInterval(() => setActivityNowTick(n => n + 1), 60 * 1000);
+    return () => clearInterval(id);
+  }, [activeTab]);
+
+  // Stable handle to THIS browser's device id. The Activity tab uses it
+  // (together with `currentSessionTimestamp`) to identify the viewer's
+  // own live-session row so we can render its duration as live wall-
+  // clock elapsed time instead of trusting the throttled DB value
+  // (which lags by up to ~5–7 minutes).
+  const ownDeviceId = useMemo(() => getDeviceId(), []);
 
   // Auto-load global stats when super admin tab is selected
   useEffect(() => {
@@ -4311,6 +4332,12 @@ const SettingsScreen = () => {
             const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
             const oneDayMs = 86400000;
             const thirtyDaysMs = 30 * oneDayMs;
+            // Captured once per render. Used downstream in the expanded
+            // card to identify the viewer's own live session row so we
+            // can render its duration as live wall-clock elapsed time
+            // instead of the throttled DB value. Null when the user
+            // isn't currently tracking a session (e.g. mid-logout).
+            const currentSessionTs = getCurrentSessionTimestamp();
 
             // Group by stable identity, not display name. Activity rows for the
             // same physical user can carry different `player_name` values across
@@ -4872,7 +4899,34 @@ const SettingsScreen = () => {
                             const lastEntry = user.latestEntry;
                             const lastDate = new Date(lastEntry.lastActive || lastEntry.timestamp);
                             const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                            const lastSessionMin = lastEntry.sessionDuration || 0;
+                            // Stored DB value. For OTHER users / OTHER devices
+                            // this is always what we render — we don't have a
+                            // live clock for someone else's session.
+                            const storedMin = lastEntry.sessionDuration || 0;
+                            // For the viewer's OWN current session we override
+                            // with wall-clock elapsed time since the row was
+                            // INSERTed. The DB value is throttled (5-min
+                            // interval + 2-min cooldown), so a user parked on
+                            // this very screen for 6 minutes would otherwise
+                            // see "< 1 דק׳" until the next push catches up.
+                            // We identify "this is my live session" by
+                            // matching the row's timestamp against the
+                            // in-process `currentSessionTimestamp` —
+                            // bulletproof because that variable holds the
+                            // exact value the row was INSERTed with and
+                            // resets only on logout / session end. The
+                            // 60-second ticker re-runs this every minute so
+                            // the value advances on its own. max(stored,
+                            // live) ensures we never shrink a value already
+                            // persisted.
+                            const isOwnLiveSession =
+                              lastEntry.deviceId === ownDeviceId
+                              && currentSessionTs !== null
+                              && lastEntry.timestamp === currentSessionTs;
+                            const liveMin = isOwnLiveSession
+                              ? (now.getTime() - new Date(lastEntry.timestamp).getTime()) / 60000
+                              : 0;
+                            const lastSessionMin = Math.max(storedMin, liveMin);
                             const lastSessionScreens = (lastEntry.screensVisited || []).slice();
 
                             // Format minutes for display. `sessionDuration` is

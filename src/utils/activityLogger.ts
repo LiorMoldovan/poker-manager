@@ -10,7 +10,6 @@ const ACTIVITY_LAST_PUSH_KEY = 'poker_activity_last_push';
 const ACTIVITY_PUSH_COOLDOWN_MS = 2 * 60 * 1000; // throttle session row updates (2 min)
 
 let currentSessionTimestamp: string | null = null;
-let lastPushedScreens: string[] = [];
 
 const generateUUID = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -102,14 +101,16 @@ export const getDeviceInfo = (): string => {
 };
 
 // `/` renders NewGameScreen but acts as the Home dashboard for everyone;
-// `/new-game` is the admin-only game-creation action screen. The two
-// were previously conflated under the label "New Game" because that was
-// the original purpose of `/`. Activity rows from before this rename
-// still contain the string "New Game" for `/` visits — see the optional
-// backfill SQL in the rollout notes.
+// `/new-game` is the admin-only game-creation action screen. They render
+// the same React component and serve the same conceptual purpose, so
+// they share the "Home" activity label — no separate "New Game" chip in
+// the activity log. Old activity_log rows from before this rename still
+// carry the literal string "New Game"; we deliberately do NOT backfill
+// them (per Lior's call) and they age out naturally via the MAX_LOG_ENTRIES
+// limit on the fetch query.
 const ROUTE_NAMES: Record<string, string> = {
   '/': 'Home',
-  '/new-game': 'New Game',
+  '/new-game': 'Home',
   '/statistics': 'Statistics',
   '/history': 'History',
   '/settings': 'Settings',
@@ -217,7 +218,6 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
   };
 
   currentSessionTimestamp = entry.timestamp;
-  lastPushedScreens = [...initialScreens];
   saveSessionBuffer(entry);
 
   const gid = getGroupId();
@@ -281,16 +281,17 @@ export const updateSessionActivity = async (
   // sticks around in module state).
   if (isObserverMode()) return;
 
-  // Two reasons to push: the visited-screen set changed (navigation),
-  // or this is a forced flush (tab close / sign out via `keepalive`).
-  // Previously this guard was `sameScreens → return` *before* checking
-  // keepalive, so a quick session that opened a single screen and
-  // closed without navigating never persisted its duration — the DB
-  // row stayed at the `session_duration: 0` it was inserted with,
-  // which surfaced in Settings as "< 1 min" forever.
-  const screensChanged = JSON.stringify(screens) !== JSON.stringify(lastPushedScreens);
-  if (!screensChanged && !keepalive) return;
-
+  // We unconditionally update the local buffer (cheap, in-memory) and
+  // delegate write throttling to `shouldPushNow()` (2-min cooldown).
+  // Previously this function early-returned when the screen set was
+  // unchanged — even on the 5-minute interval push — which meant a
+  // user parked on a single screen (e.g. Settings → Activity) had
+  // their `session_duration` stuck at the `0` from the initial INSERT
+  // forever, surfacing in Settings as "< 1 דק׳" no matter how long
+  // they sat there. v5.44.2 added a `keepalive` exception that
+  // covered tab-close but not the steady-state interval; the proper
+  // fix is to drop the guard entirely. `shouldPushNow()` ensures we
+  // never write more than once per 2 minutes regardless.
   const buffered = loadSessionBuffer();
   if (buffered && buffered.timestamp === currentSessionTimestamp) {
     buffered.screensVisited = [...screens];
@@ -308,7 +309,6 @@ export const updateSessionActivity = async (
       last_active: entry.lastActive,
     }).eq('device_id', entry.deviceId).eq('timestamp', entry.timestamp);
     markPushed();
-    lastPushedScreens = [...(entry.screensVisited || [])];
   }
 };
 
@@ -365,5 +365,14 @@ export const clearActivityLog = async (): Promise<boolean> => {
 
 export const resetSession = (): void => {
   currentSessionTimestamp = null;
-  lastPushedScreens = [];
 };
+
+// Exposed for UIs that need to render a live elapsed-time view of the
+// CURRENT session (e.g. Settings → Activity → "ביקור אחרון" for the
+// viewer's own card). Comparing `activity_log.timestamp` against this
+// is the only reliable way to know "is this row my live session?" —
+// freshness heuristics like `now - lastActive` fail because lastActive
+// only updates on push (max once per 2 min), so a session sitting on
+// one screen would otherwise stop being treated as live after a few
+// minutes even though it's still going.
+export const getCurrentSessionTimestamp = (): string | null => currentSessionTimestamp;
