@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.44.5';
+export const APP_VERSION = '5.44.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.44.6',
+    date: '2026-05-08',
+    changes: [
+      '🛡 Completed games are now permanently safe',
+      '🛡 Stale clients can\'t wipe completed rosters',
+      '🩹 Restored last night\'s missing roster',
+      '🛠 Fixed silent break in delete-game cascade',
+    ],
+  },
   {
     version: '5.44.5',
     date: '2026-05-07',

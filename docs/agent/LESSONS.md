@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-08 — `pg_trigger_depth()` does not detect FK CASCADE in AFTER-STATEMENT triggers
+
+**Incident**: Migration 043 (v5.34.2, May 3) shipped a `block_bulk_direct_delete` AFTER-STATEMENT trigger on `game_players`, `games`, `players` that was supposed to allow FK CASCADE deletes via `IF pg_trigger_depth() > 1 THEN RETURN NULL`. It does not. Empirically: in BEFORE-ROW context during cascade, `pg_trigger_depth()` returns 2 (works); in AFTER-STATEMENT context during cascade, it returns 1 (fails). So when the user's `deleteGame` flow issued `DELETE FROM games WHERE id = $1`, the cascade fired DELETE on multiple game_players, and the AFTER-STATEMENT trigger on game_players ran with depth=1, did NOT take the early-return branch, saw `affected > 1`, and aborted the entire transaction. The local cache pretended the delete succeeded; the realtime refresh would have brought the game back. `deleteGame` was silently broken for multi-player games for 5 days. The user only didn't notice because they didn't try to delete a multi-player game during that window. We discovered it while writing migration 050 because our cascade test failed unexpectedly.
+
+**Root cause**: I (in 2026-05-03) reasoned about `pg_trigger_depth()` from the PG docs ("nesting level of triggers") without empirical verification. PG implements RI cascades as triggers, but the AFTER-STATEMENT trigger fires with depth=1 because the cascade DELETE statement is its own statement-level frame — the cascading trigger context above it doesn't propagate into the new statement's user-trigger depth. The migration 043 self-verification block only tested the "block bulk" path; it never tested the "allow cascade" path, so the broken assumption shipped silently.
+
+**Lesson**: When designing a trigger that needs to distinguish FK CASCADE from a direct user statement, **don't trust `pg_trigger_depth()` alone — verify with a `_depth_log` test before relying on it**. For AFTER-STATEMENT context, the reliable signals are: (1) check whether the parent rows still exist (cascade leaves them gone, direct deletes don't), or (2) use a transaction-local `set_config('app.<flag>', '1', true)` set by a SECURITY DEFINER RPC and read with `current_setting('app.<flag>', true)`. For BEFORE-ROW context, `pg_trigger_depth() > 1` does work, but still write a sandbox test that verifies it. Pattern for DB-trigger migrations going forward: every migration that has an "allow X" branch MUST include a sandbox test that exercises that branch end-to-end (not just the "block Y" branch). The 5-test harness in session 2026-05-08 (cascade-on-completed / cascade-on-live / single-on-live / single-on-completed / bulk-on-live) is the model.
+
+**Session**: 2026-05-08 (Permanent fix for completed-game roster wipes).
+
+---
+
 ## 2026-05-07 — Don't ship HTML to a third-party template without verifying its content-type mode
 
 **Incident**: v5.41.0 (May 6) added `wrapHebrewEmailForRTL` in `src/utils/apiProxy.ts` to fix Hebrew left-alignment in some clients by wrapping the broadcast body in `<div dir="rtl" style="…">…<br>…</div>`. The code comment confidently asserted "EmailJS templates render `{{message}}` as raw HTML by default — that's the EmailJS default." It is NOT the default for templates created in Plain Text mode. The user's `template_broadcast` was (and had always been) in Plain Text mode, so every broadcast email since v5.41.0 arrived in inboxes as literal `<div dir="rtl"…><br>…</div>` text instead of a rendered RTL block. The user discovered this ~24h later via the in-app preview tester and rightly called it "garbage emails". Reverted in v5.44.3 to a pass-through.
