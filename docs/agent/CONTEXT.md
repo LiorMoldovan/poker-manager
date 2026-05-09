@@ -1,21 +1,24 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-08 (post v5.45.0 — home/schedule UX polish + new-group teaser + activity log live duration)
+> **Last refreshed**: 2026-05-09 (post v5.47.0 — photo chip counting + home "About You" card + tab-return cache recovery)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.45.0` (commit `703ed2e`).
+- **Version on `main`**: `5.47.0` (commit `80c36ca`).
 - **Branch**: `main`. Working tree clean.
-- **No in-flight WIP.** The previous session's lingering WIP in `SettingsScreen.tsx` + `activityLogger.ts` (live wall-clock session duration) was finished and shipped in `5.45.0`. The 9 pre-existing TS errors in `GroupSwitcher.tsx` + `useSupabaseAuth.ts` (super-admin observer foundation, originally from v5.44.2) were also resolved this session — `PermissionContext` now exposes `isSuperAdmin` / `allGroups` / `isObservingNonMember` and `useSupabaseAuth` initializes `allGroups: []` in the signed-out state. `npx tsc --noEmit` passes with zero errors as of push.
-- **No pending SQL migrations.** All migrations through `051` are applied to the live DB.
+- **No in-flight WIP.** v5.47.0 bundled three parallel agent streams: (1) photo-based chip counting at end-of-game (admin tool in `ChipEntryScreen` + owner test card in Settings → Services, anchored on a configurable left-to-right `chip_color_order` so the AI doesn't need to discriminate colors); (2) home dashboard `AboutYouCard` extracted alongside trivia via a shared `RotatingFactCard`; (3) `useRealtimeRefresh` opt-in `forceRefreshOnReturn` callback + new `forceRefreshPlayersFromDb` / `forceRefreshPollsFromDb` exports so Schedule/Group/Home screens recover from WebSocket gaps after the phone wakes. `npx tsc --noEmit` clean, lints clean.
+- **No pending SQL migrations.** All migrations through `060` are applied to the live DB.
+- **Photo chip counting — known limitations**: gemini-2.5-flash via the existing `/api/gemini` proxy. Owner needs to (a) configure the chip color order under Settings → Chips, (b) shoot at ~30–45° angled side view on a plain background with chips separated into per-color vertical stacks. The owner-only test card under Services lets them validate accuracy on their own chip set + lighting before relying on it in a live game. Like all `/api/*` features, only works on deployed Vercel — not localhost.
 
 ## Active themes (last ~10 versions)
 
-- **Home/schedule UX polish + new-group onboarding** (v5.45.0, this session): home dashboard now has a forward-looking teaser for brand-new groups; schedule card empty state rewritten as a poll teaser with correct navigation; schedule tab empty state shows the next auto-create anchor (day + date + time); polls auto-link to games and auto-archive when their game completes; activity log shows live session minutes without waiting for the next DB push.
+- **Photo chip counting + multi-stream merge** (v5.47.0, this session): "snap photo → AI proposes counts with per-stack confidence + total reconciliation banner → human confirms or edits" flow. Position-based identity (configurable color order) replaces color discrimination as the accuracy lever. Plus home `AboutYouCard` and tab-return cache recovery shipped in the same release.
+- **Home/schedule UX polish + new-group onboarding** (v5.45.0–v5.46.0): home dashboard forward-looking teaser for brand-new groups; schedule card empty state rewritten; schedule tab empty state shows next auto-create anchor; polls auto-link to games and auto-archive when their game completes; activity log shows live session minutes; observer mode for super admins viewing foreign groups.
 - **Data-integrity hardening** (v5.44.6): row-level `BEFORE DELETE` guard on `game_players` for completed games + parent-existence-based cascade detection. SQL migrations `050` + `051`. Resolved a 5-day-latent bug in 043 where `pg_trigger_depth()` returned the wrong value in AFTER-STATEMENT context.
+- **Realtime cache-recovery on tab return** (v5.47.0): `useRealtimeRefresh` accepts an optional `forceRefreshOnReturn` callback so screens whose underlying tables get write-heavy from peers (votes, member adds) actually re-fetch from Supabase when the tab regains focus, instead of just re-rendering stale in-memory cache.
 - **Notification volume tuning** (v5.43.x → v5.44.0): cut email types, EmailJS quota system, push-only for chatty events. Owner manages quota config in Settings → Services.
 - **Home dashboard rebuild** (v5.38–v5.41): pure dashboard with deep-links, gender-aware verbs, RTL emails, mobile polish.
 - **Schedule / poll system** (v5.37): poll reminders, join-request banner with player linking on accept.

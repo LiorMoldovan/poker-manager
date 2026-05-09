@@ -6,6 +6,30 @@
 
 ---
 
+## 2026-05-09 — Photo chip counting + multi-stream merge (v5.47.0)
+
+**Asked**: Build a "snap a photo to count player chips" feature for the end-of-game ChipEntryScreen, with strict accuracy guardrails ("AI proposes, human confirms"), and at the end "run full tests including edge cases, merge changes from all agents, bump version".
+
+**Did**:
+- **New feature — photo chip counting**: full pipeline from Settings (chip color order config + owner-only test card under Services) → ChipEntryScreen (📷 צלם קופה button per player → `PhotoCaptureModal` → AI fills counts with per-stack confidence + total-value reconciliation banner). Stack identity is anchored on a configurable left-to-right color order (new `chip_color_order` JSONB column, migration 060) so the AI relies on position rather than color discrimination — eliminates the biggest accuracy failure mode. Manual entry path is fully preserved; AI never overwrites manually-edited fields.
+- **Files**: new `src/components/PhotoCaptureModal.tsx`, `src/utils/imageUtils.ts` (downscale + Laplacian variance blur check), `supabase/060-chip-color-order.sql`. Modified `src/types/index.ts` (`PhotoChipCountStack`, `PhotoChipCountResult`, `Settings.chipColorOrder`), `supabaseCache.ts` (round-trip mapper), `geminiAI.ts` (`countChipsFromPhoto` — single holistic prompt, multimodal payload, strict JSON, gemini-2.5-flash via existing `/api/gemini` proxy), `ChipEntryScreen.tsx` (button, banner, colored input borders by confidence, edited-field tracking), `SettingsScreen.tsx` (color order UI under Chips tab + test card under Services tab), `i18n/translations.ts` (HE + EN copy for all of the above).
+- **Merged 3 parallel agent streams** under one v5.47.0 commit:
+  1. (Mine) Photo chip counting feature.
+  2. **Home dashboard "About You" personal facts card** + extracted shared `RotatingFactCard` component (refactored from `TriviaCard`), tasks-first ordering, slide animations (`triviaSlideFromRight/Left` keyframes in `index.css`).
+  3. **Realtime cache-recovery on tab return**: `useRealtimeRefresh` now accepts an optional `forceRefreshOnReturn` callback; new `forceRefreshPlayersFromDb` / `forceRefreshPollsFromDb` exports in `supabaseCache.ts`; wired into `ScheduleTab`, `GroupManagementTab`, `NewGameScreen` so screens recover from WS-gap stale data after the phone wakes.
+  4. Plus a small Statistics button color tweak (muted instead of green).
+- **Validation**: `npx tsc --noEmit` clean (89s full run), ReadLints clean across all 17 touched files. Migration 060 was already applied to live DB earlier in the session. Manual entry path in ChipEntryScreen verified unchanged via diff (photo button is purely additive — `updateChipCount` retains its original signature with optional `source` param defaulting to `'user'`).
+- **Shipped**: `git push` of `80c36ca` (v5.47.0). Vercel auto-deploys.
+
+**Learned**:
+- For an "AI proposes, human confirms" UX where accuracy matters, position-based identity (configurable color order → AI counts stack #1, #2, etc.) drastically outperforms identity-based identity (AI must classify red vs orange). Eliminating color discrimination as an error source is worth the one-time admin setup cost.
+- When the user says "merge changes from all agents", it's an explicit instruction — bundle everything into one version bump rather than fragmenting across multiple commits. The changelog covers all streams; the commit message provides per-stream breakdown.
+- `useRealtimeRefresh` with an opt-in `forceRefreshOnReturn` callback is the right shape for fixing WS-gap stale data: most screens are fine with a re-render of the in-memory cache, but write-heavy screens (schedule votes, group members) need to actually re-fetch. The 500ms debounce in `scheduleRealtimeRefresh` coalesces multi-callback fires (e.g. NewGameScreen forces both `players` and `polls`) into a single roundtrip.
+
+**Next**: No follow-ups outstanding. The photo feature is feature-complete with the test card available for owner-side accuracy validation against the user's actual chip set + lighting before relying on it in a live game.
+
+---
+
 ## 2026-05-08 — Home/schedule UX polish + new-group teaser + activity log accuracy (v5.45.0)
 
 **Asked**: A long iterative polish session against the home dashboard, the schedule card, the schedule tab empty state, and the settings activity log. Multiple discrete bugs surfaced via DOM dumps from an established group AND a brand-new test group:
