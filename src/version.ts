@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.46.0';
+export const APP_VERSION = '5.47.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.47.0',
+    date: '2026-05-09',
+    changes: [
+      '📷 Snap-to-count chips from a photo (admin)',
+      '🎨 Configurable left-to-right chip color order',
+      '🧪 Photo-count test card in Settings → Services',
+      '🎯 Per-stack confidence + total reconciliation banner',
+      '👤 New "ידעת על עצמך?" personal facts card on Home',
+      '🔄 Tab return refreshes polls + players from DB',
+      '🩹 Schedule no longer shows stale votes after wake',
+      '🩹 Members tab sees new players without reopening app',
+      '🎞 Directional slide on rotating fact carousel',
+    ],
+  },
   {
     version: '5.46.0',
     date: '2026-05-09',

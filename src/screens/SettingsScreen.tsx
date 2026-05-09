@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { usePendingVote } from '../hooks/usePendingVote';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits } from '../types';
+import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits, PhotoChipCountResult } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
   getAllPlayers, 
@@ -47,6 +48,7 @@ import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingDat
 import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
+import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
@@ -123,6 +125,12 @@ const SettingsScreen = () => {
   const [isTestingModels, setIsTestingModels] = useState(false);
   const [showAiLog, setShowAiLog] = useState(false);
   const [aiTick, setAiTick] = useState(0);
+
+  // Photo chip-counting test (Services tab — owner only).
+  // No game context, no settlement impact. Pure accuracy verification.
+  const [photoTestOpen, setPhotoTestOpen] = useState(false);
+  const [photoTestResult, setPhotoTestResult] = useState<PhotoChipCountResult | null>(null);
+  const [photoTestPreview, setPhotoTestPreview] = useState<string>('');
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -515,8 +523,16 @@ const SettingsScreen = () => {
     });
   };
 
+  // On tab focus / app return, force a DB refresh of the players cache so
+  // the Players sub-tab paints the latest roster after a peer admin's
+  // edits — not the stale cache that survives a Realtime WS gap (e.g.
+  // phone slept while another admin added or renamed a player). The
+  // other cache slices `loadData` reads (chip values, game settings,
+  // API keys) almost never change between sessions, so we don't pay the
+  // round-trip cost to refresh them — they stay on the existing
+  // cache-event-driven path which is enough for their volatility.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRealtimeRefresh(useCallback(() => loadData(), []));
+  useRealtimeRefresh(useCallback(() => loadData(), []), forceRefreshPlayersFromDb);
 
   const loadData = () => {
     setSettings(getSettings());
@@ -1465,6 +1481,139 @@ const SettingsScreen = () => {
               ))}
             </div>
           )}
+
+          {/* Chip Color Order — used by photo chip-counting (no-op without chips configured) */}
+          {chipValues.length > 0 && (() => {
+            // Resolve current order: configured ids that still exist,
+            // then any chip values not yet in the configured order
+            // (newly added colors appear at the end).
+            const configuredOrder = settings.chipColorOrder || [];
+            const idToChip = new Map(chipValues.map(c => [c.id, c]));
+            const orderedIds: string[] = [];
+            for (const id of configuredOrder) {
+              if (idToChip.has(id)) orderedIds.push(id);
+            }
+            for (const c of chipValues) {
+              if (!orderedIds.includes(c.id)) orderedIds.push(c.id);
+            }
+
+            const moveColor = (idx: number, delta: number) => {
+              const next = [...orderedIds];
+              const target = idx + delta;
+              if (target < 0 || target >= next.length) return;
+              [next[idx], next[target]] = [next[target], next[idx]];
+              handleSettingsChange('chipColorOrder', next);
+            };
+
+            const resetOrder = () => {
+              handleSettingsChange('chipColorOrder', []);
+            };
+
+            return (
+              <div style={{
+                marginTop: '1rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid var(--border)',
+              }}>
+                <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.4rem 0', fontWeight: 700 }}>
+                  {t('settings.chips.colorOrderTitle')}
+                </h3>
+                <p style={{
+                  margin: '0 0 0.75rem 0',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.5,
+                }}>
+                  {t('settings.chips.colorOrderHelper')}
+                </p>
+                <div>
+                  {orderedIds.map((id, idx) => {
+                    const chip = idToChip.get(id);
+                    if (!chip) return null;
+                    return (
+                      <div key={id} className="settings-row">
+                        <span style={{
+                          minWidth: '1.4rem',
+                          textAlign: 'center',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          fontWeight: 700,
+                        }}>{idx + 1}</span>
+                        <div
+                          className="chip-circle"
+                          style={{
+                            backgroundColor: chip.displayColor,
+                            border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
+                            flexShrink: 0,
+                            width: '1.5rem',
+                            height: '1.5rem',
+                          }}
+                        />
+                        <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>
+                          {translateChipColor(chip.color, t)}
+                        </span>
+                        {canEditChips && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => moveColor(idx, -1)}
+                              disabled={idx === 0}
+                              title={t('settings.chips.colorOrderMoveUp')}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                color: idx === 0 ? 'var(--text-muted)' : 'var(--text)',
+                                borderRadius: '6px',
+                                padding: '0.2rem 0.45rem',
+                                fontSize: '0.85rem',
+                                cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                                opacity: idx === 0 ? 0.4 : 1,
+                              }}
+                            >⬆</button>
+                            <button
+                              type="button"
+                              onClick={() => moveColor(idx, 1)}
+                              disabled={idx === orderedIds.length - 1}
+                              title={t('settings.chips.colorOrderMoveDown')}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                color: idx === orderedIds.length - 1 ? 'var(--text-muted)' : 'var(--text)',
+                                borderRadius: '6px',
+                                padding: '0.2rem 0.45rem',
+                                fontSize: '0.85rem',
+                                cursor: idx === orderedIds.length - 1 ? 'not-allowed' : 'pointer',
+                                opacity: idx === orderedIds.length - 1 ? 0.4 : 1,
+                              }}
+                            >⬇</button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {canEditChips && configuredOrder.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={resetOrder}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.75rem',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {t('settings.chips.colorOrderReset')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2858,9 +3007,173 @@ const SettingsScreen = () => {
                 </p>
               </div>
             )}
+
+            {/* Photo Chip Counting Test Card (owner-only, in Services tab) */}
+            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+              <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
+                {t('settings.photoTest.title')}
+              </h2>
+              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                {t('settings.photoTest.helper')}
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setPhotoTestOpen(true)}
+                disabled={chipValues.length === 0 || !settings.geminiApiKey}
+                style={{ width: '100%', padding: '0.65rem' }}
+              >
+                {t('settings.photoTest.takePhoto')}
+              </button>
+
+              {photoTestResult && !photoTestResult.error && (
+                <div style={{ marginTop: '0.85rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '0.5rem',
+                  }}>
+                    <h3 style={{ fontSize: '0.9rem', margin: 0, fontWeight: 700 }}>
+                      {t('settings.photoTest.resultsTitle')}
+                    </h3>
+                    <span style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: photoTestResult.overallConfidence >= 95 ? '#10b981'
+                        : photoTestResult.overallConfidence >= 80 ? '#eab308'
+                        : '#ef4444',
+                    }}>
+                      {t('settings.photoTest.confidenceLabel')}: {photoTestResult.overallConfidence}%
+                    </span>
+                  </div>
+
+                  {photoTestPreview && (
+                    <img
+                      src={`data:image/jpeg;base64,${photoTestPreview}`}
+                      alt="test"
+                      style={{
+                        width: '100%',
+                        maxHeight: '200px',
+                        objectFit: 'contain',
+                        borderRadius: '8px',
+                        background: '#000',
+                        marginBottom: '0.5rem',
+                      }}
+                    />
+                  )}
+
+                  <div>
+                    {photoTestResult.stacks.map(stack => {
+                      const chip = chipValues.find(c => c.id === stack.chipId);
+                      if (!chip) return null;
+                      const borderColor = stack.confidence >= 95 ? 'rgba(16,185,129,0.5)'
+                        : stack.confidence >= 80 ? 'rgba(234,179,8,0.5)'
+                        : 'rgba(239,68,68,0.6)';
+                      return (
+                        <div
+                          key={stack.chipId}
+                          className="settings-row"
+                          style={{ borderInlineStart: `3px solid ${borderColor}` }}
+                        >
+                          <div
+                            className="chip-circle"
+                            style={{
+                              backgroundColor: chip.displayColor,
+                              border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
+                              flexShrink: 0,
+                              width: '1.4rem',
+                              height: '1.4rem',
+                            }}
+                          />
+                          <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>
+                            {translateChipColor(chip.color, t)}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            ×{chip.value}
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: '1rem', minWidth: '2.5rem', textAlign: 'center' }}>
+                            {stack.count}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: '2.5rem', textAlign: 'end' }}>
+                            {stack.confidence}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                  }}>
+                    <span>{t('settings.photoTest.totalEstimate')}</span>
+                    <span>{photoTestResult.totalValue.toLocaleString()}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoTestResult(null);
+                      setPhotoTestPreview('');
+                      setPhotoTestOpen(true);
+                    }}
+                    style={{
+                      marginTop: '0.5rem',
+                      width: '100%',
+                      background: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                      padding: '0.45rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {t('settings.photoTest.tryAgain')}
+                  </button>
+                </div>
+              )}
+
+              {photoTestResult?.error && (
+                <div style={{
+                  marginTop: '0.75rem',
+                  padding: '0.6rem 0.75rem',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  color: '#fca5a5',
+                }}>
+                  {photoTestResult.error}
+                </div>
+              )}
+            </div>
           </>
         );
       })()}
+
+      {/* Photo Test Modal — mounted at the SettingsScreen root so it
+          works regardless of which tab is active (only the trigger
+          button is gated by activeTab === 'ai' && isOwner). */}
+      <PhotoCaptureModal
+        isOpen={photoTestOpen}
+        onClose={() => setPhotoTestOpen(false)}
+        onResult={(result, previewBase64) => {
+          setPhotoTestResult(result);
+          setPhotoTestPreview(previewBase64);
+        }}
+        chipValues={chipValues}
+        chipColorOrder={settings.chipColorOrder}
+        title={t('settings.photoTest.title')}
+      />
 
       {/* Report Tab */}
       {activeTab === 'report' && (

@@ -2296,9 +2296,9 @@ const StatisticsScreen = () => {
                   padding: '0.3rem 0.4rem',
                   fontSize: '0.7rem',
                   borderRadius: '6px',
-                  border: '1px solid rgba(16,185,129,0.3)',
-                  background: 'rgba(16,185,129,0.08)',
-                  color: '#10B981',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
                   cursor: 'pointer',
                 }}
               >

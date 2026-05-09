@@ -563,6 +563,20 @@ th {
   to { opacity: 1; }
 }
 
+/* Trivia card directional slides — used by the home "Did you know?"
+   carousel so cycling forward / backward feels like content sliding
+   in from the opposite side of the arrow the user tapped. Translate
+   distance is intentionally short (14 px) so the motion reads as a
+   subtle directional cue rather than a full carousel sweep. */
+@keyframes triviaSlideFromRight {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes triviaSlideFromLeft {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; }

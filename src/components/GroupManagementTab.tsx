@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAllPlayers, getAllGames } from '../database/storage';
+import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useTranslation } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -75,7 +76,15 @@ export default function GroupManagementTab({
   }, [fetchMembers]);
 
   useEffect(() => { loadMembers(); }, [loadMembers]);
-  useRealtimeRefresh(loadMembers);
+  // On tab focus / app return, force a DB refresh of the players cache
+  // before re-rendering. The unlinked-players list and player-type map
+  // both come from `getAllPlayers()` (in-memory cache); without this, an
+  // edit made by another admin while this client's WebSocket was suspended
+  // (e.g. someone added a guest player from their phone) would stay
+  // invisible until close+reopen. `loadMembers` itself is RPC-fetched so
+  // the member list is already fresh on every callback fire — the forced
+  // cache refresh is what closes the gap for the player-side data.
+  useRealtimeRefresh(loadMembers, forceRefreshPlayersFromDb);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });

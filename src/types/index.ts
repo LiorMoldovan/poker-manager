@@ -287,6 +287,35 @@ export interface ChipValue {
   displayColor: string;
 }
 
+// One stack the AI saw in a chip-counting photo.
+// `position` is 1-indexed in the configured chipColorOrder (or
+// the default chipValues order when no order is configured).
+// `count` may be 0 when the player has none of that denomination.
+// `confidence` is the AI's self-reported certainty (0-100); we treat
+// it as a soft signal, not a probability — the per-stack colored
+// borders in ChipEntryScreen surface it visually so the user can
+// glance-verify before accepting.
+export interface PhotoChipCountStack {
+  position: number;
+  chipId: string;       // matches ChipValue.id
+  color: string;        // canonical color name from ChipValue.color (for display)
+  count: number;
+  confidence: number;   // 0-100
+}
+
+// Result of one photo-based chip count attempt. Returned by
+// countChipsFromPhoto in geminiAI.ts. `error` is set only when the
+// flow couldn't produce usable counts (network error, malformed JSON,
+// no chips detected) — UI should surface it as a toast and leave the
+// existing manual-entry state untouched.
+export interface PhotoChipCountResult {
+  stacks: PhotoChipCountStack[];
+  overallConfidence: number;     // 0-100, geometric mean of per-stack confidences
+  totalValue: number;            // Σ(count × chipValue) across all returned stacks
+  modelUsed: string;             // e.g. 'gemini-2.5-flash' for diagnostics
+  error?: string;                // present only on failure
+}
+
 export interface BlockedTransferPair {
   playerA: string;
   playerB: string;
@@ -319,6 +348,12 @@ export interface Settings {
   scheduleAutoCreateDay?: number;          // 0=Sun..6=Sat, default 0 (Sunday)
   scheduleAutoCreateTime?: string;         // 'HH:MM' 24h, default '18:00'
   scheduleAutoCreatedAt?: string;          // ISO timestamp of last auto-create fire (re-fire guard)
+  // Conventional left-to-right photo order for chip stacks, as a list
+  // of ChipValue.id. When set, the photo-counting AI prompt uses this
+  // ordering so it doesn't need to identify colors from scratch — only
+  // count rings at known positions. When null/empty, callers fall back
+  // to the natural order of getChipValues().
+  chipColorOrder?: string[];
 }
 
 export interface Settlement {

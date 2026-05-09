@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame, getAllPolls } from '../database/storage';
+import { forceRefreshPlayersFromDb, forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
@@ -349,8 +350,23 @@ const NewGameScreen = () => {
     setPlayerStats(getPlayerStats());
   };
 
+  // On tab focus / app return, force a DB refresh of the players AND polls
+  // caches before re-rendering. The HomeDashboard rendered below reads
+  // `getAllPolls()` for the schedule card's vote counts and `getAllPlayers()`
+  // for leaderboard/teaser logic — both come straight from the in-memory
+  // cache. If the Realtime WebSocket missed an event while the phone was
+  // asleep (peer voted, admin added a player), a plain re-render would
+  // paint stale data; the forced refresh closes that gap. The two helpers
+  // share the same 500ms debounce in `scheduleRealtimeRefresh`, so calling
+  // both coalesces into a single roundtrip per refresh group.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRealtimeRefresh(useCallback(() => loadPlayers(), []));
+  useRealtimeRefresh(
+    useCallback(() => loadPlayers(), []),
+    useCallback(() => {
+      forceRefreshPlayersFromDb();
+      forceRefreshPollsFromDb();
+    }, []),
+  );
 
   // Separate players by type
   const permanentPlayers = players.filter(p => p.type === 'permanent');

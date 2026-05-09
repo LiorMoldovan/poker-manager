@@ -102,6 +102,12 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.schedule_auto_create_day != null) s.scheduleAutoCreateDay = Number(row.schedule_auto_create_day);
   if (row.schedule_auto_create_time != null) s.scheduleAutoCreateTime = String(row.schedule_auto_create_time);
   if (row.schedule_auto_created_at != null) s.scheduleAutoCreatedAt = String(row.schedule_auto_created_at);
+  // chip_color_order (migration 060) — nullable JSONB array of chip_values.id.
+  // Tolerate missing keys so the mapper works during pre-060 deployments.
+  if (Array.isArray(row.chip_color_order)) {
+    s.chipColorOrder = (row.chip_color_order as unknown[])
+      .filter((id): id is string => typeof id === 'string');
+  }
   return s;
 }
 
@@ -297,6 +303,9 @@ function settingsToRow(s: Settings, groupId: string) {
     schedule_auto_create_day: s.scheduleAutoCreateDay ?? 0,
     schedule_auto_create_time: s.scheduleAutoCreateTime ?? '18:00',
     schedule_auto_created_at: s.scheduleAutoCreatedAt ?? null,
+    // chip_color_order (migration 060) — null when not configured;
+    // empty array also serialises to null so we don't store noise.
+    chip_color_order: s.chipColorOrder && s.chipColorOrder.length > 0 ? s.chipColorOrder : null,
   };
 }
 
@@ -1592,6 +1601,28 @@ export function unsubscribeFromRealtime(): void {
     clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = null;
   }
+}
+
+// Force a fresh re-fetch of the polls cache from Supabase, bypassing the
+// in-memory cache. Used by screens that need to recover from a Realtime
+// WebSocket gap — e.g. the schedule/vote tab when the user returns to the
+// app after the phone slept and the WS missed a vote event. Reuses the
+// same debounced pipeline as realtime-driven refreshes so the resulting
+// `supabase-cache-updated` event will fire once the new data is in cache,
+// and any screen registered with `useRealtimeRefresh` will pick it up.
+export function forceRefreshPollsFromDb(): void {
+  if (!state) return;
+  scheduleRealtimeRefresh('polls');
+}
+
+// Force a fresh re-fetch of the players + group_members + player_traits
+// caches from Supabase. Used by the group management and home dashboard
+// flows so that joins, role changes, or player edits made by another
+// admin while this client's WebSocket was suspended become visible on
+// tab return — instead of staying stuck on stale cache until close+reopen.
+export function forceRefreshPlayersFromDb(): void {
+  if (!state) return;
+  scheduleRealtimeRefresh('players');
 }
 
 // ─── Game Polls (RPC-driven) ───

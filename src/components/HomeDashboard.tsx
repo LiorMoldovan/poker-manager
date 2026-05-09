@@ -27,7 +27,8 @@ import { fetchTrainingAnswers } from '../database/trainingData';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
-import { getSharedProgress } from '../utils/pokerTraining';
+import { shareToWhatsApp } from '../utils/sharing';
+import { getSharedProgress, getTrainingSessionCounts } from '../utils/pokerTraining';
 import { verbForName } from '../utils/hebrewGender';
 import { usePermissions } from '../App';
 
@@ -423,6 +424,13 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
           </span>
         </div>
       )}
+      {/* Tasks-first ordering: action (New Game) → time-sensitive
+          info (Schedule) → personal hook (About You) → recent
+          activity (Last Game) → personal numbers (Personal) →
+          group context (Leaderboard) → engagement (Training,
+          Trivia). Schedule sits above About You because a real
+          poll/upcoming game is more urgent than a fun fact about
+          yourself, even if you've already voted. */}
       {showAdminCta && <StartNewGameCta order={next()} step={STEP} t={t} onClick={goNewGame} />}
       <ScheduleCard
         order={next()}
@@ -433,6 +441,22 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         playerName={effectivePlayerName}
         onClick={goSchedule}
       />
+      {/* "About you" — personal rotating-fact card. Hidden when
+          there is no linked player (super-admin observer mode, or
+          member who hasn't picked a player yet). The card itself
+          returns null when no fact clears its data threshold. */}
+      {myStats && playerName && (
+        <AboutYouCard
+          order={next()}
+          step={STEP}
+          t={t}
+          myStats={myStats}
+          allPlayerStats={playerStats}
+          games={allGames}
+          gamePlayers={allGamePlayers}
+          playerName={playerName}
+        />
+      )}
       {/* Brand-new group teaser — only renders when zero games have
           been completed. Sits right after the Schedule card so the
           poll teaser (if any) stays the primary CTA, and the
@@ -494,7 +518,10 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
 interface HomeCardProps {
   order: number;
   step: number;
-  icon: string;
+  // Accepts a string (emoji) or any React node — `TriviaCard` passes
+  // a keyed animated span so the per-fact icon slides in alongside
+  // the subtitle when the user cycles between facts.
+  icon: React.ReactNode;
   title: string;
   // Single line by default; long values are clamped to 2 lines so a
   // long location / fact text never blows the card height out.
@@ -2007,9 +2034,8 @@ function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingP
     [games, gamePlayers, playerStats, trainingPlayers, t, language],
   );
 
-  // Initial pick is a deterministic daily rotation — same fact for the
-  // whole UTC day across all devices on first load. After that the
-  // user can tap-to-cycle through the rest.
+  // Daily-rotating start point — every device sees the same fact on
+  // any given UTC day, then the user can cycle from there.
   const initialIndex = useMemo(() => {
     if (trivia.length === 0) return 0;
     const dayOfYear = Math.floor(
@@ -2018,47 +2044,907 @@ function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingP
     return dayOfYear % trivia.length;
   }, [trivia.length]);
 
-  const [index, setIndex] = useState(initialIndex);
-  const safeIndex = trivia.length > 0 ? index % trivia.length : 0;
-
-  if (trivia.length === 0) return null;
-
-  const pick = trivia[safeIndex];
-  const canCycle = trivia.length > 1;
-
-  const handleClick = canCycle
-    ? () => { hapticTap(); setIndex(i => (i + 1) % trivia.length); }
-    : undefined;
-
-  // The fact's icon becomes the card icon, and the title is the
-  // standard trivia label. We `key` the inner spans by index so a
-  // crossfade plays on each tap — but the entrance stagger on the
-  // outer card stays untouched.
-  const accessory = canCycle ? (
-    <span style={{
-      fontSize: '0.65rem',
-      color: 'var(--text-muted)',
-      fontWeight: 600,
-      opacity: 0.8,
-      fontFeatureSettings: '"tnum"',
-    }}>
-      {safeIndex + 1}/{trivia.length}
-    </span>
-  ) : undefined;
-
   return (
-    <div key={`trivia-${safeIndex}`} style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
-      <HomeCard
-        order={order}
-        step={step}
-        icon={pick.icon}
-        title={t('home.trivia.title')}
-        subtitle={pick.text}
-        accessory={accessory}
-        onClick={handleClick}
-      />
+    <RotatingFactCard
+      order={order}
+      step={step}
+      title={t('home.trivia.title')}
+      shareLabel={t('home.trivia.shareLabel')}
+      prevLabel={t('home.trivia.prevLabel')}
+      nextLabel={t('home.trivia.nextLabel')}
+      facts={trivia}
+      initialIndex={initialIndex}
+      storageKey="home.trivia.lastIndex"
+    />
+  );
+}
+
+// ─── Shared rotating-fact card ──────────────────────────────────────────
+//
+// Generic rotating-fact UI used by `TriviaCard` and `AboutYouCard`.
+// Owns: directional slide animation, prev/next/share controls, daily
+// rotation start point, card-tap-to-advance shortcut. Knows nothing
+// about the source of the facts — pass them in already-built.
+//
+// Returns `null` for an empty fact list so callers don't need to
+// wrap in conditionals.
+interface RotatingFactCardProps {
+  order: number;
+  step: number;
+  title: string;
+  shareLabel: string;
+  prevLabel: string;
+  nextLabel: string;
+  facts: { icon: string; text: string }[];
+  initialIndex?: number;
+  // Optional accent for the surrounding HomeCard so personal cards
+  // can stand out from generic group trivia (e.g. `'info'` blue tint).
+  accent?: 'default' | 'success' | 'warning' | 'info';
+  // When set, the current fact index is persisted to `sessionStorage`
+  // under this key so navigating away from the dashboard and back
+  // RESUMES the user's last position instead of jumping back to the
+  // daily-rotation seed. Cleared when the tab closes, so the next
+  // session opens fresh on today's daily-seed fact again.
+  storageKey?: string;
+}
+
+function RotatingFactCard({
+  order,
+  step,
+  title,
+  shareLabel,
+  prevLabel,
+  nextLabel,
+  facts,
+  initialIndex = 0,
+  accent,
+  storageKey,
+}: RotatingFactCardProps) {
+  // Tracks the last cycle direction so the slide animation knows
+  // which side new content should arrive from. 'next' = forward,
+  // 'back' = previous. We treat the chevrons as universal icons
+  // (Western pagination convention: `‹` = previous, `›` = next)
+  // regardless of page language, so the slide direction is also
+  // universal: tapping `›` → new content enters from the right
+  // and pushes leftward; tapping `‹` → enters from the left and
+  // pushes rightward. This matches every browser/video-player
+  // pagination in the world and avoids the "wait, the LEFT arrow
+  // advances?" cognitive friction that an RTL-aware swap creates.
+  const [direction, setDirection] = useState<'next' | 'back'>('next');
+  // Lazy initializer reads the resumed index from sessionStorage on
+  // first render so the user lands BACK on the fact they were
+  // looking at before navigating away. Falls back to the daily-
+  // rotation seed (`initialIndex`) when no saved value exists or
+  // the saved value is out of bounds (facts list changed length).
+  const [index, setIndex] = useState(() => {
+    if (!storageKey || typeof window === 'undefined') return initialIndex;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (raw === null) return initialIndex;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed >= facts.length) return initialIndex;
+    return parsed;
+  });
+  // When the underlying facts list changes length (data arrived async,
+  // a fact's threshold flipped, etc.) keep the displayed index in
+  // bounds — without this, an out-of-range index would briefly
+  // render undefined → crash on `.icon` access.
+  useEffect(() => {
+    if (facts.length === 0) return;
+    if (index >= facts.length) setIndex(initialIndex % facts.length);
+  }, [facts.length, index, initialIndex]);
+
+  if (facts.length === 0) return null;
+
+  const safeIndex = index % facts.length;
+  const pick = facts[safeIndex];
+  const canCycle = facts.length > 1;
+
+  const cycle = (delta: 1 | -1) => {
+    if (!canCycle) return;
+    hapticTap();
+    setDirection(delta === 1 ? 'next' : 'back');
+    setIndex(i => {
+      const next = (i + delta + facts.length) % facts.length;
+      // Persist position so the next mount (after route change /
+      // tab switch / dashboard remount) resumes here instead of
+      // jumping back to the daily seed.
+      if (storageKey && typeof window !== 'undefined') {
+        try { window.sessionStorage.setItem(storageKey, String(next)); }
+        catch { /* storage full / disabled — non-fatal, just lose resume */ }
+      }
+      return next;
+    });
+  };
+
+  // Universal chevron semantics → universal slide direction.
+  //   next (›) → new content enters from the right, slides left
+  //   back (‹) → new content enters from the left,  slides right
+  const animationName = direction === 'next'
+    ? 'triviaSlideFromRight'
+    : 'triviaSlideFromLeft';
+  const animation = `${animationName} 0.32s cubic-bezier(0.2, 0.8, 0.2, 1)`;
+  // Keying both the icon span and the subtitle span with the same
+  // (index, direction) tuple guarantees React remounts them in
+  // lockstep so the animation runs in perfect sync. The HomeCard
+  // wrapper itself is NOT remounted, so the staggered entrance
+  // animation only fires on initial mount — not on every cycle.
+  const animKey = `${safeIndex}-${direction}`;
+
+  const animatedIcon = (
+    <span
+      key={animKey}
+      style={{ display: 'inline-block', animation, willChange: 'transform, opacity' }}
+    >
+      {pick.icon}
+    </span>
+  );
+
+  const animatedSubtitle = (
+    <span
+      key={animKey}
+      style={{ display: 'inline-block', animation, willChange: 'transform, opacity' }}
+    >
+      {pick.text}
+    </span>
+  );
+
+  // Share / prev / counter / next controls. Each button stops
+  // propagation so the surrounding card-tap (which still cycles
+  // forward as a shortcut) does not also fire. 26 px buttons sit
+  // comfortably above the 24 px accessibility minimum without
+  // dominating the card header on narrow phones.
+  const ctrlBtnStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    border: 'none',
+    background: 'rgba(255,255,255,0.05)',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    padding: 0,
+    transition: 'background 0.15s ease, color 0.15s ease',
+  };
+  // The chevron buttons get a tighter weight + slightly bigger
+  // glyph so the `‹ › ` arrows read crisply at 26 px.
+  const chevronBtnStyle: React.CSSProperties = {
+    ...ctrlBtnStyle,
+    fontSize: '1.15rem',
+    fontWeight: 400,
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  };
+  // Share button uses the app-wide 📤 emoji so it visually matches
+  // every other share affordance (settings, schedule, summary,
+  // graphs, stats). The emoji is intentionally rendered slightly
+  // smaller than the icon size so it doesn't dominate the row.
+  const shareBtnStyle: React.CSSProperties = {
+    ...ctrlBtnStyle,
+    fontSize: '0.85rem',
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    hapticTap();
+    const iconText = typeof pick.icon === 'string' ? `${pick.icon} ` : '';
+    const text = `${iconText}${title} ${pick.text}`;
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text, title });
+        return;
+      } catch (err) {
+        // User aborted the native share sheet — deliberate cancel,
+        // don't fall back to WhatsApp.
+        if ((err as DOMException)?.name === 'AbortError') return;
+        // Any other error (browser doesn't really support share,
+        // etc.) → silently fall through to the WhatsApp deep link.
+      }
+    }
+    shareToWhatsApp(text);
+  };
+
+  // Lock the controls strip to LTR direction so the chevron
+  // glyphs always render in the order [‹ 2/N ›] regardless of
+  // the page language. Without this lock, a Hebrew (RTL) page
+  // visually mirrors the row → the LEFT chevron ends up being
+  // "next" which contradicts the Western pagination convention
+  // every web user expects (`‹` = back, `›` = next).
+  const accessory = (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '0.3rem',
+      direction: 'ltr',
+    }}>
+      {canCycle && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); cycle(-1); }}
+            title={prevLabel}
+            aria-label={prevLabel}
+            style={chevronBtnStyle}
+          >
+            ‹
+          </button>
+          <span style={{
+            fontSize: '0.65rem',
+            color: 'var(--text-muted)',
+            fontWeight: 600,
+            opacity: 0.85,
+            fontFeatureSettings: '"tnum"',
+            minWidth: 28,
+            textAlign: 'center',
+            userSelect: 'none',
+          }}>
+            {safeIndex + 1}/{facts.length}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); cycle(1); }}
+            title={nextLabel}
+            aria-label={nextLabel}
+            style={chevronBtnStyle}
+          >
+            ›
+          </button>
+          {/* Subtle vertical divider separates pagination from
+              the share action so users don't perceive them as
+              one undifferentiated cluster of icons. */}
+          <span aria-hidden style={{
+            width: 1,
+            height: 16,
+            background: 'rgba(255,255,255,0.12)',
+            margin: '0 0.15rem',
+          }} />
+        </>
+      )}
+      <button
+        type="button"
+        onClick={handleShare}
+        title={shareLabel}
+        aria-label={shareLabel}
+        style={shareBtnStyle}
+      >
+        📤
+      </button>
     </div>
   );
+
+  // Whole-card tap still advances forward — preserves the long-
+  // standing "tap anywhere on trivia for the next fact" shortcut.
+  const handleClick = canCycle ? () => cycle(1) : undefined;
+
+  return (
+    <HomeCard
+      order={order}
+      step={step}
+      icon={animatedIcon}
+      title={title}
+      subtitle={animatedSubtitle}
+      accessory={accessory}
+      accent={accent}
+      onClick={handleClick}
+    />
+  );
+}
+
+// ─── About-you (personal trivia) ────────────────────────────────────────
+//
+// Renders a rotating fact card focused entirely on the logged-in
+// player. Uses the same UX as the group `TriviaCard` (animated
+// slide, prev/next/share, tap-to-cycle) but the fact pool comes
+// from `buildPersonalFactsList`, which mines the player's own game
+// history for personal records, recent form, head-to-head data, etc.
+//
+// Visibility rules:
+//   - Hidden entirely when `playerName` is null (super-admin in
+//     observer mode, or a member who hasn't linked a player yet).
+//   - Hidden when the fact pool is empty (brand-new players with
+//     zero completed games, or players whose data doesn't clear
+//     any fact threshold). The component returns null via the
+//     `RotatingFactCard` empty-list guard.
+//   - The daily rotation is salted by player name so two players
+//     looking at the home screen on the same day see DIFFERENT
+//     opening facts (vs. the group trivia, which is identical
+//     across all members).
+interface AboutYouCardProps extends SectionProps {
+  myStats: PlayerStats;
+  allPlayerStats: PlayerStats[];
+  games: ReturnType<typeof getAllGames>;
+  gamePlayers: ReturnType<typeof getAllGamePlayers>;
+  playerName: string;
+}
+
+function AboutYouCard({
+  order,
+  step,
+  t,
+  myStats,
+  allPlayerStats,
+  games,
+  gamePlayers,
+  playerName,
+}: AboutYouCardProps) {
+  const { language } = useTranslation();
+  const facts = useMemo(
+    () => buildPersonalFactsList(myStats, allPlayerStats, games, gamePlayers, playerName, t, language),
+    [myStats, allPlayerStats, games, gamePlayers, playerName, t, language],
+  );
+
+  // Daily rotation salted by player name, so two players on the
+  // same day land on different opening facts.
+  const initialIndex = useMemo(() => {
+    if (facts.length === 0) return 0;
+    const dayOfYear = Math.floor(
+      (Date.now() - new Date(new Date().getUTCFullYear(), 0, 0).getTime()) / 86_400_000,
+    );
+    let nameHash = 0;
+    for (let i = 0; i < playerName.length; i++) {
+      nameHash = ((nameHash << 5) - nameHash + playerName.charCodeAt(i)) | 0;
+    }
+    return Math.abs(dayOfYear + nameHash) % facts.length;
+  }, [facts.length, playerName]);
+
+  return (
+    <RotatingFactCard
+      order={order}
+      step={step}
+      title={t('home.aboutYou.title')}
+      shareLabel={t('home.trivia.shareLabel')}
+      prevLabel={t('home.trivia.prevLabel')}
+      nextLabel={t('home.trivia.nextLabel')}
+      facts={facts}
+      initialIndex={initialIndex}
+      storageKey={`home.aboutYou.lastIndex.${playerName}`}
+    />
+  );
+}
+
+// Builds the personal-facts pool for one player. Each entry is
+// gated by a data threshold so we never show "Your win rate: 0%
+// (0 of 0)" or "Your nemesis: nobody beat you yet" on a brand-new
+// player. Order is intentional: more emotionally engaging facts
+// (best/worst night, current streak) lead the rotation.
+function buildPersonalFactsList(
+  myStats: PlayerStats,
+  allPlayerStats: PlayerStats[],
+  games: ReturnType<typeof getAllGames>,
+  gamePlayers: ReturnType<typeof getAllGamePlayers>,
+  playerName: string,
+  t: SectionProps['t'],
+  language: Language,
+): { icon: string; text: string }[] {
+  const facts: { icon: string; text: string }[] = [];
+
+  // ── Pre-aggregations shared by multiple facts ──────────────────
+  // The PersonalCard already shows raw numbers (total profit,
+  // win count, win %, current streak, biggest win magnitude,
+  // avg/game, longest streak). Everything in THIS list must add
+  // information beyond those tiles — context the player can't
+  // see anywhere else on the dashboard.
+  const gameDateById = new Map<string, string>();
+  const completedGameIds = new Set<string>();
+  for (const g of games) {
+    if (g.status === 'completed') {
+      completedGameIds.add(g.id);
+      gameDateById.set(g.id, g.date || g.createdAt);
+    }
+  }
+
+  // All `game_players` rows for THIS player across completed games.
+  const myGP = gamePlayers.filter(gp => gp.playerName === playerName && completedGameIds.has(gp.gameId));
+  const myGameIds = new Set(myGP.map(gp => gp.gameId));
+
+  // gameId → (playerName → profit) for every game I've sat in.
+  // The single most expensive thing in this function; built once
+  // and reused by lucky-charm, jinx, nemesis, podium, finish-mode,
+  // and outscored-opponent computations.
+  const profitsByGameByPlayer = new Map<string, Map<string, number>>();
+  for (const gp of gamePlayers) {
+    if (!myGameIds.has(gp.gameId)) continue;
+    let inner = profitsByGameByPlayer.get(gp.gameId);
+    if (!inner) {
+      inner = new Map();
+      profitsByGameByPlayer.set(gp.gameId, inner);
+    }
+    inner.set(gp.playerName, gp.profit);
+  }
+
+  // 1. Best single night ever (with date) — magnitude is on
+  //    PersonalCard but the DATE is the wow ("oh yeah, that
+  //    night was amazing").
+  if (myStats.biggestWin > 0) {
+    let bestGameId = '';
+    let bestProfit = 0;
+    for (const gp of myGP) {
+      if (gp.profit > bestProfit) {
+        bestProfit = gp.profit;
+        bestGameId = gp.gameId;
+      }
+    }
+    if (bestProfit > 0) {
+      facts.push({
+        icon: '🏆',
+        text: t('home.aboutYou.bestNight', {
+          profit: formatCurrency(bestProfit),
+          date: formatTriviaDate(gameDateById.get(bestGameId), language),
+        }),
+      });
+    }
+  }
+
+  // 2. Worst single night ever (with date) — same logic; date
+  //    is the surprise. Skip trivial losses so a casual −20
+  //    night doesn't get crowned a "worst night."
+  if (myStats.biggestLoss > 50) {
+    let worstGameId = '';
+    let worstProfit = 0;
+    for (const gp of myGP) {
+      if (gp.profit < worstProfit) {
+        worstProfit = gp.profit;
+        worstGameId = gp.gameId;
+      }
+    }
+    if (worstProfit < 0) {
+      facts.push({
+        icon: '❄️',
+        text: t('home.aboutYou.worstNight', {
+          amount: formatCurrency(Math.abs(worstProfit)),
+          date: formatTriviaDate(gameDateById.get(worstGameId), language),
+        }),
+      });
+    }
+  }
+
+  // 3. Most-played partner — the player you've shared the most
+  //    completed games with. Skip when the leader has < 3 games
+  //    together; that's noise.
+  const partnerCounts = new Map<string, number>();
+  for (const gp of gamePlayers) {
+    if (!myGameIds.has(gp.gameId)) continue;
+    if (gp.playerName === playerName) continue;
+    partnerCounts.set(gp.playerName, (partnerCounts.get(gp.playerName) ?? 0) + 1);
+  }
+  const topPartner = [...partnerCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (topPartner && topPartner[1] >= 3) {
+    facts.push({
+      icon: '🤝',
+      text: t('home.aboutYou.partner', {
+        name: topPartner[0],
+        count: topPartner[1],
+      }),
+    });
+  }
+
+  // 4. Nemesis — opponent who finished above you most often.
+  //    Sample size gates: ≥ 5 shared games AND ≥ 4 beats so a
+  //    single rough night doesn't crown a nemesis.
+  const beatsBy = new Map<string, { beats: number; sharedGames: number }>();
+  for (const [, inner] of profitsByGameByPlayer) {
+    const myProfit = inner.get(playerName);
+    if (myProfit === undefined) continue;
+    for (const [name, profit] of inner) {
+      if (name === playerName) continue;
+      const entry = beatsBy.get(name) ?? { beats: 0, sharedGames: 0 };
+      entry.sharedGames += 1;
+      if (profit > myProfit) entry.beats += 1;
+      beatsBy.set(name, entry);
+    }
+  }
+  const topNemesis = [...beatsBy.entries()]
+    .filter(([, v]) => v.sharedGames >= 5 && v.beats >= 4)
+    .sort((a, b) => b[1].beats - a[1].beats)[0];
+  if (topNemesis) {
+    facts.push({
+      icon: '👻',
+      text: t('home.aboutYou.nemesis', {
+        name: topNemesis[0],
+        count: topNemesis[1].beats,
+        total: topNemesis[1].sharedGames,
+      }),
+    });
+  }
+
+  // 5. Podium rate — % of games this player finished top-3
+  //    by profit. Reuses `profitsByGameByPlayer` from above.
+  if (myStats.gamesPlayed >= 5) {
+    let podiums = 0;
+    for (const [, inner] of profitsByGameByPlayer) {
+      const myProfit = inner.get(playerName);
+      if (myProfit === undefined) continue;
+      const sortedProfits = [...inner.values()].sort((a, b) => b - a);
+      const myRank = sortedProfits.findIndex(p => p === myProfit) + 1;
+      if (myRank >= 1 && myRank <= 3) podiums += 1;
+    }
+    if (podiums > 0) {
+      const pct = Math.round((podiums / myStats.gamesPlayed) * 100);
+      facts.push({
+        icon: '🥇',
+        text: t('home.aboutYou.podiumRate', {
+          pct,
+          count: podiums,
+          games: myStats.gamesPlayed,
+        }),
+      });
+    }
+  }
+
+  // 6 / 7. Lucky charm + Jinx — when this opponent is at the
+  //   table, your win rate (finishing #1) shifts measurably
+  //   compared to games WITHOUT them. We only suggest one of
+  //   each (the strongest signal) and require:
+  //     · ≥ 6 shared games AND ≥ 6 games-without (sample size)
+  //     · ≥ 15-percentage-point gap (signal beats noise)
+  //   Lucky-charm = biggest positive gap. Jinx = biggest
+  //   negative gap. We only emit if both my own gamesPlayed
+  //   ≥ 12 (need a real history before pattern-finding is
+  //   meaningful) and partnerCounts has ≥ 2 entries (single-
+  //   opponent groups never produce a comparison).
+  if (myStats.gamesPlayed >= 12 && partnerCounts.size >= 2) {
+    // Per-opponent: my wins WITH them vs my wins WITHOUT them.
+    type Split = { withGames: number; withWins: number; withoutGames: number; withoutWins: number };
+    const split = new Map<string, Split>();
+    for (const opponent of partnerCounts.keys()) {
+      split.set(opponent, { withGames: 0, withWins: 0, withoutGames: 0, withoutWins: 0 });
+    }
+    for (const [gameId, inner] of profitsByGameByPlayer) {
+      const myProfit = inner.get(playerName);
+      if (myProfit === undefined) continue;
+      const sortedProfits = [...inner.values()].sort((a, b) => b - a);
+      const iWon = sortedProfits[0] === myProfit;
+      const playersInThisGame = new Set([...inner.keys()]);
+      for (const [opponent, s] of split) {
+        if (playersInThisGame.has(opponent)) {
+          s.withGames += 1;
+          if (iWon) s.withWins += 1;
+        } else if (myGameIds.has(gameId)) {
+          s.withoutGames += 1;
+          if (iWon) s.withoutWins += 1;
+        }
+      }
+    }
+    let bestCharm: { name: string; withPct: number; withoutPct: number; gap: number } | null = null;
+    let worstJinx: { name: string; withPct: number; withoutPct: number; gap: number } | null = null;
+    for (const [name, s] of split) {
+      if (s.withGames < 6 || s.withoutGames < 6) continue;
+      const withPct = (s.withWins / s.withGames) * 100;
+      const withoutPct = (s.withoutWins / s.withoutGames) * 100;
+      const gap = withPct - withoutPct;
+      if (gap >= 15 && (!bestCharm || gap > bestCharm.gap)) {
+        bestCharm = { name, withPct, withoutPct, gap };
+      }
+      if (gap <= -15 && (!worstJinx || gap < worstJinx.gap)) {
+        worstJinx = { name, withPct, withoutPct, gap };
+      }
+    }
+    if (bestCharm) {
+      facts.push({
+        icon: '🍀',
+        text: t('home.aboutYou.luckyCharm', {
+          name: bestCharm.name,
+          withPct: Math.round(bestCharm.withPct),
+          withoutPct: Math.round(bestCharm.withoutPct),
+        }),
+      });
+    }
+    if (worstJinx) {
+      facts.push({
+        icon: '🌧️',
+        text: t('home.aboutYou.jinx', {
+          name: worstJinx.name,
+          withPct: Math.round(worstJinx.withPct),
+          withoutPct: Math.round(worstJinx.withoutPct),
+        }),
+      });
+    }
+  }
+
+  // 8. Most-outscored opponent — across all shared games, the
+  //    opponent you're FURTHEST ahead of in cumulative profit.
+  //    Computed as Σ(myProfit − theirProfit) over shared games.
+  //    Gates: ≥ 5 shared games AND a meaningful gap (≥ 200) so
+  //    a player you've barely outpaced doesn't get singled out.
+  const outscoredBy = new Map<string, { gap: number; games: number }>();
+  for (const [, inner] of profitsByGameByPlayer) {
+    const myProfit = inner.get(playerName);
+    if (myProfit === undefined) continue;
+    for (const [name, profit] of inner) {
+      if (name === playerName) continue;
+      const entry = outscoredBy.get(name) ?? { gap: 0, games: 0 };
+      entry.gap += myProfit - profit;
+      entry.games += 1;
+      outscoredBy.set(name, entry);
+    }
+  }
+  const topOutscored = [...outscoredBy.entries()]
+    .filter(([, v]) => v.games >= 5 && v.gap >= 200)
+    .sort((a, b) => b[1].gap - a[1].gap)[0];
+  if (topOutscored) {
+    facts.push({
+      icon: '💸',
+      text: t('home.aboutYou.outscored', {
+        name: topOutscored[0],
+        amount: formatCurrency(Math.round(topOutscored[1].gap)),
+        games: topOutscored[1].games,
+      }),
+    });
+  }
+
+  // 9. Group rank — your current position on the all-time
+  //    profit board (only counting players with ≥ 10 games so
+  //    a one-game lucky stranger doesn't outrank regulars).
+  //    Self must also clear the ≥ 10 gate.
+  if (myStats.gamesPlayed >= 10) {
+    const ranked = allPlayerStats
+      .filter(p => p.gamesPlayed >= 10)
+      .sort((a, b) => b.totalProfit - a.totalProfit);
+    const rank = ranked.findIndex(p => p.playerName === playerName) + 1;
+    if (rank > 0 && ranked.length >= 3) {
+      facts.push({
+        icon: '🪜',
+        text: t('home.aboutYou.groupRank', {
+          rank,
+          total: ranked.length,
+        }),
+      });
+    }
+  }
+
+  // 10. Most common finish position — your rank-by-profit mode.
+  //     Surprising because most players think of themselves as
+  //     "a winner" or "in the middle" but rarely know the
+  //     specific position they hit most often. Gates: ≥ 10 games
+  //     AND the modal position must hit ≥ 25% of games (else
+  //     it's not really a "most common" pattern, just a tied
+  //     plurality with three positions). The mode label is
+  //     localised — Hebrew uses ordinal words (ראשון/שני/...),
+  //     English uses 1st/2nd/3rd suffixes.
+  if (myStats.gamesPlayed >= 10) {
+    const positionCounts = new Map<number, number>();
+    for (const [, inner] of profitsByGameByPlayer) {
+      const myProfit = inner.get(playerName);
+      if (myProfit === undefined) continue;
+      const sortedProfits = [...inner.values()].sort((a, b) => b - a);
+      const myRank = sortedProfits.findIndex(p => p === myProfit) + 1;
+      if (myRank > 0) positionCounts.set(myRank, (positionCounts.get(myRank) ?? 0) + 1);
+    }
+    const top = [...positionCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top && top[1] / myStats.gamesPlayed >= 0.25) {
+      facts.push({
+        icon: '🎯',
+        text: t('home.aboutYou.mostCommonFinish', {
+          place: ordinalLabel(top[0], language),
+          count: top[1],
+          games: myStats.gamesPlayed,
+        }),
+      });
+    }
+  }
+
+  // 11. Member since — first game date + total games. Anchors
+  //     a player's emotional sense of how long they've been at
+  //     the felt. Gates: ≥ 5 games AND first game ≥ 60 days
+  //     ago, otherwise "you've been playing for 2 weeks" reads
+  //     as silly trivia, not nostalgia.
+  if (myStats.gamesPlayed >= 5) {
+    let firstGameTs = Infinity;
+    for (const gp of myGP) {
+      const dateIso = gameDateById.get(gp.gameId);
+      if (!dateIso) continue;
+      const ts = new Date(dateIso).getTime();
+      if (Number.isFinite(ts) && ts < firstGameTs) firstGameTs = ts;
+    }
+    const sixtyDaysAgo = Date.now() - 60 * 86_400_000;
+    if (firstGameTs < sixtyDaysAgo && Number.isFinite(firstGameTs)) {
+      facts.push({
+        icon: '📅',
+        text: t('home.aboutYou.memberSince', {
+          date: formatTriviaDate(new Date(firstGameTs).toISOString(), language),
+          games: myStats.gamesPlayed,
+        }),
+      });
+    }
+  }
+
+  // ── Per-year + per-month profit aggregations ───────────────────
+  // Walked once and reused for both `bestYear` (#12) and
+  // `bestMonth` (#13). Skip games we can't date (defensive — all
+  // completed games should have a date but better than crashing).
+  const profitByYear = new Map<number, { profit: number; games: number }>();
+  const profitByMonth = new Map<string, { profit: number; games: number; ts: number }>();
+  for (const gp of myGP) {
+    const dateIso = gameDateById.get(gp.gameId);
+    if (!dateIso) continue;
+    const d = new Date(dateIso);
+    const year = d.getFullYear();
+    const monthKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const yEntry = profitByYear.get(year) ?? { profit: 0, games: 0 };
+    yEntry.profit += gp.profit;
+    yEntry.games += 1;
+    profitByYear.set(year, yEntry);
+    const mEntry = profitByMonth.get(monthKey) ?? { profit: 0, games: 0, ts: d.getTime() };
+    mEntry.profit += gp.profit;
+    mEntry.games += 1;
+    profitByMonth.set(monthKey, mEntry);
+  }
+
+  // 12. Best year ever — calendar year with the largest total
+  //     profit. Gates: ≥ 2 distinct years (otherwise "your best
+  //     year is the only year you've played" is meaningless),
+  //     ≥ 5 games in that year (one-game years aren't a year),
+  //     and the year's profit must be > 0 (no "your best year
+  //     was −5,000" sad trivia).
+  if (profitByYear.size >= 2) {
+    const bestYear = [...profitByYear.entries()]
+      .filter(([, v]) => v.games >= 5 && v.profit > 0)
+      .sort((a, b) => b[1].profit - a[1].profit)[0];
+    if (bestYear) {
+      facts.push({
+        icon: '🌟',
+        text: t('home.aboutYou.bestYear', {
+          year: bestYear[0],
+          profit: formatCurrency(Math.round(bestYear[1].profit)),
+          games: bestYear[1].games,
+        }),
+      });
+    }
+  }
+
+  // 13. Best month ever — single calendar month with the largest
+  //     positive profit. Gates: ≥ 3 games in the month (a single
+  //     lucky session isn't a "hot month"), profit > 0. Month
+  //     label is rendered via `formatTriviaDate` which auto-picks
+  //     the right localised "Month YYYY" form.
+  if (profitByMonth.size >= 3) {
+    const bestMonth = [...profitByMonth.entries()]
+      .filter(([, v]) => v.games >= 3 && v.profit > 0)
+      .sort((a, b) => b[1].profit - a[1].profit)[0];
+    if (bestMonth) {
+      facts.push({
+        icon: '🔥',
+        text: t('home.aboutYou.bestMonth', {
+          month: formatTriviaDate(new Date(bestMonth[1].ts).toISOString(), language),
+          profit: formatCurrency(Math.round(bestMonth[1].profit)),
+          games: bestMonth[1].games,
+        }),
+      });
+    }
+  }
+
+  // 14. Best location (with disclaimer) — the host whose table
+  //     has been kindest to this player. Location tracking is
+  //     newer than the rest of the data (most groups have <30%
+  //     of games tagged), so the disclaimer with `tracked`/
+  //     `total` counts is mandatory — without it the player
+  //     reads "best at X" and assumes it's based on every game.
+  //     Gates: ≥ 5 location-tagged games for THIS player at the
+  //     leader location AND avg profit ≥ 50/game (so a "best
+  //     location" with +5 avg doesn't get crowned).
+  const profitByLocation = new Map<string, { profit: number; games: number }>();
+  let trackedCount = 0;
+  for (const gp of myGP) {
+    const game = games.find(g => g.id === gp.gameId);
+    const loc = game?.location?.trim();
+    if (!loc) continue;
+    trackedCount += 1;
+    const entry = profitByLocation.get(loc) ?? { profit: 0, games: 0 };
+    entry.profit += gp.profit;
+    entry.games += 1;
+    profitByLocation.set(loc, entry);
+  }
+  const bestLoc = [...profitByLocation.entries()]
+    .filter(([, v]) => v.games >= 5 && v.profit / v.games >= 50)
+    .sort((a, b) => (b[1].profit / b[1].games) - (a[1].profit / a[1].games))[0];
+  if (bestLoc) {
+    facts.push({
+      icon: '🏠',
+      text: t('home.aboutYou.bestLocation', {
+        host: bestLoc[0],
+        avg: formatCurrency(Math.round(bestLoc[1].profit / bestLoc[1].games)),
+        games: bestLoc[1].games,
+        tracked: trackedCount,
+        total: myStats.gamesPlayed,
+      }),
+    });
+  }
+
+  // 15. Recent vs career form — am I hot or cold lately? Compare
+  //     last 20 games' avg profit to career avg. Gates: ≥ 30
+  //     career games AND |gap| ≥ 30 (currency units) so subtle
+  //     drift doesn't trigger a "you're on a heater" claim.
+  //     Trend label is localised via two sub-keys.
+  if (myStats.gamesPlayed >= 30) {
+    // Sort myGP by date desc to find the last 20 games. Built
+    // fresh here (rather than reusing myGP order, which is cache-
+    // insertion order, not date order).
+    const dated = myGP
+      .map(gp => ({ profit: gp.profit, ts: new Date(gameDateById.get(gp.gameId) ?? 0).getTime() }))
+      .filter(g => Number.isFinite(g.ts) && g.ts > 0)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+    if (dated.length >= 20) {
+      const recentAvg = dated.reduce((s, g) => s + g.profit, 0) / dated.length;
+      const careerAvg = myStats.avgProfit;
+      const gap = recentAvg - careerAvg;
+      if (Math.abs(gap) >= 30) {
+        const trend = gap > 0
+          ? t('home.aboutYou.recentForm.trend.up')
+          : t('home.aboutYou.recentForm.trend.down');
+        facts.push({
+          icon: gap > 0 ? '📈' : '📉',
+          text: t('home.aboutYou.recentForm', {
+            trend,
+            recent: 20,
+            recentAvg: formatCurrency(Math.round(recentAvg)),
+            careerAvg: formatCurrency(Math.round(careerAvg)),
+          }),
+        });
+      }
+    }
+  }
+
+  // 16. Average finish position — your mean rank-by-profit
+  //     across all games AND the average table size you've
+  //     played in. The "X out of Y" framing is way more
+  //     visceral than just "average rank: 3.2" because it
+  //     anchors the rank against the typical opponent count.
+  //     Gate: ≥ 10 games (small samples skew badly).
+  if (myStats.gamesPlayed >= 10) {
+    let rankSum = 0;
+    let rankN = 0;
+    let playerCountSum = 0;
+    for (const [, inner] of profitsByGameByPlayer) {
+      const myProfit = inner.get(playerName);
+      if (myProfit === undefined) continue;
+      const sortedProfits = [...inner.values()].sort((a, b) => b - a);
+      const myRank = sortedProfits.findIndex(p => p === myProfit) + 1;
+      if (myRank > 0) {
+        rankSum += myRank;
+        rankN += 1;
+        playerCountSum += inner.size;
+      }
+    }
+    if (rankN >= 10) {
+      const avgRank = rankSum / rankN;
+      const avgPlayers = playerCountSum / rankN;
+      facts.push({
+        icon: '📍',
+        text: t('home.aboutYou.avgFinish', {
+          avgRank: avgRank.toFixed(1),
+          avgPlayers: avgPlayers.toFixed(1),
+        }),
+      });
+    }
+  }
+
+  return facts;
+}
+
+// Localised ordinal label for finish positions. Hebrew uses
+// the masculine ordinal words (ראשון/שני/שלישי/...); English
+// uses 1st/2nd/3rd/Nth suffixes. Both fall back gracefully
+// for very high ranks (10+) by appending the English suffix
+// rules / "מקום N" Hebrew form.
+function ordinalLabel(n: number, language: Language): string {
+  if (language === 'he') {
+    const heOrdinals = ['', 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'שמיני', 'תשיעי', 'עשירי'];
+    return heOrdinals[n] ?? `ה-${n}`;
+  }
+  // English: 1st, 2nd, 3rd, then 4th–20th, then repeat the
+  // 1/2/3 rule based on the ones digit (21st, 22nd, 23rd, 24th…).
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
 }
 
 // Format a single timestamp as a short, contextual Hebrew/English
@@ -2099,6 +2985,17 @@ function formatTriviaDate(iso: string | undefined, language: Language): string {
   return `${monthName} ${d.getFullYear()}`;
 }
 
+// Internal trivia entry shape — `category` is an optional bucket tag
+// used by `spreadTriviaByCategory` to keep similar facts apart in the
+// final ordering. Most entries inherit their category from `icon`
+// (so e.g. the two "most active" facts that both use 💪 group
+// automatically). The training section explicitly overrides this with
+// `'training'` so all 4 training facts share one bucket regardless of
+// their differing icons (🎓 / 🎯 / 📚 / 👥) — without that override
+// the four would still cluster at the end of the source list and read
+// as a wall of training trivia.
+type TriviaEntry = { icon: string; text: string; category?: string };
+
 function buildTriviaList(
   games: ReturnType<typeof getAllGames>,
   gamePlayers: ReturnType<typeof getAllGamePlayers>,
@@ -2107,7 +3004,7 @@ function buildTriviaList(
   t: SectionProps['t'],
   language: Language,
 ): { icon: string; text: string }[] {
-  const list: { icon: string; text: string }[] = [];
+  const list: TriviaEntry[] = [];
   const yearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
   const yearGameIds = new Set(
     games
@@ -2192,13 +3089,47 @@ function buildTriviaList(
 
   // 3. Most active player this year.
   let mostActiveYearCount = 0;
+  let mostActiveYearCounts = new Map<string, number>();
   if (yearGP.length > 0) {
     const counts = new Map<string, number>();
     for (const gp of yearGP) counts.set(gp.playerName, (counts.get(gp.playerName) ?? 0) + 1);
+    mostActiveYearCounts = counts;
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top && top[1] >= 3) {
       mostActiveYearCount = top[1];
       list.push({ icon: '💪', text: t('home.trivia.mostActive', { name: top[0], games: top[1] }) });
+    }
+  }
+
+  // 3c. Iron-attendance — player with the highest attendance RATE
+  //     (% of year's games attended), distinct from #3 which uses
+  //     raw count. A 100%-attender of 8 games beats a 60%-attender of
+  //     12 games on commitment, even though #3 crowns the latter.
+  //     Gates: ≥ 5 year games (otherwise a single-game year gives
+  //     trivial 100% to anyone who showed up once) AND ≥ 80% rate
+  //     (anything lower isn't really "never misses"). When the year
+  //     leader matches mostActive's leader at the SAME absolute
+  //     count (i.e. attended all games), we still show this fact —
+  //     the percentage framing is a different headline ("never
+  //     missed a game" reads more impressively than "played 12
+  //     games") and a stable group is exactly when this fact lands
+  //     most meaningfully.
+  if (yearGameIds.size >= 5 && mostActiveYearCounts.size > 0) {
+    let bestAttn = { name: '', games: 0, pct: 0 };
+    for (const [name, games] of mostActiveYearCounts) {
+      const pct = (games / yearGameIds.size) * 100;
+      if (pct > bestAttn.pct) bestAttn = { name, games, pct };
+    }
+    if (bestAttn.pct >= 80) {
+      list.push({
+        icon: '🚪',
+        text: t('home.trivia.bestAttendance', {
+          name: bestAttn.name,
+          pct: Math.round(bestAttn.pct),
+          games: bestAttn.games,
+          total: yearGameIds.size,
+        }),
+      });
     }
   }
 
@@ -2261,6 +3192,36 @@ function buildTriviaList(
         text: t('home.trivia.mostWinsAllTime', {
           name: topWinnerAll[0],
           count: topWinnerAll[1],
+        }),
+      });
+    }
+  }
+
+  // 4e. All-time profit champion — actual money, not win count.
+  //     #4b crowns the player with the most #1 finishes, but a
+  //     player who consistently finishes 2nd/3rd with strong stacks
+  //     can quietly outearn the win champion over years. This fact
+  //     surfaces THAT story. Gates: top earner has ≥ 30 lifetime
+  //     games (otherwise a hot-month newbie crowns themselves) AND
+  //     ≥ +500 cumulative (anything smaller isn't really a "champ").
+  //     Reads from `playerStats.totalProfit` directly — already
+  //     aggregated by the stats pipeline, no rescan of gamePlayers
+  //     needed.
+  {
+    let topEarner = { name: '', profit: 0, games: 0 };
+    for (const ps of playerStats) {
+      if (ps.gamesPlayed < 30) continue;
+      if (ps.totalProfit > topEarner.profit) {
+        topEarner = { name: ps.playerName, profit: ps.totalProfit, games: ps.gamesPlayed };
+      }
+    }
+    if (topEarner.profit >= 500) {
+      list.push({
+        icon: '💵',
+        text: t('home.trivia.profitChamp', {
+          name: topEarner.name,
+          profit: formatCurrency(Math.round(topEarner.profit)),
+          games: topEarner.games,
         }),
       });
     }
@@ -2728,6 +3689,44 @@ function buildTriviaList(
     }
   }
 
+  // ── 21b. In-the-green rate THIS YEAR — % of games where the
+  //          player finished with a positive profit (any positive,
+  //          not just #1). This is a different lens from #21
+  //          (bestWinRate, which only counts outright tournament
+  //          wins). A solid 2nd-place player who consistently
+  //          finishes profitable can crown this fact while never
+  //          winning a single game outright — a story worth
+  //          surfacing. Eligibility ≥ 5 year games (matches the
+  //          win-rate gate); threshold ≥ 60% in the green so it's
+  //          a meaningful statement, not "X is profitable in
+  //          slightly more than half their nights".
+  if (yearGameIds.size >= 4) {
+    const greenStats = new Map<string, { green: number; games: number }>();
+    for (const gp of yearGP) {
+      const e = greenStats.get(gp.playerName) ?? { green: 0, games: 0 };
+      e.games++;
+      if (gp.profit > 0) e.green++;
+      greenStats.set(gp.playerName, e);
+    }
+    let topGreen = { name: '', pct: 0, green: 0, games: 0 };
+    for (const [name, e] of greenStats) {
+      if (e.games < 5) continue;
+      const pct = (e.green / e.games) * 100;
+      if (pct > topGreen.pct) topGreen = { name, pct, green: e.green, games: e.games };
+    }
+    if (topGreen.pct >= 60) {
+      list.push({
+        icon: '🥷',
+        text: t('home.trivia.mostInTheGreen', {
+          name: topGreen.name,
+          pct: Math.round(topGreen.pct),
+          wins: topGreen.green,
+          games: topGreen.games,
+        }),
+      });
+    }
+  }
+
   // ── 22. Total games ALL-TIME. Cute headline number for older groups.
   //         Threshold prevents it from showing for fresh groups where
   //         year-count and all-time count are identical and the line
@@ -2738,6 +3737,166 @@ function buildTriviaList(
       icon: '📚',
       text: t('home.trivia.totalAllTimeGames', { count: allTimeGameCount }),
     });
+  }
+
+  // ── 22a. Tightest game ever — smallest gap between 1st and 2nd
+  //          across the group's entire history. Genuine "wow" trivia
+  //          since this is data nobody computes themselves. A 0-gap
+  //          game (1st-place tie) is rendered with a different
+  //          string variant because "0 chip gap" reads as a typo.
+  //          Gates: ≥ 30 group-wide completed games (older groups
+  //          only — fresh groups will keep producing record-breakers
+  //          and this fact would whiplash) AND ≥ 3 players in the
+  //          tightest game (a 2-player game is heads-up, not a
+  //          podium race).
+  if (allTimeGameCount >= 30) {
+    let tightestGameId = '';
+    let tightestGap = Infinity;
+    let tightestDate = '';
+    for (const g of games) {
+      if (g.status !== 'completed') continue;
+      const gp = gamePlayers.filter(p => p.gameId === g.id);
+      if (gp.length < 3) continue;
+      const sorted = gp.map(p => p.profit).sort((a, b) => b - a);
+      const gap = sorted[0] - sorted[1];
+      if (gap < tightestGap) {
+        tightestGap = gap;
+        tightestGameId = g.id;
+        tightestDate = g.date || g.createdAt;
+      }
+    }
+    if (tightestGameId) {
+      list.push({
+        icon: '⚖️',
+        text: tightestGap === 0
+          ? t('home.trivia.tightestEverTie', {
+              date: formatTriviaDate(tightestDate, language),
+            })
+          : t('home.trivia.tightestEver', {
+              gap: formatCurrency(Math.round(tightestGap)),
+              date: formatTriviaDate(tightestDate, language),
+            }),
+      });
+    }
+  }
+
+  // ── 22b. Biggest pot ever — most chips that changed hands in a
+  //          single game across the group's entire history.
+  //          Computed as Σ positive profits (which equals |Σ
+  //          negative profits| in a zero-sum game). This is the
+  //          "this night was crazy" number. Same ≥ 30 group-game
+  //          gate as the tightest-game fact.
+  if (allTimeGameCount >= 30) {
+    let biggestPot = 0;
+    let biggestPotDate = '';
+    let biggestPotPlayers = 0;
+    for (const g of games) {
+      if (g.status !== 'completed') continue;
+      const gp = gamePlayers.filter(p => p.gameId === g.id);
+      if (gp.length === 0) continue;
+      let pot = 0;
+      for (const p of gp) if (p.profit > 0) pot += p.profit;
+      if (pot > biggestPot) {
+        biggestPot = pot;
+        biggestPotDate = g.date || g.createdAt;
+        biggestPotPlayers = gp.length;
+      }
+    }
+    if (biggestPot > 0) {
+      list.push({
+        icon: '💰',
+        text: t('home.trivia.biggestPotEver', {
+          amount: formatCurrency(Math.round(biggestPot)),
+          players: biggestPotPlayers,
+          date: formatTriviaDate(biggestPotDate, language),
+        }),
+      });
+    }
+  }
+
+  // ── 22c. Greatest comeback ever — the player who finished 1st
+  //          with the most rebuys in a single game. Real wow
+  //          factor since "I bought in 5 times AND still won" is
+  //          the kind of war-story everyone remembers. Gates:
+  //          winner had ≥ 3 rebuys (a 2-rebuy win is "scrappy",
+  //          not a comeback) AND group has ≥ 30 completed games.
+  if (allTimeGameCount >= 30) {
+    let bestComeback: {
+      name: string;
+      rebuys: number;
+      profit: number;
+      date: string;
+    } | null = null;
+    for (const g of games) {
+      if (g.status !== 'completed') continue;
+      const gp = gamePlayers.filter(p => p.gameId === g.id);
+      if (gp.length === 0) continue;
+      let winner = gp[0];
+      for (const p of gp) if (p.profit > winner.profit) winner = p;
+      if (winner.rebuys < 3) continue;
+      if (winner.profit <= 0) continue;
+      if (!bestComeback || winner.rebuys > bestComeback.rebuys
+        || (winner.rebuys === bestComeback.rebuys && winner.profit > bestComeback.profit)) {
+        bestComeback = {
+          name: winner.playerName,
+          rebuys: winner.rebuys,
+          profit: winner.profit,
+          date: g.date || g.createdAt,
+        };
+      }
+    }
+    if (bestComeback) {
+      list.push({
+        icon: '🔄',
+        text: t('home.trivia.biggestComebackEver', {
+          name: bestComeback.name,
+          rebuys: bestComeback.rebuys,
+          profit: formatCurrency(Math.round(bestComeback.profit)),
+          date: formatTriviaDate(bestComeback.date, language),
+        }),
+      });
+    }
+  }
+
+  // ── 22d. Most consistent earner — the regular with the LOWEST
+  //          profit standard deviation. "Wow, that player is a
+  //          metronome" type of insight; opposite of all the
+  //          "biggest swing" facts. Gates: regular = ≥ 20 games,
+  //          ≥ 3 such regulars exist (otherwise it's just "the
+  //          only person with games"), and we report their avg
+  //          alongside the variance signal so the fact also
+  //          carries a meaningful magnitude.
+  const regulars = playerStats.filter(p => p.gamesPlayed >= 20);
+  if (regulars.length >= 3) {
+    const regularGameSets = new Map<string, number[]>();
+    for (const ps of regulars) regularGameSets.set(ps.playerName, []);
+    for (const gp of gamePlayers) {
+      const arr = regularGameSets.get(gp.playerName);
+      if (arr) arr.push(gp.profit);
+    }
+    let lowestStdev = Infinity;
+    let lowestStdevPlayer: PlayerStats | null = null;
+    for (const ps of regulars) {
+      const profits = regularGameSets.get(ps.playerName) ?? [];
+      if (profits.length < 20) continue;
+      const mean = profits.reduce((s, p) => s + p, 0) / profits.length;
+      const variance = profits.reduce((s, p) => s + (p - mean) ** 2, 0) / profits.length;
+      const stdev = Math.sqrt(variance);
+      if (stdev < lowestStdev) {
+        lowestStdev = stdev;
+        lowestStdevPlayer = ps;
+      }
+    }
+    if (lowestStdevPlayer) {
+      list.push({
+        icon: '📐',
+        text: t('home.trivia.mostConsistent', {
+          name: lowestStdevPlayer.playerName,
+          avg: formatCurrency(Math.round(lowestStdevPlayer.avgProfit)),
+          games: lowestStdevPlayer.gamesPlayed,
+        }),
+      });
+    }
   }
 
   // ── 23. Latest game's MVP. Recency hook — anchors the dashboard
@@ -3053,6 +4212,80 @@ function buildTriviaList(
     });
   }
 
+  // ── 28b. Head-to-head king (ALL-TIME). For every pair of players
+  //          (A, B) who have ever shared games, count how many of
+  //          those shared games A finished above B by profit. Then
+  //          for each player A, count the OPPONENTS B for whom A
+  //          has a strict winning H2H record (A above B more often
+  //          than B above A, requiring at least 4 shared games for
+  //          the H2H to be statistically meaningful). The player
+  //          with the most "won" opponents is the head-to-head
+  //          king — they're the player most group-mates can't out-
+  //          finish. Different from #4 (most wins, which only
+  //          counts outright #1s) because finishing 2nd of 7
+  //          beats 5 opponents in this metric without winning the
+  //          night. Gates: ≥ 6 lifetime completed games AND the
+  //          king has a winning H2H against ≥ 4 opponents AND
+  //          against the majority of opponents they've shared
+  //          enough games with — otherwise the framing "dominates
+  //          head-to-head" is too generous.
+  if (allCompletedGameIds.size >= 6) {
+    // pair[A][B] = number of times A finished above B in a shared game
+    const pair = new Map<string, Map<string, number>>();
+    for (const gameId of allCompletedGameIds) {
+      const ps = allTimePlayersByGame.get(gameId);
+      if (!ps || ps.length < 2) continue;
+      for (let i = 0; i < ps.length; i++) {
+        for (let j = 0; j < ps.length; j++) {
+          if (i === j) continue;
+          if (ps[i].profit > ps[j].profit) {
+            let inner = pair.get(ps[i].playerName);
+            if (!inner) {
+              inner = new Map();
+              pair.set(ps[i].playerName, inner);
+            }
+            inner.set(ps[j].playerName, (inner.get(ps[j].playerName) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    // For each player A, walk every opponent B they've ever played
+    // with and decide who wins the H2H. Count A's wins.
+    const allNames = new Set<string>();
+    for (const ps of allTimeGP) allNames.add(ps.playerName);
+    let bestKing = { name: '', beat: 0, total: 0 };
+    for (const a of allNames) {
+      let beat = 0;
+      let total = 0;
+      for (const b of allNames) {
+        if (a === b) continue;
+        const aOverB = pair.get(a)?.get(b) ?? 0;
+        const bOverA = pair.get(b)?.get(a) ?? 0;
+        const sharedAB = aOverB + bOverA;
+        if (sharedAB < 4) continue; // not enough shared games for a real H2H
+        total++;
+        if (aOverB > bOverA) beat++;
+      }
+      // A is "king" only if they have a strict winning H2H against
+      // a clear majority of qualified opponents. The 60% bar mirrors
+      // the in-the-green threshold and prevents a "X beats 4 of 7"
+      // (57%) borderline case from claiming dominance.
+      if (total >= 4 && beat >= 4 && beat / total >= 0.6 && beat > bestKing.beat) {
+        bestKing = { name: a, beat, total };
+      }
+    }
+    if (bestKing.beat > 0) {
+      list.push({
+        icon: '🤜',
+        text: t('home.trivia.h2hKing', {
+          name: bestKing.name,
+          beat: bestKing.beat,
+          total: bestKing.total,
+        }),
+      });
+    }
+  }
+
   // ── 29. Game cadence THIS YEAR. Group-level fact: how often the
   //         group hits the table. Computed as the average gap
   //         between consecutive completed-game dates within the
@@ -3149,6 +4382,52 @@ function buildTriviaList(
     }
   }
 
+  // ── 30b. Group history age — a nostalgia anchor that lands well
+  //          for established groups. Surfaces the date of the very
+  //          first completed game and frames it as "we've been
+  //          playing for X". Intentionally absolute (date, not "X
+  //          years ago") so the line keeps reading correctly even
+  //          if the user opens the app months from now without a
+  //          re-render. Skipped for groups under 6 months — at that
+  //          age the framing reads as "we just started" which is a
+  //          different (less interesting) story.
+  {
+    let earliestMs = Infinity;
+    let earliestIso = '';
+    for (const g of games) {
+      if (g.status !== 'completed') continue;
+      const ts = new Date(g.date || g.createdAt).getTime();
+      if (Number.isNaN(ts)) continue;
+      if (ts < earliestMs) {
+        earliestMs = ts;
+        earliestIso = g.date || g.createdAt;
+      }
+    }
+    if (earliestMs !== Infinity) {
+      const ageMs = Date.now() - earliestMs;
+      const ageMonths = Math.floor(ageMs / (30 * 86_400_000));
+      const ageYears = Math.floor(ageMs / (365 * 86_400_000));
+      const dateLabel = formatTriviaDate(earliestIso, language);
+      if (ageYears >= 1) {
+        list.push({
+          icon: '🏰',
+          text: t('home.trivia.groupAgeYears', {
+            years: ageYears,
+            date: dateLabel,
+          }),
+        });
+      } else if (ageMonths >= 6) {
+        list.push({
+          icon: '🏰',
+          text: t('home.trivia.groupAgeMonths', {
+            months: ageMonths,
+            date: dateLabel,
+          }),
+        });
+      }
+    }
+  }
+
   // ── 31. Training engagement facts. Only surface when the group has
   //         actual training activity. The data arrives async via
   //         `fetchTrainingAnswers` and is empty on the very first
@@ -3157,48 +4436,81 @@ function buildTriviaList(
   //         tap-to-cycle (or on initial render if the fetch beat the
   //         user). All thresholds are conservative: a single test
   //         session shouldn't be enough to crown a trainer.
-  const trainersWithActivity = trainingPlayers.filter(p => p.totalQuestions > 0);
+  // Recompute per-player counts from raw sessions so we can surface
+  // BOTH the "answered" total (matches the SharedTrainingScreen "ענו"
+  // column = scored + neutral) and the "scored" total (the accuracy
+  // denominator). The cached `p.totalQuestions` field on
+  // `TrainingPlayerData` is scored-only (set by `upsertPlayerSession`
+  // in `trainingData.ts`), which previously caused a definitional
+  // mismatch on home: the trivia "ליאור עשה X אימונים" headline
+  // showed scored only (e.g. 407) while the leaderboard showed
+  // answered (e.g. 500) for the same player. Volume-flavoured facts
+  // now use the leaderboard-aligned "answered" total; the accuracy
+  // fact keeps "scored" since the % is computed against scored.
+  const trainerCounts = trainingPlayers.map(p => {
+    const counts = getTrainingSessionCounts(p);
+    return {
+      player: p,
+      answered: counts.totalAnswered,
+      scored: counts.scored,
+      accuracy: counts.accuracy,
+    };
+  });
+  const trainersWithActivity = trainerCounts.filter(t => t.answered > 0);
   if (trainersWithActivity.length > 0) {
     // 31a. Top trainer by sheer volume — the player who's done the
-    //      most reps. Only show with ≥ 20 questions so a quick
+    //      most reps. Counts neutral/near-miss attempts because they
+    //      ARE training reps; this matches the "ענו" column on the
+    //      shared-training leaderboard. Threshold ≥ 20 so a quick
     //      sample doesn't crown anyone.
-    const topByVolume = [...trainersWithActivity].sort((a, b) => b.totalQuestions - a.totalQuestions)[0];
-    if (topByVolume && topByVolume.totalQuestions >= 20) {
+    const topByVolume = [...trainersWithActivity].sort((a, b) => b.answered - a.answered)[0];
+    if (topByVolume && topByVolume.answered >= 20) {
       list.push({
         icon: '🎓',
+        category: 'training',
         text: t('home.trivia.topTrainerSessions', {
-          name: topByVolume.playerName,
-          count: topByVolume.totalQuestions,
+          name: topByVolume.player.playerName,
+          count: topByVolume.answered,
         }),
       });
     }
 
-    // 31b. Accuracy champion — best correct% with ≥ 30 questions to
-    //      qualify, mirroring the bestWinRate gate (a small sample
-    //      can't crown an "accuracy king"). Hide if the leader from
-    //      31a is also the accuracy leader to avoid double-attribution.
-    const eligibleAccuracy = trainersWithActivity.filter(p => p.totalQuestions >= 30);
+    // 31b. Accuracy champion — uses SCORED answers (correct + wrong)
+    //      because that's the denominator of the % shown. Eligibility
+    //      gate is ≥ 30 SCORED so a small scored-sample can't crown
+    //      an "accuracy king" even if their answered count is large
+    //      (e.g. lots of near-misses). Hide if the leader from 31a is
+    //      also the accuracy leader to avoid double-attribution.
+    const eligibleAccuracy = trainersWithActivity.filter(t => t.scored >= 30);
     if (eligibleAccuracy.length > 0) {
       const topByAccuracy = [...eligibleAccuracy].sort((a, b) => b.accuracy - a.accuracy)[0];
-      if (topByAccuracy && topByAccuracy.accuracy >= 60 && topByAccuracy.playerName !== topByVolume?.playerName) {
+      if (
+        topByAccuracy
+        && topByAccuracy.accuracy >= 60
+        && topByAccuracy.player.playerName !== topByVolume?.player.playerName
+      ) {
         list.push({
           icon: '🎯',
+          category: 'training',
           text: t('home.trivia.topTrainerAccuracy', {
-            name: topByAccuracy.playerName,
+            name: topByAccuracy.player.playerName,
             pct: Math.round(topByAccuracy.accuracy),
-            count: topByAccuracy.totalQuestions,
+            count: topByAccuracy.scored,
           }),
         });
       }
     }
 
-    // 31c. Group-wide training volume — the headline number. Only
-    //      surface when meaningful (≥ 50 group-wide reps).
-    const totalGroupQuestions = trainersWithActivity.reduce((sum, p) => sum + p.totalQuestions, 0);
-    if (totalGroupQuestions >= 50) {
+    // 31c. Group-wide training volume — the headline number. Uses
+    //      "answered" so the group total matches what the leaderboard
+    //      "ענו" column rolls up to. Only surface when meaningful
+    //      (≥ 50 group-wide reps).
+    const totalGroupAnswered = trainersWithActivity.reduce((sum, t) => sum + t.answered, 0);
+    if (totalGroupAnswered >= 50) {
       list.push({
         icon: '📚',
-        text: t('home.trivia.totalTrainingQuestions', { count: totalGroupQuestions }),
+        category: 'training',
+        text: t('home.trivia.totalTrainingQuestions', { count: totalGroupAnswered }),
       });
     }
 
@@ -3208,12 +4520,114 @@ function buildTriviaList(
     if (trainersWithActivity.length >= 3) {
       list.push({
         icon: '👥',
+        category: 'training',
         text: t('home.trivia.activeTrainers', { count: trainersWithActivity.length }),
       });
     }
   }
 
-  return list;
+  return spreadTriviaByCategory(list);
+}
+
+// Re-orders the trivia list so facts that share a topic don't sit
+// next to each other AND don't cluster in the early rotation. Two
+// facts are considered "the same topic" when they share an explicit
+// `category` tag (currently the 4 training facts, which cover the
+// same domain despite using different icons 🎓 / 🎯 / 📚 / 👥) OR
+// when they share an `icon` (which catches the year-vs-all-time
+// mirror pairs: most-active 💪×2, win champion 👑×2, podium king
+// 🥇×2, top duo 🤝×2, best avg 📈×2, plus accidental icon collisions
+// like 🎯 = bestWinRate vs trainer-accuracy or 📚 = total all-time
+// games vs total training questions).
+//
+// Algorithm: task-scheduler-with-cooldown. Each multi-item bucket B
+// gets a target gap of `floor(n / count(B))` positions between its
+// emissions. At each step we filter candidates by:
+//   1. Drop the bucket we just emitted from (strict no-adjacency).
+//   2. Among the rest, prefer buckets whose cooldown has elapsed.
+//   3. Among those, take the bucket with the most items remaining
+//      (ties broken by earliest source position, so the curated
+//      "headline-first" feel survives — e.g. 🏆 biggest-win-of-the-
+//      year still tends to lead the rotation).
+//
+// The cooldown is what stops a 4-item bucket like training from
+// firing at positions 1, 3, 5, 35 (the no-adjacency-only outcome) —
+// instead it fires at roughly 1, 9, 17, 25 in a 35-item list.
+// Intra-bucket order is preserved (year fact before all-time fact).
+function spreadTriviaByCategory(items: TriviaEntry[]): { icon: string; text: string }[] {
+  if (items.length <= 2) return items.map(({ icon, text }) => ({ icon, text }));
+
+  const keyOf = (e: TriviaEntry): string => e.category ?? e.icon;
+  const n = items.length;
+
+  type Bucket = {
+    key: string;
+    firstSrcIdx: number;
+    queue: TriviaEntry[];
+    lastEmit: number;
+    targetGap: number;
+  };
+  const buckets = new Map<string, Bucket>();
+  items.forEach((entry, srcIdx) => {
+    const key = keyOf(entry);
+    const existing = buckets.get(key);
+    if (existing) existing.queue.push(entry);
+    else buckets.set(key, {
+      key,
+      firstSrcIdx: srcIdx,
+      queue: [entry],
+      lastEmit: -Infinity,
+      targetGap: 0,
+    });
+  });
+
+  // Fast-path: if every bucket holds a single item, the source order
+  // is already conflict-free. Skip the reordering work.
+  if ([...buckets.values()].every(b => b.queue.length === 1)) {
+    return items.map(({ icon, text }) => ({ icon, text }));
+  }
+
+  // Set per-bucket target gaps now that final counts are known.
+  // `floor(n / count) - 1` gives roughly even spacing; clamped to
+  // ≥ 1 so even a half-list-sized bucket still has SOME breathing
+  // room (trivia lists are large enough that the clamp rarely fires).
+  for (const b of buckets.values()) {
+    b.targetGap = Math.max(1, Math.floor(n / b.queue.length) - 1);
+  }
+
+  const out: TriviaEntry[] = [];
+  let lastKey: string | null = null;
+  for (let pos = 0; pos < n; pos++) {
+    const candidates = [...buckets.values()].filter(b => b.queue.length > 0);
+    if (candidates.length === 0) break;
+
+    // (1) Strict no-adjacency: don't emit twice from the same bucket
+    // back-to-back, unless it's literally the only bucket left
+    // (impossible while ≥ 2 buckets have items, which is the only
+    // case where adjacency would be a regression).
+    const noAdj = candidates.filter(b => b.key !== lastKey);
+    const adjPool = noAdj.length > 0 ? noAdj : candidates;
+
+    // (2) Cooldown filter: prefer buckets whose target gap has
+    // elapsed since their last emission. If every eligible bucket
+    // is still on cooldown, fall through to the full pool — better
+    // to emit a slightly-too-soon repeat than to leave the slot empty
+    // or violate adjacency by picking the just-emitted bucket.
+    const cooldownOk = adjPool.filter(b => pos - b.lastEmit >= b.targetGap);
+    const pool = cooldownOk.length > 0 ? cooldownOk : adjPool;
+
+    pool.sort((a, b) => {
+      if (b.queue.length !== a.queue.length) return b.queue.length - a.queue.length;
+      return a.firstSrcIdx - b.firstSrcIdx;
+    });
+
+    const pick = pool[0];
+    out.push(pick.queue.shift()!);
+    pick.lastEmit = pos;
+    lastKey = pick.key;
+  }
+
+  return out.map(({ icon, text }) => ({ icon, text }));
 }
 
 // ─── 6. Training ────────────────────────────────────────────────────────

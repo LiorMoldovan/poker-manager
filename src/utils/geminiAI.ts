@@ -5,7 +5,7 @@
 
 import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
-import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits, TTSPlaceholder, TTSAnticipatedCategory } from '../types';
+import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits, TTSPlaceholder, TTSAnticipatedCategory, ChipValue, PhotoChipCountResult, PhotoChipCountStack } from '../types';
 import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
@@ -3821,3 +3821,236 @@ function countPoolMessages(pool: LiveGameTTSPool): number {
   return count;
 }
 
+// ─── Photo chip counting ──────────────────────────────────────────────
+//
+// Multimodal Gemini Vision call that takes a photo of a player's
+// color-sorted chip stacks and returns a per-color count + per-stack
+// confidence score. The caller (PhotoCaptureModal) populates the
+// existing chip-count inputs in ChipEntryScreen with these numbers,
+// surfaces the confidence as colored borders, and ALWAYS lets the user
+// override manually — the AI never finalizes anything on its own.
+//
+// Why a holistic prompt (no patches): per the project rule, every
+// constraint lives in ONE prompt block. If accuracy needs tuning we
+// rewrite the entire prompt, never tack on "and also do X" clauses.
+//
+// Why fixed color order: the user's poker group always lays stacks
+// out in the same left-to-right order. We tell the AI that order up
+// front, so it doesn't need to identify colors at all — only count
+// edge rings at known positions. This eliminates color-confusion
+// (yellow vs white in dim light is the classic failure) as an error
+// class entirely.
+//
+// Failure mode: the function NEVER throws; it always returns a
+// PhotoChipCountResult, with `error` populated when something went
+// wrong. The caller surfaces a toast and leaves the manual flow
+// untouched. This matches the "manual flow MUST keep working" hard
+// guarantee in the plan.
+
+export interface CountChipsFromPhotoInput {
+  imageBase64: string;       // raw base64, no data: prefix (from imageUtils.downscaleImage)
+  mimeType: string;          // 'image/jpeg' typically
+  chipValues: ChipValue[];   // the group's chip set
+  /** Per-group fixed left-to-right photo order (chipValue.id list). When
+   *  empty/undefined we fall back to chipValues' natural order. */
+  chipColorOrder?: string[];
+  /** Optional: total chip-VALUE the player is expected to hold (e.g.
+   *  (1+rebuys)*rebuyValue). When provided, the prompt asks the model
+   *  to lower confidence if its counts × values are far from this. */
+  expectedTotalValue?: number;
+  abortSignal?: AbortSignal;
+}
+
+const PHOTO_CHIP_COUNT_MODEL = 'gemini-2.5-flash';
+
+export async function countChipsFromPhoto(
+  input: CountChipsFromPhotoInput,
+): Promise<PhotoChipCountResult> {
+  const { imageBase64, mimeType, chipValues, chipColorOrder, expectedTotalValue, abortSignal } = input;
+
+  if (!imageBase64) {
+    return emptyChipCountResult('Missing image data');
+  }
+  if (chipValues.length === 0) {
+    return emptyChipCountResult('No chip values configured for this group');
+  }
+
+  // Resolve the ordered chip list. If chipColorOrder is configured,
+  // use it; otherwise fall back to chipValues' natural order. Skip
+  // any IDs in chipColorOrder that no longer exist in chipValues
+  // (defensive — the user could have deleted a chip after configuring
+  // the order).
+  const chipById = new Map(chipValues.map(c => [c.id, c]));
+  const orderedChips: ChipValue[] = (() => {
+    if (chipColorOrder && chipColorOrder.length > 0) {
+      const ordered = chipColorOrder
+        .map(id => chipById.get(id))
+        .filter((c): c is ChipValue => !!c);
+      // Tail-append any chip values not mentioned in the configured
+      // order (e.g. a new color added after the order was set).
+      for (const c of chipValues) {
+        if (!chipColorOrder.includes(c.id)) ordered.push(c);
+      }
+      return ordered;
+    }
+    return [...chipValues];
+  })();
+
+  // Build the prompt. Single block, no patches. The position list is
+  // the load-bearing piece — it tells the model exactly which color is
+  // at which slot so it doesn't need to identify colors at all.
+  const orderLines = orderedChips.map((c, i) =>
+    `  Position ${i + 1}: color="${c.color}", denomination=${c.value}, hex=${c.displayColor}`,
+  ).join('\n');
+
+  const expectedTotalLine = (typeof expectedTotalValue === 'number' && expectedTotalValue > 0)
+    ? `\nThe player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count×denomination across all positions). If your counts produce a total far from this, lower your confidence accordingly. This is a soft sanity check — do NOT invent or remove chips to match it.`
+    : '';
+
+  const prompt = `You are counting poker chips in a photo. Output STRICT JSON only.
+
+The photo shows a player's chip stacks, sorted by color into separate vertical stacks, viewed from a slight side angle (about 30-45 degrees) so each chip's edge ring is visible. The stacks are arranged left-to-right in this fixed order:
+${orderLines}
+
+Total expected stack count: ${orderedChips.length}.
+
+How to count:
+- Each chip in a stack has a clearly visible white-on-color stripe pattern on its edge ring. Count the visible rings on the side of each stack from bottom to top.
+- The top chip's face confirms the color identity for that position. If the color you see at a position does not match the expected color above, still report it at the expected position (the player may have rearranged) and lower your confidence for that stack.
+- If a player has zero chips of a given color, that position will have no stack visible. Report count=0 and confidence=100 for that position.
+- If a stack is split into visible substacks of about 10 chips each separated by a small gap, prefer (substacks × 10) + leftover top chips. This is a hint; only use it when the substack split is clearly visible.
+- Distinguish carefully between yellow and white chips — they can look similar under warm or dim lighting. Use the position cue above as your primary signal: if Position N is "yellow", the chips there are yellow even if they look pale.
+
+Confidence scoring (0-100, be honest):
+- 95-100: clean sharp photo, stack height obvious, no occlusion. Off-by-one is unlikely.
+- 80-94: stack tilted or partially obscured, or the top of a tall stack is fuzzy. Off-by-1 or off-by-2 plausible.
+- 60-79: significant blur, glare, or unusual angle. You can see roughly how many but not exactly.
+- 0-59: you are guessing. The user will be told to recount this stack manually.${expectedTotalLine}
+
+Output schema (STRICT — no markdown, no commentary, no extra fields):
+{
+  "stacks": [
+    { "position": 1, "count": <integer>, "confidence": <integer 0-100> }
+  ]
+}
+
+You MUST return exactly ${orderedChips.length} entries in the "stacks" array, one per expected position, in order from 1 to ${orderedChips.length}. Even for positions where the player has zero chips, include an entry with count=0.
+
+Return only the JSON object.`;
+
+  const apiKey = getSettings()?.geminiApiKey || '';
+
+  let response: Response;
+  try {
+    response = await proxyGeminiGenerate(
+      'v1beta',
+      PHOTO_CHIP_COUNT_MODEL,
+      apiKey,
+      {
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: imageBase64 } },
+          ],
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024,
+          responseMimeType: 'application/json',
+        },
+      },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (abortSignal?.aborted) return emptyChipCountResult('Cancelled');
+    return emptyChipCountResult(`Network error: ${msg}`);
+  }
+
+  if (abortSignal?.aborted) return emptyChipCountResult('Cancelled');
+
+  if (!response.ok) {
+    let errMsg = `HTTP ${response.status}`;
+    try {
+      const body = await response.json() as { error?: { message?: string } };
+      if (body?.error?.message) errMsg = body.error.message;
+    } catch { /* keep HTTP status */ }
+    return emptyChipCountResult(errMsg);
+  }
+
+  let parsed: { stacks?: { position?: number; count?: number; confidence?: number }[] };
+  try {
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    parsed = JSON.parse(text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return emptyChipCountResult(`Parse failed: ${msg}`);
+  }
+
+  if (!parsed || !Array.isArray(parsed.stacks)) {
+    return emptyChipCountResult('AI returned an unexpected shape');
+  }
+
+  // Build stacks array in expected position order. Tolerate missing or
+  // extra entries — fill missing with count=0/confidence=0 (so the UI
+  // marks them as low-confidence rather than blanking out the field),
+  // and ignore any positions beyond what we asked for.
+  const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
+    const position = idx + 1;
+    const entry = parsed.stacks!.find(s => s && Number(s.position) === position);
+    const count = entry && Number.isFinite(Number(entry.count)) && Number(entry.count) >= 0
+      ? Math.floor(Number(entry.count))
+      : 0;
+    const confidence = entry && Number.isFinite(Number(entry.confidence))
+      ? clamp(Math.floor(Number(entry.confidence)), 0, 100)
+      : 0;
+    return {
+      position,
+      chipId: chip.id,
+      color: chip.color,
+      count,
+      confidence,
+    };
+  });
+
+  // Geometric mean of per-stack confidences — a single low-confidence
+  // stack should drag the overall % down hard. Skip stacks with 0/0
+  // (player has none of that color, AI is very confident — these
+  // shouldn't pull the average down).
+  const meaningfulConfidences = stacks
+    .filter(s => !(s.count === 0 && s.confidence === 100)) // exclude the "definitely zero" case
+    .map(s => Math.max(s.confidence, 1)); // floor at 1 to avoid log(0)
+  let overallConfidence: number;
+  if (meaningfulConfidences.length === 0) {
+    overallConfidence = 100;
+  } else {
+    const logSum = meaningfulConfidences.reduce((acc, v) => acc + Math.log(v), 0);
+    overallConfidence = Math.round(Math.exp(logSum / meaningfulConfidences.length));
+  }
+
+  const totalValue = stacks.reduce((sum, s) => {
+    const chip = chipById.get(s.chipId);
+    return sum + (chip ? s.count * chip.value : 0);
+  }, 0);
+
+  return {
+    stacks,
+    overallConfidence,
+    totalValue,
+    modelUsed: PHOTO_CHIP_COUNT_MODEL,
+  };
+}
+
+function emptyChipCountResult(error: string): PhotoChipCountResult {
+  return {
+    stacks: [],
+    overallConfidence: 0,
+    totalValue: 0,
+    modelUsed: PHOTO_CHIP_COUNT_MODEL,
+    error,
+  };
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}

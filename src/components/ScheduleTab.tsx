@@ -14,6 +14,7 @@ import {
   getGroupId,
   getPlayerStats, getAllGames,
 } from '../database/storage';
+import { forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { formatHebrewHalf } from '../utils/calculations';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n/translations';
@@ -373,7 +374,17 @@ export default function ScheduleTab() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
-  useRealtimeRefresh(reload);
+  // Pass `forceRefreshPollsFromDb` so that returning to the app (tab focus
+  // or visibility change) re-fetches polls + dates + votes straight from
+  // Supabase — not just a re-render of the in-memory cache. This is the
+  // recovery path for the case where the Realtime WebSocket missed a vote
+  // event while the phone was asleep or the tab was backgrounded; without
+  // it the screen stays stuck on stale data until the user fully closes
+  // and reopens the app. The forced fetch reuses the existing realtime
+  // pipeline (`scheduleRealtimeRefresh('polls')`), so the resulting
+  // `supabase-cache-updated` event drives `reload()` once the cache is
+  // fresh.
+  useRealtimeRefresh(reload, forceRefreshPollsFromDb);
 
   // Load the current user's vote-change subscriptions once on mount. We
   // don't subscribe to realtime updates here because subscriptions are

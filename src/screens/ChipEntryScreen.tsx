@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GamePlayer, ChipValue } from '../types';
+import { GamePlayer, ChipValue, PhotoChipCountResult } from '../types';
 import { 
   getGamePlayers, 
   getChipValues, 
@@ -19,6 +19,18 @@ import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
+import PhotoCaptureModal from '../components/PhotoCaptureModal';
+
+// Per-stack confidence → border color helper. Used by both the
+// chip-entry inputs (left-border) and the header banner. Kept as a
+// pure function outside the component so it doesn't capture stale
+// closures.
+const confidenceColor = (confidence: number, isMismatch = false): string => {
+  if (isMismatch) return 'rgba(239,68,68,0.7)';   // red — contributes to total mismatch
+  if (confidence >= 95) return 'rgba(16,185,129,0.6)';   // green — high
+  if (confidence >= 80) return 'rgba(234,179,8,0.6)';    // yellow — medium
+  return 'rgba(239,68,68,0.7)';                          // red — low
+};
 
 // Numpad Modal Component with auto-advance
 interface NumpadModalProps {
@@ -235,6 +247,27 @@ const ChipEntryScreen = () => {
   const [showUncountedWarning, setShowUncountedWarning] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
+  // Photo chip-counting state — purely additive, lives alongside the
+  // existing manual flow. Per-player; survives switching between
+  // players in the same session but is intentionally NOT persisted
+  // (re-photo if you come back later).
+  //
+  // photoResults: AI-proposed counts + per-stack confidences keyed by
+  //   playerId. Drives the header banner and the colored input borders.
+  // userEditedFields: which (playerId, chipId) pairs the human has
+  //   manually overridden. Two purposes: (1) re-photo never overwrites
+  //   them, (2) the colored AI-confidence border is replaced with a
+  //   bold "edited" style for those fields.
+  const [photoOpen, setPhotoOpen] = useState(false);
+  // Locked at the moment the user opens the photo modal, so the result
+  // is applied to the right player even if they somehow switch players
+  // mid-flow (the modal is full-screen so this shouldn't normally
+  // happen — defensive only).
+  const [photoTargetPlayerId, setPhotoTargetPlayerId] = useState<string | null>(null);
+  const [photoResults, setPhotoResults] = useState<Record<string, PhotoChipCountResult>>({});
+  const [userEditedFields, setUserEditedFields] = useState<Record<string, Set<string>>>({});
+  const [photoErrorToast, setPhotoErrorToast] = useState<string>('');
+
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
 
@@ -365,7 +398,18 @@ const ChipEntryScreen = () => {
     );
   }
 
-  const updateChipCount = (playerId: string, chipId: string, value: number) => {
+  // `source` distinguishes user edits (numpad / ± / direct typing)
+  // from AI-populated values (PhotoCaptureModal result). User edits
+  // mark the field in userEditedFields so future re-photos won't
+  // overwrite them and the colored AI-border is replaced with a
+  // bold "edited" style. Defaults to 'user' so the existing call
+  // sites need no changes.
+  const updateChipCount = (
+    playerId: string,
+    chipId: string,
+    value: number,
+    source: 'user' | 'photo' = 'user',
+  ) => {
     const newValue = Math.max(0, value);
     setChipCounts(prev => ({
       ...prev,
@@ -374,7 +418,40 @@ const ChipEntryScreen = () => {
         [chipId]: newValue,
       },
     }));
+    if (source === 'user') {
+      setUserEditedFields(prev => {
+        const cur = prev[playerId] || new Set<string>();
+        if (cur.has(chipId)) return prev;
+        const next = new Set(cur);
+        next.add(chipId);
+        return { ...prev, [playerId]: next };
+      });
+    }
   };
+
+  // Apply a PhotoChipCountResult to the currently selected player.
+  // Honors the "manual flow protection" guarantee: any field already
+  // edited by the user is preserved untouched.
+  const applyPhotoResult = (result: PhotoChipCountResult, playerId: string) => {
+    if (result.error) {
+      setPhotoErrorToast(result.error);
+      return;
+    }
+    const editedForPlayer = userEditedFields[playerId] || new Set<string>();
+    for (const stack of result.stacks) {
+      if (editedForPlayer.has(stack.chipId)) continue;
+      updateChipCount(playerId, stack.chipId, stack.count, 'photo');
+    }
+    setPhotoResults(prev => ({ ...prev, [playerId]: result }));
+    setPhotoErrorToast('');
+  };
+
+  // Auto-dismiss the photo error toast after a few seconds.
+  useEffect(() => {
+    if (!photoErrorToast) return;
+    const id = setTimeout(() => setPhotoErrorToast(''), 5000);
+    return () => clearTimeout(id);
+  }, [photoErrorToast]);
 
   const openNumpad = (playerId: string, chipIndex: number) => {
     if (!isAdmin) return;
@@ -632,7 +709,35 @@ const ChipEntryScreen = () => {
       </div>
 
       {/* Selected Player Chip Entry */}
-      {selectedPlayer && (
+      {selectedPlayer && (() => {
+        // Per-player photo-counting derived state. All of this is
+        // additive: when no photo has been taken for this player,
+        // photoResult is undefined and the rendering below collapses
+        // to identical-to-pre-photo behavior.
+        const photoResult = photoResults[selectedPlayer.id];
+        const expectedTotalForPlayer = (selectedPlayer.rebuys || 0) * rebuyValue;
+        const stackByChipId = new Map(photoResult?.stacks.map(s => [s.chipId, s]) || []);
+        const editedForPlayer = userEditedFields[selectedPlayer.id] || new Set<string>();
+        // Banner reconciliation: AI counts × chip values vs (1+rebuys)×rebuyValue.
+        // We compute it from photoResult.totalValue so the banner shows
+        // exactly what the AI proposed, not what the user edited
+        // afterward. Tolerance: 2% of buy-in OR smallest chip value,
+        // whichever is bigger.
+        const smallestChipValue = chipValues.reduce(
+          (min, c) => (c.value > 0 && c.value < min ? c.value : min),
+          Number.POSITIVE_INFINITY,
+        );
+        const tolerance = Math.max(
+          (expectedTotalForPlayer || rebuyValue) * 0.02,
+          Number.isFinite(smallestChipValue) ? smallestChipValue * valuePerChip : 0,
+        );
+        const totalDelta = photoResult ? photoResult.totalValue * valuePerChip - expectedTotalForPlayer : 0;
+        const totalWithinTolerance = !photoResult || Math.abs(totalDelta) <= tolerance;
+        const totalWildlyOff = photoResult && expectedTotalForPlayer > 0
+          ? Math.abs(totalDelta) > expectedTotalForPlayer * 0.5
+          : false;
+
+        return (
         <div className="card">
           <div className="card-header">
             <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
@@ -645,12 +750,128 @@ const ChipEntryScreen = () => {
             {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
           </div>
 
+          {/* AI Photo Banner — appears only after a successful photo for this player */}
+          {photoResult && (
+            <div style={{
+              marginTop: '0.5rem',
+              marginBottom: '0.5rem',
+              padding: '0.6rem 0.75rem',
+              borderRadius: '10px',
+              background: totalWildlyOff
+                ? 'rgba(239,68,68,0.10)'
+                : totalWithinTolerance
+                  ? 'rgba(16,185,129,0.10)'
+                  : 'rgba(245,158,11,0.10)',
+              border: `1px solid ${totalWildlyOff
+                ? 'rgba(239,68,68,0.35)'
+                : totalWithinTolerance
+                  ? 'rgba(16,185,129,0.35)'
+                  : 'rgba(245,158,11,0.35)'}`,
+              fontSize: '0.8rem',
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.5rem',
+                flexWrap: 'wrap',
+              }}>
+                <span style={{ fontWeight: 700 }}>
+                  {t('chips.photo.banner.confidence')}:&nbsp;
+                  <span style={{
+                    color: photoResult.overallConfidence >= 95 ? '#10b981'
+                      : photoResult.overallConfidence >= 80 ? '#eab308'
+                      : '#ef4444',
+                  }}>
+                    {photoResult.overallConfidence}%
+                  </span>
+                </span>
+                <span>
+                  {t('chips.photo.banner.totalLabel')}:&nbsp;
+                  {cleanNumber(photoResult.totalValue * valuePerChip)} / {cleanNumber(expectedTotalForPlayer)}
+                  &nbsp;
+                  {totalWithinTolerance ? (
+                    <span style={{ color: '#10b981', fontWeight: 700 }}>{t('chips.photo.banner.totalOk')}</span>
+                  ) : (
+                    <span style={{ color: totalWildlyOff ? '#ef4444' : '#eab308', fontWeight: 700 }}>
+                      {totalDelta < 0
+                        ? `⚠ ${t('chips.photo.banner.totalShort')} ${cleanNumber(Math.abs(totalDelta))}`
+                        : `⚠ ${t('chips.photo.banner.totalOver')} ${cleanNumber(Math.abs(totalDelta))}`}
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAdmin) return;
+                    setPhotoTargetPlayerId(selectedPlayer.id);
+                    setPhotoOpen(true);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    borderRadius: '8px',
+                    padding: '0.25rem 0.55rem',
+                    fontSize: '0.75rem',
+                    cursor: isAdmin ? 'pointer' : 'not-allowed',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {t('chips.photo.banner.retake')}
+                </button>
+              </div>
+              {totalWildlyOff && (
+                <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: '#fca5a5' }}>
+                  {t('chips.photo.banner.warningOff')}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Photo capture button — admin only, additive to manual flow */}
+          {isAdmin && !photoResult && (
+            <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoTargetPlayerId(selectedPlayer.id);
+                  setPhotoOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem',
+                  borderRadius: '10px',
+                  border: '1px dashed rgba(16,185,129,0.4)',
+                  background: 'rgba(16,185,129,0.06)',
+                  color: '#10b981',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {t('chips.photo.button')}
+              </button>
+            </div>
+          )}
+
           {/* Chip Grid */}
           <div className="chip-grid">
-            {chipValues.map((chip, chipIndex) => (
+            {chipValues.map((chip, chipIndex) => {
+              const stack = stackByChipId.get(chip.id);
+              const isEdited = editedForPlayer.has(chip.id);
+              const showAIBorder = !!stack && !isEdited;
+              const aiBorderColor = showAIBorder
+                ? confidenceColor(stack.confidence, !totalWithinTolerance && stack.confidence < 95)
+                : null;
+              return (
               <div key={chip.id} className="chip-entry-card" style={{ 
-                borderLeft: `4px solid ${chip.displayColor}`,
-                background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
+                borderLeft: aiBorderColor
+                  ? `4px solid ${aiBorderColor}`
+                  : `4px solid ${chip.displayColor}`,
+                background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`,
+                position: 'relative',
               }}>
                 <div 
                   className="chip-entry-header"
@@ -665,6 +886,19 @@ const ChipEntryScreen = () => {
                     }} 
                   />
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
+                  {showAIBorder && stack && (
+                    <span
+                      title={`AI: ${stack.confidence}%`}
+                      style={{
+                        marginInlineStart: 'auto',
+                        fontSize: '0.65rem',
+                        color: aiBorderColor || 'var(--text-muted)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {stack.confidence}%
+                    </span>
+                  )}
                 </div>
                 <div className="chip-entry-controls">
                   {isAdmin && (
@@ -682,7 +916,11 @@ const ChipEntryScreen = () => {
                     onChange={e => isAdmin && updateChipCount(selectedPlayer.id, chip.id, parseInt(e.target.value) || 0)}
                     onClick={() => isAdmin && openNumpad(selectedPlayer.id, chipIndex)}
                     readOnly
-                    style={{ cursor: isAdmin ? 'pointer' : 'default', opacity: isAdmin ? 1 : 0.7 }}
+                    style={{
+                      cursor: isAdmin ? 'pointer' : 'default',
+                      opacity: isAdmin ? 1 : 0.7,
+                      fontWeight: isEdited ? 700 : undefined,
+                    }}
                     min="0"
                   />
                   {isAdmin && (
@@ -695,7 +933,8 @@ const ChipEntryScreen = () => {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           
           {/* Player Total & Done Button */}
@@ -736,7 +975,8 @@ const ChipEntryScreen = () => {
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* All Players Done Message */}
       {!selectedPlayer && completedPlayersCount === players.length && players.length > 0 && (
@@ -840,6 +1080,51 @@ const ChipEntryScreen = () => {
         nextChipDisplayColor={nextChip?.displayColor}
         isLastChip={numpadChipIndex >= chipValues.length - 1}
       />
+
+      {/* Photo Capture Modal — additive to manual flow.
+          Uses photoTargetPlayerId (locked at the moment the user
+          opened the modal) so the result is applied to the right
+          player even if state shifts mid-flow. */}
+      {photoTargetPlayerId && (() => {
+        const targetPlayer = players.find(p => p.id === photoTargetPlayerId);
+        if (!targetPlayer) return null;
+        return (
+          <PhotoCaptureModal
+            isOpen={photoOpen}
+            onClose={() => {
+              setPhotoOpen(false);
+              setPhotoTargetPlayerId(null);
+            }}
+            onResult={(result) => applyPhotoResult(result, targetPlayer.id)}
+            chipValues={chipValues}
+            chipColorOrder={getSettings().chipColorOrder}
+            expectedTotalValue={targetPlayer.rebuys * chipsPerRebuy}
+            title={`📷 ${targetPlayer.playerName}`}
+          />
+        );
+      })()}
+
+      {/* Photo error toast — auto-dismisses after 5s */}
+      {photoErrorToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '120px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(239,68,68,0.95)',
+          color: 'white',
+          padding: '0.6rem 1rem',
+          borderRadius: '10px',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          maxWidth: '90vw',
+          textAlign: 'center',
+          zIndex: 500,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        }}>
+          {photoErrorToast}
+        </div>
+      )}
     </div>
   );
 };
