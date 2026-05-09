@@ -20,7 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PlayerStats, TrainingPlayerData } from '../types';
+import type { GamePlayer, PlayerStats, TrainingPlayerData } from '../types';
 import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, linkPollToGame } from '../database/storage';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { fetchTrainingAnswers } from '../database/trainingData';
@@ -2822,9 +2822,14 @@ function buildPersonalFactsList(
   //     of games tagged), so the disclaimer with `tracked`/
   //     `total` counts is mandatory — without it the player
   //     reads "best at X" and assumes it's based on every game.
-  //     Gates: ≥ 5 location-tagged games for THIS player at the
+  //     Gates: ≥ 3 location-tagged games for THIS player at the
   //     leader location AND avg profit ≥ 50/game (so a "best
-  //     location" with +5 avg doesn't get crowned).
+  //     location" with +5 avg doesn't get crowned). The 3-game
+  //     gate is intentionally low — location tracking only began
+  //     recently so most players have very few tagged games. The
+  //     disclaimer in the message itself ("based on N of M") puts
+  //     the small sample in context, so the player understands
+  //     this is suggestive, not statistically definitive.
   const profitByLocation = new Map<string, { profit: number; games: number }>();
   let trackedCount = 0;
   for (const gp of myGP) {
@@ -2838,7 +2843,7 @@ function buildPersonalFactsList(
     profitByLocation.set(loc, entry);
   }
   const bestLoc = [...profitByLocation.entries()]
-    .filter(([, v]) => v.games >= 5 && v.profit / v.games >= 50)
+    .filter(([, v]) => v.games >= 3 && v.profit / v.games >= 50)
     .sort((a, b) => (b[1].profit / b[1].games) - (a[1].profit / a[1].games))[0];
   if (bestLoc) {
     facts.push({
@@ -2911,12 +2916,16 @@ function buildPersonalFactsList(
     }
     if (rankN >= 10) {
       const avgRank = rankSum / rankN;
-      const avgPlayers = playerCountSum / rankN;
+      // Round table size to the nearest whole player — "7.2 players"
+      // is nonsense (you can't have 0.2 of a player). The "~" prefix
+      // in the localised string acknowledges this is a typical
+      // table size, not a precise count.
+      const avgPlayers = Math.round(playerCountSum / rankN);
       facts.push({
         icon: '📍',
         text: t('home.aboutYou.avgFinish', {
           avgRank: avgRank.toFixed(1),
-          avgPlayers: avgPlayers.toFixed(1),
+          avgPlayers,
         }),
       });
     }
@@ -2983,6 +2992,32 @@ function formatTriviaDate(iso: string | undefined, language: Language): string {
   const d = new Date(ts);
   const monthName = (language === 'he' ? HEBREW_MONTH_NAMES : ENGLISH_MONTH_NAMES)[d.getMonth()];
   return `${monthName} ${d.getFullYear()}`;
+}
+
+// When a record (e.g. biggest single-night loss) is tied across
+// multiple games, format the holders as "Name ×N, Name, Name" sorted
+// by occurrence count (descending) then first appearance. Used by the
+// biggestWin / biggestLoss / biggestWinAllTime / biggestLossAllTime
+// trivia facts so a tied record shows everyone who shares it instead
+// of arbitrarily picking one.
+function formatTiedPlayers(records: { playerName: string }[], _language: Language): string {
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const r of records) {
+    if (!counts.has(r.playerName)) order.push(r.playerName);
+    counts.set(r.playerName, (counts.get(r.playerName) ?? 0) + 1);
+  }
+  order.sort((a, b) => {
+    const diff = (counts.get(b) ?? 0) - (counts.get(a) ?? 0);
+    if (diff !== 0) return diff;
+    return order.indexOf(a) - order.indexOf(b);
+  });
+  return order
+    .map(name => {
+      const c = counts.get(name) ?? 1;
+      return c > 1 ? `${name} ×${c}` : name;
+    })
+    .join(', ');
 }
 
 // Internal trivia entry shape — `category` is an optional bucket tag
@@ -3549,24 +3584,83 @@ function buildTriviaList(
     }
   }
 
-  // ── 17. Most 2nd-place finishes THIS YEAR. The "always-the-bridesmaid"
-  //         award. Counted across games where the player came 2nd (and
-  //         1st actually won — same guard as #16).
+  // ── 17a/b/c/d. "Bridesmaid" + "bronze" awards — players who keep
+  //         landing in 2nd or 3rd place. Surfaces a pattern players
+  //         rarely realise themselves ("wait, am I always 2nd?").
+  //         We track THIS YEAR and ALL-TIME variants for both 2nd
+  //         and 3rd, sharing the per-game podium scan so we only
+  //         walk each game once. Same per-game guard as #16: skip
+  //         games with no real winner (top profit ≤ 0).
+  //
+  //         Year scan (uses `playersByGame` index built earlier).
+  //         All-time scan (builds its own per-game player index
+  //         once, reused for both 2nd and 3rd).
   if (yearGameIds.size >= 4) {
-    const secondPlaceCounts = new Map<string, number>();
+    const secondPlaceYear = new Map<string, number>();
+    const thirdPlaceYear = new Map<string, number>();
     for (const gameId of yearGameIds) {
       const players = playersByGame.get(gameId);
       if (!players || players.length < 2) continue;
       const sorted = [...players].sort((a, b) => b.profit - a.profit);
-      if (sorted[0].profit <= 0) continue; // no real winner
-      const runnerUp = sorted[1];
-      secondPlaceCounts.set(runnerUp.playerName, (secondPlaceCounts.get(runnerUp.playerName) ?? 0) + 1);
+      if (sorted[0].profit <= 0) continue;
+      secondPlaceYear.set(sorted[1].playerName, (secondPlaceYear.get(sorted[1].playerName) ?? 0) + 1);
+      if (sorted.length >= 3) {
+        thirdPlaceYear.set(sorted[2].playerName, (thirdPlaceYear.get(sorted[2].playerName) ?? 0) + 1);
+      }
     }
-    const top2nd = [...secondPlaceCounts.entries()].sort((a, b) => b[1] - a[1])[0];
-    if (top2nd && top2nd[1] >= 2) {
+    const top2ndYear = [...secondPlaceYear.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top2ndYear && top2ndYear[1] >= 2) {
       list.push({
         icon: '🥈',
-        text: t('home.trivia.mostSecondPlaces', { name: top2nd[0], count: top2nd[1] }),
+        text: t('home.trivia.mostSecondPlaces', { name: top2ndYear[0], count: top2ndYear[1] }),
+      });
+    }
+    const top3rdYear = [...thirdPlaceYear.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top3rdYear && top3rdYear[1] >= 2) {
+      list.push({
+        icon: '🥉',
+        text: t('home.trivia.mostThirdPlaces', { name: top3rdYear[0], count: top3rdYear[1] }),
+      });
+    }
+  }
+  // All-time variant — only when the group has enough history
+  // for the rolling year scan above to actually be a subset
+  // (≥ 30 completed games, same gate as the other all-time
+  // facts). Skipped silently otherwise to avoid duplicating the
+  // year facts on fresh groups.
+  const completedGameCount = games.filter(g => g.status === 'completed').length;
+  if (completedGameCount >= 30) {
+    const allTimePlayersByGame = new Map<string, GamePlayer[]>();
+    for (const g of games) {
+      if (g.status === 'completed') allTimePlayersByGame.set(g.id, []);
+    }
+    for (const gp of gamePlayers) {
+      const arr = allTimePlayersByGame.get(gp.gameId);
+      if (arr) arr.push(gp);
+    }
+    const secondPlaceAll = new Map<string, number>();
+    const thirdPlaceAll = new Map<string, number>();
+    for (const players of allTimePlayersByGame.values()) {
+      if (players.length < 2) continue;
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      if (sorted[0].profit <= 0) continue;
+      secondPlaceAll.set(sorted[1].playerName, (secondPlaceAll.get(sorted[1].playerName) ?? 0) + 1);
+      if (sorted.length >= 3) {
+        thirdPlaceAll.set(sorted[2].playerName, (thirdPlaceAll.get(sorted[2].playerName) ?? 0) + 1);
+      }
+    }
+    const top2ndAll = [...secondPlaceAll.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top2ndAll && top2ndAll[1] >= 5) {
+      list.push({
+        icon: '🥈',
+        text: t('home.trivia.mostSecondPlacesAllTime', { name: top2ndAll[0], count: top2ndAll[1] }),
+      });
+    }
+    const top3rdAll = [...thirdPlaceAll.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top3rdAll && top3rdAll[1] >= 5) {
+      list.push({
+        icon: '🥉',
+        text: t('home.trivia.mostThirdPlacesAllTime', { name: top3rdAll[0], count: top3rdAll[1] }),
       });
     }
   }
@@ -3739,24 +3833,35 @@ function buildTriviaList(
     });
   }
 
-  // ── 22a. Tightest game ever — smallest gap between 1st and 2nd
-  //          across the group's entire history. Genuine "wow" trivia
-  //          since this is data nobody computes themselves. A 0-gap
-  //          game (1st-place tie) is rendered with a different
-  //          string variant because "0 chip gap" reads as a typo.
-  //          Gates: ≥ 30 group-wide completed games (older groups
-  //          only — fresh groups will keep producing record-breakers
-  //          and this fact would whiplash) AND ≥ 3 players in the
-  //          tightest game (a 2-player game is heads-up, not a
-  //          podium race).
+  // ── All-time scans (22a/b/c) share a single per-game index so
+  //          the three facts each run in O(N) over completed games
+  //          instead of O(N × M) re-filtering `gamePlayers` per
+  //          game. Built once, reused three times. Skipped entirely
+  //          when the ≥ 30-game gate isn't met (none of the three
+  //          facts will fire anyway).
   if (allTimeGameCount >= 30) {
+    const allTimeGameIndex = new Map<string, GamePlayer[]>();
+    for (const g of games) {
+      if (g.status === 'completed') allTimeGameIndex.set(g.id, []);
+    }
+    for (const gp of gamePlayers) {
+      const arr = allTimeGameIndex.get(gp.gameId);
+      if (arr) arr.push(gp);
+    }
+
+    // 22a. Tightest game ever — smallest gap between 1st and 2nd
+    //      across the group's entire history. Genuine "wow" trivia
+    //      since this is data nobody computes themselves. A 0-gap
+    //      game (1st-place tie) is rendered with a different
+    //      string variant because "0 chip gap" reads as a typo.
+    //      Per-game gate: ≥ 3 players (heads-up isn't a podium race).
     let tightestGameId = '';
     let tightestGap = Infinity;
     let tightestDate = '';
     for (const g of games) {
       if (g.status !== 'completed') continue;
-      const gp = gamePlayers.filter(p => p.gameId === g.id);
-      if (gp.length < 3) continue;
+      const gp = allTimeGameIndex.get(g.id);
+      if (!gp || gp.length < 3) continue;
       const sorted = gp.map(p => p.profit).sort((a, b) => b - a);
       const gap = sorted[0] - sorted[1];
       if (gap < tightestGap) {
@@ -3778,22 +3883,18 @@ function buildTriviaList(
             }),
       });
     }
-  }
 
-  // ── 22b. Biggest pot ever — most chips that changed hands in a
-  //          single game across the group's entire history.
-  //          Computed as Σ positive profits (which equals |Σ
-  //          negative profits| in a zero-sum game). This is the
-  //          "this night was crazy" number. Same ≥ 30 group-game
-  //          gate as the tightest-game fact.
-  if (allTimeGameCount >= 30) {
+    // 22b. Biggest pot ever — most chips that changed hands in a
+    //      single game across the group's entire history.
+    //      Computed as Σ positive profits (= |Σ negative| in a
+    //      zero-sum game). The "this night was crazy" number.
     let biggestPot = 0;
     let biggestPotDate = '';
     let biggestPotPlayers = 0;
     for (const g of games) {
       if (g.status !== 'completed') continue;
-      const gp = gamePlayers.filter(p => p.gameId === g.id);
-      if (gp.length === 0) continue;
+      const gp = allTimeGameIndex.get(g.id);
+      if (!gp || gp.length === 0) continue;
       let pot = 0;
       for (const p of gp) if (p.profit > 0) pot += p.profit;
       if (pot > biggestPot) {
@@ -3812,15 +3913,12 @@ function buildTriviaList(
         }),
       });
     }
-  }
 
-  // ── 22c. Greatest comeback ever — the player who finished 1st
-  //          with the most rebuys in a single game. Real wow
-  //          factor since "I bought in 5 times AND still won" is
-  //          the kind of war-story everyone remembers. Gates:
-  //          winner had ≥ 3 rebuys (a 2-rebuy win is "scrappy",
-  //          not a comeback) AND group has ≥ 30 completed games.
-  if (allTimeGameCount >= 30) {
+    // 22c. Greatest comeback ever — player who finished 1st with
+    //      the most rebuys in a single game. Real wow factor
+    //      since "I bought in 5 times AND still won" is the kind
+    //      of war-story everyone remembers. Per-game gate: winner
+    //      had ≥ 3 rebuys (2-rebuy win = scrappy, not a comeback).
     let bestComeback: {
       name: string;
       rebuys: number;
@@ -3829,8 +3927,8 @@ function buildTriviaList(
     } | null = null;
     for (const g of games) {
       if (g.status !== 'completed') continue;
-      const gp = gamePlayers.filter(p => p.gameId === g.id);
-      if (gp.length === 0) continue;
+      const gp = allTimeGameIndex.get(g.id);
+      if (!gp || gp.length === 0) continue;
       let winner = gp[0];
       for (const p of gp) if (p.profit > winner.profit) winner = p;
       if (winner.rebuys < 3) continue;

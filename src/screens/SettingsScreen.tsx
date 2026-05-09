@@ -3016,15 +3016,42 @@ const SettingsScreen = () => {
               <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
                 {t('settings.photoTest.helper')}
               </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setPhotoTestOpen(true)}
-                disabled={chipValues.length === 0 || !settings.geminiApiKey}
-                style={{ width: '100%', padding: '0.65rem' }}
-              >
-                {t('settings.photoTest.takePhoto')}
-              </button>
+              {(() => {
+                // The only hard requirement is at least one configured
+                // chip value — without those there's nothing to count.
+                // We do NOT gate on `settings.geminiApiKey`: the
+                // `/api/gemini` Edge Function falls back to the Vercel
+                // `GEMINI_API_KEY` env var, so the test may still
+                // succeed even when no per-group key is set. If both
+                // are missing, `countChipsFromPhoto` surfaces a clean
+                // error toast — far friendlier than silently greying
+                // the button out and making the user guess why.
+                const noChips = chipValues.length === 0;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setPhotoTestOpen(true)}
+                      disabled={noChips}
+                      style={{ width: '100%', padding: '0.65rem' }}
+                    >
+                      {t('settings.photoTest.takePhoto')}
+                    </button>
+                    {noChips && (
+                      <p style={{
+                        margin: '0.5rem 0 0',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.5,
+                        fontStyle: 'italic',
+                      }}>
+                        {t('settings.photoTest.disabledNoChips')}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
 
               {photoTestResult && !photoTestResult.error && (
                 <div style={{ marginTop: '0.85rem' }}>

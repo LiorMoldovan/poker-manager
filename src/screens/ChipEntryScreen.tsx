@@ -267,7 +267,6 @@ const ChipEntryScreen = () => {
   const [photoResults, setPhotoResults] = useState<Record<string, PhotoChipCountResult>>({});
   const [userEditedFields, setUserEditedFields] = useState<Record<string, Set<string>>>({});
   const [photoErrorToast, setPhotoErrorToast] = useState<string>('');
-
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
 
@@ -329,7 +328,6 @@ const ChipEntryScreen = () => {
     setChipValues(chips);
     setRebuyValue(settings.rebuyValue || 30);
     setChipsPerRebuy(settings.chipsPerRebuy || 10000);
-    
     // Initialize chip counts
     const initialCounts: Record<string, Record<string, number>> = {};
     gamePlayers.forEach(player => {
@@ -829,7 +827,15 @@ const ChipEntryScreen = () => {
             </div>
           )}
 
-          {/* Photo capture button — admin only, additive to manual flow */}
+          {/* Photo capture button — admin only, additive to manual flow.
+              Always shown for admins regardless of whether the group has
+              a per-group Gemini API key configured: the `/api/gemini`
+              Edge Function falls back to the Vercel `GEMINI_API_KEY`
+              env var, so the call may still succeed. If both per-group
+              AND env-var keys are missing, `countChipsFromPhoto` surfaces
+              a clean error toast — much friendlier than silently hiding
+              the button and leaving the user wondering whether the
+              feature exists at all. */}
           {isAdmin && !photoResult && (
             <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
               <button

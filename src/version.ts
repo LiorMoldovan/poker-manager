@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.47.0';
+export const APP_VERSION = '5.47.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.47.1',
+    date: '2026-05-09',
+    changes: [
+      '🩹 Photo chip-count works without per-group Gemini key',
+      '📷 Test button no longer falsely greyed out',
+      '💬 Helper text when chips not yet configured',
+      '🏠 Lowered "best at venue" threshold to 3 games',
+      '🥉 New "always 3rd place" trivia variant',
+      '🔢 Integer table sizes in personal facts',
+    ],
+  },
   {
     version: '5.47.0',
     date: '2026-05-09',
