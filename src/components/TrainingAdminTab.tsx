@@ -2093,14 +2093,51 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                   {genProgress.current}/{genProgress.total}
                 </span>
               </div>
-              <div style={{ height: '6px', borderRadius: '3px', background: 'var(--surface-light)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: '3px',
-                  background: 'linear-gradient(90deg, #6366f1, #a855f7)',
-                  width: `${(genProgress.current / Math.max(genProgress.total, 1)) * 100}%`,
-                  transition: 'width 0.5s ease',
-                }} />
-              </div>
+              {(() => {
+                // Two-layer progress: solid fill for the categories already
+                // finished + an animated striped segment for the one currently
+                // generating. Important for the common single-category case
+                // where the old bar jumped to 100% before the AI even
+                // returned the first scenario, then sat at 100% for minutes
+                // — a "steady" bar that conveyed no motion. Now the in-flight
+                // segment always shimmers, so the user can tell the run is
+                // alive even when total === 1. RTL-safe via insetInlineStart.
+                const total = Math.max(genProgress.total, 1);
+                // Clamp to [0, 100] — the parent only renders this block
+                // while `generating === true`, which can't be true before
+                // the first setGenProgress call, but a defensive clamp
+                // keeps the bar visually sane if that invariant ever breaks.
+                const completedPct = Math.max(0, Math.min(100, ((genProgress.current - 1) / total) * 100));
+                const inFlightPct = Math.min(100 - completedPct, (1 / total) * 100);
+                return (
+                  <div style={{
+                    height: '6px', borderRadius: '3px',
+                    background: 'var(--surface-light)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      insetInlineStart: 0, top: 0, bottom: 0,
+                      width: `${completedPct}%`,
+                      background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                      transition: 'width 0.4s ease',
+                    }} />
+                    <div style={{
+                      position: 'absolute',
+                      insetInlineStart: `${completedPct}%`,
+                      top: 0, bottom: 0,
+                      width: `${inFlightPct}%`,
+                      backgroundImage:
+                        'linear-gradient(90deg, #6366f1, #a855f7), ' +
+                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.28) 0 8px, transparent 8px 16px)',
+                      backgroundSize: '100% 100%, 22px 100%',
+                      animation: 'trainingProgressStripes 0.9s linear infinite',
+                      transition: 'inset-inline-start 0.4s ease, width 0.4s ease',
+                    }} />
+                  </div>
+                );
+              })()}
               {genMessage && (
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                   {genMessage}

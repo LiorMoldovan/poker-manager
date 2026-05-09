@@ -1,0 +1,31 @@
+-- ============================================================
+-- Drop the stale zero-arg overload of fetch_group_members_with_email().
+--
+-- Background: migration 061-super-admin-fetch-members-bypass.sql created
+-- a NEW overload `fetch_group_members_with_email(p_group_id uuid DEFAULT NULL)`
+-- meant to REPLACE the original from migration 013. But the original
+-- was defined without a default param, so it lives in pg_proc as a
+-- separate zero-arg overload (`fetch_group_members_with_email()`).
+-- Postgres picks the exact-match zero-arg overload when callers invoke
+-- it with no args — meaning the super-admin escape hatch in 061 never
+-- fires for that call shape, leaving super admins blocked from viewing
+-- foreign-group members (the very bug 061 was supposed to fix).
+--
+-- Codebase audit (2026-05-09): every caller passes `p_group_id`
+-- explicitly, so dropping the zero-arg overload removes only the
+-- shadowing copy and routes all calls (including the few that pass
+-- NULL) through the (uuid)-overload that has the super-admin bypass.
+--
+-- Idempotent: `DROP FUNCTION IF EXISTS` with explicit signature.
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.fetch_group_members_with_email();
+
+-- ============================================================
+-- Verify with:
+--   SELECT pg_get_function_identity_arguments(p.oid)
+--     FROM pg_proc p
+--     JOIN pg_namespace n ON n.oid = p.pronamespace
+--     WHERE n.nspname = 'public' AND p.proname = 'fetch_group_members_with_email';
+-- Expected: a single row, args = 'p_group_id uuid'.
+-- ============================================================

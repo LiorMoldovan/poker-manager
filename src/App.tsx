@@ -966,6 +966,17 @@ function SupabaseApp() {
     // (gated on `realIsSuperAdmin`, not the possibly-overridden flag,
     // so the pill is always reachable to switch back).
     viewAs: realIsSuperAdmin ? { current: viewAsRole, cycle: cycleViewAs } : undefined,
+    // groupMgmt is provided in two cases:
+    //   1) Real member: pulled from auth.membership (group name + invite
+    //      code derived from the user's group_members row).
+    //   2) Super-admin observer (no membership row in the active group):
+    //      synthesized from auth.allGroups so the Settings > Group tab
+    //      can render. Mutation callbacks are still wired through, but
+    //      GroupManagementTab is rendered with `readOnly` when
+    //      `isObservingNonMember` is true so write affordances are
+    //      hidden — the server-side RPCs for those mutations would
+    //      reject super admins anyway (migration 061 only widened the
+    //      read path, by product decision).
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
       inviteCode: auth.membership.inviteCode,
@@ -978,7 +989,19 @@ function SupabaseApp() {
       unlinkMemberPlayer: auth.unlinkMemberPlayer,
       createPlayerInvite: auth.createPlayerInvite,
       addMemberByEmail: auth.addMemberByEmail,
-    } : undefined,
+    } : (isObservingNonMember && observedGroupMeta ? {
+      groupName: observedGroupMeta.groupName,
+      inviteCode: observedGroupMeta.inviteCode,
+      currentUserId: auth.user?.id ?? '',
+      fetchMembers: auth.fetchMembers,
+      updateMemberRole: auth.updateMemberRole,
+      removeMember: auth.removeMember,
+      transferOwnership: auth.transferOwnership,
+      regenerateInviteCode: auth.regenerateInviteCode,
+      unlinkMemberPlayer: auth.unlinkMemberPlayer,
+      createPlayerInvite: auth.createPlayerInvite,
+      addMemberByEmail: auth.addMemberByEmail,
+    } : undefined),
     multiGroup: {
       memberships: auth.memberships,
       activeGroupId: groupId,
@@ -1000,7 +1023,7 @@ function SupabaseApp() {
       allGroups: auth.allGroups,
       isObservingNonMember,
     },
-  }), [role, isOwner, isSuperAdmin, realIsSuperAdmin, viewAsRole, cycleViewAs, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard, isObservingNonMember]);
+  }), [role, isOwner, isSuperAdmin, realIsSuperAdmin, viewAsRole, cycleViewAs, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard, isObservingNonMember, observedGroupMeta]);
 
   if (auth.loading) {
     return (

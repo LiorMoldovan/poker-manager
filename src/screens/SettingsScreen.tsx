@@ -1109,6 +1109,7 @@ const SettingsScreen = () => {
           deleteGroup={multiGroup ? () => multiGroup.deleteGroup(multiGroup.activeGroupId ?? '') : undefined}
           leaveGroup={multiGroup ? () => multiGroup.leaveGroup(multiGroup.activeGroupId ?? '') : undefined}
           appUrl={window.location.origin}
+          readOnly={multiGroup?.isObservingNonMember ?? false}
         />
       )}
 

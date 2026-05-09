@@ -596,6 +596,15 @@ th {
   100% { background-position: 200% 0; }
 }
 
+/* Diagonal-stripe scroll for the training pool generation progress bar.
+   The 22px step matches `background-size: 22px 100%` on the in-progress
+   segment so each iteration advances exactly one stripe period — the
+   animation looks continuous on any bar width. Used by TrainingAdminTab. */
+@keyframes trainingProgressStripes {
+  from { background-position: 0 0; }
+  to   { background-position: 22px 0; }
+} 
+
 @keyframes subtleFloat {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }

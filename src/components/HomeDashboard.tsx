@@ -20,14 +20,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PlayerStats } from '../types';
+import type { PlayerStats, TrainingPlayerData } from '../types';
 import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, linkPollToGame } from '../database/storage';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
+import { fetchTrainingAnswers } from '../database/trainingData';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 import { getSharedProgress } from '../utils/pokerTraining';
 import { verbForName } from '../utils/hebrewGender';
+import { usePermissions } from '../App';
 
 // ─── Design tokens ──────────────────────────────────────────────────────
 // Every dashboard card MUST consume these instead of hard-coding sizes,
@@ -175,6 +177,16 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   const showAdminCta = isAdmin && !hasActiveGame;
   const { t } = useTranslation();
   const navigate = useNavigate();
+  // Observer mode (super admin browsing a non-member group): suppress
+  // personal framing on the schedule card. The synthetic playerName
+  // ("👁 Super Admin") doesn't match any player record, so the
+  // existing flow would render "👁 Super Admin, מחכים להצבעה שלך" —
+  // a vote nudge for someone who can't actually vote in this group.
+  // Falling back to playerName=null routes ScheduleCard to its
+  // generic title path (`home.schedule.openTitle`).
+  const { multiGroup } = usePermissions();
+  const isObserver = multiGroup?.isObservingNonMember ?? false;
+  const effectivePlayerName = isObserver ? null : playerName;
 
   // ── Pull-to-refresh ─────────────────────────────────────────
   // Mobile users sometimes hear about a new poll/vote/result from a
@@ -210,13 +222,36 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   // is linked to its game, the card disappears from Home regardless
   // of how the admin started the game (poll button OR regular flow).
   // The auto-link effect below maintains this invariant.
-  const activePoll = useMemo(
-    () =>
-      polls.find(p => p.status === 'confirmed' && !p.confirmedGameId)
-      ?? polls.find(p => p.status === 'open' || p.status === 'expanded')
-      ?? null,
-    [polls],
-  );
+  //
+  // Past-dated polls are filtered out (matches ScheduleTab's archive
+  // rule). Without this guard, an admin who opens a single-date poll
+  // and never starts the game leaves an "open" poll lingering in the
+  // DB after its only proposed date passes — ScheduleTab archives it
+  // (no "active poll" message) but Home was still surfacing it as a
+  // vote prompt, which contradicted the schedule view AND nagged
+  // users about a vote on a date that has already passed.
+  const activePoll = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartTs = todayStart.getTime();
+    const isPastDated = (p: typeof polls[number]): boolean => {
+      if (!p.dates || p.dates.length === 0) return false;
+      let latestEod = 0;
+      for (const d of p.dates) {
+        if (!d.proposedDate) continue;
+        const ts = new Date(`${d.proposedDate}T23:59:59`).getTime();
+        if (Number.isNaN(ts)) continue;
+        if (ts > latestEod) latestEod = ts;
+      }
+      if (latestEod === 0) return false;
+      return latestEod < todayStartTs;
+    };
+    return (
+      polls.find(p => p.status === 'confirmed' && !p.confirmedGameId && !isPastDated(p))
+      ?? polls.find(p => (p.status === 'open' || p.status === 'expanded') && !isPastDated(p))
+      ?? null
+    );
+  }, [polls]);
 
 
   // Self-healing link: any confirmed poll without a confirmed_game_id
@@ -266,6 +301,28 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return completed[0] ?? null;
   }, [allGames]);
+
+  // Training engagement data, loaded async so it doesn't block the
+  // initial dashboard render. Used by TriviaCard to surface
+  // group-wide practice facts ("X answered N questions", "accuracy
+  // champion is Y", "M questions answered in this group", etc.).
+  // Empty array until the fetch resolves — TriviaCard treats it as
+  // "no training facts to show yet" and just skips those entries,
+  // so the rest of the trivia pool keeps rendering without delay.
+  const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchTrainingAnswers()
+      .then(file => {
+        if (!cancelled && file) setTrainingPlayers(file.players);
+      })
+      .catch(err => {
+        // Non-fatal: trivia card just skips training facts on
+        // failure. Logged so the F12 console still shows the cause.
+        console.warn('home: fetchTrainingAnswers failed (trivia training facts will be skipped)', err);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // Days since this user last played a completed game (regardless of
   // which game it was). Used by LastGameCard to surface an
@@ -373,7 +430,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         t={t}
         poll={activePoll}
         myPlayerId={myStats?.playerId ?? null}
-        playerName={playerName}
+        playerName={effectivePlayerName}
         onClick={goSchedule}
       />
       {/* Brand-new group teaser — only renders when zero games have
@@ -426,6 +483,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         games={allGames}
         gamePlayers={allGamePlayers}
         playerStats={playerStats}
+        trainingPlayers={trainingPlayers}
       />
     </div>
   );
@@ -872,14 +930,165 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
   // for everyone:
   //   1. User hasn't voted → amber-tinted nudge with their name in
   //      the title ("ליאור, ההצבעה מחכה לך"). Strong but not noisy.
-  //   2. User has voted → blue card confirming the vote is in. Stays
-  //      tappable so they can update or peek at interim results.
-  // We treat any vote on any date by `myPlayerId` as "voted" — the
-  // dashboard doesn't care which dates they picked, just whether
-  // they participated.
+  //   2. User has voted → blue thank-you card. Stays tappable so they
+  //      can update or peek at interim results.
+  //
+  // Both flavours render an at-a-glance compact poll preview as the
+  // card body: one row per proposed date with `<yes-count> / <target>`
+  // so the viewer can see WHICH date is closest to filling without
+  // having to drill into the schedule tab. On the "voted" card we
+  // additionally flag the dates THIS viewer said yes to with a small
+  // ✓ marker so they remember which option they backed.
+  //
+  // We treat any vote on any date by `myPlayerId` as "voted" for the
+  // branch selection — the dashboard doesn't care which dates they
+  // picked, just whether they participated. The "yes-only" highlight
+  // in the body row is a separate per-date check.
   const hasMyVote = myPlayerId !== null && poll.votes.some(v => v.playerId === myPlayerId);
 
+  // Distinct voter count for the subtitle stat. Reflects participation,
+  // not raw vote rows (a member voting yes on 3 dates = 1 voter).
+  const distinctVoterCount = new Set(poll.votes.map(v => v.playerId)).size;
+
+  // Sort dates chronologically so the visible order matches a calendar
+  // walk forward in time — closest date first. Time is appended for
+  // tie-breaking when two options share the same calendar date.
+  const sortedDates = [...poll.dates].sort((a, b) => {
+    const ka = `${a.proposedDate}T${a.proposedTime || '00:00'}`;
+    const kb = `${b.proposedDate}T${b.proposedTime || '00:00'}`;
+    return ka.localeCompare(kb);
+  });
+
+  const glanceBody = sortedDates.length > 0 ? (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.35rem',
+      paddingTop: '0.5rem',
+      borderTop: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      {sortedDates.map(d => {
+        const yesCount = poll.votes.filter(
+          v => v.dateId === d.id && v.response === 'yes'
+        ).length;
+        // The viewer's own response on THIS date — independent of
+        // whether they voted on other dates. We surface all three
+        // RSVP states (yes/no/maybe) so a member who said "no" to
+        // Friday but "yes" to Thursday/Saturday sees a clear marker
+        // on Friday too — not silence, which would read as "I didn't
+        // vote" when in fact they did.
+        const myResponse: 'yes' | 'no' | 'maybe' | null = (() => {
+          if (myPlayerId === null) return null;
+          const mine = poll.votes.find(
+            v => v.dateId === d.id && v.playerId === myPlayerId
+          );
+          return mine?.response ?? null;
+        })();
+        const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
+        const dayName = Number.isNaN(dt.getTime())
+          ? ''
+          : dt.toLocaleDateString('he-IL', { weekday: 'short' });
+        const dateStr = Number.isNaN(dt.getTime())
+          ? d.proposedDate
+          : dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+        const timeStr = d.proposedTime ? d.proposedTime.slice(0, 5) : null;
+        const labelParts = [dayName, dateStr].filter(Boolean);
+        const label = labelParts.join(' · ') + (timeStr ? ` · ${timeStr}` : '');
+        // The most-popular date gets a faint highlight so the viewer's
+        // eye is drawn to the option closest to filling. We compute it
+        // once per render — ties don't matter (any of them will glow).
+        const isLeading = yesCount > 0 && yesCount === Math.max(
+          ...sortedDates.map(x => poll.votes.filter(v => v.dateId === x.id && v.response === 'yes').length)
+        );
+        return (
+          <div
+            key={d.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.78rem',
+              lineHeight: 1.3,
+              opacity: isLeading ? 1 : 0.85,
+            }}
+          >
+            <span style={{
+              flex: '1 1 auto',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: 'var(--text)',
+              fontWeight: isLeading ? 600 : 400,
+            }}>
+              {label}
+            </span>
+            {(() => {
+              // Color the pill by stance:
+              //   yes     → green  (positive commitment)
+              //   no      → red    (negative — clear, not "you didn't vote")
+              //   maybe   → amber  (uncertain — same hue we use for warnings)
+              //   skipped → grey   (you participated in the poll but did
+              //                     not respond to THIS date — distinct
+              //                     from "haven't voted at all", which
+              //                     uses no pill)
+              //
+              // The "skipped" pill is only meaningful on the "voted"
+              // card variant. On the "haven't voted yet" card, every
+              // row is in skipped state, so a pill on every row would
+              // be visual noise — the card title already carries the
+              // meaning. We gate it on `hasMyVote` from the outer
+              // scope.
+              if (!myResponse && !hasMyVote) return null;
+              const tone = myResponse === 'yes'
+                ? { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', key: 'home.schedule.openGlanceMineYes' as const }
+                : myResponse === 'no'
+                ? { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', key: 'home.schedule.openGlanceMineNo' as const }
+                : myResponse === 'maybe'
+                ? { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.16)', key: 'home.schedule.openGlanceMineMaybe' as const }
+                : { fg: 'var(--text-muted)', bg: 'rgba(148, 163, 184, 0.16)', key: 'home.schedule.openGlanceMineSkipped' as const };
+              return (
+                <span style={{
+                  flexShrink: 0,
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: tone.fg,
+                  background: tone.bg,
+                  padding: '1px 6px',
+                  borderRadius: 6,
+                }}>
+                  {t(tone.key)}
+                </span>
+              );
+            })()}
+            <span style={{
+              flexShrink: 0,
+              fontWeight: 700,
+              color: 'var(--text)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {/* Order: target first then yes-count, so in RTL the
+                  numerator (current participants) lands on the right —
+                  matching how the rest of the dashboard reads. */}
+              <span style={{ opacity: 0.5, fontWeight: 400, fontSize: '0.72rem' }}>
+                {poll.targetPlayerCount}{' / '}
+              </span>
+              {yesCount}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
   if (!hasMyVote) {
+    // Subtitle promotes the participation count to keep the page
+    // dynamic across visits — but only when at least one member has
+    // voted. With zero votes we fall back to the action prompt to
+    // avoid the awkward "0 חברים הצביעו".
+    const subtitle = distinctVoterCount > 0
+      ? t('home.schedule.openYouHaventVotedStat', { n: distinctVoterCount })
+      : t('home.schedule.openYouHaventVotedHelper');
     return (
       <HomeCard
         order={order}
@@ -888,21 +1097,29 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
         title={playerName
           ? t('home.schedule.openYouHaventVoted', { name: playerName })
           : t('home.schedule.openTitle')}
-        subtitle={t('home.schedule.openYouHaventVotedHelper')}
+        subtitle={subtitle}
         accent="warning"
+        body={glanceBody}
         onClick={onClick}
       />
     );
   }
 
+  // Already voted — warm thank-you, same compact glance below.
+  const votedSubtitle = distinctVoterCount > 0
+    ? t('home.schedule.openYouVotedStat', { n: distinctVoterCount })
+    : t('home.schedule.openYouVotedHelper');
   return (
     <HomeCard
       order={order}
       step={step}
       icon="🗳"
-      title={t('home.schedule.openYouVoted')}
-      subtitle={t('home.schedule.openYouVotedHelper')}
+      title={playerName
+        ? t('home.schedule.openYouVotedThanks', { name: playerName })
+        : t('home.schedule.openYouVoted')}
+      subtitle={votedSubtitle}
       accent="info"
+      body={glanceBody}
       onClick={onClick}
     />
   );
@@ -1780,13 +1997,14 @@ interface TriviaProps extends SectionProps {
   games: ReturnType<typeof getAllGames>;
   gamePlayers: ReturnType<typeof getAllGamePlayers>;
   playerStats: PlayerStats[];
+  trainingPlayers: TrainingPlayerData[];
 }
 
-function TriviaCard({ order, step, t, games, gamePlayers, playerStats }: TriviaProps) {
+function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingPlayers }: TriviaProps) {
   const { language } = useTranslation();
   const trivia = useMemo(
-    () => buildTriviaList(games, gamePlayers, playerStats, t, language),
-    [games, gamePlayers, playerStats, t, language],
+    () => buildTriviaList(games, gamePlayers, playerStats, trainingPlayers, t, language),
+    [games, gamePlayers, playerStats, trainingPlayers, t, language],
   );
 
   // Initial pick is a deterministic daily rotation — same fact for the
@@ -1843,10 +2061,49 @@ function TriviaCard({ order, step, t, games, gamePlayers, playerStats }: TriviaP
   );
 }
 
+// Format a single timestamp as a short, contextual Hebrew/English
+// suffix used inside trivia facts — e.g. "(לפני 5 ימים)", "(לפני 3
+// חודשים)", "(מאי 2024)" / "(May 2024)". Recent events read better
+// as relative ("a year ago doesn't help me picture WHICH game"),
+// older events read better as absolute ("3 years ago" is too vague).
+// Returns an empty string for invalid input so callers can safely
+// concatenate without a guard.
+const HEBREW_MONTH_NAMES = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+] as const;
+const ENGLISH_MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+function formatTriviaDate(iso: string | undefined, language: Language): string {
+  if (!iso) return '';
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return '';
+  const daysAgo = Math.floor((Date.now() - ts) / 86_400_000);
+  if (daysAgo <= 0) return language === 'he' ? 'היום' : 'today';
+  if (daysAgo === 1) return language === 'he' ? 'אתמול' : 'yesterday';
+  if (daysAgo < 14) {
+    return language === 'he' ? `לפני ${daysAgo} ימים` : `${daysAgo} days ago`;
+  }
+  if (daysAgo < 60) {
+    const weeks = Math.round(daysAgo / 7);
+    return language === 'he' ? `לפני ${weeks} שבועות` : `${weeks} weeks ago`;
+  }
+  if (daysAgo < 180) {
+    const months = Math.max(2, Math.round(daysAgo / 30));
+    return language === 'he' ? `לפני ${months} חודשים` : `${months} months ago`;
+  }
+  const d = new Date(ts);
+  const monthName = (language === 'he' ? HEBREW_MONTH_NAMES : ENGLISH_MONTH_NAMES)[d.getMonth()];
+  return `${monthName} ${d.getFullYear()}`;
+}
+
 function buildTriviaList(
   games: ReturnType<typeof getAllGames>,
   gamePlayers: ReturnType<typeof getAllGamePlayers>,
   playerStats: PlayerStats[],
+  trainingPlayers: TrainingPlayerData[],
   t: SectionProps['t'],
   language: Language,
 ): { icon: string; text: string }[] {
@@ -1865,6 +2122,26 @@ function buildTriviaList(
     else playersByGame.set(gp.gameId, [gp]);
   }
 
+  // O(1) lookup from gameId → ISO date, used to attach date suffixes
+  // to single-event trivia facts ("biggest win on X date"). Cheaper
+  // than scanning `games` for every fact that wants a date.
+  const gameDateById = new Map<string, string>();
+  for (const g of games) {
+    if (g.status === 'completed') gameDateById.set(g.id, g.date || g.createdAt);
+  }
+
+  // Counts per player of completed game appearances (year + all-time).
+  // Used by `mostActive` (year + all-time mirror) and to compute
+  // win/podium percentages.
+  const allCompletedGameIds = new Set(games.filter(g => g.status === 'completed').map(g => g.id));
+  const allTimeGP = gamePlayers.filter(gp => allCompletedGameIds.has(gp.gameId));
+  const allTimePlayersByGame = new Map<string, typeof allTimeGP>();
+  for (const gp of allTimeGP) {
+    const arr = allTimePlayersByGame.get(gp.gameId);
+    if (arr) arr.push(gp);
+    else allTimePlayersByGame.set(gp.gameId, [gp]);
+  }
+
   // Recently-active = appeared in any completed game in the last 60
   // days. Used to gate facts that reference a player's "current" state
   // (e.g. streak leader) so a frozen streak from someone who quit
@@ -1880,41 +2157,69 @@ function buildTriviaList(
     if (recentGameIds.has(gp.gameId)) recentPlayerNames.add(gp.playerName);
   }
 
-  // 1. Biggest single win this year.
-  let biggest = { name: '', profit: 0 };
+  // 1. Biggest single win this year. Track gameId so the fact can
+  //    carry a date suffix ("biggest win this year: +X by Y on Z").
+  let biggest = { name: '', profit: 0, gameId: '' };
   for (const gp of yearGP) {
-    if (gp.profit > biggest.profit) biggest = { name: gp.playerName, profit: gp.profit };
+    if (gp.profit > biggest.profit) biggest = { name: gp.playerName, profit: gp.profit, gameId: gp.gameId };
   }
   if (biggest.profit > 0) {
     list.push({
       icon: '🏆',
-      text: t('home.trivia.biggestWin', { profit: formatCurrency(biggest.profit), name: biggest.name }),
+      text: t('home.trivia.biggestWin', {
+        profit: formatCurrency(biggest.profit),
+        name: biggest.name,
+        date: formatTriviaDate(gameDateById.get(biggest.gameId), language),
+      }),
     });
   }
 
   // 2. Biggest single loss this year.
-  let worst = { name: '', loss: 0 };
+  let worst = { name: '', loss: 0, gameId: '' };
   for (const gp of yearGP) {
-    if (gp.profit < worst.loss) worst = { name: gp.playerName, loss: gp.profit };
+    if (gp.profit < worst.loss) worst = { name: gp.playerName, loss: gp.profit, gameId: gp.gameId };
   }
   if (worst.loss < -50) {
     list.push({
       icon: '❄️',
-      text: t('home.trivia.biggestLoss', { amount: formatCurrency(Math.abs(worst.loss)), name: worst.name }),
+      text: t('home.trivia.biggestLoss', {
+        amount: formatCurrency(Math.abs(worst.loss)),
+        name: worst.name,
+        date: formatTriviaDate(gameDateById.get(worst.gameId), language),
+      }),
     });
   }
 
   // 3. Most active player this year.
+  let mostActiveYearCount = 0;
   if (yearGP.length > 0) {
     const counts = new Map<string, number>();
     for (const gp of yearGP) counts.set(gp.playerName, (counts.get(gp.playerName) ?? 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top && top[1] >= 3) {
+      mostActiveYearCount = top[1];
       list.push({ icon: '💪', text: t('home.trivia.mostActive', { name: top[0], games: top[1] }) });
     }
   }
 
-  // 4. Most #1 finishes this year.
+  // 3b. Most active player ALL-TIME. Mirror of #3 — only surface when
+  //     strictly larger than the year leader so the two facts don't
+  //     echo each other on a fresh group whose entire history fits
+  //     inside the current year.
+  if (allTimeGP.length > 0) {
+    const counts = new Map<string, number>();
+    for (const gp of allTimeGP) counts.set(gp.playerName, (counts.get(gp.playerName) ?? 0) + 1);
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (top && top[1] >= 6 && top[1] > mostActiveYearCount + 2) {
+      list.push({ icon: '💪', text: t('home.trivia.mostActiveAllTime', { name: top[0], games: top[1] }) });
+    }
+  }
+
+  // 4. Most #1 finishes this year. The "{verb}" placeholder was
+  //    dropped from the translation when we reworded the line —
+  //    sentence reads as a noun-phrase headline now ("Win champion
+  //    this year: …"), so no gendered verb is needed.
+  let topWinnerThisYearCount = 0;
   if (yearGameIds.size >= 3) {
     const wins = new Map<string, number>();
     for (const gameId of yearGameIds) {
@@ -1926,14 +2231,112 @@ function buildTriviaList(
     }
     const topWinner = [...wins.entries()].sort((a, b) => b[1] - a[1])[0];
     if (topWinner && topWinner[1] >= 2) {
+      topWinnerThisYearCount = topWinner[1];
       list.push({
         icon: '👑',
         text: t('home.trivia.mostWins', {
           name: topWinner[0],
-          verb: verbForName('won', topWinner[0], language),
           count: topWinner[1],
         }),
       });
+    }
+  }
+
+  // 4b. Most #1 finishes ALL-TIME. Mirror of #4 — only surface when
+  //     strictly larger than the year-scoped count so the two facts
+  //     don't echo each other on a fresh group.
+  if (allCompletedGameIds.size >= 5) {
+    const winsAll = new Map<string, number>();
+    for (const gameId of allCompletedGameIds) {
+      const players = allTimePlayersByGame.get(gameId);
+      if (!players || players.length === 0) continue;
+      let winner = players[0];
+      for (const p of players) if (p.profit > winner.profit) winner = p;
+      if (winner.profit > 0) winsAll.set(winner.playerName, (winsAll.get(winner.playerName) ?? 0) + 1);
+    }
+    const topWinnerAll = [...winsAll.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (topWinnerAll && topWinnerAll[1] >= 5 && topWinnerAll[1] > topWinnerThisYearCount) {
+      list.push({
+        icon: '👑',
+        text: t('home.trivia.mostWinsAllTime', {
+          name: topWinnerAll[0],
+          count: topWinnerAll[1],
+        }),
+      });
+    }
+  }
+
+  // 4c. Most podiums (top-3 finishes) THIS YEAR. Counts top-3 by
+  //     profit per game where the player finished above zero (no
+  //     real podium if everyone tanked). Threshold prevents
+  //     surfacing on too few games.
+  if (yearGameIds.size >= 4) {
+    const podiumYear = new Map<string, number>();
+    const playerYearGames = new Map<string, number>();
+    for (const gameId of yearGameIds) {
+      const players = playersByGame.get(gameId);
+      if (!players || players.length === 0) continue;
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      const podium = sorted.slice(0, 3).filter(p => p.profit > 0);
+      for (const p of podium) podiumYear.set(p.playerName, (podiumYear.get(p.playerName) ?? 0) + 1);
+      for (const p of players) playerYearGames.set(p.playerName, (playerYearGames.get(p.playerName) ?? 0) + 1);
+    }
+    const topPodiumYear = [...podiumYear.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (topPodiumYear && topPodiumYear[1] >= 3) {
+      list.push({
+        icon: '🥇',
+        text: t('home.trivia.mostPodiumsYear', {
+          name: topPodiumYear[0],
+          count: topPodiumYear[1],
+          games: playerYearGames.get(topPodiumYear[0]) ?? topPodiumYear[1],
+        }),
+      });
+    }
+  }
+
+  // 4d. Most podiums ALL-TIME. Same shape as 4c but across every
+  //     completed game ever. Only surface when the all-time count
+  //     is strictly larger than the year-scoped count, otherwise
+  //     it echoes 4c verbatim for groups whose history fits inside
+  //     the current year.
+  let topPodiumAllTimeCount = 0;
+  if (allCompletedGameIds.size >= 6) {
+    const podiumAll = new Map<string, number>();
+    for (const gameId of allCompletedGameIds) {
+      const players = allTimePlayersByGame.get(gameId);
+      if (!players || players.length === 0) continue;
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      const podium = sorted.slice(0, 3).filter(p => p.profit > 0);
+      for (const p of podium) podiumAll.set(p.playerName, (podiumAll.get(p.playerName) ?? 0) + 1);
+    }
+    const topPodiumAll = [...podiumAll.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (topPodiumAll && topPodiumAll[1] >= 5) {
+      topPodiumAllTimeCount = topPodiumAll[1];
+      // Compare against year leader to avoid echo: only show if at
+      // least 50% larger so the all-time framing carries weight.
+      const yearLeaderCount = (() => {
+        // Re-derive top-year count locally — small enough not to
+        // bother caching from 4c (which scopes to its own block).
+        const c = new Map<string, number>();
+        for (const gameId of yearGameIds) {
+          const players = playersByGame.get(gameId);
+          if (!players) continue;
+          const sorted = [...players].sort((a, b) => b.profit - a.profit);
+          for (const p of sorted.slice(0, 3).filter(p => p.profit > 0)) {
+            c.set(p.playerName, (c.get(p.playerName) ?? 0) + 1);
+          }
+        }
+        return [...c.values()].reduce((m, v) => v > m ? v : m, 0);
+      })();
+      if (topPodiumAllTimeCount >= Math.ceil(yearLeaderCount * 1.5) || topPodiumAllTimeCount >= yearLeaderCount + 5) {
+        list.push({
+          icon: '🥇',
+          text: t('home.trivia.mostPodiumsAllTime', {
+            name: topPodiumAll[0],
+            count: topPodiumAll[1],
+          }),
+        });
+      }
     }
   }
 
@@ -1980,14 +2383,18 @@ function buildTriviaList(
   }
 
   // 9. Most rebuys ever in a single game this year.
-  let mostRebuys = { name: '', count: 0 };
+  let mostRebuys = { name: '', count: 0, gameId: '' };
   for (const gp of yearGP) {
-    if (gp.rebuys > mostRebuys.count) mostRebuys = { name: gp.playerName, count: gp.rebuys };
+    if (gp.rebuys > mostRebuys.count) mostRebuys = { name: gp.playerName, count: gp.rebuys, gameId: gp.gameId };
   }
   if (mostRebuys.count >= 4) {
     list.push({
       icon: '🔁',
-      text: t('home.trivia.mostRebuysSingle', { count: mostRebuys.count, name: mostRebuys.name }),
+      text: t('home.trivia.mostRebuysSingle', {
+        count: mostRebuys.count,
+        name: mostRebuys.name,
+        date: formatTriviaDate(gameDateById.get(mostRebuys.gameId), language),
+      }),
     });
   }
 
@@ -1999,7 +2406,7 @@ function buildTriviaList(
   }
 
   // 11. Biggest 1st-vs-2nd gap in a single game this year.
-  let biggestMargin = { winner: '', runnerUp: '', margin: 0 };
+  let biggestMargin = { winner: '', runnerUp: '', margin: 0, gameId: '' };
   for (const gameId of yearGameIds) {
     const players = playersByGame.get(gameId);
     if (!players || players.length < 2) continue;
@@ -2010,6 +2417,7 @@ function buildTriviaList(
         winner: sorted[0].playerName,
         runnerUp: sorted[1].playerName,
         margin,
+        gameId,
       };
     }
   }
@@ -2020,6 +2428,7 @@ function buildTriviaList(
         margin: formatCurrency(biggestMargin.margin),
         winner: biggestMargin.winner,
         runnerUp: biggestMargin.runnerUp,
+        date: formatTriviaDate(gameDateById.get(biggestMargin.gameId), language),
       }),
     });
   }
@@ -2035,28 +2444,39 @@ function buildTriviaList(
   }
 
   // ── 13. Biggest single win / loss ALL-TIME (across every year).
-  //         playerStats already aggregates this per player, so we just
-  //         pick the leaders. Lower thresholds than the year-scoped
-  //         entries (#1, #2) because the all-time pool is bigger and
-  //         the "ever" framing is the headline value.
-  let biggestEver = { name: '', profit: 0 };
-  let worstEver = { name: '', loss: 0 };
-  for (const ps of playerStats) {
-    if (ps.biggestWin > biggestEver.profit) biggestEver = { name: ps.playerName, profit: ps.biggestWin };
-    if (ps.biggestLoss < worstEver.loss) worstEver = { name: ps.playerName, loss: ps.biggestLoss };
+  //         We scan `gamePlayers` directly (rather than reading
+  //         `playerStats.biggestWin`) so we can recover the actual
+  //         gameId behind the record, which gives us a date suffix
+  //         ("biggest win ever: +X by Y on Z"). Lower thresholds
+  //         than the year-scoped entries (#1, #2) because the
+  //         all-time pool is bigger and the "ever" framing is the
+  //         headline value.
+  let biggestEver = { name: '', profit: 0, gameId: '' };
+  let worstEver = { name: '', loss: 0, gameId: '' };
+  for (const gp of allTimeGP) {
+    if (gp.profit > biggestEver.profit) biggestEver = { name: gp.playerName, profit: gp.profit, gameId: gp.gameId };
+    if (gp.profit < worstEver.loss) worstEver = { name: gp.playerName, loss: gp.profit, gameId: gp.gameId };
   }
   if (biggestEver.profit > biggest.profit) {
     // Only surface "ever" when it's larger than the year-scoped record;
     // otherwise the two entries would be redundant.
     list.push({
       icon: '🏅',
-      text: t('home.trivia.biggestWinAllTime', { profit: formatCurrency(biggestEver.profit), name: biggestEver.name }),
+      text: t('home.trivia.biggestWinAllTime', {
+        profit: formatCurrency(biggestEver.profit),
+        name: biggestEver.name,
+        date: formatTriviaDate(gameDateById.get(biggestEver.gameId), language),
+      }),
     });
   }
   if (worstEver.loss < worst.loss && worstEver.loss < -50) {
     list.push({
       icon: '🥶',
-      text: t('home.trivia.biggestLossAllTime', { amount: formatCurrency(Math.abs(worstEver.loss)), name: worstEver.name }),
+      text: t('home.trivia.biggestLossAllTime', {
+        amount: formatCurrency(Math.abs(worstEver.loss)),
+        name: worstEver.name,
+        date: formatTriviaDate(gameDateById.get(worstEver.gameId), language),
+      }),
     });
   }
 
@@ -2136,7 +2556,7 @@ function buildTriviaList(
   //         of #11. Surfaces the game where the title was most contested.
   //         Only interesting if the gap is genuinely tight (≤ 30).
   if (yearGameIds.size >= 3) {
-    let closestPodium: { winner: string; runnerUp: string; margin: number } | null = null;
+    let closestPodium: { winner: string; runnerUp: string; margin: number; gameId: string } | null = null;
     for (const gameId of yearGameIds) {
       const players = playersByGame.get(gameId);
       if (!players || players.length < 2) continue;
@@ -2151,6 +2571,7 @@ function buildTriviaList(
           winner: sorted[0].playerName,
           runnerUp: sorted[1].playerName,
           margin,
+          gameId,
         };
       }
     }
@@ -2161,6 +2582,7 @@ function buildTriviaList(
           margin: formatCurrency(closestPodium.margin),
           winner: closestPodium.winner,
           runnerUp: closestPodium.runnerUp,
+          date: formatTriviaDate(gameDateById.get(closestPodium.gameId), language),
         }),
       });
     }
@@ -2214,7 +2636,7 @@ function buildTriviaList(
   // ── 19. Biggest single-game profit swing THIS YEAR. The gap between
   //         the night's biggest winner and biggest loser (= max - min).
   //         Tells the "wildest night" story.
-  let biggestSwing = 0;
+  let biggestSwing = { amount: 0, gameId: '' };
   for (const gameId of yearGameIds) {
     const players = playersByGame.get(gameId);
     if (!players || players.length < 2) continue;
@@ -2224,10 +2646,16 @@ function buildTriviaList(
       if (p.profit < mn) mn = p.profit;
     }
     const swing = mx - mn;
-    if (swing > biggestSwing) biggestSwing = swing;
+    if (swing > biggestSwing.amount) biggestSwing = { amount: swing, gameId };
   }
-  if (biggestSwing >= 200) {
-    list.push({ icon: '🎢', text: t('home.trivia.biggestSwing', { amount: formatCurrency(biggestSwing) }) });
+  if (biggestSwing.amount >= 200) {
+    list.push({
+      icon: '🎢',
+      text: t('home.trivia.biggestSwing', {
+        amount: formatCurrency(biggestSwing.amount),
+        date: formatTriviaDate(gameDateById.get(biggestSwing.gameId), language),
+      }),
+    });
   }
 
   // ── 20. Newest player to join the group. Find each player's earliest
@@ -2280,11 +2708,11 @@ function buildTriviaList(
         stats.set(p.playerName, e);
       }
     }
-    let topRate = { name: '', pct: 0, games: 0 };
+    let topRate = { name: '', pct: 0, games: 0, wins: 0 };
     for (const [name, e] of stats) {
       if (e.games < 3) continue;
       const pct = (e.wins / e.games) * 100;
-      if (pct > topRate.pct) topRate = { name, pct, games: e.games };
+      if (pct > topRate.pct) topRate = { name, pct, games: e.games, wins: e.wins };
     }
     if (topRate.pct >= 30) {
       list.push({
@@ -2293,6 +2721,7 @@ function buildTriviaList(
           name: topRate.name,
           verb: verbForName('won', topRate.name, language),
           pct: Math.round(topRate.pct),
+          wins: topRate.wins,
           games: topRate.games,
         }),
       });
@@ -2369,16 +2798,91 @@ function buildTriviaList(
     }
   }
 
+  // ── 24b. Best average profit per game ALL-TIME. Mirror of #24.
+  //          Uses the playerStats `avgProfit` directly, which is
+  //          already computed across all completed games. Shown
+  //          only when strictly larger than the year leader to
+  //          avoid echoing.
+  if (allCompletedGameIds.size >= 6) {
+    let topAvgAll = { name: '', avg: 0, games: 0 };
+    for (const ps of playerStats) {
+      if (ps.gamesPlayed < 6) continue;
+      if (ps.avgProfit > topAvgAll.avg) {
+        topAvgAll = { name: ps.playerName, avg: ps.avgProfit, games: ps.gamesPlayed };
+      }
+    }
+    // Re-derive the year leader's avg to gate against echo.
+    const yearAvgLeader = (() => {
+      const totals = new Map<string, { profit: number; games: number }>();
+      for (const gp of yearGP) {
+        const e = totals.get(gp.playerName) ?? { profit: 0, games: 0 };
+        e.profit += gp.profit;
+        e.games++;
+        totals.set(gp.playerName, e);
+      }
+      let m = 0;
+      for (const e of totals.values()) {
+        if (e.games >= 4) {
+          const avg = e.profit / e.games;
+          if (avg > m) m = avg;
+        }
+      }
+      return m;
+    })();
+    if (topAvgAll.avg >= 25 && topAvgAll.avg > yearAvgLeader + 5) {
+      list.push({
+        icon: '📈',
+        text: t('home.trivia.bestAvgPerGameAllTime', {
+          name: topAvgAll.name,
+          avg: formatCurrency(Math.round(topAvgAll.avg)),
+          games: topAvgAll.games,
+        }),
+      });
+    }
+  }
+
   // ── 25. Longest win streak in the group's HISTORY. Distinct from
   //         #8 (current streak): this is the all-time record across
   //         every completed game, regardless of recency, anchoring
   //         the "legendary moments" framing. We only surface it when
   //         it's strictly larger than the current streak leader so
   //         the two facts don't echo each other on the same dataset.
-  let bestStreakEver = { name: '', streak: 0 };
+  let bestStreakEver: { name: string; streak: number; endDate: string } = { name: '', streak: 0, endDate: '' };
   for (const ps of playerStats) {
     if (ps.longestWinStreak > bestStreakEver.streak) {
-      bestStreakEver = { name: ps.playerName, streak: ps.longestWinStreak };
+      // Find the END date of the player's longest win streak. Their
+      // `lastGameResults` is sorted most-recent-first; we walk it
+      // back to oldest, accumulating consecutive wins, and remember
+      // the date of the last game (chronologically latest) of the
+      // first run that matched the player's `longestWinStreak`. If
+      // no run matches (data inconsistency, e.g. partial history),
+      // fall back to an empty date — `formatTriviaDate('')` returns
+      // an empty string and the translation gracefully renders
+      // "(.)" which is acceptable degradation.
+      const chronological = [...(ps.lastGameResults || [])].reverse();
+      let run = 0;
+      let foundEnd: string | null = null;
+      for (const g of chronological) {
+        if (g.profit > 0) {
+          run++;
+          if (run === ps.longestWinStreak && foundEnd === null) {
+            // First time we hit the player's recorded longest run —
+            // capture this game's date as the canonical "streak end".
+            // Keep scanning in case a later equal-length run exists,
+            // but we always take the FIRST occurrence (earliest in
+            // history that matches the record, since that's when the
+            // record was originally set).
+            foundEnd = g.date;
+          }
+        } else {
+          run = 0;
+        }
+      }
+      bestStreakEver = {
+        name: ps.playerName,
+        streak: ps.longestWinStreak,
+        endDate: foundEnd ?? '',
+      };
     }
   }
   if (bestStreakEver.streak >= 3 && bestStreakEver.streak > streakLeader.streak) {
@@ -2387,6 +2891,7 @@ function buildTriviaList(
       text: t('home.trivia.longestWinStreakEver', {
         name: bestStreakEver.name,
         n: bestStreakEver.streak,
+        date: formatTriviaDate(bestStreakEver.endDate, language),
       }),
     });
   }
@@ -2429,6 +2934,59 @@ function buildTriviaList(
     }
   }
 
+  // ── 26b. Top duo ALL-TIME. Same shape as 26 but unbounded by
+  //          year. Surfaces the pair that most defined the group's
+  //          history. Only shows when strictly larger than the
+  //          year-scoped duo so they don't echo on a young group.
+  if (allCompletedGameIds.size >= 6) {
+    const pairCountsAll = new Map<string, { a: string; b: string; n: number }>();
+    for (const gameId of allCompletedGameIds) {
+      const ps = allTimePlayersByGame.get(gameId);
+      if (!ps || ps.length < 2) continue;
+      const names = ps.map(p => p.playerName).sort();
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          const key = `${names[i]}|${names[j]}`;
+          const cur = pairCountsAll.get(key) ?? { a: names[i], b: names[j], n: 0 };
+          cur.n++;
+          pairCountsAll.set(key, cur);
+        }
+      }
+    }
+    let topPairAll: { a: string; b: string; n: number } | null = null;
+    for (const v of pairCountsAll.values()) {
+      if (topPairAll === null || v.n > topPairAll.n) topPairAll = v;
+    }
+    // Re-derive year duo top count to gate against echo. Cheap because
+    // pair counts above #26 are scoped to year and we have local
+    // access here.
+    const yearTopDuoCount = (() => {
+      const counts = new Map<string, number>();
+      for (const gameId of yearGameIds) {
+        const ps = playersByGame.get(gameId);
+        if (!ps || ps.length < 2) continue;
+        const names = ps.map(p => p.playerName).sort();
+        for (let i = 0; i < names.length; i++) {
+          for (let j = i + 1; j < names.length; j++) {
+            const key = `${names[i]}|${names[j]}`;
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+          }
+        }
+      }
+      return [...counts.values()].reduce((m, v) => v > m ? v : m, 0);
+    })();
+    if (topPairAll && topPairAll.n >= 8 && topPairAll.n > yearTopDuoCount + 3) {
+      list.push({
+        icon: '🤝',
+        text: t('home.trivia.topDuoAllTime', {
+          a: topPairAll.a,
+          b: topPairAll.b,
+          count: topPairAll.n,
+        }),
+      });
+    }
+  }
+
   // ── 27. Top chaser THIS YEAR — highest avg rebuys per game.
   //         Different from #9 (single-game record) and #10 (group
   //         total): this is the player who CONSISTENTLY chases.
@@ -2466,7 +3024,7 @@ function buildTriviaList(
   //         `firstSeen` is built earlier (#20) — we reuse it here
   //         to find which players debuted this year, then look up
   //         their first-game profit via `playersByGame`.
-  let bestDebut = { name: '', profit: 0 };
+  let bestDebut = { name: '', profit: 0, gameId: '' };
   for (const [name, firstTs] of firstSeen) {
     if (firstTs < yearStart) continue;
     // Locate the actual game record matching the player's first-
@@ -2479,7 +3037,7 @@ function buildTriviaList(
       if (!ps) continue;
       const me = ps.find(p => p.playerName === name);
       if (!me) continue;
-      if (me.profit > bestDebut.profit) bestDebut = { name, profit: me.profit };
+      if (me.profit > bestDebut.profit) bestDebut = { name, profit: me.profit, gameId: g.id };
       break;
     }
   }
@@ -2490,6 +3048,7 @@ function buildTriviaList(
         name: bestDebut.name,
         verb: verbForName('won', bestDebut.name, language),
         profit: formatCurrency(bestDebut.profit),
+        date: formatTriviaDate(gameDateById.get(bestDebut.gameId), language),
       }),
     });
   }
@@ -2587,6 +3146,70 @@ function buildTriviaList(
           });
         }
       }
+    }
+  }
+
+  // ── 31. Training engagement facts. Only surface when the group has
+  //         actual training activity. The data arrives async via
+  //         `fetchTrainingAnswers` and is empty on the very first
+  //         render — that's fine, the trivia list just rebuilds when
+  //         the fetch resolves and these entries appear on the next
+  //         tap-to-cycle (or on initial render if the fetch beat the
+  //         user). All thresholds are conservative: a single test
+  //         session shouldn't be enough to crown a trainer.
+  const trainersWithActivity = trainingPlayers.filter(p => p.totalQuestions > 0);
+  if (trainersWithActivity.length > 0) {
+    // 31a. Top trainer by sheer volume — the player who's done the
+    //      most reps. Only show with ≥ 20 questions so a quick
+    //      sample doesn't crown anyone.
+    const topByVolume = [...trainersWithActivity].sort((a, b) => b.totalQuestions - a.totalQuestions)[0];
+    if (topByVolume && topByVolume.totalQuestions >= 20) {
+      list.push({
+        icon: '🎓',
+        text: t('home.trivia.topTrainerSessions', {
+          name: topByVolume.playerName,
+          count: topByVolume.totalQuestions,
+        }),
+      });
+    }
+
+    // 31b. Accuracy champion — best correct% with ≥ 30 questions to
+    //      qualify, mirroring the bestWinRate gate (a small sample
+    //      can't crown an "accuracy king"). Hide if the leader from
+    //      31a is also the accuracy leader to avoid double-attribution.
+    const eligibleAccuracy = trainersWithActivity.filter(p => p.totalQuestions >= 30);
+    if (eligibleAccuracy.length > 0) {
+      const topByAccuracy = [...eligibleAccuracy].sort((a, b) => b.accuracy - a.accuracy)[0];
+      if (topByAccuracy && topByAccuracy.accuracy >= 60 && topByAccuracy.playerName !== topByVolume?.playerName) {
+        list.push({
+          icon: '🎯',
+          text: t('home.trivia.topTrainerAccuracy', {
+            name: topByAccuracy.playerName,
+            pct: Math.round(topByAccuracy.accuracy),
+            count: topByAccuracy.totalQuestions,
+          }),
+        });
+      }
+    }
+
+    // 31c. Group-wide training volume — the headline number. Only
+    //      surface when meaningful (≥ 50 group-wide reps).
+    const totalGroupQuestions = trainersWithActivity.reduce((sum, p) => sum + p.totalQuestions, 0);
+    if (totalGroupQuestions >= 50) {
+      list.push({
+        icon: '📚',
+        text: t('home.trivia.totalTrainingQuestions', { count: totalGroupQuestions }),
+      });
+    }
+
+    // 31d. How many players actually train. Surfaces engagement
+    //      breadth ("X people are practicing", not just "Y reps")
+    //      when the group has multiple trainers.
+    if (trainersWithActivity.length >= 3) {
+      list.push({
+        icon: '👥',
+        text: t('home.trivia.activeTrainers', { count: trainersWithActivity.length }),
+      });
     }
   }
 

@@ -40,6 +40,7 @@ import {
   ReminderModal,
   ModalPortal,
   fmtHebrewDate,
+  hasGuestTierPlayers,
   ghostBtn,
   shareBtn,
 } from './ScheduleTab';
@@ -64,6 +65,13 @@ export default function PollCard(props: PollCardProps) {
   // not a gradient image whose `background-position` had to be flipped.
 
   const playerById = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
+
+  // Single-tier groups (permanents only) collapse the open / expanded
+  // phase distinction — see hasGuestTierPlayers for the rationale.
+  // Forwarded into PollTimer and PollShareCard so phase wording, the
+  // share-image phase pill, and the "opens to all on" countdown all
+  // disappear when the group has no guest/permanent_guest players.
+  const hasGuestTier = useMemo(() => hasGuestTierPlayers(players), [players]);
 
   // Per-date yes/maybe/no counts + proxy-vote breakdown.
   // Shape matches what VoterGroups expects.
@@ -384,7 +392,7 @@ export default function PollCard(props: PollCardProps) {
       borderTop: `3px solid ${statusColor[visualStatus] || 'var(--border)'}`,
     }}>
       {/* Phase-aware countdown banner. Self-hides on cancelled / expired. */}
-      <PollTimer poll={poll} now={now} t={t} />
+      <PollTimer poll={poll} now={now} t={t} hasGuestTier={hasGuestTier} />
 
       {/* Optional admin note */}
       {poll.note && (
@@ -1132,6 +1140,7 @@ export default function PollCard(props: PollCardProps) {
               confirmedPlayers={confirmedPlayers}
               appUrl={typeof window !== 'undefined' ? window.location.origin : undefined}
               t={t}
+              hasGuestTier={hasGuestTier}
             />
           </div>
         </div>

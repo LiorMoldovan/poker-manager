@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getAllPlayers, getAllGames } from '../database/storage';
 import { useTranslation } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -20,6 +20,12 @@ interface GroupManagementTabProps {
   deleteGroup?: () => Promise<{ error: unknown }>;
   leaveGroup?: () => Promise<{ error: unknown }>;
   appUrl: string;
+  // Observer mode: super admin viewing a group they aren't a member of.
+  // When true, all mutation UI is hidden — the page is purely a
+  // read-only inspection surface. The mutation callbacks above are
+  // still required (the parent always wires them through), they're
+  // just never invoked from this component.
+  readOnly?: boolean;
 }
 
 export default function GroupManagementTab({
@@ -38,6 +44,7 @@ export default function GroupManagementTab({
   deleteGroup,
   leaveGroup,
   appUrl,
+  readOnly = false,
 }: GroupManagementTabProps) {
   const { t, isRTL } = useTranslation();
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -181,10 +188,14 @@ export default function GroupManagementTab({
   const allPlayers = getAllPlayers();
   const allGames = getAllGames();
   const completedGames = allGames.filter(g => g.status === 'completed');
-  const activePlayers = new Set(getAllGamePlayers().filter(gp => {
-    const g = allGames.find(ga => ga.id === gp.gameId);
-    return g && g.status === 'completed';
-  }).map(gp => gp.playerId)).size;
+  // Total players in the group's roster — matches the count shown on
+  // Settings > Players tab. Was previously computed as the set of
+  // distinct playerIds appearing in completed games, which collapses
+  // to 0 for groups that haven't logged a game yet (and silently
+  // diverged from the Players tab number for groups that had roster
+  // entries who never played). The label "Total Players in Group" /
+  // "סה״כ שחקנים בקבוצה" promises the roster total, so honor that.
+  const totalPlayersInGroup = allPlayers.length;
   const firstGameDate = completedGames.length > 0
     ? completedGames.map(g => new Date(g.date || g.createdAt).getTime()).reduce((a, b) => Math.min(a, b))
     : null;
@@ -231,7 +242,7 @@ export default function GroupManagementTab({
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.activePlayers')}</span>
-          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{activePlayers}</span>
+          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{totalPlayersInGroup}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.totalGames')}</span>
@@ -265,7 +276,7 @@ export default function GroupManagementTab({
               >
                 {copied ? '✓' : '📋'}
               </button>
-              {isOwner && (
+              {isOwner && !readOnly && (
                 <button
                   onClick={() => setConfirmAction({ type: 'regenerate' })}
                   style={{
@@ -310,7 +321,7 @@ export default function GroupManagementTab({
               const isMe = m.userId === currentUserId;
               const isMemberOwner = members.length > 0 && isOwner && isMe;
               const displayName = m.playerName || m.displayName || t('groupMgmt.noName');
-              const canManage = isAdmin && !isMe && (isOwner || m.role !== 'admin');
+              const canManage = isAdmin && !isMe && (isOwner || m.role !== 'admin') && !readOnly;
               const pType = m.playerId ? playerTypeMap.get(m.playerId) : null;
               const typeIcon = pType === 'permanent' ? '⭐' : pType === 'permanent_guest' ? '🏠' : pType ? '👤' : null;
 
@@ -427,7 +438,7 @@ export default function GroupManagementTab({
 
 
       {/* Personal Player Invites — available to all admins */}
-      {isAdmin && unlinkedPlayers.length > 0 && (
+      {isAdmin && !readOnly && unlinkedPlayers.length > 0 && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.personalInvites')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
@@ -468,7 +479,7 @@ export default function GroupManagementTab({
       )}
 
       {/* Add Member by Email — available to all admins */}
-      {isAdmin && (
+      {isAdmin && !readOnly && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.addByEmail')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
@@ -589,7 +600,10 @@ export default function GroupManagementTab({
         </div>
       )}
 
-      {/* Danger Zone */}
+      {/* Danger Zone — hidden in observer (read-only) mode. A super
+          admin observing a foreign group has no business deleting it
+          or "leaving" a group they were never a member of. */}
+      {!readOnly && (
       <div className="card" style={{
         padding: '1rem', marginBottom: '0.75rem',
         borderInlineStart: '3px solid #EF4444',
@@ -636,6 +650,7 @@ export default function GroupManagementTab({
           </>
         )}
       </div>
+      )}
 
       {/* Confirmation Modal */}
       {confirmAction && (

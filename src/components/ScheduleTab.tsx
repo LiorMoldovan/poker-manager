@@ -84,6 +84,17 @@ export const fmtHebrewDateCompact = (d: GamePollDate): string => {
   }
 };
 
+// True if the group has any non-permanent player. When false, the entire
+// "permanents only → expand to all" two-phase voting concept collapses
+// into noise: every member is already eligible from the moment the poll
+// is created, so phase wording on the timer banner, the "permanents
+// only / open to all" pill on the share card, the "opens to all on X"
+// countdown, and the per-poll expansion-delay field have nothing to
+// communicate. Hiding them is reactive — as soon as the admin adds a
+// guest player the chrome reappears on the next render.
+export const hasGuestTierPlayers = (players: Player[]): boolean =>
+  players.some(p => p.type === 'permanent_guest' || p.type === 'guest');
+
 const todayIso = (): string => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -699,19 +710,28 @@ export default function ScheduleTab() {
             console.warn('sendTargetFilledNotifications failed:', err));
         }
       }
-      // Vote-change notification: fire only if this was an UPDATE that
-      // actually CHANGED the response. The voted_at-vs-created_at delta
-      // tells us "row existed before"; the previousResponse comparison
-      // tells us "the response differs now". Both must be true to avoid
-      // pinging admins on a same-response re-click.
+      // Vote-event notification: fire on a fresh INSERT (no prior row)
+      // OR on an UPDATE that actually CHANGED the response. Same-response
+      // re-clicks are filtered two ways: the previousResponse comparison
+      // (cheap, primary guard) and a voted_at-vs-created_at delta (belt-
+      // and-suspenders for the case where the previousResponse snapshot
+      // is stale due to realtime lag). New votes skip the delta guard
+      // since votedAt ≈ createdAt at INSERT time.
       const myVote = updated.votes.find(
         v => v.dateId === dateId && v.playerId === currentPlayer?.id,
       );
-      if (myVote && currentPlayer && previousResponse !== null && previousResponse !== response) {
-        const delta = new Date(myVote.votedAt).getTime() - new Date(myVote.createdAt).getTime();
-        if (delta > VOTE_CHANGE_DETECTION_MS) {
-          sendVoteChangeNotifications(updated, myVote, currentPlayer.name, null)
+      if (myVote && currentPlayer) {
+        const isNewVote = previousResponse === null;
+        const isResponseChange = previousResponse !== null && previousResponse !== response;
+        if (isNewVote) {
+          sendVoteChangeNotifications(updated, myVote, currentPlayer.name, null, { isNewVote: true })
             .catch(err => console.warn('sendVoteChangeNotifications failed:', err));
+        } else if (isResponseChange) {
+          const delta = new Date(myVote.votedAt).getTime() - new Date(myVote.createdAt).getTime();
+          if (delta > VOTE_CHANGE_DETECTION_MS) {
+            sendVoteChangeNotifications(updated, myVote, currentPlayer.name, null)
+              .catch(err => console.warn('sendVoteChangeNotifications failed:', err));
+          }
         }
       }
     } catch (e) {
@@ -967,22 +987,131 @@ export default function ScheduleTab() {
               {archivePolls.map(p => {
                 const confirmedDate = p.dates.find(d => d.id === p.confirmedDateId);
                 const yesCount = p.votes.filter(v => v.dateId === p.confirmedDateId && v.response === 'yes').length;
-                const statusBg = p.status === 'cancelled' ? 'rgba(239, 68, 68, 0.10)'
-                  : p.status === 'expired' ? 'rgba(234, 179, 8, 0.10)'
-                  : 'rgba(16, 185, 129, 0.10)';
-                const statusColor = p.status === 'cancelled' ? '#ef4444'
-                  : p.status === 'expired' ? '#eab308'
-                  : '#10b981';
-                const statusLabel = p.status === 'cancelled' ? t('schedule.statusCancelled')
-                  : p.status === 'expired' ? t('schedule.statusExpired')
-                  : t('schedule.gameStarted');
+                // Resolve the linked game from real data. Two paths,
+                // tried in order:
+                //   1. Explicit FK (`confirmedGameId`) — set when the
+                //      admin started the game via the poll's "Start
+                //      Scheduled Game" button. Highest signal.
+                //   2. Date match against the `games` table — for the
+                //      common orphan case where the admin started the
+                //      game from the regular New Game flow and the FK
+                //      never got set. The games table is the single
+                //      source of truth about which nights produced a
+                //      game; we match poll dates → games.date by the
+                //      day portion (YYYY-MM-DD), favoring the pinned
+                //      `confirmedDateId` if the poll has one, then
+                //      falling back to any of the proposed dates. No
+                //      ±N-hour window needed — same calendar day in
+                //      this group is decisive (nobody hosts two
+                //      separate poker nights in the same group on the
+                //      same day).
+                let linkedGame = p.confirmedGameId
+                  ? games.find(g => g.id === p.confirmedGameId) ?? null
+                  : null;
+                if (!linkedGame) {
+                  const datesToTry: string[] = p.confirmedDateId
+                    ? (confirmedDate?.proposedDate ? [confirmedDate.proposedDate] : [])
+                    : p.dates.map(d => d.proposedDate).filter((s): s is string => !!s);
+                  for (const dateStr of datesToTry) {
+                    const match = games.find(g => g.date?.slice(0, 10) === dateStr);
+                    if (match) {
+                      linkedGame = match;
+                      break;
+                    }
+                  }
+                }
+                // True when EVERY proposed date is strictly before today
+                // (mirrors `isPastDatedPoll`). Used to label polls whose
+                // dates lapsed without producing a game in the games
+                // table — i.e. the night really didn't happen.
+                let pollAllDatesPast = false;
+                if (p.dates.length > 0) {
+                  const todayStart = new Date();
+                  todayStart.setHours(0, 0, 0, 0);
+                  const todayStartTs = todayStart.getTime();
+                  let latestEod = 0;
+                  for (const d of p.dates) {
+                    if (!d.proposedDate) continue;
+                    const ts = new Date(`${d.proposedDate}T23:59:59`).getTime();
+                    if (Number.isNaN(ts)) continue;
+                    if (ts > latestEod) latestEod = ts;
+                  }
+                  pollAllDatesPast = latestEod > 0 && latestEod < todayStartTs;
+                }
+                let statusBg: string;
+                let statusColor: string;
+                let statusLabel: string;
+                let gameNavTarget: string | null = null;
+                if (p.status === 'cancelled') {
+                  statusBg = 'rgba(239, 68, 68, 0.10)';
+                  statusColor = '#ef4444';
+                  statusLabel = t('schedule.statusCancelled');
+                } else if (p.status === 'expired') {
+                  statusBg = 'rgba(234, 179, 8, 0.10)';
+                  statusColor = '#eab308';
+                  statusLabel = t('schedule.statusExpired');
+                } else if (linkedGame?.status === 'completed') {
+                  statusBg = 'rgba(100, 116, 139, 0.12)';
+                  statusColor = '#64748b';
+                  statusLabel = t('schedule.gameEnded');
+                  gameNavTarget = `/game/${linkedGame.id}`;
+                } else if (linkedGame?.status === 'chip_entry') {
+                  statusBg = 'rgba(59, 130, 246, 0.10)';
+                  statusColor = '#3b82f6';
+                  statusLabel = t('schedule.gameInChipEntry');
+                  gameNavTarget = `/chip-entry/${linkedGame.id}`;
+                } else if (linkedGame?.status === 'live') {
+                  statusBg = 'rgba(16, 185, 129, 0.10)';
+                  statusColor = '#10b981';
+                  statusLabel = t('schedule.gameStarted');
+                  gameNavTarget = `/live-game/${linkedGame.id}`;
+                } else if (pollAllDatesPast) {
+                  // No linked game AND every proposed date has already
+                  // passed → the poll never resolved into a game. Three
+                  // sub-cases collapse here, all with the same outcome:
+                  //   * open/expanded poll that never reached the seat
+                  //     target before its only date(s) lapsed.
+                  //   * confirmed poll whose admin never hit "Start
+                  //     Game" before the pinned date came and went.
+                  //   * any-status poll with all-historical dates (rare
+                  //     legacy data).
+                  // Surfaced as a neutral "didn't happen" pill so the
+                  // history is honest about the outcome instead of
+                  // misleadingly claiming the game is still pending.
+                  statusBg = 'rgba(234, 179, 8, 0.10)';
+                  statusColor = '#eab308';
+                  statusLabel = t('schedule.gameDidNotHappen');
+                } else {
+                  // Confirmed poll, no linked game, date still in the
+                  // future (admin pinned a slot but hasn't started the
+                  // game yet). Genuinely awaiting the start action.
+                  statusBg = 'rgba(148, 163, 184, 0.10)';
+                  statusColor = '#94a3b8';
+                  statusLabel = t('schedule.gamePending');
+                }
+                const isClickable = gameNavTarget !== null;
+                const handleRowClick = isClickable
+                  ? () => navigate(gameNavTarget!, { state: { from: 'schedule' } })
+                  : undefined;
                 return (
-                  <div key={p.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '10px 12px', borderRadius: 6,
-                    background: 'var(--surface-elevated, var(--surface))',
-                    border: '1px solid var(--border)',
-                  }}>
+                  <div
+                    key={p.id}
+                    onClick={handleRowClick}
+                    role={isClickable ? 'button' : undefined}
+                    tabIndex={isClickable ? 0 : undefined}
+                    onKeyDown={isClickable ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleRowClick!();
+                      }
+                    } : undefined}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 12px', borderRadius: 6,
+                      background: 'var(--surface-elevated, var(--surface))',
+                      border: '1px solid var(--border)',
+                      cursor: isClickable ? 'pointer' : 'default',
+                    }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -1300,6 +1429,12 @@ function ToggleSwitch({ checked, onChange, ariaLabel, disabled }: ToggleSwitchPr
 //                  in the last 30 minutes / past the start).
 // cancelled / expired polls hide the timer entirely.
 //
+// Single-tier override: when the caller passes `hasGuestTier=false`, the
+// open/expanded distinction collapses into one neutral "voting closes in
+// {time}" countdown (always blue, ticking toward the soonest proposed
+// date). The tiered wording adds zero signal in a permanents-only group
+// — every member could already vote at t=0 — so we drop it entirely.
+//
 // Re-renders happen via the parent's `now` tick (1 min cadence). That's
 // the right granularity — second-by-second motion would be noise on a
 // poll page that mostly sits in multi-hour windows.
@@ -1308,6 +1443,12 @@ export interface PollTimerProps {
   poll: GamePoll;
   now: number;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  // True if the group contains permanent_guest / guest players. When
+  // false, we collapse the open / expanded distinction into a single
+  // neutral "voting closes in {time}" countdown — the expansion phase
+  // adds zero new eligible voters in a permanents-only group, so the
+  // tiered wording is noise.
+  hasGuestTier?: boolean;
 }
 
 const SOON_WINDOW_MS = 30 * 60 * 1000;
@@ -1341,7 +1482,7 @@ const getDateRowTimestamp = (d: GamePollDate): number => {
   return Number.isFinite(ts) ? ts : 0;
 };
 
-export function PollTimer({ poll, now, t }: PollTimerProps) {
+export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps) {
   if (poll.status === 'cancelled' || poll.status === 'expired') return null;
 
   let color = '#3b82f6';
@@ -1351,7 +1492,32 @@ export function PollTimer({ poll, now, t }: PollTimerProps) {
   let progress: number | null = null;
   let isSoon = false;
 
-  if (poll.status === 'open') {
+  // Single-tier group: "open" and "expanded" become indistinguishable
+  // (every member could already vote at t=0). Render a single neutral
+  // closing-deadline banner that ticks toward the soonest proposed
+  // date, in the same blue palette regardless of underlying status.
+  // The expansion-phase color shift (blue→orange) was a "hey, the
+  // door just unlocked for non-permanents" signal — meaningless here.
+  const singleTier = !hasGuestTier && (poll.status === 'open' || poll.status === 'expanded');
+
+  if (singleTier) {
+    color = '#3b82f6';
+    bg = 'rgba(59, 130, 246, 0.10)';
+    border = 'rgba(59, 130, 246, 0.30)';
+    const start = new Date(poll.createdAt).getTime();
+    const stamps = poll.dates.map(getDateRowTimestamp).filter(ts => ts > 0);
+    const upcoming = stamps.find(ts => ts > now);
+    const target = upcoming ?? (stamps.length ? Math.max(...stamps) : now);
+    const remaining = target - now;
+    if (remaining <= 0) {
+      label = t('schedule.timer.expandedPhaseDue');
+      progress = 1;
+    } else {
+      label = t('schedule.timer.singlePhase', { time: formatRemainingMs(remaining, t) });
+      const total = target - start;
+      progress = total > 0 ? Math.max(0, Math.min(1, (now - start) / total)) : null;
+    }
+  } else if (poll.status === 'open') {
     color = '#3b82f6';
     bg = 'rgba(59, 130, 246, 0.10)';
     border = 'rgba(59, 130, 246, 0.30)';
@@ -1884,13 +2050,17 @@ function ShareBoardingHero({
 // Phase + deadline pill row for the invitation card. The phase indicator
 // is THE most actionable piece of info for non-permanent players who get
 // the share in a group chat: it tells them whether they can vote yet.
+// Hidden entirely when the group has no guest tier — the "permanents
+// only / open to all" distinction has no recipient who would care.
 function SharePhaseBadge({
-  poll, t, tokens,
+  poll, t, tokens, hasGuestTier = true,
 }: {
   poll: GamePoll;
   t: PollShareCardProps['t'];
   tokens: { TEXT: string; TEXT_MUTED: string; ACCENT_BLUE: string; ACCENT_GREEN: string };
+  hasGuestTier?: boolean;
 }) {
+  if (!hasGuestTier) return null;
   const { TEXT_MUTED, ACCENT_BLUE, ACCENT_GREEN } = tokens;
   // Derived voting phase. For confirmed-below-target polls (rendered as
   // invitation cards via the visualStatus pivot), poll.status is
@@ -1976,9 +2146,13 @@ interface PollShareCardProps {
   // pure / SSR-safe.
   appUrl?: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  // Suppresses the "Permanents only / Open to all" phase pill row on
+  // the invitation card when the group has no guest tier — see
+  // SharePhaseBadge for the rationale.
+  hasGuestTier?: boolean;
 }
 
-export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t }: PollShareCardProps) {
+export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t, hasGuestTier = true }: PollShareCardProps) {
   // Shared visual tokens
   const BG_OUTER = '#0f172a';        // slate-900 — page background
   const BG_CARD = '#1e293b';         // slate-800 — card surface
@@ -2110,6 +2284,7 @@ export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate
             appUrl={appUrl}
             t={t}
             tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_BLUE, ACCENT_GREEN }}
+            hasGuestTier={hasGuestTier}
           />
         )}
 
@@ -2310,7 +2485,7 @@ function ShareDateCompetitionStrip({
 }
 
 function PollShareInvitationBody({
-  poll, dateStats, playerById, bestYes, targetPct, appUrl, t, tokens,
+  poll, dateStats, playerById, bestYes, targetPct, appUrl, t, tokens, hasGuestTier = true,
 }: {
   poll: GamePoll;
   dateStats: Map<string, DateStat>;
@@ -2323,6 +2498,9 @@ function PollShareInvitationBody({
   appUrl?: string;
   t: PollShareCardProps['t'];
   tokens: ShareTokens;
+  // Forwarded from PollShareCard so the SharePhaseBadge can suppress
+  // the "Permanents only / Open to all" pill row in single-tier groups.
+  hasGuestTier?: boolean;
 }) {
   const { TEXT, TEXT_MUTED, BORDER, ACCENT_BLUE = '#3b82f6', ACCENT_GREEN = '#10b981' } = tokens;
   // Multi-date polls drop the per-date voter chip lists entirely. The
@@ -2349,6 +2527,7 @@ function PollShareInvitationBody({
         poll={poll}
         t={t}
         tokens={{ TEXT, TEXT_MUTED, ACCENT_BLUE, ACCENT_GREEN }}
+        hasGuestTier={hasGuestTier}
       />
 
       {/* Target progress meter — single-date polls only. For multi-date
@@ -3043,6 +3222,13 @@ function CreatePollModal(props: CreatePollModalProps) {
 
   const knownLocations = settings.locations || [];
 
+  // Single-tier groups (permanents only) skip the expansion-delay
+  // field entirely — no guest player exists to "expand" voting to,
+  // so configuring a delay is meaningless. Read once per render via
+  // the in-memory cache; flips back on as soon as the admin adds a
+  // permanent_guest / guest in the Players tab.
+  const hasGuestTier = hasGuestTierPlayers(getAllPlayers());
+
   const updateDate = (idx: number, patch: Partial<DraftDate>) => {
     setDates(prev => prev.map((d, i) => i === idx ? { ...d, ...patch } : d));
     // Clear date-related errors as the user fixes them
@@ -3240,11 +3426,13 @@ function CreatePollModal(props: CreatePollModalProps) {
               </div>
             )}
           </div>
-          <div style={{ flex: 1, minWidth: 130 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule.expansionDelay')}</div>
-            <input type="number" min={0} value={delay}
-              onChange={(e) => setDelay(parseInt(e.target.value, 10) || 0)} style={inputBase} />
-          </div>
+          {hasGuestTier && (
+            <div style={{ flex: 1, minWidth: 130 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule.expansionDelay')}</div>
+              <input type="number" min={0} value={delay}
+                onChange={(e) => setDelay(parseInt(e.target.value, 10) || 0)} style={inputBase} />
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 12 }}>
@@ -3414,7 +3602,11 @@ function EditPollModal(props: EditPollModalProps) {
   // and admins don't have to re-type "בית של דני" every time.
   const knownLocations = getSettings().locations || [];
 
-  const showExpansionDelay = poll.status === 'open';
+  // Hide the expansion-delay editor in groups with no guest tier:
+  // the field controls when guest/permanent_guest players join the
+  // pool, so when no such players exist there's nothing to delay.
+  const hasGuestTier = hasGuestTierPlayers(getAllPlayers());
+  const showExpansionDelay = poll.status === 'open' && hasGuestTier;
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -3825,25 +4017,24 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
       for (const id of ids) {
         await adminCastVote(dateId, id, response, comment || undefined);
       }
-      // Fire vote-change notifications only for rows where the response or
-      // comment actually changed AND the row pre-existed (so it was an
-      // UPDATE, not an INSERT). This filters out:
-      //   - Fresh proxy votes (no `prev` in the snapshot) — those are not
-      //     "changes", they're new entries.
-      //   - Re-confirms with identical response/comment — silent no-ops.
+      // Fire vote-event notifications for:
+      //   - Fresh proxy votes (no `prev` in the snapshot) — INSERTs, sent
+      //     with `isNewVote: true` so the push title reads "🗳️ הצבעה חדשה".
+      //   - Updates whose response or comment actually changed.
+      // Skipped: re-confirms with identical response/comment (silent no-op).
       const refreshed = getAllPolls().find(p => p.id === poll.id);
       const newComment = comment || null;
       if (refreshed) {
         for (const id of ids) {
           const prev = previousByPlayer.get(id);
-          if (!prev) continue;
-          if (prev.response === response && prev.comment === newComment) continue;
+          const isNewVote = !prev;
+          if (!isNewVote && prev!.response === response && prev!.comment === newComment) continue;
           const refreshedVote = refreshed.votes.find(
             v => v.dateId === dateId && v.playerId === id,
           );
           const player = players.find(p => p.id === id);
           if (refreshedVote && player) {
-            sendVoteChangeNotifications(refreshed, refreshedVote, player.name, actorName)
+            sendVoteChangeNotifications(refreshed, refreshedVote, player.name, actorName, { isNewVote })
               .catch(err => console.warn('sendVoteChangeNotifications failed:', err));
           }
         }
@@ -4707,6 +4898,10 @@ interface ScheduleConfigPanelProps {
 function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const { onSuccess, onError, t } = props;
   const initial = getSettings();
+  // Single-tier groups skip the default-expansion-delay field for the
+  // same reason as Create / Edit Poll modals — there's no guest tier
+  // for the delay to gate.
+  const hasGuestTier = hasGuestTierPlayers(getAllPlayers());
   const [pushEnabled, setPushEnabled] = useState<boolean>(initial.schedulePushEnabled !== false);
   const [emailsEnabled, setEmailsEnabled] = useState<boolean>(initial.scheduleEmailsEnabled === true);
   const [defaultTarget, setDefaultTarget] = useState<number>(initial.scheduleDefaultTarget ?? 7);
@@ -4939,18 +5134,20 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             style={inputBase}
           />
         </div>
-        <div style={{ flex: 1, minWidth: 130 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-            {t('schedule.config.defaultDelayHours')}
+        {hasGuestTier && (
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+              {t('schedule.config.defaultDelayHours')}
+            </div>
+            <input
+              type="number" min={0} max={240}
+              value={defaultDelay}
+              onChange={(e) => setDefaultDelay(parseInt(e.target.value, 10) || 0)}
+              onBlur={commitDefaultDelay}
+              style={inputBase}
+            />
           </div>
-          <input
-            type="number" min={0} max={240}
-            value={defaultDelay}
-            onChange={(e) => setDefaultDelay(parseInt(e.target.value, 10) || 0)}
-            onBlur={commitDefaultDelay}
-            style={inputBase}
-          />
-        </div>
+        )}
         <div style={{
           flex: 1, minWidth: 130,
           display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',

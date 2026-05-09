@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.45.0';
+export const APP_VERSION = '5.46.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,26 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.46.0',
+    date: '2026-05-09',
+    changes: [
+      '🔔 Push fires on new votes too (not only changes)',
+      '✉️ "New vote opened" wording in invitation email',
+      '🗂 Archived polls show real game status + open the right screen',
+      '🚫 "Did not happen" label for polls whose dates lapsed without a game',
+      '🏠 Home schedule card: per-date vote glance + "X members voted" stat',
+      '👁 Observer mode: schedule card uses neutral title (no fake nudge)',
+      '📅 Past-dated polls no longer surface as "active" on Home',
+      '🧠 Trivia card: dates on facts, all-time mirrors, training facts',
+      '👥 Super admins can view foreign group\'s Members tab (read-only)',
+      '🔢 Group tab roster count now matches the Players tab',
+      '🃏 Single-tier groups (permanents only) hide two-phase chrome',
+      '🎓 Training pool generation bar now shimmers live',
+      '🩹 Resolved 10 reported training questions (3 fixed, 7 dismissed)',
+      '🛠 DB: dropped stale fetch_group_members_with_email overload',
+    ],
+  },
   {
     version: '5.45.0',
     date: '2026-05-08',

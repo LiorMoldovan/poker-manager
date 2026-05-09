@@ -419,7 +419,12 @@ export function useSupabaseAuth() {
   }, [state.user, fetchMemberships]);
 
   const fetchMembers = useCallback(async (): Promise<GroupMember[]> => {
-    const groupId = membership?.groupId;
+    // Use activeGroupId (not membership?.groupId) so super-admin
+    // observer mode works: when observing a foreign group, membership
+    // is null but activeGroupId still points at the observed group.
+    // The server-side RPC was widened in migration 061 to accept this
+    // for super admins.
+    const groupId = activeGroupId;
     if (!groupId) return [];
     const { data, error } = await supabase.rpc('fetch_group_members_with_email', {
       p_group_id: groupId,
@@ -435,7 +440,7 @@ export function useSupabaseAuth() {
       }));
     }
     return [];
-  }, [membership?.groupId]);
+  }, [activeGroupId]);
 
   return {
     user: state.user,

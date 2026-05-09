@@ -339,8 +339,8 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
     emailSubject: subject,
     emailBody: (name) =>
       emailGreeting(name) +
-      'ההצבעה לערב הפוקר עדיין פתוחה.\n\n' +
-      `${I}📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
+      'נפתחה הצבעה חדשה לערב פוקר.\n\n' +
+      `${I}📅 התאריכים המוצעים:\n${dateLines}\n\n` +
       (locationLine ? `📍 ${locationLine}\n\n` : '') +
       `${I}🎯 יעד: ${poll.targetPlayerCount} שחקנים` +
       (deadline ? `\n${I}⏳ ${deadline}` : '') +
