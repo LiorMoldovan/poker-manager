@@ -111,6 +111,8 @@ const he = {
   'home.trivia.profitChamp': 'אלוף הרווחים בכל הזמנים: {name} — רווח של {profit} ב-{games} משחקים',
   'home.trivia.bestAttendance': '{name} לא מפספס — נכח ב-{pct}% מהמשחקים השנה ({games} מתוך {total})',
   'home.trivia.h2hKing': '{name} שולט ראש בראש — סיים מעל יותר שחקנים מכל אחד אחר ({beat} מתוך {total} יריבים)',
+  'home.trivia.h2hKingWithLead': '{name} שולט ראש בראש — סיים מעל {beat} מתוך {total} יריבים, רק {leaders} מוביל מולו',
+  'home.trivia.h2hKingWithLeadPlural': '{name} שולט ראש בראש — סיים מעל {beat} מתוך {total} יריבים, רק {leaders} מובילים מולו',
   'home.trivia.groupAgeYears': 'הקבוצה משחקת כבר {years} שנים — המשחק הראשון נרשם ב-{date}',
   'home.trivia.groupAgeMonths': 'הקבוצה משחקת כבר {months} חודשים — המשחק הראשון נרשם ב-{date}',
   'home.trivia.tapForNext': '· {current}/{total} · לחצו להבא',
@@ -1527,6 +1529,7 @@ const he = {
   'settings.photoTest.totalEstimate': 'הערכת סה"כ',
   'settings.photoTest.confidenceLabel': 'ביטחון',
   'settings.photoTest.tryAgain': 'בדיקה נוספת',
+  'settings.photoTest.disabledNoKey': 'בקבוצה הזו עדיין אין מפתח Gemini פעיל ואין משחק עם סיכום AI — הזן מפתח בכרטיס "מפתחות API" שלמעלה כדי להפעיל את הבדיקה.',
   'settings.photoTest.disabledNoChips': 'נדרש להגדיר ז\'יטונים לקבוצה — היכנס ללשונית "ז\'יטונים" והוסף ערכים כדי להפעיל את הבדיקה.',
 
   // Settings > Backup
@@ -2037,6 +2040,8 @@ const en: Record<keyof typeof he, string> = {
   'home.trivia.profitChamp': 'All-time profit champion: {name} with {profit} across {games} games',
   'home.trivia.bestAttendance': '{name} never misses — attended {pct}% of this year\'s games ({games} of {total})',
   'home.trivia.h2hKing': '{name} dominates head-to-head — finishes above more group members than anyone else ({beat} of {total} opponents)',
+  'home.trivia.h2hKingWithLead': '{name} dominates head-to-head — finishes above {beat} of {total} opponents; only {leaders} leads the H2H',
+  'home.trivia.h2hKingWithLeadPlural': '{name} dominates head-to-head — finishes above {beat} of {total} opponents; only {leaders} lead the H2H',
   'home.trivia.groupAgeYears': 'This group has been playing for {years} years — first game on {date}',
   'home.trivia.groupAgeMonths': 'This group has been playing for {months} months — first game on {date}',
   'home.trivia.tapForNext': '· {current}/{total} · tap for next',
@@ -3364,6 +3369,7 @@ const en: Record<keyof typeof he, string> = {
   'settings.photoTest.totalEstimate': 'Estimated total',
   'settings.photoTest.confidenceLabel': 'Confidence',
   'settings.photoTest.tryAgain': 'Test again',
+  'settings.photoTest.disabledNoKey': 'This group has no active Gemini key and no past game with an AI summary — set a key in the "API Keys" card above to enable the test.',
   'settings.photoTest.disabledNoChips': 'Chip values must be configured for this group — open the "Chips" tab and add values to enable the test.',
   'settings.players.permanentDesc': 'Main roster — permanent group members',
   'settings.players.guestDesc': 'Regular guest who comes often',

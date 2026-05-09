@@ -3089,37 +3089,63 @@ function buildTriviaList(
     if (recentGameIds.has(gp.gameId)) recentPlayerNames.add(gp.playerName);
   }
 
-  // 1. Biggest single win this year. Track gameId so the fact can
-  //    carry a date suffix ("biggest win this year: +X by Y on Z").
-  let biggest = { name: '', profit: 0, gameId: '' };
+  // 1. Biggest single win this year. Track every game tied at the max
+  //    so a shared record surfaces all holders ("400 — 3 nights:
+  //    A ×2, B") instead of arbitrarily picking one. Single-holder
+  //    case keeps the original date-suffix copy.
+  let biggest = { profit: 0 };
   for (const gp of yearGP) {
-    if (gp.profit > biggest.profit) biggest = { name: gp.playerName, profit: gp.profit, gameId: gp.gameId };
+    if (gp.profit > biggest.profit) biggest = { profit: gp.profit };
   }
   if (biggest.profit > 0) {
-    list.push({
-      icon: '🏆',
-      text: t('home.trivia.biggestWin', {
-        profit: formatCurrency(biggest.profit),
-        name: biggest.name,
-        date: formatTriviaDate(gameDateById.get(biggest.gameId), language),
-      }),
-    });
+    const winners = yearGP.filter(gp => gp.profit === biggest.profit);
+    if (winners.length === 1) {
+      list.push({
+        icon: '🏆',
+        text: t('home.trivia.biggestWin', {
+          profit: formatCurrency(biggest.profit),
+          name: winners[0].playerName,
+          date: formatTriviaDate(gameDateById.get(winners[0].gameId), language),
+        }),
+      });
+    } else {
+      list.push({
+        icon: '🏆',
+        text: t('home.trivia.biggestWinMulti', {
+          profit: formatCurrency(biggest.profit),
+          count: String(winners.length),
+          players: formatTiedPlayers(winners, language),
+        }),
+      });
+    }
   }
 
   // 2. Biggest single loss this year.
-  let worst = { name: '', loss: 0, gameId: '' };
+  let worst = { loss: 0 };
   for (const gp of yearGP) {
-    if (gp.profit < worst.loss) worst = { name: gp.playerName, loss: gp.profit, gameId: gp.gameId };
+    if (gp.profit < worst.loss) worst = { loss: gp.profit };
   }
   if (worst.loss < -50) {
-    list.push({
-      icon: '❄️',
-      text: t('home.trivia.biggestLoss', {
-        amount: formatCurrency(Math.abs(worst.loss)),
-        name: worst.name,
-        date: formatTriviaDate(gameDateById.get(worst.gameId), language),
-      }),
-    });
+    const losers = yearGP.filter(gp => gp.profit === worst.loss);
+    if (losers.length === 1) {
+      list.push({
+        icon: '❄️',
+        text: t('home.trivia.biggestLoss', {
+          amount: formatCurrency(Math.abs(worst.loss)),
+          name: losers[0].playerName,
+          date: formatTriviaDate(gameDateById.get(losers[0].gameId), language),
+        }),
+      });
+    } else {
+      list.push({
+        icon: '❄️',
+        text: t('home.trivia.biggestLossMulti', {
+          amount: formatCurrency(Math.abs(worst.loss)),
+          count: String(losers.length),
+          players: formatTiedPlayers(losers, language),
+        }),
+      });
+    }
   }
 
   // 3. Most active player this year.
@@ -3447,33 +3473,57 @@ function buildTriviaList(
   //         than the year-scoped entries (#1, #2) because the
   //         all-time pool is bigger and the "ever" framing is the
   //         headline value.
-  let biggestEver = { name: '', profit: 0, gameId: '' };
-  let worstEver = { name: '', loss: 0, gameId: '' };
+  let biggestEver = { profit: 0 };
+  let worstEver = { loss: 0 };
   for (const gp of allTimeGP) {
-    if (gp.profit > biggestEver.profit) biggestEver = { name: gp.playerName, profit: gp.profit, gameId: gp.gameId };
-    if (gp.profit < worstEver.loss) worstEver = { name: gp.playerName, loss: gp.profit, gameId: gp.gameId };
+    if (gp.profit > biggestEver.profit) biggestEver = { profit: gp.profit };
+    if (gp.profit < worstEver.loss) worstEver = { loss: gp.profit };
   }
   if (biggestEver.profit > biggest.profit) {
     // Only surface "ever" when it's larger than the year-scoped record;
     // otherwise the two entries would be redundant.
-    list.push({
-      icon: '🏅',
-      text: t('home.trivia.biggestWinAllTime', {
-        profit: formatCurrency(biggestEver.profit),
-        name: biggestEver.name,
-        date: formatTriviaDate(gameDateById.get(biggestEver.gameId), language),
-      }),
-    });
+    const winners = allTimeGP.filter(gp => gp.profit === biggestEver.profit);
+    if (winners.length === 1) {
+      list.push({
+        icon: '🏅',
+        text: t('home.trivia.biggestWinAllTime', {
+          profit: formatCurrency(biggestEver.profit),
+          name: winners[0].playerName,
+          date: formatTriviaDate(gameDateById.get(winners[0].gameId), language),
+        }),
+      });
+    } else {
+      list.push({
+        icon: '🏅',
+        text: t('home.trivia.biggestWinAllTimeMulti', {
+          profit: formatCurrency(biggestEver.profit),
+          count: String(winners.length),
+          players: formatTiedPlayers(winners, language),
+        }),
+      });
+    }
   }
   if (worstEver.loss < worst.loss && worstEver.loss < -50) {
-    list.push({
-      icon: '🥶',
-      text: t('home.trivia.biggestLossAllTime', {
-        amount: formatCurrency(Math.abs(worstEver.loss)),
-        name: worstEver.name,
-        date: formatTriviaDate(gameDateById.get(worstEver.gameId), language),
-      }),
-    });
+    const losers = allTimeGP.filter(gp => gp.profit === worstEver.loss);
+    if (losers.length === 1) {
+      list.push({
+        icon: '🥶',
+        text: t('home.trivia.biggestLossAllTime', {
+          amount: formatCurrency(Math.abs(worstEver.loss)),
+          name: losers[0].playerName,
+          date: formatTriviaDate(gameDateById.get(losers[0].gameId), language),
+        }),
+      });
+    } else {
+      list.push({
+        icon: '🥶',
+        text: t('home.trivia.biggestLossAllTimeMulti', {
+          amount: formatCurrency(Math.abs(worstEver.loss)),
+          count: String(losers.length),
+          players: formatTiedPlayers(losers, language),
+        }),
+      });
+    }
   }
 
   // ── 14. Most popular day of week THIS YEAR. Surfaces the group's
@@ -4351,10 +4401,22 @@ function buildTriviaList(
     // with and decide who wins the H2H. Count A's wins.
     const allNames = new Set<string>();
     for (const ps of allTimeGP) allNames.add(ps.playerName);
-    let bestKing = { name: '', beat: 0, total: 0 };
+    let bestKing: {
+      name: string;
+      beat: number;
+      total: number;
+      // Opponents who actually lead the king in their H2H. Tracked
+      // so the trivia copy can name them ("only X leads the H2H")
+      // instead of leaving the user wondering who the missing
+      // opponents are. Ties (aOverB === bOverA) are neither
+      // "above" nor "below" the king and are intentionally
+      // excluded from this list.
+      lostTo: { name: string; lead: number }[];
+    } = { name: '', beat: 0, total: 0, lostTo: [] };
     for (const a of allNames) {
       let beat = 0;
       let total = 0;
+      const lostTo: { name: string; lead: number }[] = [];
       for (const b of allNames) {
         if (a === b) continue;
         const aOverB = pair.get(a)?.get(b) ?? 0;
@@ -4363,22 +4425,35 @@ function buildTriviaList(
         if (sharedAB < 4) continue; // not enough shared games for a real H2H
         total++;
         if (aOverB > bOverA) beat++;
+        else if (bOverA > aOverB) lostTo.push({ name: b, lead: bOverA - aOverB });
       }
       // A is "king" only if they have a strict winning H2H against
       // a clear majority of qualified opponents. The 60% bar mirrors
       // the in-the-green threshold and prevents a "X beats 4 of 7"
       // (57%) borderline case from claiming dominance.
       if (total >= 4 && beat >= 4 && beat / total >= 0.6 && beat > bestKing.beat) {
-        bestKing = { name: a, beat, total };
+        bestKing = { name: a, beat, total, lostTo };
       }
     }
     if (bestKing.beat > 0) {
+      // Sort the opponents who lead the king by H2H gap descending so
+      // the most-dominant-over-king appears first when we list them.
+      bestKing.lostTo.sort((a, b) => b.lead - a.lead);
+      const leaderCount = bestKing.lostTo.length;
+      const leadersStr = bestKing.lostTo.map(l => l.name).join(language === 'he' ? ', ' : ', ');
+      const key =
+        leaderCount === 0
+          ? 'home.trivia.h2hKing'
+          : leaderCount === 1
+            ? 'home.trivia.h2hKingWithLead'
+            : 'home.trivia.h2hKingWithLeadPlural';
       list.push({
         icon: '🤜',
-        text: t('home.trivia.h2hKing', {
+        text: t(key, {
           name: bestKing.name,
           beat: bestKing.beat,
           total: bestKing.total,
+          leaders: leadersStr,
         }),
       });
     }

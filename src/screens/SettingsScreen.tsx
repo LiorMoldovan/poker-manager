@@ -3017,28 +3017,41 @@ const SettingsScreen = () => {
                 {t('settings.photoTest.helper')}
               </p>
               {(() => {
-                // The only hard requirement is at least one configured
-                // chip value — without those there's nothing to count.
-                // We do NOT gate on `settings.geminiApiKey`: the
-                // `/api/gemini` Edge Function falls back to the Vercel
-                // `GEMINI_API_KEY` env var, so the test may still
-                // succeed even when no per-group key is set. If both
-                // are missing, `countChipsFromPhoto` surfaces a clean
-                // error toast — far friendlier than silently greying
-                // the button out and making the user guess why.
+                // Two real prerequisites for the photo flow:
+                //   1. `aiAvailable` — the Gemini call path must work.
+                //      Treat per-group `geminiApiKey` set OR any past
+                //      game with an AI summary as proof of working
+                //      path (covers both UI-managed per-group keys
+                //      AND groups that rely on the Vercel
+                //      `GEMINI_API_KEY` env-var fallback).
+                //   2. `noChips` — at least one chip value must be
+                //      defined; nothing to count without them.
+                // We surface only the more actionable reason — a
+                // missing key beats missing chips because the API
+                // Keys card is one panel up on this same tab while
+                // chips live under a separate Chips tab.
+                const aiAvailable =
+                  !!settings.geminiApiKey ||
+                  getAllGames().some(g => g.aiSummary);
                 const noChips = chipValues.length === 0;
+                const disabled = !aiAvailable || noChips;
+                const reasonKey = !aiAvailable
+                  ? 'settings.photoTest.disabledNoKey'
+                  : noChips
+                    ? 'settings.photoTest.disabledNoChips'
+                    : null;
                 return (
                   <>
                     <button
                       type="button"
                       className="btn btn-primary"
                       onClick={() => setPhotoTestOpen(true)}
-                      disabled={noChips}
+                      disabled={disabled}
                       style={{ width: '100%', padding: '0.65rem' }}
                     >
                       {t('settings.photoTest.takePhoto')}
                     </button>
-                    {noChips && (
+                    {reasonKey && (
                       <p style={{
                         margin: '0.5rem 0 0',
                         fontSize: '0.75rem',
@@ -3046,7 +3059,7 @@ const SettingsScreen = () => {
                         lineHeight: 1.5,
                         fontStyle: 'italic',
                       }}>
-                        {t('settings.photoTest.disabledNoChips')}
+                        {t(reasonKey)}
                       </p>
                     )}
                   </>

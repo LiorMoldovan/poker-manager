@@ -5,6 +5,7 @@ import {
   getGamePlayers, 
   getChipValues, 
   getSettings,
+  getAllGames,
   updateGamePlayerChips,
   updateGamePlayerResults,
   updateGameStatus,
@@ -267,6 +268,17 @@ const ChipEntryScreen = () => {
   const [photoResults, setPhotoResults] = useState<Record<string, PhotoChipCountResult>>({});
   const [userEditedFields, setUserEditedFields] = useState<Record<string, Set<string>>>({});
   const [photoErrorToast, setPhotoErrorToast] = useState<string>('');
+  // Whether the photo chip-counting feature is available for this group.
+  // True when EITHER (a) the group has its own Gemini API key set in
+  // settings, OR (b) at least one past game in the group has an AI
+  // summary — proof that the Gemini call path works (per-group key OR
+  // Vercel `GEMINI_API_KEY` env-var fallback). When both signals are
+  // false, we hide the photo button entirely so users mid-game don't
+  // start a chip count, click photo, hit a downstream API error, and
+  // have to fall back to manual after burning the modal flow. The
+  // owner can enable the feature for a brand-new group by configuring
+  // a key under Settings → Services and reopening this screen.
+  const [photoAvailable, setPhotoAvailable] = useState(false);
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
 
@@ -328,6 +340,12 @@ const ChipEntryScreen = () => {
     setChipValues(chips);
     setRebuyValue(settings.rebuyValue || 30);
     setChipsPerRebuy(settings.chipsPerRebuy || 10000);
+    // Photo button availability (see comment on `photoAvailable`).
+    // Same heuristic the SettingsScreen setup wizard uses (line ~879)
+    // to decide whether the AI step is "done": per-group key set OR
+    // any past game has an AI summary (= proof of working call path,
+    // be it per-group key or Vercel env-var fallback).
+    setPhotoAvailable(!!settings.geminiApiKey || getAllGames().some(g => g.aiSummary));
     // Initialize chip counts
     const initialCounts: Record<string, Record<string, number>> = {};
     gamePlayers.forEach(player => {
@@ -828,15 +846,17 @@ const ChipEntryScreen = () => {
           )}
 
           {/* Photo capture button — admin only, additive to manual flow.
-              Always shown for admins regardless of whether the group has
-              a per-group Gemini API key configured: the `/api/gemini`
-              Edge Function falls back to the Vercel `GEMINI_API_KEY`
-              env var, so the call may still succeed. If both per-group
-              AND env-var keys are missing, `countChipsFromPhoto` surfaces
-              a clean error toast — much friendlier than silently hiding
-              the button and leaving the user wondering whether the
-              feature exists at all. */}
-          {isAdmin && !photoResult && (
+              Hidden when the group has no per-group Gemini key AND no
+              past game has an AI summary (= no proof the call path
+              works). This avoids the worst-case mid-game UX of "click
+              photo → spinner → API error → fall back to manual" after
+              the user has already committed to the modal flow. The
+              gate intentionally treats env-var fallback as available
+              once ANY past AI feature has succeeded in this group, so
+              groups that rely on the Vercel `GEMINI_API_KEY` env var
+              (no per-group key) still get the photo button as long as
+              their other AI features are working. */}
+          {isAdmin && photoAvailable && !photoResult && (
             <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
               <button
                 type="button"
