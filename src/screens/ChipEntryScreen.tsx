@@ -22,6 +22,7 @@ import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
+import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
 
 // Per-stack confidence → border color helper. Used by both the
 // chip-entry inputs (left-border) and the header banner. Kept as a
@@ -284,6 +285,12 @@ const ChipEntryScreen = () => {
     useState<Record<string, { base64: string; mimeType: string }>>({});
   const [userEditedFields, setUserEditedFields] = useState<Record<string, Set<string>>>({});
   const [photoErrorToast, setPhotoErrorToast] = useState<string>('');
+  // Per-player toggle: whether the AI detection overlay (boxes on the
+  // photo) is expanded under the photo banner. Default collapsed —
+  // most users never need to look at it, but when an AI count goes
+  // wrong it's the fastest way to spot whether the model cropped the
+  // wrong region. v5.59.
+  const [overlayExpandedPlayerId, setOverlayExpandedPlayerId] = useState<string | null>(null);
   // Whether the photo chip-counting feature is available for this group.
   // True when EITHER (a) the group has its own Gemini API key set in
   // settings, OR (b) at least one past game in the group has an AI
@@ -883,26 +890,72 @@ const ChipEntryScreen = () => {
                     </span>
                   )}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isAdmin) return;
-                    setPhotoTargetPlayerId(selectedPlayer.id);
-                    setPhotoOpen(true);
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text)',
-                    borderRadius: '8px',
-                    padding: '0.25rem 0.55rem',
-                    fontSize: '0.75rem',
-                    cursor: isAdmin ? 'pointer' : 'not-allowed',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {t('chips.photo.banner.retake')}
-                </button>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isAdmin) return;
+                      setPhotoTargetPlayerId(selectedPlayer.id);
+                      setPhotoOpen(true);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                      borderRadius: '8px',
+                      padding: '0.25rem 0.55rem',
+                      fontSize: '0.75rem',
+                      cursor: isAdmin ? 'pointer' : 'not-allowed',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {t('chips.photo.banner.retake')}
+                  </button>
+                  {/* v5.59: one-tap escape hatch — wipe ALL AI-proposed
+                      counts for this player (preserving fields the user
+                      already manually edited) and remove the banner so
+                      they can finish manually from a clean slate.
+                      Honors manual-flow protection: per-field user edits
+                      stay untouched, only photo-sourced fields reset. */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const playerId = selectedPlayer.id;
+                        const editedForPlayer = userEditedFields[playerId] || new Set<string>();
+                        // Reset only chips that were filled by the photo
+                        // and not subsequently edited by the user.
+                        for (const stack of photoResult.stacks) {
+                          if (editedForPlayer.has(stack.chipId)) continue;
+                          updateChipCount(playerId, stack.chipId, 0, 'photo');
+                        }
+                        setPhotoResults(prev => {
+                          const next = { ...prev };
+                          delete next[playerId];
+                          return next;
+                        });
+                        setPhotoImagesForFeedback(prev => {
+                          const next = { ...prev };
+                          delete next[playerId];
+                          return next;
+                        });
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(239,68,68,0.35)',
+                        color: '#fca5a5',
+                        borderRadius: '8px',
+                        padding: '0.25rem 0.55rem',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                      title={t('chips.photo.banner.clearAITooltip')}
+                    >
+                      {t('chips.photo.banner.clearAI')}
+                    </button>
+                  )}
+                </div>
               </div>
               {totalWildlyOff && (
                 <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: '#fca5a5' }}>
@@ -943,6 +996,75 @@ const ChipEntryScreen = () => {
               }}>
                 {t('chips.photo.banner.feedbackHint')}
               </div>
+              {/* v5.59 — collapsible detection overlay. Only available
+                  when we still have the photo in memory for this
+                  player AND the result has at least one stack with
+                  a region (= came from the new pipeline). */}
+              {(() => {
+                const photoImg = photoImagesForFeedback[selectedPlayer.id];
+                const hasRegions = photoResult.stacks.some(s => s.region);
+                if (!photoImg || !hasRegions) return null;
+                const isOpen = overlayExpandedPlayerId === selectedPlayer.id;
+                const adjustedStackId = photoResult.totalValueCheckResult?.adjustedStackId ?? null;
+                return (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setOverlayExpandedPlayerId(prev =>
+                        prev === selectedPlayer.id ? null : selectedPlayer.id,
+                      )}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.72rem',
+                        padding: '0.2rem 0',
+                        fontFamily: 'inherit',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '2px',
+                      }}
+                    >
+                      {isOpen
+                        ? t('chips.photo.banner.hideOverlay')
+                        : t('chips.photo.banner.showOverlay')}
+                    </button>
+                    {isOpen && (
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <ChipDetectionOverlay
+                          photoBase64={photoImg.base64}
+                          photoMimeType={photoImg.mimeType}
+                          stacks={photoResult.stacks}
+                          chipById={new Map(chipValues.map(c => [c.id, c]))}
+                          adjustedStackId={adjustedStackId}
+                          maxHeight={220}
+                        />
+                        {photoResult.detectionSignal && (
+                          <div style={{
+                            marginTop: '0.3rem',
+                            fontSize: '0.65rem',
+                            color: 'var(--text-muted)',
+                          }}>
+                            {t('chips.photo.banner.detectionSignal')}:&nbsp;
+                            <span style={{
+                              color: photoResult.detectionSignal === 'position-only'
+                                ? '#fca5a5'
+                                : 'var(--text)',
+                            }}>
+                              {t(`chips.photo.banner.detection.${photoResult.detectionSignal}` as const)}
+                            </span>
+                            {photoResult.whiteBalanceApplied && (
+                              <> · <span style={{ color: '#10b981' }}>
+                                {t('chips.photo.banner.wbOn')}
+                              </span></>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -997,6 +1119,7 @@ const ChipEntryScreen = () => {
               // wrong chip in this slot). Any of those → red border.
               const stackIsMismatch = !!stack && (
                 stack.needsRecount === true ||
+                stack.needsVerify === true ||
                 stack.colorMatch === false ||
                 (!totalWithinTolerance && stack.confidence < 70)
               );
@@ -1005,8 +1128,18 @@ const ChipEntryScreen = () => {
                 : null;
               // Extra at-a-glance icons in the header so the user doesn't
               // have to read the percentage to spot a problem stack.
-              const showRecountIcon = !!stack && stack.needsRecount === true && !isEdited;
+              const showRecountIcon = !!stack && (stack.needsRecount === true || stack.needsVerify === true) && !isEdited;
               const showColorMismatchIcon = !!stack && stack.colorMatch === false && !isEdited && stack.count > 0;
+              // v5.59 — purple "🛟 adjusted" badge: this stack's count
+              // was nudged by the total-value sanity check (sum of
+              // chip values × counts didn't match expected; the
+              // lowest-confidence stack was reconciled). Hidden when
+              // the user already overrode the value, since their
+              // edit superseded the AI's adjustment anyway.
+              const wasAdjusted = !!stack
+                && !isEdited
+                && photoResult?.totalValueCheckResult?.adjustedStackId === chip.id
+                && (photoResult.totalValueCheckResult?.adjustmentChips ?? 0) !== 0;
               return (
               <div key={chip.id} className="chip-entry-card" style={{ 
                 borderLeft: aiBorderColor
@@ -1045,6 +1178,27 @@ const ChipEntryScreen = () => {
                         fontSize: '0.85rem',
                       }}
                     >🔍</span>
+                  )}
+                  {wasAdjusted && !showRecountIcon && !showColorMismatchIcon && (
+                    <span
+                      title={t('chips.photo.stack.adjustedTooltip').replace(
+                        '{n}',
+                        String(photoResult?.totalValueCheckResult?.adjustmentChips ?? 0),
+                      )}
+                      style={{
+                        marginInlineStart: 'auto',
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        color: '#a855f7',
+                        background: 'rgba(168,85,247,0.12)',
+                        border: '1px solid rgba(168,85,247,0.35)',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      🛟 {t('chips.photo.stack.adjustedBadge')}
+                    </span>
                   )}
                   {showAIBorder && stack && (
                     <span

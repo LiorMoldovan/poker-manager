@@ -71,6 +71,8 @@ import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
+import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
+import { captureChipSelfie } from '../utils/imageUtils';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
@@ -112,6 +114,12 @@ const SettingsScreen = () => {
   const [showFullChangelog, setShowFullChangelog] = useState(false);
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
+  // v5.59 chip-selfie capture: which chip row is currently waiting on a
+  // file pick + processing, so the row can show a spinner. Cleared on
+  // success or error. Capture flow uses a single hidden file input,
+  // re-targeted per chip via this state.
+  const [chipSelfieBusyId, setChipSelfieBusyId] = useState<string | null>(null);
+  const [chipSelfieError, setChipSelfieError] = useState<string>('');
   // Collapsed/expanded state for the player groups (by type) on the Players tab.
   // Defaults to all collapsed so the long roster doesn't dominate the view.
   const [playerGroupsCollapsed, setPlayerGroupsCollapsed] = useState<Record<PlayerType, boolean>>({
@@ -551,7 +559,7 @@ const SettingsScreen = () => {
         const [{ data: rows, error: rowsErr }, { data: tunings, error: tuneErr }] = await Promise.all([
           supabase
             .from('chip_count_feedback')
-            .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks')
+            .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks, pipeline_meta')
             .eq('group_id', gid)
             .order('created_at', { ascending: false })
             .limit(200),
@@ -872,6 +880,55 @@ const SettingsScreen = () => {
     }
   };
 
+  /**
+   * v5.59 — capture a per-color chip selfie from the user's camera and
+   * save base64 + dominant hex back into `chip_values`. The selfie is
+   * used by the photo chip-counting pipeline as:
+   *  - a few-shot reference image bundled with each per-stack LLM call
+   *  - precomputed dominant color for HSL-based stack-to-chip mapping
+   * Both fields are nullable: if the user skips a color the pipeline
+   * falls back to `displayColor` for matching and drops the
+   * reference-image clause from the LLM prompt.
+   */
+  const handleSelfieFile = async (chipId: string, file: File | undefined) => {
+    if (!file) {
+      setChipSelfieBusyId(null);
+      return;
+    }
+    setChipSelfieError('');
+    try {
+      const result = await captureChipSelfie(file);
+      const chip = chipValues.find(c => c.id === chipId);
+      if (!chip) return;
+      const updated: ChipValue = {
+        ...chip,
+        selfieBase64: result.base64,
+        selfieDominantHex: result.dominantHex,
+      };
+      saveChipValue(updated);
+      setChipValues(chipValues.map(c => c.id === chipId ? updated : c));
+      showSaved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setChipSelfieError(msg);
+    } finally {
+      setChipSelfieBusyId(null);
+    }
+  };
+
+  const handleClearSelfie = (chipId: string) => {
+    const chip = chipValues.find(c => c.id === chipId);
+    if (!chip) return;
+    const updated: ChipValue = {
+      ...chip,
+      selfieBase64: null,
+      selfieDominantHex: null,
+    };
+    saveChipValue(updated);
+    setChipValues(chipValues.map(c => c.id === chipId ? updated : c));
+    showSaved();
+  };
+
   const loadActivityLog = async () => {
     setActivityLoading(true);
     setActivityError(null);
@@ -1020,7 +1077,7 @@ const SettingsScreen = () => {
     // dashboard fill up. The Tune / Revert buttons inside the
     // dashboard remain owner-only (DB RLS on
     // chip_count_tuning_overrides + UI gate).
-    { id: 'ai', label: t('settings.tabAI'), icon: '🔌', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
+    { id: 'ai', label: t('settings.tabAI'), icon: '🤖', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'triviaReports', label: t('settings.tabTriviaReports'), icon: '🚩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
@@ -1682,11 +1739,52 @@ const SettingsScreen = () => {
             </div>
           ) : (
             <div>
-              {chipValues.map((chip, idx) => (
+              {/* v5.59 chip-selfie tip — only shown when at least one
+                  configured chip is missing a selfie. The selfie isn't
+                  required (the photo pipeline falls back gracefully)
+                  but it materially improves accuracy because it
+                  anchors stack-to-chip color matching to a calibrated
+                  reference instead of `displayColor` (which is just
+                  the swatch the user picked in this same UI). */}
+              {canEditChips && chipValues.some(c => !c.selfieBase64) && (
+                <div style={{
+                  marginBottom: '0.75rem',
+                  padding: '0.6rem 0.85rem',
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.25)',
+                  borderRadius: '10px',
+                  fontSize: '0.78rem',
+                  color: 'var(--text)',
+                  lineHeight: 1.5,
+                }}>
+                  {t('settings.chips.selfieTip')}
+                </div>
+              )}
+              {chipSelfieError && (
+                <div style={{
+                  marginBottom: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  background: 'rgba(239,68,68,0.10)',
+                  border: '1px solid rgba(239,68,68,0.30)',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  color: '#fca5a5',
+                }}>
+                  {chipSelfieError}
+                </div>
+              )}
+              {chipValues.map((chip, idx) => {
+                const hasSelfie = !!chip.selfieBase64;
+                const busy = chipSelfieBusyId === chip.id;
+                return (
                 <div
                   key={chip.id}
                   className="settings-row"
-                  style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
+                  style={{
+                    animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both`,
+                    flexWrap: 'wrap',
+                    rowGap: '0.4rem',
+                  }}
                 >
                   <div
                     className="chip-circle"
@@ -1707,16 +1805,79 @@ const SettingsScreen = () => {
                     disabled={!canEditChips}
                   />
                   {canEditChips && (
-                    <button
-                      className="row-action row-action-danger"
-                      onClick={() => setDeleteChipConfirm({ id: chip.id, name: translateChipColor(chip.color, t) })}
-                      title={t('settings.chips.deleteTitle')}
-                    >
-                      🗑️
-                    </button>
+                    <>
+                      {/* Selfie thumbnail (when present) — clickable to retake.
+                          When absent, the camera button below is the entry point. */}
+                      {hasSelfie && (
+                        <img
+                          src={`data:image/jpeg;base64,${chip.selfieBase64}`}
+                          alt={t('settings.chips.selfieAlt')}
+                          title={t('settings.chips.selfieRetake')}
+                          onClick={() => {
+                            if (busy) return;
+                            setChipSelfieBusyId(chip.id);
+                            const input = document.getElementById(`chip-selfie-input-${chip.id}`) as HTMLInputElement | null;
+                            input?.click();
+                          }}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            cursor: busy ? 'wait' : 'pointer',
+                            border: '2px solid rgba(16,185,129,0.5)',
+                            opacity: busy ? 0.5 : 1,
+                          }}
+                        />
+                      )}
+                      <button
+                        className="row-action"
+                        onClick={() => {
+                          if (busy) return;
+                          setChipSelfieBusyId(chip.id);
+                          const input = document.getElementById(`chip-selfie-input-${chip.id}`) as HTMLInputElement | null;
+                          input?.click();
+                        }}
+                        title={hasSelfie ? t('settings.chips.selfieRetake') : t('settings.chips.selfieTake')}
+                        disabled={busy}
+                        style={{ opacity: busy ? 0.5 : 1 }}
+                      >
+                        {busy ? '⏳' : (hasSelfie ? '🔄' : '📷')}
+                      </button>
+                      <input
+                        id={`chip-selfie-input-${chip.id}`}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          void handleSelfieFile(chip.id, f);
+                        }}
+                      />
+                      {hasSelfie && (
+                        <button
+                          className="row-action"
+                          onClick={() => handleClearSelfie(chip.id)}
+                          title={t('settings.chips.selfieClear')}
+                          style={{ fontSize: '0.7rem' }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                      <button
+                        className="row-action row-action-danger"
+                        onClick={() => setDeleteChipConfirm({ id: chip.id, name: translateChipColor(chip.color, t) })}
+                        title={t('settings.chips.deleteTitle')}
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -3128,59 +3289,20 @@ const SettingsScreen = () => {
               </div>
             )}
 
-            {/* Chip-count feedback opt-in (owner only).
-                The numeric per-stack ai-vs-real diff is captured
-                automatically every time a player is finalized after
-                an AI photo count — no opt-in needed. This toggle
-                only controls whether the PHOTO that the AI saw is
-                also uploaded to a private Supabase Storage bucket
-                so the developer can replay specific failure cases.
-                Default OFF for privacy (photos may capture
-                surroundings). Migration 069. */}
-            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-              <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
-                {t('settings.chipFeedback.title')}
-              </h2>
-              <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                {t('settings.chipFeedback.helper')}
-              </p>
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                padding: '0.5rem 0.6rem',
-                background: settings.shareChipPhotos ? 'rgba(16,185,129,0.08)' : 'var(--surface)',
-                border: `1px solid ${settings.shareChipPhotos ? 'rgba(16,185,129,0.35)' : 'var(--border)'}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease, border-color 0.15s ease',
-              }}>
-                <input
-                  type="checkbox"
-                  checked={settings.shareChipPhotos === true}
-                  onChange={e => {
-                    const next = { ...settings, shareChipPhotos: e.target.checked };
-                    setSettings(next);
-                    saveSettings(next);
-                    setSaved(true);
-                    setTimeout(() => setSaved(false), 2000);
-                  }}
-                  style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
-                />
-                <div style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }}>
-                  {t('settings.chipFeedback.toggleLabel')}
-                </div>
-              </label>
-              <p style={{
-                margin: '0.5rem 0 0',
-                fontSize: '0.7rem',
-                color: 'var(--text-muted)',
-                opacity: 0.85,
-                lineHeight: 1.5,
-              }}>
-                {t('settings.chipFeedback.privacyNote')}
-              </p>
-            </div>
+            {/* v5.59 — chip-photo feedback opt-in card was REMOVED here.
+                The numeric per-stack ai-vs-real diff still gets captured
+                automatically (see `submitChipCountFeedback` in
+                chipCountFeedback.ts), which is enough for the
+                accuracy-improvement loop and the dashboard tuner.
+                The photo-upload toggle was clutter without earning
+                its keep — owners weren't using it and the per-stack
+                provenance log makes failure replay possible without
+                the original photo. The underlying `shareChipPhotos`
+                setting + Supabase Storage bucket are intentionally
+                kept; both callers pass `false` now, so no photos
+                upload, but if we ever need to re-enable photo replay
+                for a specific debugging session we can add a hidden
+                toggle without another migration. */}
 
             </>)}
             {/* Photo Chip Counting Test Card — visible to ALL admins
@@ -3266,18 +3388,54 @@ const SettingsScreen = () => {
                   </div>
 
                   {photoTestPreview && (
-                    <img
-                      src={`data:image/jpeg;base64,${photoTestPreview}`}
-                      alt="test"
-                      style={{
-                        width: '100%',
-                        maxHeight: '200px',
-                        objectFit: 'contain',
-                        borderRadius: '8px',
-                        background: '#000',
-                        marginBottom: '0.5rem',
-                      }}
-                    />
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <ChipDetectionOverlay
+                        photoBase64={photoTestPreview}
+                        photoMimeType={photoTestPreviewMime}
+                        stacks={photoTestResult.stacks}
+                        chipById={new Map(chipValues.map(c => [c.id, c]))}
+                        adjustedStackId={photoTestResult.totalValueCheckResult?.adjustedStackId ?? null}
+                        maxHeight={220}
+                      />
+                    </div>
+                  )}
+
+                  {/* v5.59 — pipeline diagnostics strip. Compact one-
+                      liner showing how the detector found the stacks,
+                      whether WB correction fired, and (test card has
+                      no `expectedTotalValue`, so this branch typically
+                      stays empty here, but kept for symmetry with the
+                      live game flow). */}
+                  {(photoTestResult.detectionSignal || photoTestResult.whiteBalanceApplied !== undefined) && (
+                    <div style={{
+                      marginBottom: '0.55rem',
+                      padding: '0.4rem 0.6rem',
+                      background: 'rgba(99,102,241,0.06)',
+                      border: '1px solid rgba(99,102,241,0.20)',
+                      borderRadius: '8px',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.25rem 0.7rem',
+                    }}>
+                      {photoTestResult.detectionSignal && (
+                        <span>
+                          {t('chips.photo.banner.detectionSignal')}:&nbsp;
+                          <span style={{
+                            color: photoTestResult.detectionSignal === 'position-only' ? '#fca5a5' : 'var(--text)',
+                            fontWeight: 600,
+                          }}>
+                            {t(`chips.photo.banner.detection.${photoTestResult.detectionSignal}` as const)}
+                          </span>
+                        </span>
+                      )}
+                      {photoTestResult.whiteBalanceApplied && (
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>
+                          ✓ {t('chips.photo.banner.wbOn')}
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {/* Per-chip rows. v5.54: each row now has an editable
@@ -3384,7 +3542,29 @@ const SettingsScreen = () => {
                             }}
                             title={t('settings.photoTest.actualHint')}
                           />
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: '2.5rem', textAlign: 'end' }}>
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              color: 'var(--text-muted)',
+                              minWidth: '2.5rem',
+                              textAlign: 'end',
+                              cursor: stack.provenance ? 'help' : 'default',
+                              textDecoration: stack.provenance ? 'underline dotted' : 'none',
+                              textUnderlineOffset: '2px',
+                            }}
+                            title={
+                              stack.provenance
+                                ? [
+                                    `LLM: ${stack.provenance.llmCount ?? '—'}`,
+                                    `bottom-chip: ${stack.provenance.geometryBottomChip ?? '—'}`,
+                                    `gradient: ${stack.provenance.geometryGradientCount ?? '—'}`,
+                                    `shared-cal: ${stack.provenance.geometrySharedCal ?? '—'}`,
+                                    `→ ${stack.provenance.finalCount} (${stack.provenance.finalConfidence}%)`,
+                                    stack.provenance.reasoning,
+                                  ].join(' · ')
+                                : `${stack.confidence}%`
+                            }
+                          >
                             {stack.confidence}%
                           </span>
                         </div>
@@ -3751,8 +3931,13 @@ const SettingsScreen = () => {
                       {formatSigned(stats.avgSignedBias)}
                     </div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                      {stats.avgSignedBias < -0.3 ? t('settings.chipDashboard.biasUnder')
-                        : stats.avgSignedBias > 0.3 ? t('settings.chipDashboard.biasOver')
+                      {/* Sign convention: per-stack `delta = realCount - aiCount`
+                          (see chipCountFeedback.ts), so a POSITIVE avgSignedBias
+                          means real had MORE chips than AI saw → AI undercounted.
+                          The label was inverted before v5.58.1 — kept the same
+                          numeric thresholds, only fixed the over/under direction. */}
+                      {stats.avgSignedBias > 0.3 ? t('settings.chipDashboard.biasUnder')
+                        : stats.avgSignedBias < -0.3 ? t('settings.chipDashboard.biasOver')
                         : t('settings.chipDashboard.biasNone')}
                     </div>
                   </div>
@@ -3812,6 +3997,139 @@ const SettingsScreen = () => {
                       {' '}
                       ({formatSigned(-verdict.deltaAbs)})
                     </span>
+                  </div>
+                )}
+
+                {/* v5.59+ pipeline-aware diagnostics block. Hidden
+                    when no rows from the new pipeline have been
+                    captured yet — keeps the dashboard quiet for
+                    legacy-only data and lights up automatically as
+                    new feedback arrives. */}
+                {stats.pipelineSamples > 0 && (
+                  <div style={{
+                    marginBottom: '0.75rem',
+                    padding: '0.6rem 0.8rem',
+                    background: 'rgba(99,102,241,0.06)',
+                    border: '1px solid rgba(99,102,241,0.25)',
+                    borderRadius: '10px',
+                  }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.45rem' }}>
+                      {t('settings.chipDashboard.pipelineHealthTitle')}
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginInlineStart: '0.4rem', fontSize: '0.7rem' }}>
+                        ({stats.pipelineSamples} {t('settings.chipDashboard.pipelineSamplesSuffix')})
+                      </span>
+                    </div>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '0.4rem 0.6rem',
+                      fontSize: '0.74rem',
+                    }}>
+                      {/* Verified-by-multiple-methods rate. Top-line
+                          KPI — when this stays consistently >70%
+                          we trust the pipeline; <40% means the
+                          methods routinely disagree and tuning
+                          should focus on whichever signal is
+                          carrying the wrong weight. */}
+                      {stats.pctVerifiedByMultipleMethods !== null && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            {t('settings.chipDashboard.verifiedByMultipleMethods')}
+                          </span>
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            color: stats.pctVerifiedByMultipleMethods >= 0.7 ? '#10b981'
+                              : stats.pctVerifiedByMultipleMethods >= 0.4 ? '#eab308'
+                              : '#ef4444',
+                          }}>
+                            {Math.round(stats.pctVerifiedByMultipleMethods * 100)}%
+                          </span>
+                        </div>
+                      )}
+                      {/* Average agreement (LLM vs geometry). 0..1
+                          surfaced as a percentage. */}
+                      {stats.avgAgreementScore !== null && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            {t('settings.chipDashboard.avgAgreement')}
+                          </span>
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            color: stats.avgAgreementScore >= 0.7 ? '#10b981'
+                              : stats.avgAgreementScore >= 0.4 ? '#eab308'
+                              : '#ef4444',
+                          }}>
+                            {Math.round(stats.avgAgreementScore * 100)}%
+                          </span>
+                        </div>
+                      )}
+                      {/* White-balance applied %. Low here while abs
+                          error stays high == white stripes invisible
+                          to the camera (fixable with photo protocol). */}
+                      {stats.pctWhiteBalanceApplied !== null && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            {t('settings.chipDashboard.wbApplied')}
+                          </span>
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            color: stats.pctWhiteBalanceApplied >= 0.7 ? '#10b981'
+                              : stats.pctWhiteBalanceApplied >= 0.4 ? '#eab308'
+                              : '#ef4444',
+                          }}>
+                            {Math.round(stats.pctWhiteBalanceApplied * 100)}%
+                          </span>
+                        </div>
+                      )}
+                      {/* Total-value adjustment counter — shows how
+                          often the live-game safety net actually
+                          had to step in. High = AI counts are
+                          systematically off and the sanity check is
+                          masking it. */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          {t('settings.chipDashboard.totalValueAdjustments')}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
+                          {stats.totalValueAdjustmentsFired}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Detection-signal breakdown (which path the
+                        stack detector took on each photo). Strong
+                        skew toward `position-only` is a red flag —
+                        means the chip stripes weren't visible and
+                        we fell back to evenly-spaced placeholders. */}
+                    {Object.keys(stats.detectionSignalCounts).length > 0 && (
+                      <div style={{
+                        marginTop: '0.55rem',
+                        paddingTop: '0.5rem',
+                        borderTop: '1px solid rgba(99,102,241,0.20)',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.35rem 0.7rem',
+                      }}>
+                        <span style={{ fontWeight: 700 }}>
+                          {t('settings.chipDashboard.detectionSignalLabel')}:
+                        </span>
+                        {(['white-stripe', 'edge-density', 'position-only'] as const).map(sig => {
+                          const n = stats.detectionSignalCounts[sig] || 0;
+                          if (n === 0) return null;
+                          const isFallback = sig === 'position-only';
+                          return (
+                            <span key={sig} style={{ color: isFallback ? '#fca5a5' : 'var(--text)' }}>
+                              {t(`settings.chipDashboard.detectionSignal.${sig}` as const)}: {n}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 

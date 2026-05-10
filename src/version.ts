@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.58.0';
+export const APP_VERSION = '5.59.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.59.0',
+    date: '2026-05-10',
+    changes: [
+      '📷 Chip counting rebuilt: per-stack with multi-method voting',
+      '🎨 New: chip selfies for accurate color matching',
+      '🔍 New: detection overlay shows boxes + per-stack reasoning',
+      '🛟 Total-value sanity check fixes single-chip miscounts',
+      '↻ "Clear AI suggestions" link to abandon photo result',
+      '📊 Dashboard: pipeline-health KPIs (agreement, signal, WB)',
+      '🛡 Fixed inverted under/over bias label on dashboard + tuner',
+      '⚡ Dropped Pro model that was failing on free tier',
+      '🎯 Trivia: "all" mode count now matches group + players math',
+      '✨ Cleaner number inputs (no spinner arrows)',
+    ],
+  },
   {
     version: '5.58.0',
     date: '2026-05-10',

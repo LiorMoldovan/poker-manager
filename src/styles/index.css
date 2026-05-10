@@ -291,6 +291,23 @@ body {
   color: var(--text-muted);
 }
 
+/* Hide browser-default spinner arrows on numeric `.input`s. The arrows
+ * eat ~16-20px of the input's right edge on Chrome/Safari and look
+ * ugly in dark theme; for chip values / settings amounts users type
+ * the digits directly, so the spinners add no value. Mirrors the
+ * existing `.chip-count-input` rule (line ~990) but applied globally
+ * to every `.input[type="number"]`. v5.59 fix — chip-values row was
+ * crowding 4-digit values like "5000" against the spinner area after
+ * the 📷 selfie buttons were added. */
+.input[type="number"] {
+  -moz-appearance: textfield;
+}
+.input[type="number"]::-webkit-outer-spin-button,
+.input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* Page Headers */
 .page-header {
   margin-bottom: 1.5rem;

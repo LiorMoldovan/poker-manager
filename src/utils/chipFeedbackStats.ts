@@ -38,11 +38,46 @@ export interface RawFeedbackStack {
   realCount: number;
   delta: number;
   wasCorrect: boolean;
+  // Legacy v5.48–v5.58 fields.
   aiConfidence?: number;
   aiColorMatch?: boolean;
   aiNeedsRecount?: boolean;
   aiTopColorHex?: string;
   aiRawCounts?: number[];
+  // v5.59+ provenance fields. Optional everywhere — older rows
+  // simply lack them, the dashboard's pipeline-aware metrics
+  // skip those rows automatically.
+  aiAgreementScore?: number;            // 0..1
+  aiNeedsVerify?: boolean;
+  aiGeometricCount?: number | null;
+  aiGeometricMethod?:
+    | 'bottom-chip'
+    | 'gradient-count'
+    | 'shared-cal'
+    | 'failed'
+    | 'empty-stack-detected';
+  aiDetectedDominantHex?: string;
+  aiProvenance?: {
+    llmCount: number | null;
+    geometryBottomChip: number | null;
+    geometryGradientCount: number | null;
+    geometrySharedCal: number | null;
+    finalCount: number;
+    finalConfidence: number;
+    reasoning: string;
+  };
+}
+
+/** v5.59+ per-photo diagnostic block (migration 075). */
+export interface RawFeedbackPipelineMeta {
+  whiteBalanceApplied?: boolean;
+  detectionSignal?: 'white-stripe' | 'edge-density' | 'position-only';
+  totalValueCheckResult?: {
+    expected: number;
+    computed: number;
+    adjustedStackId: string | null;
+    adjustmentChips: number;
+  } | null;
 }
 
 /** A row from `chip_count_feedback` after PostgREST returns it. snake_case
@@ -65,6 +100,9 @@ export interface RawFeedbackRow {
   rebuys: number | null;
   chips_per_rebuy: number | null;
   stacks: RawFeedbackStack[];
+  /** v5.59+ per-photo diagnostics (migration 075).
+   *  Null for legacy rows. */
+  pipeline_meta?: RawFeedbackPipelineMeta | null;
 }
 
 /** Per-color slice of accuracy stats. Sorted descending by `samples`
@@ -73,13 +111,27 @@ export interface RawFeedbackRow {
 export interface PerColorStats {
   color: string;
   samples: number;
-  /** Average signed delta (real - ai). Negative = AI undercounting
-   *  this color, positive = AI overcounting. Closer to 0 = better. */
+  /** Average signed delta (real - ai). POSITIVE = AI undercounting
+   *  this color (real had more chips than AI saw). NEGATIVE = AI
+   *  overcounting (rare). Closer to 0 = better. */
   avgSignedDelta: number;
   /** Average absolute error. Always >= 0. Closer to 0 = better. */
   avgAbsDelta: number;
   /** Fraction of stacks of this color where `wasCorrect`. 0..1. */
   pctCorrect: number;
+  /** v5.59+ — average cross-method agreement score (LLM vs the three
+   *  geometric methods) for this color, ONLY over stacks that have
+   *  the new `aiAgreementScore` field. 0..1; null when the color has
+   *  no v5.59+ samples yet. Higher = more methods agree, which is
+   *  the strongest "we got the right number" signal we have short
+   *  of ground truth. */
+  avgAgreement: number | null;
+  /** v5.59+ — number of stacks of this color whose count was
+   *  produced by the new pipeline (i.e. carries `aiAgreementScore`).
+   *  Lets the dashboard distinguish "low agreement because all our
+   *  data is from the old pipeline" from "low agreement because the
+   *  new pipeline is genuinely struggling on this color". */
+  pipelineSamples: number;
 }
 
 /** One point on the trend line. `idx` is the zero-based index in
@@ -99,8 +151,10 @@ export interface FeedbackStats {
   totalSamples: number;
   totalStacksAll: number;
   pctPerfectStacks: number; // 0-100
-  /** Average chips off per session, signed. Negative = systematic
-   *  undercount, positive = systematic overcount, ~0 = unbiased. */
+  /** Average chips off per session, signed. POSITIVE = systematic
+   *  undercount (real had more chips than AI saw, the most common
+   *  vision-LLM failure). NEGATIVE = systematic overcount (rare).
+   *  ~0 = unbiased. */
   avgSignedBias: number;
   /** Average absolute chips off per session. Sole "how good is it"
    *  number — closer to 0 = better. */
@@ -121,6 +175,33 @@ export interface FeedbackStats {
    *  (or all rows if no tuning has happened yet). The "tune now"
    *  button unlocks when this hits TUNE_THRESHOLD_SAMPLES. */
   rowsSinceLastTuning: number;
+  // ── v5.59+ pipeline-aware aggregates ──
+  /** Number of rows that came from the new (per-stack + multi-method)
+   *  pipeline — i.e. have `pipeline_meta` populated. Older rows do
+   *  not contribute to any of the pipeline-aware fields below. */
+  pipelineSamples: number;
+  /** Top-line "verified by 2+ methods" rate: fraction of pipeline
+   *  stacks (across ALL pipeline rows) where `aiAgreementScore >=
+   *  0.5` AND the LLM count agreed with at least one geometry
+   *  method. 0..1. Null when no pipeline rows yet. */
+  pctVerifiedByMultipleMethods: number | null;
+  /** Average cross-method agreement across all pipeline stacks. 0..1.
+   *  Null when no pipeline rows yet. */
+  avgAgreementScore: number | null;
+  /** Distribution of which detection signal carried the photo. Keys
+   *  are the `detectionSignal` enum values; values are row counts.
+   *  Empty when no pipeline rows. The dashboard uses this to spot
+   *  groups whose photos systematically fall back to `position-only`
+   *  (= unusable backgrounds, fixable with photo-protocol guidance). */
+  detectionSignalCounts: Partial<Record<'white-stripe' | 'edge-density' | 'position-only', number>>;
+  /** Fraction of pipeline rows where white balance was actually
+   *  applied (we had ≥50 white-stripe pixel samples). Null when no
+   *  pipeline rows. Low here while abs error stays high suggests
+   *  the chip side stripes aren't visible to the camera. */
+  pctWhiteBalanceApplied: number | null;
+  /** Number of pipeline rows whose total-value sanity check fired
+   *  (live-game flow only, with `expectedTotalValue`). */
+  totalValueAdjustmentsFired: number;
 }
 
 /** Pure aggregator. Always returns a fully-populated FeedbackStats —
@@ -144,6 +225,12 @@ export function aggregateFeedback(
       recentAvgAbsDelta: null,
       earlierAvgAbsDelta: null,
       rowsSinceLastTuning: 0,
+      pipelineSamples: 0,
+      pctVerifiedByMultipleMethods: null,
+      avgAgreementScore: null,
+      detectionSignalCounts: {},
+      pctWhiteBalanceApplied: null,
+      totalValueAdjustmentsFired: 0,
     };
   }
 
@@ -157,13 +244,33 @@ export function aggregateFeedback(
   let sumAbsError = 0;
   let sumConfidence = 0;
 
-  // Per-color accumulator: color -> { count, sumSigned, sumAbs, correctCount }
+  // Per-color accumulator: color -> { count, sumSigned, sumAbs, correct,
+  // pipelineCount, sumAgreement }
   const colorBuckets = new Map<
     string,
-    { count: number; sumSigned: number; sumAbs: number; correct: number }
+    {
+      count: number;
+      sumSigned: number;
+      sumAbs: number;
+      correct: number;
+      pipelineCount: number;     // stacks of this color from v5.59+ pipeline
+      sumAgreement: number;      // sum of agreement scores over pipelineCount
+    }
   >();
 
   const trend: TrendPoint[] = [];
+
+  // ── v5.59+ pipeline-aware accumulators (per-photo + per-stack). ──
+  let pipelineRowsTotal = 0;
+  let pipelineStacksTotal = 0;
+  let pipelineStacksVerified = 0;
+  let pipelineAgreementSum = 0;
+  let whiteBalanceAppliedCount = 0;
+  let totalValueAdjustmentsFired = 0;
+  const detectionSignalCounts: Partial<Record<
+    'white-stripe' | 'edge-density' | 'position-only',
+    number
+  >> = {};
 
   for (let i = 0; i < sorted.length; i++) {
     const row = sorted[i];
@@ -179,6 +286,21 @@ export function aggregateFeedback(
       absDelta: row.total_abs_delta,
     });
 
+    // pipeline_meta presence marks this row as v5.59+. Older rows
+    // contribute to the legacy KPIs above but skip every block below.
+    const meta = row.pipeline_meta;
+    if (meta) {
+      pipelineRowsTotal += 1;
+      if (meta.whiteBalanceApplied === true) whiteBalanceAppliedCount += 1;
+      if (meta.detectionSignal) {
+        detectionSignalCounts[meta.detectionSignal] =
+          (detectionSignalCounts[meta.detectionSignal] || 0) + 1;
+      }
+      if (meta.totalValueCheckResult && meta.totalValueCheckResult.adjustedStackId) {
+        totalValueAdjustmentsFired += 1;
+      }
+    }
+
     for (const stack of row.stacks ?? []) {
       const key = (stack.color || 'unknown').toLowerCase();
       const bucket = colorBuckets.get(key) ?? {
@@ -186,11 +308,37 @@ export function aggregateFeedback(
         sumSigned: 0,
         sumAbs: 0,
         correct: 0,
+        pipelineCount: 0,
+        sumAgreement: 0,
       };
       bucket.count += 1;
       bucket.sumSigned += stack.delta;
       bucket.sumAbs += Math.abs(stack.delta);
       if (stack.wasCorrect) bucket.correct += 1;
+
+      // v5.59+ per-stack rollups. We treat the presence of a numeric
+      // agreement score as the marker of "this stack came from the
+      // new pipeline" (any old row is missing it entirely).
+      if (typeof stack.aiAgreementScore === 'number') {
+        bucket.pipelineCount += 1;
+        bucket.sumAgreement += stack.aiAgreementScore;
+        pipelineStacksTotal += 1;
+        pipelineAgreementSum += stack.aiAgreementScore;
+        // "Verified by multiple methods" definition: agreement ≥ 0.5
+        // AND the LLM count agreed with at least one geometry method.
+        // Provenance gives us the per-method counts; if it's missing
+        // we fall back to agreement-only.
+        const prov = stack.aiProvenance;
+        const llm = prov?.llmCount;
+        const geomMatchesLlm = prov && llm !== null && (
+          prov.geometryBottomChip === llm ||
+          prov.geometryGradientCount === llm ||
+          prov.geometrySharedCal === llm
+        );
+        if (stack.aiAgreementScore >= 0.5 && (geomMatchesLlm || !prov)) {
+          pipelineStacksVerified += 1;
+        }
+      }
       colorBuckets.set(key, bucket);
     }
   }
@@ -209,6 +357,10 @@ export function aggregateFeedback(
       avgSignedDelta: bucket.sumSigned / bucket.count,
       avgAbsDelta: bucket.sumAbs / bucket.count,
       pctCorrect: bucket.correct / bucket.count,
+      avgAgreement: bucket.pipelineCount > 0
+        ? bucket.sumAgreement / bucket.pipelineCount
+        : null,
+      pipelineSamples: bucket.pipelineCount,
     });
   }
   perColor.sort((a, b) => b.samples - a.samples);
@@ -253,6 +405,18 @@ export function aggregateFeedback(
     recentAvgAbsDelta,
     earlierAvgAbsDelta,
     rowsSinceLastTuning,
+    pipelineSamples: pipelineRowsTotal,
+    pctVerifiedByMultipleMethods: pipelineStacksTotal > 0
+      ? pipelineStacksVerified / pipelineStacksTotal
+      : null,
+    avgAgreementScore: pipelineStacksTotal > 0
+      ? pipelineAgreementSum / pipelineStacksTotal
+      : null,
+    detectionSignalCounts,
+    pctWhiteBalanceApplied: pipelineRowsTotal > 0
+      ? whiteBalanceAppliedCount / pipelineRowsTotal
+      : null,
+    totalValueAdjustmentsFired,
   };
 }
 

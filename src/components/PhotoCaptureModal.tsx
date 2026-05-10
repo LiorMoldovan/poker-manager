@@ -11,13 +11,14 @@ import { useTranslation, type TranslationKey } from '../i18n';
 // code without adding the matching key here is a compile error, which
 // is what we want.
 const ERROR_CODE_TO_TRANSLATION: Record<PhotoChipCountErrorCode, TranslationKey> = {
-  missingImage:    'chips.photo.error.code.missingImage',
-  noChipsConfig:   'chips.photo.error.code.noChipsConfig',
-  network:         'chips.photo.error.code.network',
-  httpError:       'chips.photo.error.code.httpError',
-  parseFailed:     'chips.photo.error.code.parseFailed',
-  unexpectedShape: 'chips.photo.error.code.unexpectedShape',
-  cancelled:       'chips.photo.error.code.cancelled',
+  missingImage:         'chips.photo.error.code.missingImage',
+  noChipsConfig:        'chips.photo.error.code.noChipsConfig',
+  network:              'chips.photo.error.code.network',
+  httpError:            'chips.photo.error.code.httpError',
+  parseFailed:          'chips.photo.error.code.parseFailed',
+  unexpectedShape:      'chips.photo.error.code.unexpectedShape',
+  cancelled:            'chips.photo.error.code.cancelled',
+  stackDetectionFailed: 'chips.photo.error.code.stackDetectionFailed',
 };
 
 /**
@@ -182,17 +183,32 @@ const PhotoCaptureModal = ({
         chipValues,
         expectedTotalValue,
         abortSignal: controller.signal,
-        // Live status updates as the function tries each model in the
-        // fallback chain. As of v5.48 each model attempt fires TWO
-        // parallel shots for consensus, so the wait per model is
-        // ~3-5s with Pro / ~1-2s with Flash. We surface this to the
-        // user so a 5-second spinner doesn't feel like a hang.
-        onProgress: ({ phase, modelDisplay, attempt }) => {
-          if (phase === 'attempting') {
+        // Live status updates throughout the per-stack pipeline (v5.59
+        // rebuild). The orchestrator emits four primary phases —
+        // `detecting-stacks`, `calibrating`, `counting-stacks` (with
+        // a stackIndex/stackTotal so we can render "3/6"), and
+        // `reconciling-totals` (only fires when expectedTotalValue is
+        // set). The legacy `attempting` phase is still typed for
+        // backward-compat with any pre-rebuild caller; new pipeline
+        // doesn't emit it.
+        onProgress: ({ phase, modelDisplay, attempt, stackIndex, stackTotal }) => {
+          if (phase === 'detecting-stacks') {
+            setStatusMsg(t('chips.photo.status.detectingStacks'));
+          } else if (phase === 'calibrating') {
+            setStatusMsg(t('chips.photo.status.calibrating'));
+          } else if (phase === 'counting-stacks') {
+            const total = stackTotal ?? 0;
+            const idx = stackIndex ?? 0;
+            const tail = modelDisplay ? ` · ${modelDisplay}` : '';
+            setStatusMsg(`${t('chips.photo.status.countingStacks')} ${idx}/${total}${tail}`);
+          } else if (phase === 'reconciling-totals') {
+            setStatusMsg(t('chips.photo.status.reconciling'));
+          } else if (phase === 'attempting') {
+            // Legacy path — kept so older orchestrators don't go silent.
             const key: TranslationKey = attempt === 0
               ? 'chips.photo.status.askingModel'
               : 'chips.photo.status.tryingFallback';
-            setStatusMsg(`${t(key)} (${modelDisplay}) · ${t('chips.photo.status.dualShot')}`);
+            setStatusMsg(`${t(key)} (${modelDisplay})`);
           }
         },
       });

@@ -106,11 +106,24 @@ function buildStacks(
       delta: realCount - aiCount,
       wasCorrect: realCount === aiCount,
     };
+    // ── Legacy v5.48–v5.58 fields (only populated when the older
+    //    pipeline ran; new pipeline leaves them undefined). ──
     if (typeof stack.confidence === 'number') stackOut.aiConfidence = stack.confidence;
     if (typeof stack.colorMatch === 'boolean') stackOut.aiColorMatch = stack.colorMatch;
     if (typeof stack.needsRecount === 'boolean') stackOut.aiNeedsRecount = stack.needsRecount;
     if (typeof stack.topColorHex === 'string') stackOut.aiTopColorHex = stack.topColorHex;
     if (Array.isArray(stack.rawCounts)) stackOut.aiRawCounts = stack.rawCounts;
+    // ── v5.59+ per-stack provenance fields ──
+    //    The new pipeline always populates `confidence`, but copy the
+    //    rest only when present so we don't write `undefined`s into
+    //    JSONB. The dashboard tolerates missing fields gracefully.
+    if (typeof stack.agreementScore === 'number') stackOut.aiAgreementScore = stack.agreementScore;
+    if (typeof stack.needsVerify === 'boolean') stackOut.aiNeedsVerify = stack.needsVerify;
+    if (stack.geometricCount !== undefined) stackOut.aiGeometricCount = stack.geometricCount;
+    if (stack.geometricMethod !== undefined) stackOut.aiGeometricMethod = stack.geometricMethod;
+    if (typeof stack.detectedDominantHex === 'string') stackOut.aiDetectedDominantHex = stack.detectedDominantHex;
+    if (stack.region) stackOut.aiRegion = stack.region;
+    if (stack.provenance) stackOut.aiProvenance = stack.provenance;
     return stackOut;
   });
 }
@@ -191,6 +204,28 @@ export async function submitChipCountFeedback(
     }
   }
 
+  // ── v5.59+ per-photo pipeline diagnostics ──
+  // Captured into a single JSONB column (`pipeline_meta`, migration 075)
+  // so future pipeline iterations can add signals without DDL. We
+  // only emit fields the photo result actually carries; null when
+  // the result is from the legacy pipeline (pre-rebuild).
+  const pipelineMeta: Record<string, unknown> | null =
+    (input.photoResult.whiteBalanceApplied !== undefined ||
+     input.photoResult.detectionSignal !== undefined ||
+     input.photoResult.totalValueCheckResult !== undefined)
+      ? {
+          ...(input.photoResult.whiteBalanceApplied !== undefined
+            ? { whiteBalanceApplied: input.photoResult.whiteBalanceApplied }
+            : {}),
+          ...(input.photoResult.detectionSignal !== undefined
+            ? { detectionSignal: input.photoResult.detectionSignal }
+            : {}),
+          ...(input.photoResult.totalValueCheckResult !== undefined
+            ? { totalValueCheckResult: input.photoResult.totalValueCheckResult }
+            : {}),
+        }
+      : null;
+
   const row: Record<string, unknown> = {
     id: feedbackId,
     group_id: groupId,
@@ -211,6 +246,7 @@ export async function submitChipCountFeedback(
     total_abs_delta: totalAbsDelta,
     photo_path: photoPath,
     photo_consented: photoConsented,
+    pipeline_meta: pipelineMeta,
   };
 
   const { error: insertErr } = await supabase

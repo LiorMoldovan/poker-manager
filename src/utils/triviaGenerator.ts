@@ -2030,13 +2030,28 @@ export function getTemplateIds(mode?: TriviaMode): string[] {
 
 // Count how many distinct templates a mode draws from. Used by
 // the landing screen to show the pool size next to each mode chip.
-// Reflects the post-2026-05-10 mode semantics:
-//   'group'   → group templates + player templates (broad pool)
-//   'players' → player templates only (self-mode)
-//   'mixed'   → same as 'group' (the broadest superset; mixed flips
-//                scope per question but the TEMPLATE pool is the
-//                broad one). Showing the broad count is honest:
-//                "this many distinct questions can be asked".
+//
+// IMPORTANT — display vs runtime: the runtime in
+// `generateTriviaBatch` is asymmetric. `mixed` and `group` BOTH
+// pull from the broad pool (group + player templates) — they only
+// differ in scope behavior (mixed flips 50/50 per question; group
+// always uses random scope so player templates render as "about
+// any player"). If we show the runtime pool size, both chips
+// display 205 and users (correctly) ask "if הכל == קבוצתי, what's
+// the difference?" — see v5.58.1 / 2026-05-10 ask.
+//
+// Resolution (Option A): show each chip only its conceptually
+// "native" templates so the math adds up:
+//   'group'   → group templates only (player-agnostic facts)
+//   'players' → player templates only (about a specific person)
+//   'mixed'   → group + players (everything)
+//
+// The trade-off: in `group` mode the engine still rolls player
+// templates with random scope at runtime, so the user CAN see
+// "which player did X?" questions. The displayed count understates
+// that. Acceptable because the help text ("group=broad") still
+// communicates the breadth, and the mental model "all = group +
+// about-me" is what users actually expect from the chip math.
 export function countTemplates(
   mode: TriviaMode,
   categories?: TriviaCategory[],
@@ -2044,6 +2059,7 @@ export function countTemplates(
   const catFilter = categories && categories.length > 0 ? new Set(categories) : null;
   return ALL_TEMPLATES.filter(tpl => {
     if (catFilter && !catFilter.has(tpl.category)) return false;
+    if (mode === 'group')   return tpl.mode === 'group';
     if (mode === 'players') return tpl.mode === 'players';
     return tpl.mode === 'group' || tpl.mode === 'players';
   }).length;

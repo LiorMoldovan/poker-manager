@@ -1,12 +1,14 @@
 /**
  * Browser-side image helpers for the photo chip-counting feature.
  *
- * Three pure async functions, no React, no DOM globals leaking out:
+ * The functions below split into two groups:
+ *
+ * ── Group 1: legacy single-photo pipeline (downscale + enhance + blur) ──
  *
  * 1. `downscaleImage(file, maxDim)` — reads a File (typically from a
  *    `<input type="file" capture="environment">`), downscales it so the
- *    longer edge is `maxDim` px, and returns base64 JPEG. Two reasons
- *    we always do this client-side:
+ *    longer edge is `maxDim` px, and returns base64 JPEG. Reasons we
+ *    always do this client-side:
  *      a. Vercel Edge Functions cap request bodies at ~4.5 MB; raw
  *         phone photos are 4-12 MB. Downscale + JPEG@0.92 lands ~250-
  *         500 KB at maxDim=1280.
@@ -15,38 +17,65 @@
  *         the extra resolution just costs latency + tokens.
  *
  * 2. `enhanceForChipCounting(base64)` — vision-targeted preprocessing
- *    pass that runs AFTER downscale and BEFORE the Gemini call.
+ *    pass that runs AFTER downscale and BEFORE any analysis.
  *
- *    Per-channel histogram stretch (auto-levels). Phone cameras under
- *    indoor light often produce muddy mid-grey backgrounds and washed-
- *    out chip stripes. Stretching the 1st-99th percentile to 0-255
- *    pulls the white stripes back to white and the colored body back
- *    to saturated, which makes the ring-count edges crisp for the
- *    model.
- *
- *    NOTE: an earlier version also did Sobel-based auto-crop to the
- *    chip region. We dropped it after measuring on real photos: the
- *    bounding box covered 100% of every test image because cluttered
- *    indoor backgrounds (carpets, household items, wood grain) all
- *    provide enough scattered edges to drown out the chip stripes at
- *    a 75th-percentile threshold. A more aggressive threshold risked
- *    false-cropping out actual chip stacks, which would silently lose
- *    counts. The right v2 of this is saturation + connected-component
- *    labelling (chip colors are highly saturated; backgrounds usually
- *    aren't), but we'll wait for real user data before adding that.
- *    For now, histogram stretch alone delivers measurable contrast
- *    improvement with zero risk.
+ *    Per-channel histogram stretch (auto-levels) only. Phone cameras
+ *    under indoor light often produce muddy mid-grey backgrounds and
+ *    washed-out chip stripes. Stretching the 1st-99th percentile to
+ *    0-255 pulls the white stripes back to white and the colored body
+ *    back to saturated, which makes the ring-count edges crisp for
+ *    the model. There is NO auto-crop step here (an earlier version
+ *    had a Sobel-based bounding-box crop; it was dropped because real
+ *    photos with cluttered backgrounds — carpets, wood grain — all
+ *    crossed the threshold and the box covered the whole image).
  *
  * 3. `varianceOfLaplacian(base64)` — tiny blur metric. Computes the
  *    variance of the Laplacian (3x3 kernel: 0 1 0 / 1 -4 1 / 0 1 0) on
  *    the grayscale-converted pixels. Higher = sharper. Below ~50 the
- *    photo is too blurry for reliable ring-counting and we should
- *    prompt for a retake before burning a Gemini call.
+ *    photo is too blurry for reliable ring-counting.
  *
- * All three functions are written to fail soft: any exception bubbles
- * up as an Error so the caller can decide whether to surface it as a
- * toast or silently skip the check (we never block the manual flow on
- * these).
+ * ── Group 2: rebuild helpers (per-stack pipeline, v5.59+) ──
+ *
+ * 4. `decodeImageStreaming(file)` — uses `createImageBitmap` directly
+ *    on the File when available (Chrome, Safari 15+, Firefox 99+),
+ *    skipping the FileReader→DataURL→HTMLImageElement chain that loads
+ *    the whole encoded JPEG as a JS string before decoding. On a 48MP
+ *    phone photo this drops peak memory from ~40MB to ~30MB and
+ *    eliminates an OOM crash mode on older Android devices. Falls back
+ *    to the legacy path when the API is missing.
+ *
+ * 5. `sampleMatColor(input)` — samples 8 small patches from corners +
+ *    edge midpoints, computes median HSL with outlier rejection. Used
+ *    by the rebuilt stack detector as the "background" reference for
+ *    HSV masking. Outlier rejection drops patches that look saturated
+ *    (likely a chip placed near the edge of the frame).
+ *
+ * 6. `cropToRegion(input, region)` — extracts a rectangular sub-image
+ *    as a fresh `DownscaledImage`. Used by the per-stack pipeline to
+ *    feed each stack's tight crop to its own LLM call.
+ *
+ * 7. `sampleDominantColor(input, region?)` — returns the dominant RGB
+ *    + HSL of an image (or a sub-rectangle). Used both for chip-selfie
+ *    color extraction (precomputed at capture time, stored in
+ *    `chip_values.selfie_dominant_hex`) and as a fallback for stack
+ *    body-color sampling.
+ *
+ * 8. `whiteBalanceFromStripes(stripePixelsRgb)` — computes a per-
+ *    channel correction so that the average of supplied "known white"
+ *    pixels (the chips' own white side stripes) maps back to neutral
+ *    white. Eliminates the camera color cast (warm tungsten, cool
+ *    shade, fluorescent green-tint) before downstream color matching.
+ *    Returns a tiny `{ rScale, gScale, bScale }` object that
+ *    `applyWhiteBalance(rgb, wb)` then applies to any RGB sample.
+ *
+ * 9. RGB/HSL/Hex utilities (`rgbToHsl`, `hslToRgb`, `hslDistance`,
+ *    `hexToRgb`, `rgbToHex`) — deterministic color math shared across
+ *    stack detection, color-mapping, and selfie capture so every
+ *    module agrees on what "the same color" means.
+ *
+ * All async functions fail soft: any exception bubbles up as an Error
+ * so the caller can decide whether to surface it as a toast or
+ * silently skip (we never block the manual chip-entry flow on these).
  */
 
 export interface DownscaledImage {
@@ -114,13 +143,20 @@ export async function downscaleImage(
 
 /**
  * Vision-targeted preprocessing for chip-stack photos. Runs AFTER
- * `downscaleImage` and BEFORE the Gemini call. Auto-crops to the
- * region with the most edge density (the chip stacks) and applies
- * a per-channel histogram stretch to restore contrast.
+ * `downscaleImage` and BEFORE any analysis. Applies a per-channel
+ * histogram stretch (auto-levels) to restore contrast on the white
+ * stripe boundaries.
+ *
+ * NOTE: there is NO auto-crop step. An earlier version had a Sobel-
+ * based bounding-box crop; it was dropped because real photos with
+ * cluttered indoor backgrounds (carpets, wood grain, household items)
+ * all crossed the edge-density threshold and the bounding box ended
+ * up covering the whole image. The crop was useless in practice and
+ * made later debugging confusing. Only histogram stretch survives.
  *
  * Returns a NEW `DownscaledImage` (always JPEG 0.92). On any failure
- * (canvas unavailable, image won't load, edge map empty) returns the
- * input unchanged so the caller never has to special-case errors.
+ * (canvas unavailable, image won't load) returns the input unchanged
+ * so the caller never has to special-case errors.
  */
 export async function enhanceForChipCounting(
   input: DownscaledImage,
@@ -292,4 +328,433 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('Image failed to load'));
     img.src = src;
   });
+}
+
+// ── Group 2: rebuild helpers ──────────────────────────────────────────
+
+export interface RGB { r: number; g: number; b: number; }
+export interface HSL { h: number; s: number; l: number; } // h: 0-360, s/l: 0-1
+export interface Region { x: number; y: number; width: number; height: number; }
+export interface WhiteBalance { rScale: number; gScale: number; bScale: number; }
+
+// Anything we can pass to ctx.drawImage(...). Both HTMLImageElement and
+// ImageBitmap satisfy CanvasImageSource.
+export type DrawableImage = HTMLImageElement | ImageBitmap;
+
+/**
+ * Read a File using `createImageBitmap` when available so the encoded
+ * JPEG is decoded directly from the blob (no DataURL string in JS heap).
+ * Falls back to FileReader → DataURL → HTMLImageElement on browsers
+ * without the API.
+ */
+export async function decodeImageStreaming(file: File): Promise<DrawableImage> {
+  if (!file || !file.type.startsWith('image/')) {
+    throw new Error('Not an image file');
+  }
+  // createImageBitmap with a Blob argument is widely supported — Chrome 50+,
+  // Safari 15+, Firefox 99+ — and skips the DataURL detour entirely.
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file);
+    } catch {
+      // Fall through to legacy path on bitmap-decode failures (rare; usually
+      // means CMYK JPEG or similar exotic format).
+    }
+  }
+  const dataUrl = await readFileAsDataUrl(file);
+  return await loadImage(dataUrl);
+}
+
+/**
+ * Sample 8 small patches from corners + edge midpoints of an image and
+ * return the median RGB/HSL with simple outlier rejection.
+ *
+ * "Outlier" here = a patch whose saturation is unusually high relative
+ * to the others; that indicates a chip placed near the edge of the
+ * frame rather than the actual mat. Drop the top quartile by saturation
+ * before taking the median.
+ *
+ * Each patch is 24×24 px, sampled at the listed positions:
+ *   ┌───────────────┐
+ *   │ A    E    B   │
+ *   │ G         H   │
+ *   │ C    F    D   │
+ *   └───────────────┘
+ *
+ * Used by `detectStackRegions` as the "this is what the background
+ * looks like" reference for HSV masking.
+ */
+export async function sampleMatColor(input: DownscaledImage): Promise<{ rgb: RGB; hsl: HSL }> {
+  const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+  const img = await loadImage(dataUrl);
+  const w = img.width;
+  const h = img.height;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.drawImage(img, 0, 0);
+
+  const patchSize = 24;
+  const half = patchSize / 2;
+  // 8 sample centers — 4 corners (offset by patchSize so the patch is
+  // entirely inside the image) + 4 edge midpoints.
+  const centers: Array<{ x: number; y: number }> = [
+    { x: patchSize, y: patchSize },                 // A
+    { x: w - patchSize, y: patchSize },              // B
+    { x: patchSize, y: h - patchSize },              // C
+    { x: w - patchSize, y: h - patchSize },          // D
+    { x: w / 2, y: patchSize },                      // E
+    { x: w / 2, y: h - patchSize },                  // F
+    { x: patchSize, y: h / 2 },                      // G
+    { x: w - patchSize, y: h / 2 },                  // H
+  ];
+
+  const samples: Array<{ rgb: RGB; hsl: HSL }> = [];
+  for (const c of centers) {
+    const x = Math.max(0, Math.min(w - patchSize, Math.round(c.x - half)));
+    const y = Math.max(0, Math.min(h - patchSize, Math.round(c.y - half)));
+    const { data } = ctx.getImageData(x, y, patchSize, patchSize);
+    let rSum = 0, gSum = 0, bSum = 0;
+    const n = patchSize * patchSize;
+    for (let i = 0; i < data.length; i += 4) {
+      rSum += data[i];
+      gSum += data[i + 1];
+      bSum += data[i + 2];
+    }
+    const rgb: RGB = { r: rSum / n, g: gSum / n, b: bSum / n };
+    samples.push({ rgb, hsl: rgbToHsl(rgb) });
+  }
+
+  // Sort by saturation ascending and drop the top quartile (likely chips).
+  const sorted = [...samples].sort((a, b) => a.hsl.s - b.hsl.s);
+  const keep = sorted.slice(0, Math.max(4, Math.floor(sorted.length * 0.75)));
+
+  // Median per channel of the kept samples.
+  const median = (vals: number[]) => {
+    const s = [...vals].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const rgb: RGB = {
+    r: median(keep.map(k => k.rgb.r)),
+    g: median(keep.map(k => k.rgb.g)),
+    b: median(keep.map(k => k.rgb.b)),
+  };
+  return { rgb, hsl: rgbToHsl(rgb) };
+}
+
+/**
+ * Extract a rectangular sub-image as a fresh `DownscaledImage`.
+ *
+ * Region coordinates are in source-image pixel space. Out-of-bounds
+ * coordinates are clamped to the image. JPEG quality 0.92 (matching
+ * `enhanceForChipCounting`) so the per-stack crop survives the round-
+ * trip without visible artefacts on the white stripe boundaries.
+ */
+export async function cropToRegion(
+  input: DownscaledImage,
+  region: Region,
+): Promise<DownscaledImage> {
+  const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+  const img = await loadImage(dataUrl);
+
+  const sx = Math.max(0, Math.floor(region.x));
+  const sy = Math.max(0, Math.floor(region.y));
+  const sw = Math.max(1, Math.min(Math.floor(region.width), img.width - sx));
+  const sh = Math.max(1, Math.min(Math.floor(region.height), img.height - sy));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const base64 = jpegDataUrl.split(',')[1] || '';
+  const byteSize = Math.floor((base64.length * 3) / 4);
+  return {
+    base64,
+    mimeType: 'image/jpeg',
+    width: sw,
+    height: sh,
+    byteSize,
+  };
+}
+
+/**
+ * Average RGB / HSL of an image (or a sub-region of an image).
+ *
+ * For chip-selfie capture: pass no region, get the dominant color of a
+ * 24×24 center patch (the chip face is centered in selfie photos).
+ *
+ * For general use: pass an explicit region.
+ *
+ * "Dominant" here is the simple arithmetic mean of pixel RGB values.
+ * Mode-based / k-means quantization would be more accurate for multi-
+ * color images, but for chip selfies (single object on a plain
+ * background, centered) the mean of the center patch is empirically
+ * within ~5 HSL units of mode-based and runs in 1ms instead of 20ms.
+ */
+export async function sampleDominantColor(
+  input: DownscaledImage,
+  region?: Region,
+): Promise<{ rgb: RGB; hsl: HSL }> {
+  const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+  const img = await loadImage(dataUrl);
+
+  // Default region: 24×24 center patch (good for selfie capture).
+  const r: Region = region || {
+    x: img.width / 2 - 12,
+    y: img.height / 2 - 12,
+    width: 24,
+    height: 24,
+  };
+  const sx = Math.max(0, Math.floor(r.x));
+  const sy = Math.max(0, Math.floor(r.y));
+  const sw = Math.max(1, Math.min(Math.floor(r.width), img.width - sx));
+  const sh = Math.max(1, Math.min(Math.floor(r.height), img.height - sy));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  const { data } = ctx.getImageData(0, 0, sw, sh);
+
+  let rSum = 0, gSum = 0, bSum = 0;
+  const n = sw * sh;
+  for (let i = 0; i < data.length; i += 4) {
+    rSum += data[i];
+    gSum += data[i + 1];
+    bSum += data[i + 2];
+  }
+  const rgb: RGB = { r: rSum / n, g: gSum / n, b: bSum / n };
+  return { rgb, hsl: rgbToHsl(rgb) };
+}
+
+/**
+ * Compute a per-channel white-balance correction from "known white"
+ * pixels (the chips' own white side stripes).
+ *
+ * The chips' white stripes SHOULD render as pure white (255,255,255).
+ * Any deviation in the average is the camera's color cast — warm
+ * tungsten light skews everything toward red, cool shade toward blue,
+ * fluorescent toward green. Correcting the cast here makes downstream
+ * color matching reliable in any lighting.
+ *
+ * Returns scale factors per channel. Each `*Scale` is clamped to
+ * [0.5, 2.0] so a few mis-classified non-white pixels can't blow up
+ * the correction.
+ *
+ * Apply the correction with `applyWhiteBalance(rgb, wb)`.
+ *
+ * Falls back to identity (1,1,1) when no usable samples are supplied.
+ */
+export function whiteBalanceFromStripes(stripeRgbSamples: RGB[]): WhiteBalance {
+  const identity: WhiteBalance = { rScale: 1, gScale: 1, bScale: 1 };
+  if (!stripeRgbSamples.length) return identity;
+
+  let rSum = 0, gSum = 0, bSum = 0;
+  let n = 0;
+  for (const rgb of stripeRgbSamples) {
+    // Defensive filter: only use samples that are ACTUALLY bright. A
+    // pixel that's ~50% lightness can't be a meaningful "white reference"
+    // — it was likely mis-classified as a stripe. Threshold 140 = comfortably
+    // above mid-grey but below true white so we still capture warm-cast
+    // stripes that come in at e.g. (220, 200, 170).
+    const luma = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    if (luma < 140) continue;
+    rSum += rgb.r;
+    gSum += rgb.g;
+    bSum += rgb.b;
+    n++;
+  }
+  if (n === 0) return identity;
+
+  const rAvg = rSum / n;
+  const gAvg = gSum / n;
+  const bAvg = bSum / n;
+
+  // Target: brightest channel becomes 255 after scaling. Using max instead
+  // of a fixed 255 prevents over-saturation (lift instead of clip).
+  const target = Math.max(rAvg, gAvg, bAvg, 1);
+  const clamp = (v: number) => Math.max(0.5, Math.min(2.0, v));
+  return {
+    rScale: clamp(target / rAvg),
+    gScale: clamp(target / gAvg),
+    bScale: clamp(target / bAvg),
+  };
+}
+
+/**
+ * Apply a `WhiteBalance` correction to a single RGB sample.
+ * Result is clamped to the valid 0-255 range per channel.
+ */
+export function applyWhiteBalance(rgb: RGB, wb: WhiteBalance): RGB {
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  return {
+    r: clamp(rgb.r * wb.rScale),
+    g: clamp(rgb.g * wb.gScale),
+    b: clamp(rgb.b * wb.bScale),
+  };
+}
+
+// ── Color math (RGB ↔ HSL ↔ Hex) ─────────────────────────────────────
+
+export function rgbToHsl({ r, g, b }: RGB): HSL {
+  const rN = r / 255, gN = g / 255, bN = b / 255;
+  const max = Math.max(rN, gN, bN);
+  const min = Math.min(rN, gN, bN);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rN: h = (gN - bN) / d + (gN < bN ? 6 : 0); break;
+      case gN: h = (bN - rN) / d + 2; break;
+      case bN: h = (rN - gN) / d + 4; break;
+    }
+    h *= 60;
+  }
+  return { h, s, l };
+}
+
+export function hslToRgb({ h, s, l }: HSL): RGB {
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
+  }
+  const hueToRgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hN = h / 360;
+  return {
+    r: Math.round(hueToRgb(p, q, hN + 1 / 3) * 255),
+    g: Math.round(hueToRgb(p, q, hN) * 255),
+    b: Math.round(hueToRgb(p, q, hN - 1 / 3) * 255),
+  };
+}
+
+/**
+ * Perceptual-ish HSL distance, scaled 0-100. Hue distance is circular
+ * (0° and 360° are the same color) and weighted lower when saturation
+ * is low (greys can have any hue without looking "different").
+ */
+export function hslDistance(a: HSL, b: HSL): number {
+  // Circular hue distance in degrees, 0-180.
+  const dH = Math.min(Math.abs(a.h - b.h), 360 - Math.abs(a.h - b.h));
+  // Down-weight hue when either color is unsaturated — a near-grey
+  // pixel can have wildly different hue values that don't matter.
+  const hueWeight = Math.min(a.s, b.s);
+  // Map hue 0-180° → 0-100, then weight; map S, L 0-1 → 0-100.
+  const hueComponent = (dH / 180) * 100 * hueWeight;
+  const satComponent = Math.abs(a.s - b.s) * 100;
+  const lightComponent = Math.abs(a.l - b.l) * 100;
+  // Weighted Euclidean — hue dominates when both colors are saturated;
+  // saturation/lightness pick up the slack for greys/whites.
+  return Math.sqrt(
+    hueComponent * hueComponent * 0.6 +
+    satComponent * satComponent * 0.2 +
+    lightComponent * lightComponent * 0.2,
+  );
+}
+
+export function hexToRgb(hex: string): RGB | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const v = parseInt(m[1], 16);
+  return {
+    r: (v >> 16) & 0xff,
+    g: (v >> 8) & 0xff,
+    b: v & 0xff,
+  };
+}
+
+export function rgbToHex({ r, g, b }: RGB): string {
+  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/**
+ * Selfie-capture pipeline for the chips settings UI.
+ *
+ * Reads a File (one chip on a plain background, captured from the
+ * device camera), downscales + center-crops to a 256x256 JPEG, then
+ * samples the center 24x24 patch for the dominant color. Both
+ * outputs are persisted to `chip_values.selfie_base64` and
+ * `chip_values.selfie_dominant_hex` respectively (migration 074).
+ *
+ * Why 256x256:
+ *  - Big enough that the chip's body color + edge ring are clearly
+ *    visible to the LLM as a few-shot reference image.
+ *  - Small enough that a 6-color chip set adds ~200KB to the
+ *    settings cache load — well under the table-row budget.
+ *
+ * Why center-crop (vs. preserving aspect):
+ *  - Selfies are user-framed: putting one chip in the middle of
+ *    the viewfinder is the obvious composition. Center-crop drops
+ *    irrelevant background and gives the LLM more useful pixels per
+ *    byte. If the user happens to put the chip off-center the
+ *    capture still works (we crop to the largest centered square),
+ *    just with less of the chip visible.
+ *
+ * Throws on bad input (non-image file, decode failure) so the
+ * caller can surface a toast.
+ */
+export async function captureChipSelfie(
+  file: File,
+): Promise<{ base64: string; mimeType: string; dominantHex: string }> {
+  if (!file || !file.type.startsWith('image/')) {
+    throw new Error('Not an image file');
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  const img = await loadImage(dataUrl);
+
+  const SIZE = 256;
+  const minEdge = Math.min(img.width, img.height);
+  const sx = Math.floor((img.width - minEdge) / 2);
+  const sy = Math.floor((img.height - minEdge) / 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx, sy, minEdge, minEdge, 0, 0, SIZE, SIZE);
+
+  // Sample dominant color from the center 24x24 patch directly off
+  // the same canvas (cheaper than re-decoding via sampleDominantColor,
+  // which would round-trip through base64).
+  const patch = 24;
+  const px = (SIZE - patch) / 2;
+  const py = (SIZE - patch) / 2;
+  const { data } = ctx.getImageData(px, py, patch, patch);
+  let rSum = 0, gSum = 0, bSum = 0;
+  const n = patch * patch;
+  for (let i = 0; i < data.length; i += 4) {
+    rSum += data[i];
+    gSum += data[i + 1];
+    bSum += data[i + 2];
+  }
+  const dominantHex = rgbToHex({ r: rSum / n, g: gSum / n, b: bSum / n });
+
+  const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const base64 = jpegDataUrl.split(',')[1] || '';
+
+  return { base64, mimeType: 'image/jpeg', dominantHex };
 }

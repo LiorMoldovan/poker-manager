@@ -71,6 +71,8 @@ function toChipValue(row: Record<string, unknown>): ChipValue {
     color: row.color as string,
     value: Number(row.value),
     displayColor: row.display_color as string,
+    selfieBase64: (row.selfie_base64 as string | null | undefined) ?? null,
+    selfieDominantHex: (row.selfie_dominant_hex as string | null | undefined) ?? null,
   };
 }
 
@@ -286,6 +288,8 @@ function chipValueToRow(cv: ChipValue, groupId: string) {
     color: cv.color,
     value: cv.value,
     display_color: cv.displayColor,
+    selfie_base64: cv.selfieBase64 ?? null,
+    selfie_dominant_hex: cv.selfieDominantHex ?? null,
   };
 }
 

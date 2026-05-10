@@ -285,6 +285,13 @@ export interface ChipValue {
   color: string;
   value: number;
   displayColor: string;
+  // Per-color reference photo for the rebuilt photo chip-counting
+  // pipeline (v5.59+). Both fields are optional — groups that haven't
+  // taken selfies still work, the pipeline falls back to displayColor
+  // for color matching and drops the few-shot reference image from
+  // the per-stack LLM prompt.
+  selfieBase64?: string | null;
+  selfieDominantHex?: string | null;
 }
 
 // One stack the AI saw in a chip-counting photo.
@@ -300,41 +307,80 @@ export interface PhotoChipCountStack {
   chipId: string;       // matches ChipValue.id
   color: string;        // canonical color name from ChipValue.color (for display)
   count: number;
-  // 0-100. As of v5.48 this is COMPUTED externally (stack-height
-  // penalty × inter-shot agreement × color-match × honesty cap), NOT
-  // self-reported by the model. The model's own confidence number
-  // turned out to be near-100% even when the count was wildly wrong,
-  // so we now ignore it and derive a real signal from physical/
-  // mathematical checks. See `computeStackConfidence` in geminiAI.ts.
+  // 0-100. As of v5.59 (per-stack rebuild) this is COMPUTED by
+  // `combineLLMAndGeometry` from cross-method agreement — LLM count
+  // vs. three independent geometric methods (bottom-chip self-cal,
+  // gradient counting, shared cross-stack cal). The model's own
+  // self-reported confidence is ignored entirely; we derive an honest
+  // signal from physical / mathematical checks plus stack-height
+  // weighting (taller stacks start with lower confidence regardless
+  // of method agreement).
   confidence: number;
-  // ── New diagnostic fields (all optional for backward compat). ──
-  // Populated when the multi-shot consensus path was used.
-  rawCounts?: number[];     // counts from each shot, e.g. [7, 8]
-  // The dominant color hex of the TOP chip's face that the model
-  // reported. Used to verify the user actually placed the right
-  // color in the right position (catches "I put them in the wrong
-  // order" silently — confidence drops, UI flags the stack).
+  // ── Legacy v5.48-v5.58 fields (kept for backward-compat with
+  //    feedback rows already written; new pipeline doesn't populate). ──
+  rawCounts?: number[];
   topColorHex?: string;
-  // Did `topColorHex` match the expected `displayColor` for this
-  // position within tolerance? false → confidence is heavily penalized.
   colorMatch?: boolean;
-  // True when computed confidence falls below the "please verify
-  // manually" threshold (currently 70%). UI surfaces a recount hint.
   needsRecount?: boolean;
+  // ── v5.59+ rebuild fields (all optional for backward compat). ──
+  // The detected chip-stack region in source-image pixel coordinates.
+  // Used by ChipEntryScreen / SettingsScreen to draw the detection
+  // overlay (colored bounding boxes + count labels) on the photo
+  // thumbnail. Empty-stack placeholders carry a tiny placeholder
+  // region (1×1) that the UI knows to skip.
+  region?: { x: number; y: number; width: number; height: number };
+  // Geometric count from chipGeometry.ts (the better of bottom-chip /
+  // gradient / shared-cal methods after voting). null when all three
+  // methods failed.
+  geometricCount?: number | null;
+  geometricMethod?:
+    | 'bottom-chip'
+    | 'gradient-count'
+    | 'shared-cal'
+    | 'failed'
+    | 'empty-stack-detected';
+  // 0-1. Cross-method agreement signal computed by
+  // `combineLLMAndGeometry`. Higher = more confidence both signals
+  // landed on the same value. The new chip_count_feedback dashboard
+  // surfaces aggregate "agreement %" as a per-color KPI.
+  agreementScore?: number;
+  // True when LLM and geometry disagreed enough that the user should
+  // double-check this stack. Drives the yellow-border + tooltip in
+  // the chip-row inputs.
+  needsVerify?: boolean;
+  // Detected dominant body color of the stack (after white-balance
+  // correction). Useful for debugging color-mapping decisions.
+  detectedDominantHex?: string;
+  // Full provenance of how the final count was reached, persisted to
+  // the feedback row for diagnostic purposes. When the user reports
+  // "AI was wrong by 2", we can see whether LLM, geometry, color
+  // mapping, or total-value reconciliation was the culprit.
+  provenance?: {
+    llmCount: number | null;
+    geometryBottomChip: number | null;
+    geometryGradientCount: number | null;
+    geometrySharedCal: number | null;
+    totalValueAdjustedFrom?: number | null;
+    finalCount: number;
+    finalConfidence: number;
+    reasoning: string; // human-readable English summary
+  };
 }
 
 // Stable error code for photo-based chip counting failures. The UI
 // translates these into the user's language; `error` itself stays
 // English so it's still useful in console logs.
 //
-//   missingImage    — no image data was sent (caller bug)
-//   noChipsConfig   — group has no chip values defined
-//   network         — fetch threw before a response came back
-//   httpError       — proxy/upstream returned non-2xx (message in `error`)
-//   parseFailed     — model returned text we couldn't parse as JSON
-//                     even after the tolerant repair pass
-//   unexpectedShape — JSON parsed OK but `stacks` array is missing
-//   cancelled       — caller aborted the request before it finished
+//   missingImage         — no image data was sent (caller bug)
+//   noChipsConfig        — group has no chip values defined
+//   network              — fetch threw before a response came back
+//   httpError            — proxy/upstream returned non-2xx (message in `error`)
+//   parseFailed          — model returned text we couldn't parse as JSON
+//                          even after the tolerant repair pass
+//   unexpectedShape      — JSON parsed OK but `stacks` array is missing
+//   cancelled            — caller aborted the request before it finished
+//   stackDetectionFailed — v5.59+: client-side stack detection found nothing
+//                          usable (extremely rare; only blank/corrupt photos)
 export type PhotoChipCountErrorCode =
   | 'missingImage'
   | 'noChipsConfig'
@@ -342,7 +388,8 @@ export type PhotoChipCountErrorCode =
   | 'httpError'
   | 'parseFailed'
   | 'unexpectedShape'
-  | 'cancelled';
+  | 'cancelled'
+  | 'stackDetectionFailed';
 
 // Result of one photo-based chip count attempt. Returned by
 // countChipsFromPhoto in geminiAI.ts. `error` is set only when the
@@ -353,24 +400,48 @@ export type PhotoChipCountErrorCode =
 // showing the raw English diagnostic string to Hebrew users.
 export interface PhotoChipCountResult {
   stacks: PhotoChipCountStack[];
-  // 0-100. Capped at 90% even when all signals look perfect — the
+  // 0-100. Capped at 95% even when all signals look perfect — the
   // honest framing is "AI estimate, please verify". 100% would imply
-  // we'd risk the player's money on it, which we won't.
+  // we'd risk the player's money on it, which we won't. As of v5.59
+  // this is computed as the stack-count-weighted average of per-stack
+  // confidence values (a 10-chip stack contributes more than a 2-chip
+  // stack to the overall photo's confidence).
   overallConfidence: number;
   totalValue: number;            // Σ(count × chipValue) across all returned stacks
-  modelUsed: string;             // e.g. 'gemini-2.5-pro×2' (model + shot count)
-  // ── New diagnostic fields ──
-  // How many parallel shots actually returned usable data (1 or 2).
-  // 1 means we couldn't get a consensus signal → confidence is lower.
+  modelUsed: string;             // e.g. 'gemini-2.5-flash×N' (model + per-stack call count)
+  // ── Legacy v5.48-v5.58 fields (kept for backward-compat with
+  //    callers that still read them; new pipeline doesn't populate). ──
   shotsUsed?: number;
   // Total-value mismatch as a fraction of expected, signed:
   //   +0.15 = reported total is 15% over expected
   //   -0.40 = reported total is 40% under expected
   // 0 / undefined when no expectedTotalValue was supplied.
   totalValueDelta?: number;
-  // Chip IDs whose individual confidence dropped below 70%. UI shows
-  // "please recount these" hints next to those input fields.
+  // Chip IDs whose individual confidence dropped below 70% (legacy);
+  // new pipeline writes the same info as `needsVerify` per stack.
   recountStackIds?: string[];
+  // ── v5.59+ rebuild fields. ──
+  // Did the per-photo white-balance correction kick in (>= 50 stripe
+  // pixels were available)? When false, the camera color cast was not
+  // neutralized and color-mapping accuracy is reduced.
+  whiteBalanceApplied?: boolean;
+  // Result of the post-LLM total-value sanity check (live game flow
+  // only — null when no expectedTotalValue was supplied). When the
+  // summed AI total is off by exactly one chip denomination from the
+  // expected bankroll, the lowest-confidence non-edited stack gets a
+  // ±1 nudge to reconcile. The provenance for the adjusted stack
+  // records `totalValueAdjustedFrom`. UI surfaces a small purple badge.
+  totalValueCheckResult?: {
+    expected: number;
+    computed: number;
+    adjustedStackId: string | null;  // null when no adjustment was applied
+    adjustmentChips: number;         // -1, 0, or +1
+  } | null;
+  // Diagnostic from `detectStackRegions`: which signal won (white-stripe
+  // density / edge density / position-only fallback). Persisted to the
+  // feedback row so we can spot photos where the primary signal kept
+  // failing and tune the thresholds.
+  detectionSignal?: 'white-stripe' | 'edge-density' | 'position-only';
   error?: string;                // English diagnostic for logs/devs
   errorCode?: PhotoChipCountErrorCode;
 }
@@ -440,13 +511,60 @@ export interface ChipCountFeedbackStack {
   realCount: number;       // what the user actually saved
   delta: number;           // realCount - aiCount (positive = AI undercounted)
   wasCorrect: boolean;
-  // ── Optional AI-side diagnostics, copied verbatim from the
-  //    PhotoChipCountStack when present. Missing on legacy / single-shot.
+  // ── Optional v5.48–v5.58 (legacy) AI-side diagnostics ──
+  //    Copied verbatim from the PhotoChipCountStack when present.
+  //    The v5.59 pipeline doesn't populate these; new rows leave
+  //    them undefined while still writing the v5.59+ block below.
   aiConfidence?: number;
   aiColorMatch?: boolean;
   aiNeedsRecount?: boolean;
   aiTopColorHex?: string;
   aiRawCounts?: number[];
+  // ── v5.59+ per-stack provenance ──
+  //    Lets us reconstruct, after the fact, exactly how the AI
+  //    arrived at its `aiCount` for this stack — which signal
+  //    (LLM, geometry method, or total-value reconciliation)
+  //    was the load-bearing one. When mining feedback to tune
+  //    the pipeline, we can group by which signal dominated and
+  //    see whether errors cluster on one method.
+  aiAgreementScore?: number;             // 0..1 cross-method agreement
+  aiNeedsVerify?: boolean;               // suggested manual recount
+  aiGeometricCount?: number | null;
+  aiGeometricMethod?:
+    | 'bottom-chip'
+    | 'gradient-count'
+    | 'shared-cal'
+    | 'failed'
+    | 'empty-stack-detected';
+  aiDetectedDominantHex?: string;        // post-WB stack body color
+  aiRegion?: { x: number; y: number; width: number; height: number };
+  aiProvenance?: {
+    llmCount: number | null;
+    geometryBottomChip: number | null;
+    geometryGradientCount: number | null;
+    geometrySharedCal: number | null;
+    totalValueAdjustedFrom?: number | null;
+    finalCount: number;
+    finalConfidence: number;
+    reasoning: string;
+  };
+}
+
+/** v5.59+ per-photo (NOT per-stack) diagnostic block stored in the
+ *  `chip_count_feedback.pipeline_meta` JSONB column (migration 075).
+ *  All fields are optional so future pipeline iterations can add
+ *  signals without another DDL change. The dashboard's new
+ *  pipeline-aware KPIs read these — rows where the field is
+ *  undefined fall back to "unknown" and don't pollute the metrics. */
+export interface ChipCountFeedbackPipelineMeta {
+  whiteBalanceApplied?: boolean;
+  detectionSignal?: 'white-stripe' | 'edge-density' | 'position-only';
+  totalValueCheckResult?: {
+    expected: number;
+    computed: number;
+    adjustedStackId: string | null;
+    adjustmentChips: number;
+  } | null;
 }
 
 // Row inserted into `chip_count_feedback` (migration 069). One row
@@ -479,6 +597,9 @@ export interface ChipCountFeedback {
   totalAbsDelta: number;    // unsigned
   photoPath?: string | null;
   photoConsented: boolean;
+  /** v5.59+ per-photo pipeline diagnostics (migration 075).
+   *  Nullable for legacy rows. */
+  pipelineMeta?: ChipCountFeedbackPipelineMeta | null;
 }
 
 export interface Settlement {
