@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.49.0';
+export const APP_VERSION = '5.49.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.49.1',
+    date: '2026-05-10',
+    changes: [
+      '🔧 Fix: webhook now uses correct pg_net schema',
+      '🛰 Server-side dispatch verified end-to-end (HTTP 200)',
+    ],
+  },
   {
     version: '5.49.0',
     date: '2026-05-10',
