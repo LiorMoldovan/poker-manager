@@ -415,6 +415,70 @@ export interface Settings {
   // rows still load cleanly through the cache mappers; nothing reads
   // them anymore. Safe to drop in a future cleanup migration.
   chipColorOrder?: string[];
+  // Owner opt-in (group-level): when true, the photo chip-counting
+  // flow uploads the enhanced photo it sent to the AI to a PRIVATE
+  // Supabase Storage bucket alongside the numeric feedback row, so
+  // the developer can replay the exact image when tuning the
+  // pipeline. Default false — only the anonymous-ish numeric data
+  // (per-stack ai vs real counts, model, confidence) is captured
+  // unless this is on. Migration 069. Owner-only toggle in Settings
+  // → Services tab.
+  shareChipPhotos?: boolean;
+}
+
+// One stack-level entry inside `ChipCountFeedback.stacks` — captures
+// the full diff between what the AI proposed and what the user
+// actually saved for one chip color in one save event. Used by
+// `submitChipCountFeedback` to build the JSONB payload, and by any
+// downstream mining queries reading those rows back.
+export interface ChipCountFeedbackStack {
+  chipId: string;          // ChipValue.id
+  color: string;           // canonical color name (display)
+  position: number;        // 1-indexed left→right (canonical sort order)
+  value: number;           // chip denomination
+  aiCount: number;         // what the AI proposed
+  realCount: number;       // what the user actually saved
+  delta: number;           // realCount - aiCount (positive = AI undercounted)
+  wasCorrect: boolean;
+  // ── Optional AI-side diagnostics, copied verbatim from the
+  //    PhotoChipCountStack when present. Missing on legacy / single-shot.
+  aiConfidence?: number;
+  aiColorMatch?: boolean;
+  aiNeedsRecount?: boolean;
+  aiTopColorHex?: string;
+  aiRawCounts?: number[];
+}
+
+// Row inserted into `chip_count_feedback` (migration 069). One row
+// per AI-photo-driven save event (per player per game), capturing
+// everything needed for offline accuracy mining: model+shots that
+// produced the estimate, computed overall confidence, expected
+// total chip value, and per-stack ai-vs-real diffs in JSONB.
+//
+// `photoPath` is set only when `photoConsented === true` AND the
+// upload succeeded. We always insert the numeric row even if the
+// photo upload fails, so partial feedback isn't lost.
+export interface ChipCountFeedback {
+  id?: string;             // generated server-side
+  groupId: string;
+  userId?: string | null;
+  gameId?: string | null;
+  playerId?: string | null;
+  playerName?: string;
+  createdAt?: string;
+  modelUsed: string;
+  overallConfidence: number;
+  shotsUsed: number;
+  expectedTotalValue?: number;
+  rebuys?: number;
+  chipsPerRebuy?: number;
+  stacks: ChipCountFeedbackStack[];
+  totalStacks: number;
+  correctStacks: number;
+  totalChipDelta: number;   // signed
+  totalAbsDelta: number;    // unsigned
+  photoPath?: string | null;
+  photoConsented: boolean;
 }
 
 export interface Settlement {

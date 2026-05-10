@@ -258,8 +258,8 @@ const he = {
   'trivia.landing.shareLeaderboardCaption': 'מי בראש? בואו לשחק חידון על הקבוצה',
 
   // Question report flow (mirrors training, simpler)
-  'trivia.report.flag': '🚩 דווח על השאלה',
-  'trivia.report.flagShort': '🚩 דווח',
+  'trivia.report.flag': '🚩 דווח בעיה',
+  'trivia.report.flagShort': '🚩 דווח בעיה',
   'trivia.report.title': '🚩 דיווח על שאלה',
   'trivia.report.subtitle': 'מה הבעיה?',
   'trivia.report.reason.wrongAnswer': '❌ התשובה הנכונה לא נכונה',
@@ -1109,6 +1109,11 @@ const he = {
   // Counts and confidence are AI estimates, not certainties; the user
   // is the final authority on what gets saved to the game.
   'chips.photo.banner.verifyHint': 'הערכת AI — בדקו לפני שמירה',
+  // v5.53 / migration 069: subtle hint that user edits to the AI's
+  // numbers feed the accuracy-feedback loop. Capture is silent in
+  // markPlayerDone — this line just makes the loop visible to the
+  // user so they understand their edits are useful.
+  'chips.photo.banner.feedbackHint': 'העריכה שלכם עוזרת לשפר את דיוק ה-AI',
   // Shown when only one of the two consensus shots came back (the other
   // hit a rate-limit or transient error). Confidence is auto-reduced.
   'chips.photo.banner.singleShot': 'צילום בודד (ביטחון מופחת)',
@@ -1120,7 +1125,18 @@ const he = {
   'chips.photo.stack.colorMismatch': 'הצבע בערימה זו לא תואם לציפייה — ייתכן שהז\'יטונים סודרו לא לפי הסדר הנכון',
   // Shown under the spinner during the analyze step. Tells the user
   // the wait is intentional (we run two parallel calls for accuracy).
-  'chips.photo.status.dualShot': 'מריץ שני ניתוחים מקבילים לדיוק',
+  'chips.photo.status.dualShot': 'מריץ שלושה ניתוחים מקבילים לדיוק',
+  // ── Tips section (v5.49) — actionable user-facing photo guidance.
+  // Targets the systematic undercount-by-1-2 failure mode reported in
+  // field tests. Each tip directly addresses one mechanism causing it.
+  'chips.photo.tipsTitle': '💡 איך לשפר את הדיוק (טיפים לתמונה)',
+  'chips.photo.tip.angle': 'זווית: צלמו מצד, בערך 45° (לא מלמעלה ולא מקדימה — חשוב לראות את הטבעות בצדדים של הז\'יטונים).',
+  'chips.photo.tip.lighting': 'תאורה: אור חזק, שווה, ללא צללים חדים על הז\'יטונים. עדיף אור מלמעלה או מהצד.',
+  'chips.photo.tip.background': 'רקע: משטח חלק וכהה (כמו במבצע פוקר אמיתי). שטיח, פרטים מסביב — מבלבלים את ה-AI.',
+  'chips.photo.tip.maxStack': 'גובה: עד 10 ז\'יטונים בערימה. אם יש יותר — חלקו לכמה ערימות באותו צבע. ערימות גבוהות הן הסיבה העיקרית לטעויות.',
+  'chips.photo.tip.steady': 'יציבות: החזיקו את הטלפון בשתי ידיים, או הניחו אותו על משהו. תזוזה קלה הורסת את הספירה.',
+  'chips.photo.tip.gap': 'רווחים: השאירו רווח קטן בין ערימות (אצבע) — מונע מ-AI לבלבל בין צבעים סמוכים.',
+  'chips.photo.tip.fillFrame': 'מסגרת: שהז\'יטונים יתפסו לפחות חצי מהתמונה. תמונה רחוקה = פחות פיקסלים לכל טבעת = פחות דיוק.',
 
   // ── Game Summary ──
   'summary.loading': 'טוען סיכום...',
@@ -2053,6 +2069,16 @@ const he = {
   'settings.photoTest.disabledNoKey': 'בקבוצה הזו עדיין אין מפתח Gemini פעיל ואין משחק עם סיכום AI — הזן מפתח בכרטיס "מפתחות API" שלמעלה כדי להפעיל את הבדיקה.',
   'settings.photoTest.disabledNoChips': 'נדרש להגדיר ז\'יטונים לקבוצה — היכנס ללשונית "ז\'יטונים" והוסף ערכים כדי להפעיל את הבדיקה.',
 
+  // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
+  // The numeric per-stack feedback is captured silently regardless;
+  // this toggle ONLY controls whether the photo we sent to the AI is
+  // also uploaded to private storage so the developer can replay
+  // specific failure cases.
+  'settings.chipFeedback.title': '🎯 שיפור דיוק ספירת הז\'יטונים',
+  'settings.chipFeedback.helper': 'בכל פעם שאתם מסיימים שחקן אחרי ספירה אוטומטית מתמונה, אנחנו שומרים את ההפרש בין הספירה של ה-AI לספירה הסופית שלכם — זה עוזר לשפר את הדיוק עם הזמן.',
+  'settings.chipFeedback.toggleLabel': 'שלחו גם את התמונה (לא חובה — עוזר לאתר טעויות ספציפיות)',
+  'settings.chipFeedback.privacyNote': 'כשהאופציה כבויה (ברירת מחדל), נשמרים רק נתונים מספריים. כשהיא דלוקה, התמונה ששלחנו ל-AI נשמרת בארכיון פרטי שרק בעל הקבוצה ומנהל-העל יכולים לראות.',
+
   // Settings > Backup
   'settings.backup.title': '📦 גיבוי ושחזור',
   'settings.backup.lastBackup': 'גיבוי אחרון:',
@@ -2674,8 +2700,8 @@ const en: Record<keyof typeof he, string> = {
   'trivia.landing.shareLeaderboardCaption': 'Who\'s on top? Open the app and play a round',
   'trivia.landing.leaderboardLoading': 'Loading...',
 
-  'trivia.report.flag': '🚩 Report this question',
-  'trivia.report.flagShort': '🚩 Report',
+  'trivia.report.flag': '🚩 Report issue',
+  'trivia.report.flagShort': '🚩 Report issue',
   'trivia.report.title': '🚩 Question report',
   'trivia.report.subtitle': 'What\'s wrong?',
   'trivia.report.reason.wrongAnswer': '❌ The "correct" answer is actually wrong',
@@ -3493,11 +3519,20 @@ const en: Record<keyof typeof he, string> = {
   'chips.photo.banner.warningOff': 'Warning: result is far from expected — retake or verify manually',
   'chips.photo.banner.retake': '📷 Retake',
   'chips.photo.banner.verifyHint': 'AI estimate — verify before saving',
+  'chips.photo.banner.feedbackHint': 'Your edits help improve AI accuracy',
   'chips.photo.banner.singleShot': 'single shot (reduced confidence)',
   'chips.photo.banner.recountCount': '⚠ {n} stack(s) need manual recount',
   'chips.photo.stack.recount': 'Low confidence — please recount manually',
   'chips.photo.stack.colorMismatch': 'Color in this stack doesn\'t match expected — chips may be in the wrong order',
-  'chips.photo.status.dualShot': 'running two parallel analyses for accuracy',
+  'chips.photo.status.dualShot': 'running three parallel analyses for accuracy',
+  'chips.photo.tipsTitle': '💡 How to improve accuracy (photo tips)',
+  'chips.photo.tip.angle': 'Angle: shoot from the side at about 45° (not from above, not straight on — the AI needs to see each chip\'s edge ring).',
+  'chips.photo.tip.lighting': 'Lighting: bright, even light with no harsh shadows on the chips. Overhead or side light works best.',
+  'chips.photo.tip.background': 'Background: a smooth dark surface (like a real poker felt). Carpet and busy backgrounds confuse the AI.',
+  'chips.photo.tip.maxStack': 'Stack height: up to 10 chips per stack. If you have more, split into multiple same-color stacks. Tall stacks are the main cause of counting errors.',
+  'chips.photo.tip.steady': 'Steadiness: hold the phone with both hands, or rest it on something. Slight blur destroys ring counting.',
+  'chips.photo.tip.gap': 'Gaps: leave a finger-width gap between stacks — prevents the AI from blending adjacent colors.',
+  'chips.photo.tip.fillFrame': 'Framing: chips should fill at least half the frame. Distant photo = fewer pixels per ring = lower accuracy.',
   'chips.color.black': 'Black',
   'chips.color.yellow': 'Yellow',
 
@@ -4345,6 +4380,11 @@ const en: Record<keyof typeof he, string> = {
   'settings.photoTest.tryAgain': 'Test again',
   'settings.photoTest.disabledNoKey': 'This group has no active Gemini key and no past game with an AI summary — set a key in the "API Keys" card above to enable the test.',
   'settings.photoTest.disabledNoChips': 'Chip values must be configured for this group — open the "Chips" tab and add values to enable the test.',
+  // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
+  'settings.chipFeedback.title': '🎯 Improve chip-counting accuracy',
+  'settings.chipFeedback.helper': 'Every time you finalize a player after an AI photo count, we save the diff between what the AI suggested and what you actually saved — this helps tune accuracy over time.',
+  'settings.chipFeedback.toggleLabel': 'Also send the photo (optional — helps debug specific failures)',
+  'settings.chipFeedback.privacyNote': 'When off (default), only numeric data is saved. When on, the photo we sent to the AI is stored in a private archive only the group owner and super admin can see.',
   'settings.players.permanentDesc': 'Main roster — permanent group members',
   'settings.players.guestDesc': 'Regular guest who comes often',
   'settings.players.occasionalDesc': 'Occasional player who joins sometimes',

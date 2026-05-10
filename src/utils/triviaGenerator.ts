@@ -223,19 +223,33 @@ function niceRound(n: number): number {
 
 // Generate 3 plausible-but-wrong numeric distractors around `correct`.
 // Distractors are placed at deliberately different magnitudes around
-// `correct` (one notably below, two above), each with small jitter,
-// so the 4 final answers visibly span a wide arc instead of clustering
-// in a tight ±X% band. Wider spread + deliberate placement makes the
-// "estimate the right ballpark" gameplay loop work — too-tight clusters
-// were the #1 source of "this question is impossible" complaints.
+// `correct` (one well below, two well above), each with small jitter.
+// Goal: a player who has the right *ballpark estimate* should land
+// on `correct` — not on the nearest neighbour. So the closest
+// distractor on either side is far enough that anyone estimating
+// within ~±40% of correct picks it correctly.
 //
-// `spread` is the OUTER bound (e.g. 0.55 → distractors range from
-// ~45% to ~155% of correct). The default jumped from 0.35 to 0.55
-// in v5.50.x for exactly this reason.
+// `spread` is the dominant outer multiplier. With `spread = 0.85`
+// (default), distractors land at roughly:
+//   - low : ~0.15× correct (one third or less — clearly "much less")
+//   - mid : ~1.85× correct (almost double — clearly "more")
+//   - high: ~2.53× correct (about 2.5× — clearly "way more")
+// Closest above (1.85×) means anyone estimating ≤ ~1.4× correct
+// picks the right answer. Closest below (0.15×) means anyone
+// estimating ≥ ~0.6× correct picks the right answer. So a
+// ±40% rough estimate wins the question, which is the gameplay
+// loop we want for hard "guess the number" templates.
+//
+// Default bumped 0.55 → 0.85 in v5.52.x after player feedback that
+// the previous 0.55 spread (low ~0.45×, mid ~1.27×, high ~1.55×)
+// still penalised correct-but-imprecise estimators. Per-call sites
+// can pass a smaller spread when the correct value is well-known
+// (e.g. "who won that night, by how many chips" — players remember
+// the round number, so distractors should sit closer).
 //
 // Avoids negatives when correct is positive (and vice versa), and
 // avoids producing duplicates of `correct` after rounding.
-export function numericDistractors(correct: number, spread = 0.55): string[] {
+export function numericDistractors(correct: number, spread = 0.85): string[] {
   const sign = correct >= 0 ? 1 : -1;
   const m = Math.abs(correct);
   if (m === 0) {
@@ -243,17 +257,20 @@ export function numericDistractors(correct: number, spread = 0.55): string[] {
     // by ±spread with a fixed magnitude of 1.
     return [-1, 1, 2].map(n => formatCurrency(n));
   }
-  // Three deliberately-spread target ratios around 1.0:
-  //   - one notably below: ~(1 - spread)
-  //   - one above: ~(1 + spread/2)
-  //   - one further above: ~(1 + spread)
+  // Three deliberately-spread target ratios around 1.0. We want
+  // the *gap* between correct (1.0) and the nearest distractor on
+  // each side to be ≥ ~0.7× — that is the "rough estimate wins"
+  // sweet spot. Hence:
+  //   - low : 1 - spread          (e.g. 0.15× when spread=0.85)
+  //   - mid : 1 + spread          (e.g. 1.85×)
+  //   - high: 1 + spread * 1.85   (e.g. 2.57×)
   // Small jitter (±10%) so two questions with the same correct
   // value don't produce identical distractor sets.
   const jitter = () => 0.9 + Math.random() * 0.2; // 0.9 - 1.1
   const targets = [
-    Math.max(0.05, 1 - spread),
-    1 + spread * 0.5,
+    Math.max(0.1, 1 - spread),
     1 + spread,
+    1 + spread * 1.85,
   ];
   const seen = new Set<number>([correct]);
   const out: number[] = [];
@@ -337,14 +354,19 @@ export function bucketedNumericAnswers(
 
   // Pick a bucket size from a "visually nice" ladder so boundaries
   // read as 50/100/500/1000/etc. instead of 175/225/3700. Target
-  // bucket size ≈ 28% of correct so 4 buckets span ~110% of the
-  // range around the answer.
+  // bucket size ≈ 55% of correct, so each bucket spans roughly
+  // half-to-the-full magnitude of the correct value — wide enough
+  // that anyone with a ±40% estimate of correct lands inside the
+  // right bucket. (Was 28% before v5.52.x; players consistently
+  // missed by one bucket because the previous narrow buckets
+  // demanded near-exact recall, which defeats the point of a
+  // range answer.)
   const NICE_SIZES = [3, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
-  const target = m * 0.28;
+  const target = m * 0.55;
   // Pick the largest nice size that's ≤ 2× the target — this gives
   // nice round boundaries while keeping bucket count near 4 spanning
   // the answer. Falls back to the smallest size if even that's too
-  // big (only for correct in [6, 9] which uses bucket=3).
+  // big (only for correct in [6, 9] which uses bucket=3 or 5).
   let bucket = NICE_SIZES[0];
   for (const s of NICE_SIZES) {
     if (s <= target * 2) bucket = s;
@@ -991,7 +1013,7 @@ const GROUP_TEMPLATES: Template[] = [
       const correct = String(total);
       const bucketed = bucketedNumericAnswers(total, String, b.ctx.t);
       const answers = bucketed ?? (() => {
-        const distractors = numericDistractors(total, 0.3);
+        const distractors = numericDistractors(total);
         return buildAnswers(correct, distractors);
       })();
       if (!answers) return null;
@@ -1366,7 +1388,7 @@ const PLAYER_TEMPLATES: Template[] = [
       // for tiny counts (< 6) where buckets would be silly.
       const bucketed = bucketedNumericAnswers(stats.gamesPlayed, String, b.ctx.t);
       const answers = bucketed ?? (() => {
-        const distractors = numericDistractors(stats.gamesPlayed, 0.45);
+        const distractors = numericDistractors(stats.gamesPlayed);
         return buildAnswers(String(stats.gamesPlayed), distractors);
       })();
       if (!answers) return null;
@@ -1404,7 +1426,7 @@ const PLAYER_TEMPLATES: Template[] = [
         ? bucketedNumericAnswers(Math.round(stats.totalProfit), formatCurrency, b.ctx.t)
         : null;
       const answers = bucketed ?? (() => {
-        const distractors = numericDistractors(stats.totalProfit, 0.5);
+        const distractors = numericDistractors(stats.totalProfit);
         return buildAnswers(correct, distractors);
       })();
       if (!answers) return null;
@@ -1440,7 +1462,7 @@ const PLAYER_TEMPLATES: Template[] = [
       // genuinely remember.
       const bucketed = firsts >= 6 ? bucketedNumericAnswers(firsts, String, b.ctx.t) : null;
       const answers = bucketed ?? (() => {
-        const distractors = numericDistractors(firsts, 0.6);
+        const distractors = numericDistractors(firsts);
         return buildAnswers(correct, distractors);
       })();
       if (!answers) return null;
@@ -1720,7 +1742,7 @@ const PLAYER_TEMPLATES: Template[] = [
       const stats = b.ctx.playerStats.find(s => s.playerName === subject);
       if (!stats || stats.gamesPlayed < 10) return null;
       const correct = formatCurrency(Math.round(stats.avgProfit));
-      const distractors = numericDistractors(stats.avgProfit, 0.5);
+      const distractors = numericDistractors(stats.avgProfit);
       const answers = buildAnswers(correct, distractors);
       if (!answers) return null;
       return {
@@ -1807,7 +1829,7 @@ const PLAYER_TEMPLATES: Template[] = [
       // (where users genuinely might know "X has 4 podiums").
       const bucketed = podiums >= 6 ? bucketedNumericAnswers(podiums, String, b.ctx.t) : null;
       const answers = bucketed ?? (() => {
-        const distractors = numericDistractors(podiums, 0.5);
+        const distractors = numericDistractors(podiums);
         return buildAnswers(correct, distractors);
       })();
       if (!answers) return null;

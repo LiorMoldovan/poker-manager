@@ -1014,7 +1014,15 @@ const TriviaGameScreen = () => {
                 lineHeight: 1.2,
               }}
             >
-              🚩
+              {/* Render the full localized label (flag + "דווח
+                  בעיה") inline. Players didn't recognise the bare
+                  🚩 as a "report a problem" affordance — the
+                  explicit text was added 2026-05-10 per user
+                  feedback. The translation string carries the
+                  emoji + text so both are RTL-safe (Hebrew puts
+                  the emoji on the visual right where the eye
+                  expects an action affordance to start). */}
+              {t('trivia.report.flag')}
             </button>
           )}
           {reportedIdxs.has(currentIdx) && (

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.52.0';
+export const APP_VERSION = '5.53.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.53.0',
+    date: '2026-05-10',
+    changes: [
+      '🎯 Chip photo: Pro model + 3-shot consensus',
+      '🔍 Computed confidence cap 90%, anti-undercount prompting',
+      '💡 Photo tips collapsible in capture modal',
+      '🛠 Feedback loop: silent diff capture on Done',
+      '🔒 Owner opt-in to share photos for tuning',
+      '🚩 Trivia report shows label not just flag',
+      '🎲 Trivia: wider number-guess distractors',
+    ],
+  },
   {
     version: '5.52.0',
     date: '2026-05-10',

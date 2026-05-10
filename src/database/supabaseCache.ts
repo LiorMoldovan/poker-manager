@@ -108,6 +108,14 @@ function toSettings(row: Record<string, unknown>): Settings {
     s.chipColorOrder = (row.chip_color_order as unknown[])
       .filter((id): id is string => typeof id === 'string');
   }
+  // share_chip_photos (migration 069) — owner opt-in for uploading
+  // chip-counting feedback photos to private storage. Tolerate
+  // missing key on pre-069 deployments (defaults to false at the
+  // DB level but the column may not exist if the cache loaded
+  // before the migration applied).
+  if (typeof row.share_chip_photos === 'boolean') {
+    s.shareChipPhotos = row.share_chip_photos;
+  }
   return s;
 }
 
@@ -306,6 +314,11 @@ function settingsToRow(s: Settings, groupId: string) {
     // chip_color_order (migration 060) — null when not configured;
     // empty array also serialises to null so we don't store noise.
     chip_color_order: s.chipColorOrder && s.chipColorOrder.length > 0 ? s.chipColorOrder : null,
+    // share_chip_photos (migration 069) — owner opt-in. Default false
+    // matches the DB column default; explicit `false` is sent so an
+    // owner who toggles it OFF after having toggled ON actually
+    // persists the OFF state.
+    share_chip_photos: s.shareChipPhotos === true,
   };
 }
 

@@ -2912,6 +2912,60 @@ const SettingsScreen = () => {
               </div>
             )}
 
+            {/* Chip-count feedback opt-in (owner only).
+                The numeric per-stack ai-vs-real diff is captured
+                automatically every time a player is finalized after
+                an AI photo count — no opt-in needed. This toggle
+                only controls whether the PHOTO that the AI saw is
+                also uploaded to a private Supabase Storage bucket
+                so the developer can replay specific failure cases.
+                Default OFF for privacy (photos may capture
+                surroundings). Migration 069. */}
+            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+              <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
+                {t('settings.chipFeedback.title')}
+              </h2>
+              <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                {t('settings.chipFeedback.helper')}
+              </p>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                padding: '0.5rem 0.6rem',
+                background: settings.shareChipPhotos ? 'rgba(16,185,129,0.08)' : 'var(--surface)',
+                border: `1px solid ${settings.shareChipPhotos ? 'rgba(16,185,129,0.35)' : 'var(--border)'}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease, border-color 0.15s ease',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={settings.shareChipPhotos === true}
+                  onChange={e => {
+                    const next = { ...settings, shareChipPhotos: e.target.checked };
+                    setSettings(next);
+                    saveSettings(next);
+                    setSaved(true);
+                    setTimeout(() => setSaved(false), 2000);
+                  }}
+                  style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                />
+                <div style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }}>
+                  {t('settings.chipFeedback.toggleLabel')}
+                </div>
+              </label>
+              <p style={{
+                margin: '0.5rem 0 0',
+                fontSize: '0.7rem',
+                color: 'var(--text-muted)',
+                opacity: 0.85,
+                lineHeight: 1.5,
+              }}>
+                {t('settings.chipFeedback.privacyNote')}
+              </p>
+            </div>
+
             {/* Photo Chip Counting Test Card (owner-only, in Services tab) */}
             <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
               <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
@@ -3110,7 +3164,13 @@ const SettingsScreen = () => {
       <PhotoCaptureModal
         isOpen={photoTestOpen}
         onClose={() => setPhotoTestOpen(false)}
-        onResult={(result, previewBase64) => {
+        onResult={(result, previewBase64 /* , previewMimeType */) => {
+          // Note: test card intentionally does NOT submit feedback to
+          // chip_count_feedback. The user can't enter "actual counts"
+          // here, so without ground truth there's no useful diff to
+          // record. The real-game ChipEntryScreen flow produces the
+          // useful feedback signal. (Could add a "what was the real
+          // count?" sidecar in v2 if we want test-card feedback too.)
           setPhotoTestResult(result);
           setPhotoTestPreview(previewBase64);
         }}

@@ -4027,17 +4027,31 @@ interface RawShot {
 // signals (NOT the model's self-rating). This is the heart of why
 // v5.48 confidence numbers are trustworthy where v5.47's were not.
 //
+// v5.49 update — DIRECTIONAL aggregation (max, not mean).
+//
+// Field-test feedback (May 2026): Pro+2-shot consistently undercounts
+// real stacks by 1-2 chips per stack — the bias is one-directional
+// (always under, never over). Why: vision LLMs systematically miss
+//   (a) the topmost chip — its edge ring is partially hidden by its
+//       own face and merges visually with the chip below it, and
+//   (b) the bottom-most chip — its ring may blend into the surface
+//       shadow.
+// Mean-aggregating two undercounts just gives you another undercount.
+// MAX-aggregating gives you whichever shot caught more chips — closer
+// to truth. We pay for this with a slight overcount risk on tall
+// stacks where one shot hallucinates a phantom chip, but the prompt
+// now explicitly anti-biases against hallucination too.
+//
 // Inputs:
-//   count1, count2 — counts from shot 1 and shot 2 (count2 may be null
-//     when only one shot succeeded).
-//   topColorHex   — model-reported top-chip color (from shot 1 — we
-//     don't try to reconcile colors across shots, just counts).
+//   counts        — per-shot counts for this position. May be length 1
+//                   (single-shot fallback), 2, or 3.
+//   topColorHex   — model-reported top-chip color (from shot 1; we don't
+//                   reconcile colors across shots, just counts).
 //   expectedColorHex — the displayColor we expected at this position.
 //
 // Output: combined count + computed confidence + diagnostic flags.
 function computeStackConfidence(args: {
-  count1: number;
-  count2: number | null;
+  counts: number[];
   topColorHex: string;
   expectedColorHex: string;
 }): {
@@ -4048,39 +4062,40 @@ function computeStackConfidence(args: {
   colorMatch: boolean;
   needsRecount: boolean;
 } {
-  const { count1, count2, topColorHex, expectedColorHex } = args;
+  const { counts, topColorHex, expectedColorHex } = args;
+  const rawCounts = counts.slice();
+  const nShots = rawCounts.length || 1;
 
-  // 1. Combine counts via consensus.
-  let count: number;
-  let agreementFactor: number; // 0..1
-  let rawCounts: number[];
-  if (count2 == null) {
-    count = count1;
-    rawCounts = [count1];
-    // Single shot — we have NO consensus signal, so trust is reduced.
-    agreementFactor = 0.7;
+  // 1. Aggregate across shots — MAX, not mean. See block comment above
+  //    for the systematic-undercount-bias rationale.
+  const count = nShots > 0 ? Math.max(...rawCounts) : 0;
+
+  // 2. Inter-shot agreement = 1 − (range / scale). When all shots agree
+  //    exactly, range=0 → factor=1.0 (full trust). One shot off → small
+  //    penalty. Widely disagreeing shots → big penalty (the model is
+  //    flailing; user should recount).
+  //    `nShots === 1` means only one shot came back — no consensus
+  //    available, so we can't tell if it's right. Reduce trust.
+  let agreementFactor: number;
+  if (nShots === 1) {
+    agreementFactor = 0.65;
   } else {
-    rawCounts = [count1, count2];
-    if (count1 === count2) {
-      count = count1;
-      agreementFactor = 1.0;
-    } else {
-      // Disagreement → average (rounded), penalise per unit of disagreement.
-      const diff = Math.abs(count1 - count2);
-      count = Math.round((count1 + count2) / 2);
-      // 1-off → 0.75, 2-off → 0.55, 3-off → 0.40, 4+-off → ≤0.25.
-      agreementFactor = Math.max(0.10, 1 - diff * 0.20);
-    }
+    const range = Math.max(...rawCounts) - Math.min(...rawCounts);
+    // 0 → 1.00, 1 → 0.85, 2 → 0.65, 3 → 0.45, 4+ → ≤0.25.
+    agreementFactor = Math.max(0.10, 1 - range * 0.20);
   }
 
-  // 2. Stack-height penalty. Counting tall stacks from a 2D photo is
-  //    fundamentally unreliable — even Pro routinely undercounts past
-  //    8-10 chips. Cap confidence accordingly.
+  // 3. Stack-height penalty. Counting tall stacks from a 2D photo is
+  //    fundamentally unreliable. Slightly RELAXED in v5.49 because
+  //    MAX aggregation already corrects much of the bias on small/
+  //    medium stacks — we don't want to also penalise the same chips
+  //    twice. Penalty stays steep for >12 chips (where even MAX of 3
+  //    shots misses chips).
   let heightFactor: number;
-  if (count <= 8) heightFactor = 1.0;
-  else if (count <= 12) heightFactor = 1 - (count - 8) * 0.07; // 9→0.93, 12→0.72
-  else if (count <= 18) heightFactor = 0.50;
-  else heightFactor = 0.30;
+  if (count <= 10) heightFactor = 1.0;
+  else if (count <= 14) heightFactor = 1 - (count - 10) * 0.07; // 11→0.93, 14→0.72
+  else if (count <= 20) heightFactor = 0.55;
+  else heightFactor = 0.35;
 
   // 3. Color verification. If the model says the top of position-1 is
   //    red but we expected white, the user almost certainly arranged
@@ -4151,30 +4166,39 @@ function computeOverallConfidence(
   return { overall: clamp(geo, 0, 90), totalValueDelta };
 }
 
-// Combine 1 or 2 raw shots into the final PhotoChipCountResult.
+// Combine 1, 2, or 3 raw shots into the final PhotoChipCountResult.
+// Order of `shots` doesn't matter — we MAX the counts (see
+// computeStackConfidence rationale) and prefer shot[0]'s topColorHex
+// for the color verification (shot[0] is the deterministic temp=0
+// pass, less likely to hallucinate weird colors).
 function combineShots(args: {
-  shot1: RawShot;
-  shot2: RawShot | null;
+  shots: RawShot[];
   orderedChips: ChipValue[];
   expectedTotalValue: number | undefined;
-  modelLabel: string; // e.g. 'gemini-2.5-pro×2' or 'gemini-2.5-flash×1'
+  modelLabel: string; // e.g. 'gemini-2.5-pro×3' or 'gemini-2.5-flash×1'
   shotsUsed: number;
 }): PhotoChipCountResult {
-  const { shot1, shot2, orderedChips, expectedTotalValue, modelLabel, shotsUsed } = args;
+  const { shots, orderedChips, expectedTotalValue, modelLabel, shotsUsed } = args;
 
   const chipById = new Map(orderedChips.map(c => [c.id, c]));
 
   const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
     const position = idx + 1;
-    const r1 = shot1.byPosition.get(position);
-    const r2 = shot2?.byPosition.get(position) ?? null;
-    const count1 = r1?.count ?? 0;
-    const count2 = r2 ? (r2.count ?? null) : null;
-    const topColorHex = (r1?.topColorHex || r2?.topColorHex || '').trim();
+    // Pull this position's count + reported color from each shot. Counts
+    // that came back null (model omitted the position entirely) are
+    // treated as 0 for aggregation; we'd rather an "absent" stack flag
+    // as zero than throw the position away entirely. The first non-empty
+    // topColorHex wins for color-match purposes.
+    const counts: number[] = [];
+    let firstTopColor = '';
+    for (const shot of shots) {
+      const cell = shot.byPosition.get(position);
+      counts.push(cell?.count ?? 0);
+      if (!firstTopColor && cell?.topColorHex) firstTopColor = cell.topColorHex;
+    }
     const conf = computeStackConfidence({
-      count1,
-      count2,
-      topColorHex,
+      counts,
+      topColorHex: firstTopColor.trim(),
       expectedColorHex: chip.displayColor,
     });
     return {
@@ -4234,10 +4258,19 @@ function buildChipCountPayload(args: {
     ? `\nFor reference: the player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count × denomination across all positions). DO NOT invent or remove chips to match this — count what you actually see. We use this only to flag results that look implausible.`
     : '';
 
-  // No self-reported confidence in this prompt. The model's confidence
-  // estimates were near-100% even when wildly wrong (May 2026 testing).
-  // We compute confidence externally from inter-shot agreement, color
-  // verification, stack height, and total-value sanity check.
+  // v5.49 prompt — explicit anti-undercount guidance.
+  //
+  // Field-test feedback: vision LLMs reliably MISS 1-2 chips per stack,
+  // always undercounting, never overcounting. Two structural causes:
+  //   1. The TOPMOST chip's edge ring is partially hidden by its own
+  //      face (the chip face overhangs the ring slightly). Models tend
+  //      to merge it visually with the chip below.
+  //   2. The BOTTOMMOST chip's ring blurs into the surface shadow on
+  //      most casual phone shots.
+  // We instruct the model to specifically check both ends of each stack
+  // and to break ties UPWARD (prefer 7 over 6 when uncertain). We also
+  // run 3 shots and take the MAX externally — the prompt is only half
+  // the fix.
   const prompt = `Count poker chips in this photo. For each stack visible left to right, report:
 - position (1-indexed, left to right)
 - count (the number of chips you can see in that stack)
@@ -4250,9 +4283,22 @@ ${orderLines}
 
 Return EXACTLY ${orderedChips.length} entries — one per expected position 1..${orderedChips.length} — INCLUDING positions where the player has zero chips of that color (use count=0 and topColorHex="#000000" for empty positions).
 
-How to count accurately:
-- Each chip has a clear pattern of stripes around its edge ring. Count the visible stripe patterns on the SIDE of each stack from bottom to top.
-- For tall stacks (more than 10 chips), the top edge often blurs together. Count what you can clearly distinguish; do not invent chips beyond what you actually see.
+CRITICAL counting strategy — READ THIS CAREFULLY:
+
+Vision models systematically UNDERCOUNT chip stacks because:
+  (a) The TOPMOST chip's edge ring is partially hidden by its own face — its ring blends into the chip face above. It's easy to count it as part of the chip below.
+  (b) The BOTTOMMOST chip's ring may merge into the surface shadow.
+  (c) Adjacent chips of identical color can visually fuse in the middle of a stack.
+
+To counter this:
+1. Count from BOTTOM to TOP, one chip at a time.
+2. Examine the TOPMOST chip especially carefully — its visible face IS a chip, even when its edge ring is half-hidden behind itself. Add it to the count.
+3. Examine the BOTTOMMOST chip carefully — even if its ring is dark, if you can see the top of its rim, count it.
+4. When you're between two possible counts (e.g. "I see 5 or 6 rings"), choose the HIGHER count. The systematic bias is toward undercounting, so erring high cancels it.
+5. Do NOT, however, invent chips beyond what's actually visible. If you see exactly 4 chips, say 4 — don't say 5 because of the bias rule. The "round up when uncertain" rule applies only to GENUINE ambiguity.
+
+For each stack:
+- Each chip has a clear pattern of stripes around its edge ring. Count the visible stripe patterns on the SIDE of the stack from bottom to top.
 - topColorHex: read the color of the TOP chip's FACE (the round part facing the camera), NOT the side stripes. Report the actual color you see — if the player put a red chip in position 1, report "#DC2626" even though we expected white. The user will be alerted to fix the arrangement.
 - If a position has no stack at all, the player has zero chips of that color. Report count=0 and topColorHex="#000000".
 
@@ -4385,29 +4431,30 @@ export async function countChipsFromPhoto(
   // the photo.
   const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
 
-  // Two payloads with different temperatures so the consensus has
-  // useful diversity (same temp → identical answers → no signal).
-  // 0.0 = greedy decoding (most likely tokens), 0.4 = some sampling
-  // — the latter occasionally catches chips the greedy pass missed,
-  // and disagreement between the two is itself the confidence signal.
-  const payload1 = buildChipCountPayload({
-    imageBase64, mimeType, orderedChips, expectedTotalValue, temperature: 0.0,
-  });
-  const payload2 = buildChipCountPayload({
-    imageBase64, mimeType, orderedChips, expectedTotalValue, temperature: 0.4,
-  });
+  // v5.49: 3 payloads with spread temperatures so the MAX-aggregation
+  // catches chips that any one shot missed.
+  //   t=0.0 — greedy decoding, most "honest" baseline pass
+  //   t=0.3 — light sampling, breaks symmetry on borderline-visible chips
+  //   t=0.6 — more sampling, occasionally catches chips the greedy pass
+  //           dismissed as "probably part of the chip below"
+  // We don't go above 0.6 because higher temps start producing JSON
+  // schema violations and color hallucinations, which doesn't help.
+  // Free-tier Pro = 5 RPM / 25 RPD; 3 calls / photo × 5 photos / game
+  // = 15 calls — comfortably under the daily limit, and the 3 are
+  // parallel so they all consume from the SAME 60s window (3 of 5 RPM).
+  const payloads = [0.0, 0.3, 0.6].map(temperature => buildChipCountPayload({
+    imageBase64, mimeType, orderedChips, expectedTotalValue, temperature,
+  }));
 
   const apiKey = getSettings()?.geminiApiKey || '';
 
   // Multi-shot strategy with cascading model fallback:
   //   For each model in CHIP_COUNT_MODELS:
-  //     1. Try BOTH shots in parallel.
-  //     2. If at least one succeeds, return the consensus result.
-  //     3. If both fail, advance to the next model.
-  //
-  // This gives us the "Pro × 2 = best confidence; Pro × 1 = degraded
-  // but usable; Flash × 2 = fallback consensus; Flash × 1 = last-ditch
-  // single-shot" progression without explicit branching at every step.
+  //     1. Try ALL three shots in parallel.
+  //     2. If at least one succeeds, return the consensus result with
+  //        whatever survived (3 shots > 2 shots > 1 shot). MAX
+  //        aggregation means more shots → strictly better counts.
+  //     3. If all three fail, advance to the next model.
   let lastErrorMsg = '';
   let lastErrorCode: PhotoChipCountErrorCode = 'httpError';
 
@@ -4425,61 +4472,42 @@ export async function countChipsFromPhoto(
 
     if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
 
-    // Run both shots in parallel for this model.
-    const [r1, r2] = await Promise.all([
-      runChipCountShot({ version, model, apiKey, payload: payload1, abortSignal }),
-      runChipCountShot({ version, model, apiKey, payload: payload2, abortSignal }),
-    ]);
+    // Run all shots in parallel for this model.
+    const results = await Promise.all(
+      payloads.map(payload =>
+        runChipCountShot({ version, model, apiKey, payload, abortSignal })),
+    );
 
     if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
 
-    // Decide what we have to work with.
-    if (r1.shot && r2.shot) {
-      // Best case: 2-shot consensus.
-      onProgress?.({
-        phase: 'success',
-        model,
-        modelDisplay,
-        attempt,
-        totalModels: CHIP_COUNT_MODELS.length,
-      });
-      return combineShots({
-        shot1: r1.shot,
-        shot2: r2.shot,
-        orderedChips,
-        expectedTotalValue,
-        modelLabel: `${model}×2`,
-        shotsUsed: 2,
-      });
-    }
-
-    if (r1.shot || r2.shot) {
-      // Degraded: one shot succeeded, one failed (typically rate-limit
-      // on the second). Use the survivor with reduced confidence.
-      const survivor = (r1.shot || r2.shot) as RawShot;
-      onProgress?.({
-        phase: 'success',
-        model,
-        modelDisplay,
-        attempt,
-        totalModels: CHIP_COUNT_MODELS.length,
-      });
-      return combineShots({
-        shot1: survivor,
-        shot2: null,
-        orderedChips,
-        expectedTotalValue,
-        modelLabel: `${model}×1`,
-        shotsUsed: 1,
-      });
-    }
-
-    // Both shots failed for this model — record the worst error and
-    // advance. Cancellation short-circuits the whole loop.
-    if (r1.errorCode === 'cancelled' || r2.errorCode === 'cancelled') {
+    // Collect successful shots (cancellation short-circuits the whole loop).
+    if (results.some(r => r.errorCode === 'cancelled')) {
       return emptyChipCountResult('Cancelled', 'cancelled');
     }
-    // Prefer parseFailed > unexpectedShape > httpError > network when
+    const survivors = results
+      .map(r => r.shot)
+      .filter((s): s is RawShot => s !== null);
+
+    if (survivors.length > 0) {
+      onProgress?.({
+        phase: 'success',
+        model,
+        modelDisplay,
+        attempt,
+        totalModels: CHIP_COUNT_MODELS.length,
+      });
+      return combineShots({
+        shots: survivors,
+        orderedChips,
+        expectedTotalValue,
+        modelLabel: `${model}×${survivors.length}`,
+        shotsUsed: survivors.length,
+      });
+    }
+
+    // All shots failed for this model — record the worst error and
+    // advance to the next model in the fallback chain. Prefer
+    // parseFailed > unexpectedShape > httpError > network when
     // surfacing the error code (more specific = more useful for debug).
     const codeRank: Record<PhotoChipCountErrorCode, number> = {
       missingImage: 0,
@@ -4490,8 +4518,11 @@ export async function countChipsFromPhoto(
       unexpectedShape: 3,
       parseFailed: 4,
     };
-    const pick = codeRank[r1.errorCode] >= codeRank[r2.errorCode] ? r1 : r2;
-    lastErrorMsg = pick.errorMsg || `${model}: both shots failed`;
+    const pick = results.reduce((worst, r) =>
+      codeRank[r.errorCode] > codeRank[worst.errorCode] ? r : worst,
+      results[0],
+    );
+    lastErrorMsg = pick.errorMsg || `${model}: all shots failed`;
     lastErrorCode = pick.errorCode;
   }
 

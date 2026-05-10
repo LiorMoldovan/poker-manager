@@ -49,7 +49,17 @@ type Phase = 'instruction' | 'preview' | 'processing' | 'error';
 interface PhotoCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onResult: (result: PhotoChipCountResult, previewBase64: string) => void;
+  /**
+   * Fires once with the AI result. `previewBase64` is the ENHANCED
+   * image we sent to the model (NOT the raw camera output) — that's
+   * the image the developer would need to replay any failure case,
+   * so it's also what gets uploaded if the group has opted in to
+   * the chip-count feedback photo bucket. `previewMimeType` is the
+   * matching content-type for that base64 (always `image/jpeg` at
+   * present, but plumbed explicitly so a future PNG path stays
+   * sound).
+   */
+  onResult: (result: PhotoChipCountResult, previewBase64: string, previewMimeType: string) => void;
   chipValues: ChipValue[];
   expectedTotalValue?: number;
   /** Title shown in the modal header. Defaults to a generic Hebrew string. */
@@ -204,7 +214,7 @@ const PhotoCaptureModal = ({
         return;
       }
 
-      onResult(result, previewBase64);
+      onResult(result, previewBase64, previewMimeType);
       onClose();
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -319,10 +329,11 @@ const PhotoCaptureModal = ({
                        and AI interpretation can never disagree. */
                     <div style={{
                       display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.4rem',
+                      flexWrap: 'nowrap',
+                      gap: '0.25rem',
                       marginTop: '0.5rem',
                       direction: 'ltr', // photo arrangement is ALWAYS left→right ascending, regardless of UI language
+                      width: '100%',
                     }}>
                       {orderedChips.map((chip, idx) => (
                         <div key={chip.id} style={{
@@ -330,7 +341,8 @@ const PhotoCaptureModal = ({
                           flexDirection: 'column',
                           alignItems: 'center',
                           gap: '2px',
-                          minWidth: '38px',
+                          flex: '1 1 0',
+                          minWidth: 0,
                         }}>
                           <div style={{
                             fontSize: '0.65rem',
@@ -365,6 +377,45 @@ const PhotoCaptureModal = ({
                 <li>{t('chips.photo.instructionStep4')}</li>
               </ul>
             </div>
+
+            {/* v5.49: actionable tips to improve AI accuracy. Expandable
+                because they're not strictly required (the AI works
+                without them) but they materially improve the count
+                quality. Default-collapsed so we don't overwhelm the
+                instruction phase. The tips block targets the systematic
+                undercount-by-1-2 failure mode reported in field tests
+                — every tip directly addresses one mechanism causing it. */}
+            <details style={{
+              marginBottom: '0.85rem',
+              padding: '0.6rem 0.85rem',
+              background: 'rgba(59,130,246,0.06)',
+              border: '1px solid rgba(59,130,246,0.20)',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              color: 'var(--text)',
+            }}>
+              <summary style={{
+                fontWeight: 700,
+                cursor: 'pointer',
+                listStyle: 'none',
+                color: '#60a5fa',
+              }}>
+                {t('chips.photo.tipsTitle')}
+              </summary>
+              <ul style={{
+                margin: '0.5rem 0 0 0',
+                paddingInlineStart: '1.25rem',
+                lineHeight: 1.55,
+              }}>
+                <li>{t('chips.photo.tip.angle')}</li>
+                <li>{t('chips.photo.tip.lighting')}</li>
+                <li>{t('chips.photo.tip.background')}</li>
+                <li>{t('chips.photo.tip.maxStack')}</li>
+                <li>{t('chips.photo.tip.steady')}</li>
+                <li>{t('chips.photo.tip.gap')}</li>
+                <li>{t('chips.photo.tip.fillFrame')}</li>
+              </ul>
+            </details>
 
             <button
               type="button"

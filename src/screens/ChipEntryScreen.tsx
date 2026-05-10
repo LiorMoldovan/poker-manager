@@ -18,6 +18,7 @@ import {
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
+import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
@@ -273,6 +274,14 @@ const ChipEntryScreen = () => {
   // happen — defensive only).
   const [photoTargetPlayerId, setPhotoTargetPlayerId] = useState<string | null>(null);
   const [photoResults, setPhotoResults] = useState<Record<string, PhotoChipCountResult>>({});
+  // The exact image we sent the AI, kept per-player so we can ship
+  // it as part of the chip-count feedback row when the user
+  // finalizes that player AND the group has opted in to photo
+  // sharing. NOT persisted across reloads — re-photo if you come
+  // back. base64 is the enhanced (auto-leveled) image, not the raw
+  // camera output.
+  const [photoImagesForFeedback, setPhotoImagesForFeedback] =
+    useState<Record<string, { base64: string; mimeType: string }>>({});
   const [userEditedFields, setUserEditedFields] = useState<Record<string, Set<string>>>({});
   const [photoErrorToast, setPhotoErrorToast] = useState<string>('');
   // Whether the photo chip-counting feature is available for this group.
@@ -381,8 +390,36 @@ const ChipEntryScreen = () => {
     setIsLoading(false);
   };
 
-  // Mark player as done and return to player selection
+  // Mark player as done and return to player selection.
+  //
+  // Side effect: if this player had an AI photo count, capture
+  // feedback (per-stack ai vs real diff) so the developer can
+  // mine the data later and tune the pipeline. Silent — never
+  // blocks or surfaces errors to the user. Photo upload to
+  // private storage is opt-in via Settings → Services →
+  // "Help improve AI accuracy" toggle (owner only).
   const markPlayerDone = (playerId: string) => {
+    const photoResult = photoResults[playerId];
+    if (photoResult && !photoResult.error) {
+      const player = players.find(p => p.id === playerId);
+      const photoImage = photoImagesForFeedback[playerId];
+      const settings = getSettings();
+      void submitChipCountFeedback({
+        photoResult,
+        finalCounts: chipCounts[playerId] || {},
+        chipValues,
+        gameId: gameId ?? null,
+        playerId,
+        playerName: player?.playerName,
+        expectedTotalValue: player ? player.rebuys * chipsPerRebuy : undefined,
+        rebuys: player?.rebuys,
+        chipsPerRebuy,
+        photoBase64: photoImage?.base64,
+        photoMimeType: photoImage?.mimeType,
+        shareChipPhotos: settings?.shareChipPhotos === true,
+      });
+    }
+
     setCompletedPlayers(prev => new Set([...prev, playerId]));
     // Close numpad and deselect player - user chooses next
     setNumpadOpen(false);
@@ -467,7 +504,19 @@ const ChipEntryScreen = () => {
   // Apply a PhotoChipCountResult to the currently selected player.
   // Honors the "manual flow protection" guarantee: any field already
   // edited by the user is preserved untouched.
-  const applyPhotoResult = (result: PhotoChipCountResult, playerId: string) => {
+  //
+  // Also stashes the enhanced photo (base64 + mime) so we can
+  // optionally upload it as part of the feedback row in
+  // markPlayerDone — only happens when the group has opted in to
+  // photo sharing (owner toggle in Services tab). When opted-out,
+  // the base64 stays in memory until the player is finalized and
+  // is then dropped (never persisted, never sent off-device).
+  const applyPhotoResult = (
+    result: PhotoChipCountResult,
+    playerId: string,
+    photoBase64?: string,
+    photoMimeType?: string,
+  ) => {
     if (result.error) {
       setPhotoErrorToast(result.error);
       return;
@@ -478,6 +527,12 @@ const ChipEntryScreen = () => {
       updateChipCount(playerId, stack.chipId, stack.count, 'photo');
     }
     setPhotoResults(prev => ({ ...prev, [playerId]: result }));
+    if (photoBase64 && photoMimeType) {
+      setPhotoImagesForFeedback(prev => ({
+        ...prev,
+        [playerId]: { base64: photoBase64, mimeType: photoMimeType },
+      }));
+    }
     setPhotoErrorToast('');
   };
 
@@ -873,6 +928,21 @@ const ChipEntryScreen = () => {
                   </span></>
                 )}
               </div>
+              {/* v5.53: tells the user that editing the AI's numbers
+                  contributes to the feedback loop. Subtle on purpose
+                  — we don't want the user to feel they're filling out
+                  a survey. The actual capture is silent in
+                  markPlayerDone (sends per-stack ai vs real diff to
+                  chip_count_feedback). Migration 069. */}
+              <div style={{
+                marginTop: '0.25rem',
+                fontSize: '0.68rem',
+                color: 'var(--text-muted)',
+                opacity: 0.7,
+                fontStyle: 'italic',
+              }}>
+                {t('chips.photo.banner.feedbackHint')}
+              </div>
             </div>
           )}
 
@@ -1189,7 +1259,9 @@ const ChipEntryScreen = () => {
               setPhotoOpen(false);
               setPhotoTargetPlayerId(null);
             }}
-            onResult={(result) => applyPhotoResult(result, targetPlayer.id)}
+            onResult={(result, base64, mimeType) =>
+              applyPhotoResult(result, targetPlayer.id, base64, mimeType)
+            }
             chipValues={chipValues}
             expectedTotalValue={targetPlayer.rebuys * chipsPerRebuy}
             title={`📷 ${targetPlayer.playerName}`}
