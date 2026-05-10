@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.49.1';
+export const APP_VERSION = '5.50.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.50.0',
+    date: '2026-05-10',
+    changes: [
+      '📷 Chip photo: Gemini 2.5 Pro + dual-shot consensus',
+      '🚦 Real confidence: height + color + total checks',
+      '⚠ Wrong-color chip detection per stack',
+      '🔍 Per-stack recount hints when AI is unsure',
+      '🆕 Brand-new groups see leaderboard preview',
+      '🌱 Sparse groups get trivia countdown card',
+    ],
+  },
   {
     version: '5.49.1',
     date: '2026-05-10',

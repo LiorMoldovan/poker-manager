@@ -94,6 +94,20 @@ const he = {
   'home.lastGame.absentNeverPlayed': '{name}, מוזמן למשחק הראשון שלך',
   'home.leaderboard.title': 'מובילי החודש',
   'home.leaderboard.empty': 'אין עדיין משחקים החודש',
+  // Sparse-group only (group has 1-4 completed all-time games AND
+  // the current month has at least one game but fewer than 2 distinct
+  // players or fewer than 2 games). Keeps the leaderboard card visible
+  // with a forward-looking message instead of crowning a single player
+  // with a misleading 100% win rate. Mature groups (>=5 all-time games)
+  // never see this — they keep the existing "אין עדיין משחקים החודש"
+  // copy and the full top-3 table.
+  'home.leaderboard.warmingUp': 'המובילים יתעוררו אחרי כמה משחקים החודש',
+  // Brand-new group only (zero completed games all-time). Replaces
+  // the previous full-hide so the dashboard shows a tangible preview
+  // of what's coming, not just the blue feature-list teaser. Mature
+  // groups never see this — they always have at least one completed
+  // game so this branch is unreachable for them.
+  'home.leaderboard.previewBrandNew': 'המובילים יופיעו אחרי המשחק הראשון',
   // Onboarding teaser shown on the home dashboard for brand-new groups
   // (zero completed games). Replaces the empty/sparse fresh-group view
   // with a forward-looking preview of what will appear here once they
@@ -107,6 +121,17 @@ const he = {
   'home.leaderboard.rowMeta': '{games} משחקים · {pct}%',
   'home.leaderboard.rowMetaSingleGame': 'משחק אחד · {pct}%',
   'home.trivia.title': 'הידעת?',
+  // Sparse-group only (group has 1-4 completed all-time games AND
+  // the trivia generator produced fewer than 5 facts). Replaces the
+  // RotatingFactCard with a small countdown teaser so the rotation
+  // experience isn't broken by a 1-2 fact "rotation" with no new
+  // content. The countdown number is `5 - groupCompletedGames`, so
+  // the user sees exactly how many more nights they need. Mature
+  // groups (>=5 all-time games) NEVER hit this branch — they keep
+  // rendering the existing RotatingFactCard with whatever facts exist,
+  // including the legitimate early-January sparse case.
+  'home.trivia.warmingUpCountdown': 'עוד {n} משחקים והטריוויה נדלקת',
+  'home.trivia.warmingUpOne': 'עוד משחק אחד והטריוויה נדלקת',
   'home.trivia.mostInTheGreen': 'מלך הרווחים העקביים: {name} מסיים בפלוס ב-{pct}% מהמשחקים השנה ({wins} מתוך {games})',
   'home.trivia.mostInTheGreenMulti': 'מלכי הרווחים העקביים: {players} — {pct}% בפלוס לכל אחד',
   'home.trivia.profitChamp': 'אלוף הרווחים בכל הזמנים: {name} — רווח של {profit} ב-{games} משחקים',
@@ -1068,6 +1093,22 @@ const he = {
   'chips.photo.banner.totalOver': 'יתר',
   'chips.photo.banner.warningOff': 'אזהרה: התוצאה רחוקה מהצפוי, מומלץ לצלם שוב או לבדוק ידנית',
   'chips.photo.banner.retake': '📷 צלם שוב',
+  // Honest framing — shown under the confidence number on every result.
+  // Counts and confidence are AI estimates, not certainties; the user
+  // is the final authority on what gets saved to the game.
+  'chips.photo.banner.verifyHint': 'הערכת AI — בדקו לפני שמירה',
+  // Shown when only one of the two consensus shots came back (the other
+  // hit a rate-limit or transient error). Confidence is auto-reduced.
+  'chips.photo.banner.singleShot': 'צילום בודד (ביטחון מופחת)',
+  // Shown when ≥1 stack was flagged for manual recount (low confidence).
+  // Token {n} is the count of stacks needing recount.
+  'chips.photo.banner.recountCount': '⚠ {n} ערימות לבדיקה ידנית',
+  // Per-stack header tooltips
+  'chips.photo.stack.recount': 'ביטחון נמוך — מומלץ לספור ידנית',
+  'chips.photo.stack.colorMismatch': 'הצבע בערימה זו לא תואם לציפייה — ייתכן שהז\'יטונים סודרו לא לפי הסדר הנכון',
+  // Shown under the spinner during the analyze step. Tells the user
+  // the wait is intentional (we run two parallel calls for accuracy).
+  'chips.photo.status.dualShot': 'מריץ שני ניתוחים מקבילים לדיוק',
 
   // ── Game Summary ──
   'summary.loading': 'טוען סיכום...',
@@ -2497,6 +2538,8 @@ const en: Record<keyof typeof he, string> = {
   'home.lastGame.absentNeverPlayed': '{name}, join your first game',
   'home.leaderboard.title': 'Top of the Month',
   'home.leaderboard.empty': 'No games yet this month',
+  'home.leaderboard.warmingUp': 'Leaderboard wakes up once a few games are in this month',
+  'home.leaderboard.previewBrandNew': 'Leaderboard appears after your first game',
   'home.newGroup.title': 'Your first poker night is on the way',
   'home.newGroup.subtitle': "Once you play, this is what'll show up here:",
   'home.newGroup.feature1': '🏆 Results, winners and losses',
@@ -2506,6 +2549,8 @@ const en: Record<keyof typeof he, string> = {
   'home.leaderboard.rowMeta': '{games} games · {pct}%',
   'home.leaderboard.rowMetaSingleGame': '1 game · {pct}%',
   'home.trivia.title': 'Did you know?',
+  'home.trivia.warmingUpCountdown': '{n} more games and trivia comes alive',
+  'home.trivia.warmingUpOne': 'One more game and trivia comes alive',
   'home.trivia.mostInTheGreen': 'Most consistent earner: {name} finishes in the green {pct}% of this year\'s games ({wins} of {games})',
   'home.trivia.mostInTheGreenMulti': 'Most consistent earners: {players} — {pct}% in the green each',
   'home.trivia.profitChamp': 'All-time profit champion: {name} with {profit} across {games} games',
@@ -3427,6 +3472,12 @@ const en: Record<keyof typeof he, string> = {
   'chips.photo.banner.totalOver': 'over',
   'chips.photo.banner.warningOff': 'Warning: result is far from expected — retake or verify manually',
   'chips.photo.banner.retake': '📷 Retake',
+  'chips.photo.banner.verifyHint': 'AI estimate — verify before saving',
+  'chips.photo.banner.singleShot': 'single shot (reduced confidence)',
+  'chips.photo.banner.recountCount': '⚠ {n} stack(s) need manual recount',
+  'chips.photo.stack.recount': 'Low confidence — please recount manually',
+  'chips.photo.stack.colorMismatch': 'Color in this stack doesn\'t match expected — chips may be in the wrong order',
+  'chips.photo.status.dualShot': 'running two parallel analyses for accuracy',
   'chips.color.black': 'Black',
   'chips.color.yellow': 'Yellow',
 

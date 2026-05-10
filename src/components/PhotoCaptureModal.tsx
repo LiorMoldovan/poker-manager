@@ -173,15 +173,16 @@ const PhotoCaptureModal = ({
         expectedTotalValue,
         abortSignal: controller.signal,
         // Live status updates as the function tries each model in the
-        // fallback chain. First attempt shows the model name; later
-        // attempts add an "alternate model" label so the user knows
-        // we're not stuck — we're recovering from a hiccup.
+        // fallback chain. As of v5.48 each model attempt fires TWO
+        // parallel shots for consensus, so the wait per model is
+        // ~3-5s with Pro / ~1-2s with Flash. We surface this to the
+        // user so a 5-second spinner doesn't feel like a hang.
         onProgress: ({ phase, modelDisplay, attempt }) => {
           if (phase === 'attempting') {
             const key: TranslationKey = attempt === 0
               ? 'chips.photo.status.askingModel'
               : 'chips.photo.status.tryingFallback';
-            setStatusMsg(`${t(key)} (${modelDisplay})`);
+            setStatusMsg(`${t(key)} (${modelDisplay}) · ${t('chips.photo.status.dualShot')}`);
           }
         },
       });

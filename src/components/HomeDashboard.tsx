@@ -303,6 +303,23 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
     return completed[0] ?? null;
   }, [allGames]);
 
+  // ── Sparse-group flag (single safety gate) ──────────────────────
+  // Every "smart empty state" branch added for new/sparse groups
+  // (Leaderboard warming-up copy, Trivia countdown card, AboutYou
+  // hide-on-too-few-facts, PersonalCard hide-on-zero-games) is
+  // gated on this flag and ONLY this flag. The threshold of 5
+  // matches the trivia countdown's natural unlock point — below 5
+  // games the dashboard treats the group as still emerging; at 5
+  // games and beyond every card takes its existing code path
+  // verbatim. This makes mature-group safety auditable in one
+  // place: if isSparseGroup is false, behavior is byte-identical
+  // to before this change.
+  const groupCompletedGames = useMemo(
+    () => allGames.filter(g => g.status === 'completed').length,
+    [allGames],
+  );
+  const isSparseGroup = groupCompletedGames < 5;
+
   // Training engagement data, loaded async so it doesn't block the
   // initial dashboard render. Used by TriviaCard to surface
   // group-wide practice facts ("X answered N questions", "accuracy
@@ -455,6 +472,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
           games={allGames}
           gamePlayers={allGamePlayers}
           playerName={playerName}
+          isSparseGroup={isSparseGroup}
         />
       )}
       {/* Brand-new group teaser — only renders when zero games have
@@ -480,7 +498,16 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
           onClick={goLastGame}
         />
       )}
-      {myStats && <PersonalCard order={next()} step={STEP} t={t} stats={myStats} onClick={goPersonal} />}
+      {/* PersonalCard: in sparse groups (<5 all-time games), hide when
+          the viewer has played zero games — three zero-tiles
+          ("Games: 0 · Win%: 0% · Total: ₪0") on a brand-new dashboard
+          add noise without information. In mature groups (>=5 all-time
+          games), keep today's behavior so a new joiner with 0 games
+          still sees their (zero) stats card — matches the rest of the
+          dashboard which shows real data points there. */}
+      {myStats && (myStats.gamesPlayed > 0 || !isSparseGroup) && (
+        <PersonalCard order={next()} step={STEP} t={t} stats={myStats} onClick={goPersonal} />
+      )}
       <LeaderboardCard
         order={next()}
         step={STEP}
@@ -488,6 +515,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         games={allGames}
         gamePlayers={allGamePlayers}
         playerName={playerName}
+        isSparseGroup={isSparseGroup}
         onClick={goLeaderboard}
       />
       {trainingEnabled && (
@@ -508,6 +536,8 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         gamePlayers={allGamePlayers}
         playerStats={playerStats}
         trainingPlayers={trainingPlayers}
+        isSparseGroup={isSparseGroup}
+        groupCompletedGames={groupCompletedGames}
       />
     </div>
   );
@@ -1789,11 +1819,16 @@ interface LeaderboardProps extends SectionProps {
   games: ReturnType<typeof getAllGames>;
   gamePlayers: ReturnType<typeof getAllGamePlayers>;
   playerName: string | null;
+  // True iff the group has fewer than 5 completed all-time games. The
+  // ONLY gate that controls the new "warming up" branch — mature
+  // groups (>=5 all-time games) always pass this as false and take
+  // the same code paths they did before this change.
+  isSparseGroup: boolean;
   onClick: () => void;
 }
 
-function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onClick }: LeaderboardProps) {
-  const { top3, monthLabel, hasAnyCompletedGames } = useMemo(() => {
+function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSparseGroup, onClick }: LeaderboardProps) {
+  const { top3, monthLabel, hasAnyCompletedGames, monthGameCount, monthDistinctPlayers } = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
@@ -1825,6 +1860,8 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
         top3: [] as { name: string; profit: number; games: number; wins: number }[],
         monthLabel,
         hasAnyCompletedGames,
+        monthGameCount: 0,
+        monthDistinctPlayers: 0,
       };
     }
 
@@ -1851,16 +1888,10 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
       top3: [...byPlayer.values()].sort((a, b) => b.profit - a.profit).slice(0, 3),
       monthLabel,
       hasAnyCompletedGames,
+      monthGameCount: monthGameIds.size,
+      monthDistinctPlayers: byPlayer.size,
     };
   }, [games, gamePlayers]);
-
-  // Brand-new group with zero completed games ever → don't render the
-  // leaderboard at all. Showing "מובילי החודש · אין עדיין משחקים החודש"
-  // for a group that has never played is misleading copy AND wasted
-  // dashboard real estate. The card reappears the moment the first
-  // game is completed (which is exactly when "leaderboard" becomes a
-  // real concept for that group).
-  if (!hasAnyCompletedGames) return null;
 
   // Title carries the month inline ("מובילי החודש · מאי 2026")
   // instead of a separate subtitle line — the user wants the period
@@ -1869,6 +1900,48 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
   // is visible too (matters in January when "מאי" alone could be
   // last year's results coming back into the rolling window).
   const titleWithMonth = `${t('home.leaderboard.title')} · ${monthLabel}`;
+
+  // Brand-new group (zero completed games all-time) — render a
+  // visible preview of the leaderboard card instead of hiding it.
+  // The blue NewGroupTeaserCard already lists "leaderboard" as a
+  // promised feature, but a real card placeholder gives the new
+  // admin a more concrete glance of what the dashboard will look
+  // like. Mature groups (>=5 all-time games) NEVER reach this
+  // branch — `hasAnyCompletedGames` is always true for them.
+  if (!hasAnyCompletedGames) {
+    return (
+      <HomeCard
+        order={order}
+        step={step}
+        icon="🏅"
+        title={titleWithMonth}
+        subtitle={t('home.leaderboard.previewBrandNew')}
+        onClick={onClick}
+      />
+    );
+  }
+
+  // Sparse-group warming-up state: at least one game has happened
+  // this month but the data is too thin to crown anyone (only one
+  // distinct player has played, OR only one game total). Crowning
+  // a single player with a 100% win rate after their first night
+  // is misleading — the warming-up copy keeps the card visible
+  // and forward-looking until a 2nd player or 2nd game arrives.
+  // Gated on `isSparseGroup` so MATURE groups (>=5 all-time games)
+  // continue to render their existing top-3 table for the very
+  // first game of a new month, exactly as before this change.
+  if (isSparseGroup && monthGameCount > 0 && (monthDistinctPlayers < 2 || monthGameCount < 2)) {
+    return (
+      <HomeCard
+        order={order}
+        step={step}
+        icon="🏅"
+        title={titleWithMonth}
+        subtitle={t('home.leaderboard.warmingUp')}
+        onClick={onClick}
+      />
+    );
+  }
 
   if (top3.length === 0) {
     return (
@@ -2052,9 +2125,29 @@ interface TriviaProps extends SectionProps {
   gamePlayers: ReturnType<typeof getAllGamePlayers>;
   playerStats: PlayerStats[];
   trainingPlayers: TrainingPlayerData[];
+  // True iff the group has fewer than 5 completed all-time games.
+  // ONLY gate on the new countdown branch — mature groups always
+  // pass false here and take the existing RotatingFactCard path,
+  // even in legitimately sparse early-year cases (e.g. Jan 5 with
+  // 0 year-to-date games but 50 all-time).
+  isSparseGroup: boolean;
+  // Completed all-time game count, used to compute the user-visible
+  // countdown ("עוד N משחקים והטריוויה נדלקת"). Only consulted
+  // inside the sparse-group branch.
+  groupCompletedGames: number;
 }
 
-function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingPlayers }: TriviaProps) {
+function TriviaCard({
+  order,
+  step,
+  t,
+  games,
+  gamePlayers,
+  playerStats,
+  trainingPlayers,
+  isSparseGroup,
+  groupCompletedGames,
+}: TriviaProps) {
   const { language } = useTranslation();
   const navigate = useNavigate();
   const trivia = useMemo(
@@ -2063,7 +2156,10 @@ function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingP
   );
 
   // Daily-rotating start point — every device sees the same fact on
-  // any given UTC day, then the user can cycle from there.
+  // any given UTC day, then the user can cycle from there. Computed
+  // unconditionally (BEFORE the sparse-group branch below) so the
+  // hook order is stable across renders even if the group crosses
+  // the 5-game boundary mid-session.
   const initialIndex = useMemo(() => {
     if (trivia.length === 0) return 0;
     const dayOfYear = Math.floor(
@@ -2071,6 +2167,39 @@ function TriviaCard({ order, step, t, games, gamePlayers, playerStats, trainingP
     );
     return dayOfYear % trivia.length;
   }, [trivia.length]);
+
+  // ── Sparse-group countdown branch ──────────────────────────────
+  // For brand-new (0 games) and sparse-data (1-4 games) groups
+  // where the trivia generator hasn't produced enough material to
+  // make a real rotation, replace the RotatingFactCard with a tiny
+  // teaser card that explicitly tells the user how many more games
+  // until the trivia pool unlocks. Gated on isSparseGroup so MATURE
+  // groups (>=5 all-time games) NEVER hit this branch — they
+  // continue to render the existing RotatingFactCard with whatever
+  // facts exist, including the legitimate early-January sparse
+  // case where year-to-date is empty.
+  //
+  // The `groupCompletedGames === 0` case is intentionally INCLUDED
+  // here so brand-new groups see the countdown ("עוד 5 משחקים
+  // והטריוויה נדלקת") instead of the card disappearing entirely.
+  // This gives the 0-game dashboard one more concrete preview of
+  // a feature that's coming, alongside the LeaderboardCard preview
+  // and the NewGroupTeaserCard list.
+  if (isSparseGroup && trivia.length < 5) {
+    const remaining = Math.max(0, 5 - groupCompletedGames);
+    const subtitle = remaining === 1
+      ? t('home.trivia.warmingUpOne')
+      : t('home.trivia.warmingUpCountdown', { n: remaining });
+    return (
+      <HomeCard
+        order={order}
+        step={step}
+        icon="💡"
+        title={t('home.trivia.title')}
+        subtitle={subtitle}
+      />
+    );
+  }
 
   return (
     <RotatingFactCard
@@ -2609,6 +2738,12 @@ interface AboutYouCardProps extends SectionProps {
   games: ReturnType<typeof getAllGames>;
   gamePlayers: ReturnType<typeof getAllGamePlayers>;
   playerName: string;
+  // True iff the group has fewer than 5 completed all-time games.
+  // ONLY gate on the "hide when facts < 2" tightening — mature
+  // groups (>=5 all-time games) keep today's behavior, including
+  // the edge case of a new joiner with a single fact rendering
+  // a non-rotating one-fact card.
+  isSparseGroup: boolean;
 }
 
 function AboutYouCard({
@@ -2620,6 +2755,7 @@ function AboutYouCard({
   games,
   gamePlayers,
   playerName,
+  isSparseGroup,
 }: AboutYouCardProps) {
   const { language } = useTranslation();
   const navigate = useNavigate();
@@ -2641,6 +2777,17 @@ function AboutYouCard({
     }
     return Math.abs(dayOfYear + nameHash) % facts.length;
   }, [facts.length, playerName]);
+
+  // Sparse-group only: hide the card when there's less than two
+  // facts to rotate through. With one fact the chevrons hint at a
+  // rotation that doesn't deliver — the user taps "next" and
+  // nothing changes. Cleaner to hide entirely in this state.
+  // Gated on isSparseGroup so MATURE groups (>=5 all-time games)
+  // keep today's behavior — even the edge case of a brand-new
+  // joiner of an established group whose single fact would render
+  // a non-rotating card. (RotatingFactCard already returns null
+  // for an empty list, so the 0-fact case is handled regardless.)
+  if (isSparseGroup && facts.length < 2) return null;
 
   return (
     <RotatingFactCard

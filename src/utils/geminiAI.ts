@@ -29,6 +29,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-3-flash-preview': '3 Flash',
   'gemini-3.1-flash-lite-preview': '3.1 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
+  'gemini-2.5-pro': '2.5 Pro',
   // Comic image provider — Pollinations (anonymous, free).
   'pollinations/flux': 'FLUX',
   'pollinations/zimage': 'Pollinations',
@@ -3873,24 +3874,29 @@ export interface CountChipsFromPhotoInput {
 // must (a) be on the FREE Gemini tier (per project policy) and (b)
 // support multimodal input + responseSchema-constrained JSON output.
 //
-// Order rationale:
-//   1. gemini-3-flash-preview     — newest, best vision benchmarks (free
-//      preview tier). Try first for highest accuracy on chip-ring
-//      counting; if it's overloaded / 429 we drop to the proven path.
-//   2. gemini-2.5-flash           — stable workhorse, our reference for
-//      structured-output reliability (used elsewhere in the app for
-//      bbox detection — see line 2991). The "if all else fails this
-//      will work" tier.
-//   3. gemini-3.1-flash-lite-preview — last resort. Cheapest / fastest
-//      free model; lower vision quality but still uses responseSchema
-//      so we won't get malformed JSON back.
+// REWRITTEN v5.48 — Pro-first, multi-shot strategy.
 //
-// Models are attempted in order. First non-error response wins; the
-// model that succeeded is reported back via `PhotoChipCountResult.modelUsed`.
+// Why Pro before Flash now:
+//   We had Flash-3 first for "speed first, accuracy fallback". Real-world
+//   tests on phone photos (May 2026) showed Flash undercounting tall
+//   stacks by 30-50% while reporting 98% confidence — the worst possible
+//   failure mode. Pro is much better at counting visible objects in a
+//   stack (still imperfect, but a meaningful step up). Free-tier limits
+//   for Pro are 5 RPM / 25 RPD — plenty for chip counting (typically
+//   ≤5 photos per game night).
+//
+// Order rationale:
+//   1. gemini-2.5-pro            — best vision model on the free tier.
+//      Slower (~3-5s) but accurate. Used in the multi-shot consensus
+//      pass below.
+//   2. gemini-3-flash-preview    — fast fallback when Pro is rate-limited
+//      or otherwise unavailable. Quality is lower; we lean on the
+//      computed confidence layer to flag anything dodgy.
+//   3. gemini-2.5-flash          — last-resort stable Flash.
 const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
+  { version: 'v1beta', model: 'gemini-2.5-pro' },
   { version: 'v1beta', model: 'gemini-3-flash-preview' },
   { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
 ];
 
 // Tolerant JSON parser for the chip-count response. Strict JSON.parse
@@ -3900,8 +3906,13 @@ const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
 // trailing commas — we apply a minimal sequence of textual repairs
 // and try again before giving up. Throws on irrecoverable input so
 // the caller's catch can surface a "Parse failed" message.
+//
+// NOTE v5.48: response shape changed from `{ position, count, confidence }`
+// to `{ position, count, topColorHex }` — the model no longer self-reports
+// confidence (it was useless), but instead reports the visible top-chip
+// color so we can verify the stack is in the expected position.
 function parseChipCountResponse(raw: string): {
-  stacks?: { position?: number; count?: number; confidence?: number }[];
+  stacks?: { position?: number; count?: number; topColorHex?: string }[];
 } {
   const trimmed = raw.trim();
   try {
@@ -3936,6 +3947,426 @@ function parseChipCountResponse(raw: string): {
   return JSON.parse(candidate);
 }
 
+// ─── Helpers (color match, confidence math, single-shot call) ────────
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+// HSL conversion from a #RRGGBB hex. Returns hue in 0-360, sat/light in 0-1.
+// Robust to short hex (#RGB), missing #, bad input (returns mid-grey).
+function hexToHsl(hex: string): [number, number, number] {
+  if (typeof hex !== 'string') return [0, 0, 0.5];
+  let h = hex.trim().replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (h.length !== 6 || !/^[0-9a-f]{6}$/i.test(h)) return [0, 0, 0.5];
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let s = 0;
+  let hue = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: hue = ((g - b) / d + (g < b ? 6 : 0)); break;
+      case g: hue = ((b - r) / d + 2); break;
+      default: hue = ((r - g) / d + 4); break;
+    }
+    hue *= 60;
+  }
+  return [hue, s, l];
+}
+
+// Perceptual-ish color distance for chip-color verification.
+// Returns 0 (identical) to 1 (max distinguishable). Tuned for the
+// poker-chip palette (white, red, blue, green, black, yellow):
+//   - When either color is near-greyscale (S < 0.2), lightness dominates
+//     (white vs black is a clear lightness win, hue is meaningless).
+//   - Otherwise hue distance dominates, with lightness/saturation as
+//     tiebreakers (red vs green = different hues; light-red vs dark-red
+//     = same hue but different lightness, still a meaningful diff).
+//   - Hue distance is circular (red-355 vs red-5 should be near-zero).
+function colorDistance(hex1: string, hex2: string): number {
+  const [h1, s1, l1] = hexToHsl(hex1);
+  const [h2, s2, l2] = hexToHsl(hex2);
+  const hueDelta = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2)) / 180; // 0..1
+  const lightDelta = Math.abs(l1 - l2); // 0..1
+  const satDelta = Math.abs(s1 - s2);   // 0..1
+  // Both near-greyscale → only lightness matters.
+  if (s1 < 0.2 && s2 < 0.2) {
+    return lightDelta;
+  }
+  // One is greyscale, other isn't → that itself is a strong signal.
+  if (s1 < 0.2 || s2 < 0.2) {
+    return Math.max(satDelta, lightDelta * 0.7);
+  }
+  // Both saturated — hue is primary, lightness is secondary tiebreaker.
+  return Math.max(hueDelta, lightDelta * 0.5);
+}
+
+// Threshold above which we consider two chip colors "different".
+// 0.20 was tuned against the standard chip palette: red/blue/green/yellow
+// pair-distances all land in 0.30-0.55 range; a single chip's
+// shoot-to-shoot color jitter under reasonable lighting stays under 0.15.
+const COLOR_MATCH_THRESHOLD = 0.20;
+
+// One raw shot from a single Gemini call, BEFORE consensus combination.
+// `null` count means the model didn't return that position at all
+// (parseable response but missing that stack).
+interface RawShot {
+  model: string;
+  // Indexed by position (1-based) → result for that position.
+  byPosition: Map<number, { count: number | null; topColorHex: string }>;
+}
+
+// Compute the real per-stack confidence from physical/mathematical
+// signals (NOT the model's self-rating). This is the heart of why
+// v5.48 confidence numbers are trustworthy where v5.47's were not.
+//
+// Inputs:
+//   count1, count2 — counts from shot 1 and shot 2 (count2 may be null
+//     when only one shot succeeded).
+//   topColorHex   — model-reported top-chip color (from shot 1 — we
+//     don't try to reconcile colors across shots, just counts).
+//   expectedColorHex — the displayColor we expected at this position.
+//
+// Output: combined count + computed confidence + diagnostic flags.
+function computeStackConfidence(args: {
+  count1: number;
+  count2: number | null;
+  topColorHex: string;
+  expectedColorHex: string;
+}): {
+  count: number;
+  confidence: number;
+  rawCounts: number[];
+  topColorHex: string;
+  colorMatch: boolean;
+  needsRecount: boolean;
+} {
+  const { count1, count2, topColorHex, expectedColorHex } = args;
+
+  // 1. Combine counts via consensus.
+  let count: number;
+  let agreementFactor: number; // 0..1
+  let rawCounts: number[];
+  if (count2 == null) {
+    count = count1;
+    rawCounts = [count1];
+    // Single shot — we have NO consensus signal, so trust is reduced.
+    agreementFactor = 0.7;
+  } else {
+    rawCounts = [count1, count2];
+    if (count1 === count2) {
+      count = count1;
+      agreementFactor = 1.0;
+    } else {
+      // Disagreement → average (rounded), penalise per unit of disagreement.
+      const diff = Math.abs(count1 - count2);
+      count = Math.round((count1 + count2) / 2);
+      // 1-off → 0.75, 2-off → 0.55, 3-off → 0.40, 4+-off → ≤0.25.
+      agreementFactor = Math.max(0.10, 1 - diff * 0.20);
+    }
+  }
+
+  // 2. Stack-height penalty. Counting tall stacks from a 2D photo is
+  //    fundamentally unreliable — even Pro routinely undercounts past
+  //    8-10 chips. Cap confidence accordingly.
+  let heightFactor: number;
+  if (count <= 8) heightFactor = 1.0;
+  else if (count <= 12) heightFactor = 1 - (count - 8) * 0.07; // 9→0.93, 12→0.72
+  else if (count <= 18) heightFactor = 0.50;
+  else heightFactor = 0.30;
+
+  // 3. Color verification. If the model says the top of position-1 is
+  //    red but we expected white, the user almost certainly arranged
+  //    the photo wrong (or this is the wrong position) — drop confidence
+  //    hard so they recount.
+  const dist = colorDistance(topColorHex, expectedColorHex);
+  const colorMatch = !topColorHex || dist <= COLOR_MATCH_THRESHOLD;
+  // For zero-count stacks (player has none of this color), color is
+  // meaningless — there's no chip to read a color from. Don't penalize.
+  const colorFactor = (count === 0 || colorMatch) ? 1.0 : 0.35;
+
+  // 4. Combine and cap.
+  let confidence = Math.round(agreementFactor * heightFactor * colorFactor * 100);
+
+  // Special case: count=0 with color match → high confidence (it's
+  // easy to verify "no chips here"). Without color match, we can't
+  // even tell what's there, so penalize.
+  if (count === 0) {
+    confidence = colorMatch ? 95 : 50;
+  }
+
+  // 5. Honesty cap. Even when every signal is perfect, we never claim
+  //    >90% — single-shot LLM vision counting is not 100% reliable
+  //    even on easy cases, and pretending otherwise burns user trust.
+  confidence = clamp(confidence, 0, 90);
+
+  return {
+    count,
+    confidence,
+    rawCounts,
+    topColorHex,
+    colorMatch,
+    needsRecount: confidence < 70,
+  };
+}
+
+// Combine per-stack confidences + total-value sanity check into one
+// overall confidence number for the result banner.
+function computeOverallConfidence(
+  stacks: PhotoChipCountStack[],
+  totalValue: number,
+  expectedTotalValue: number | undefined,
+): { overall: number; totalValueDelta: number | undefined } {
+  // Per-stack geometric mean. Skip stacks where the player legitimately
+  // has zero chips of that color (count=0 with high confidence) — they
+  // shouldn't drag the average up OR down, they're just "empty slots".
+  const meaningful = stacks.filter(s => !(s.count === 0 && s.confidence >= 90));
+  let geo: number;
+  if (meaningful.length === 0) {
+    geo = 90; // nothing to count → vacuously confident, but capped.
+  } else {
+    const logSum = meaningful.reduce((acc, s) => acc + Math.log(Math.max(s.confidence, 1)), 0);
+    geo = Math.round(Math.exp(logSum / meaningful.length));
+  }
+
+  // Total-value reality check. If the AI says the player has 7,500 in
+  // chips but they should have ~10,000, something is off — penalise.
+  let totalValueDelta: number | undefined;
+  if (typeof expectedTotalValue === 'number' && expectedTotalValue > 0) {
+    totalValueDelta = (totalValue - expectedTotalValue) / expectedTotalValue;
+    const absDelta = Math.abs(totalValueDelta);
+    if (absDelta > 0.50) geo = Math.round(geo * 0.35);
+    else if (absDelta > 0.25) geo = Math.round(geo * 0.55);
+    else if (absDelta > 0.10) geo = Math.round(geo * 0.80);
+    // Within 10% of expected → no penalty (within reasonable rounding).
+  }
+
+  return { overall: clamp(geo, 0, 90), totalValueDelta };
+}
+
+// Combine 1 or 2 raw shots into the final PhotoChipCountResult.
+function combineShots(args: {
+  shot1: RawShot;
+  shot2: RawShot | null;
+  orderedChips: ChipValue[];
+  expectedTotalValue: number | undefined;
+  modelLabel: string; // e.g. 'gemini-2.5-pro×2' or 'gemini-2.5-flash×1'
+  shotsUsed: number;
+}): PhotoChipCountResult {
+  const { shot1, shot2, orderedChips, expectedTotalValue, modelLabel, shotsUsed } = args;
+
+  const chipById = new Map(orderedChips.map(c => [c.id, c]));
+
+  const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
+    const position = idx + 1;
+    const r1 = shot1.byPosition.get(position);
+    const r2 = shot2?.byPosition.get(position) ?? null;
+    const count1 = r1?.count ?? 0;
+    const count2 = r2 ? (r2.count ?? null) : null;
+    const topColorHex = (r1?.topColorHex || r2?.topColorHex || '').trim();
+    const conf = computeStackConfidence({
+      count1,
+      count2,
+      topColorHex,
+      expectedColorHex: chip.displayColor,
+    });
+    return {
+      position,
+      chipId: chip.id,
+      color: chip.color,
+      count: conf.count,
+      confidence: conf.confidence,
+      rawCounts: conf.rawCounts,
+      topColorHex: conf.topColorHex || undefined,
+      colorMatch: conf.colorMatch,
+      needsRecount: conf.needsRecount,
+    };
+  });
+
+  const totalValue = stacks.reduce((sum, s) => {
+    const chip = chipById.get(s.chipId);
+    return sum + (chip ? s.count * chip.value : 0);
+  }, 0);
+
+  const { overall, totalValueDelta } = computeOverallConfidence(
+    stacks,
+    totalValue,
+    expectedTotalValue,
+  );
+
+  const recountStackIds = stacks.filter(s => s.needsRecount).map(s => s.chipId);
+
+  return {
+    stacks,
+    overallConfidence: overall,
+    totalValue,
+    modelUsed: modelLabel,
+    shotsUsed,
+    totalValueDelta,
+    recountStackIds,
+  };
+}
+
+// Build the multimodal payload for ONE chip-counting shot. `temperature`
+// is varied across shots to encourage useful diversity in the consensus
+// (same temp → identical answers → no signal).
+function buildChipCountPayload(args: {
+  imageBase64: string;
+  mimeType: string;
+  orderedChips: ChipValue[];
+  expectedTotalValue: number | undefined;
+  temperature: number;
+}): unknown {
+  const { imageBase64, mimeType, orderedChips, expectedTotalValue, temperature } = args;
+
+  const orderLines = orderedChips.map((c, i) =>
+    `  Position ${i + 1}: color="${c.color}", denomination=${c.value}, hex=${c.displayColor}`,
+  ).join('\n');
+
+  const expectedTotalLine = (typeof expectedTotalValue === 'number' && expectedTotalValue > 0)
+    ? `\nFor reference: the player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count × denomination across all positions). DO NOT invent or remove chips to match this — count what you actually see. We use this only to flag results that look implausible.`
+    : '';
+
+  // No self-reported confidence in this prompt. The model's confidence
+  // estimates were near-100% even when wildly wrong (May 2026 testing).
+  // We compute confidence externally from inter-shot agreement, color
+  // verification, stack height, and total-value sanity check.
+  const prompt = `Count poker chips in this photo. For each stack visible left to right, report:
+- position (1-indexed, left to right)
+- count (the number of chips you can see in that stack)
+- topColorHex (the dominant color of the TOP chip's face, as a #RRGGBB hex string — e.g. "#DC2626" for red)
+
+The photo shows a player's chips, sorted by color into separate vertical stacks, viewed from a slight side angle so each chip's edge ring is visible.
+
+EXPECTED arrangement (left to right, smallest denomination on the left):
+${orderLines}
+
+Return EXACTLY ${orderedChips.length} entries — one per expected position 1..${orderedChips.length} — INCLUDING positions where the player has zero chips of that color (use count=0 and topColorHex="#000000" for empty positions).
+
+How to count accurately:
+- Each chip has a clear pattern of stripes around its edge ring. Count the visible stripe patterns on the SIDE of each stack from bottom to top.
+- For tall stacks (more than 10 chips), the top edge often blurs together. Count what you can clearly distinguish; do not invent chips beyond what you actually see.
+- topColorHex: read the color of the TOP chip's FACE (the round part facing the camera), NOT the side stripes. Report the actual color you see — if the player put a red chip in position 1, report "#DC2626" even though we expected white. The user will be alerted to fix the arrangement.
+- If a position has no stack at all, the player has zero chips of that color. Report count=0 and topColorHex="#000000".
+
+Do NOT include a confidence field. Confidence is computed externally from cross-checks.${expectedTotalLine}`;
+
+  return {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType, data: imageBase64 } },
+      ],
+    }],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          stacks: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                position: { type: 'INTEGER' },
+                count: { type: 'INTEGER' },
+                topColorHex: { type: 'STRING' },
+              },
+              required: ['position', 'count', 'topColorHex'],
+            },
+          },
+        },
+        required: ['stacks'],
+      },
+    },
+  };
+}
+
+// Run a single chip-counting Gemini call and parse it into a RawShot.
+// Returns null on any failure (network, HTTP, parse, abort) — caller
+// decides whether the partial result (1 of 2 shots) is enough to
+// proceed or whether to fall back to a different model.
+async function runChipCountShot(args: {
+  version: string;
+  model: string;
+  apiKey: string;
+  payload: unknown;
+  abortSignal?: AbortSignal;
+}): Promise<{ shot: RawShot | null; errorMsg: string; errorCode: PhotoChipCountErrorCode }> {
+  const { version, model, apiKey, payload, abortSignal } = args;
+
+  let response: Response;
+  try {
+    response = await proxyGeminiGenerateWithSignal(
+      version,
+      model,
+      apiKey,
+      payload,
+      abortSignal,
+    );
+  } catch (err) {
+    if (abortSignal?.aborted) return { shot: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[runChipCountShot] ${model} network error:`, msg);
+    return { shot: null, errorMsg: msg, errorCode: 'network' };
+  }
+
+  if (abortSignal?.aborted) return { shot: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+
+  if (!response.ok) {
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const body = await response.json() as { error?: { message?: string } };
+      if (body?.error?.message) errorMsg = body.error.message;
+    } catch { /* keep HTTP status */ }
+    console.warn(`[runChipCountShot] ${model} HTTP error:`, errorMsg);
+    return { shot: null, errorMsg, errorCode: 'httpError' };
+  }
+
+  let raw = '{}';
+  let parsed: { stacks?: { position?: number; count?: number; topColorHex?: string }[] };
+  try {
+    const data = await response.json();
+    raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    parsed = parseChipCountResponse(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[runChipCountShot] ${model} parse failed:`, msg, 'raw:', raw.slice(0, 200));
+    return { shot: null, errorMsg: `Parse failed: ${msg}`, errorCode: 'parseFailed' };
+  }
+
+  if (!parsed || !Array.isArray(parsed.stacks)) {
+    console.warn(`[runChipCountShot] ${model} unexpected shape:`, raw.slice(0, 200));
+    return { shot: null, errorMsg: 'Unexpected shape', errorCode: 'unexpectedShape' };
+  }
+
+  const byPosition = new Map<number, { count: number | null; topColorHex: string }>();
+  for (const entry of parsed.stacks) {
+    if (!entry || !Number.isFinite(Number(entry.position))) continue;
+    const position = Math.floor(Number(entry.position));
+    const count = Number.isFinite(Number(entry.count)) && Number(entry.count) >= 0
+      ? Math.floor(Number(entry.count))
+      : null;
+    const topColorHex = typeof entry.topColorHex === 'string' ? entry.topColorHex : '';
+    byPosition.set(position, { count, topColorHex });
+  }
+
+  return {
+    shot: { model, byPosition },
+    errorMsg: '',
+    errorCode: 'httpError', // unused on success
+  };
+}
+
 export async function countChipsFromPhoto(
   input: CountChipsFromPhotoInput,
 ): Promise<PhotoChipCountResult> {
@@ -3951,103 +4382,39 @@ export async function countChipsFromPhoto(
   // Single canonical photo order: ascending by denomination (small → high).
   // This matches what the modal instructs the user to do, so the AI's
   // position-1/2/3/... assignment lines up with what's physically in
-  // the photo. No per-group configuration needed — every group sees
-  // the same rule, the order is derived from their own chip values.
-  // Reasoning for this design: an earlier version had a separate
-  // configurable "photo order" setting per group, but it added a
-  // configuration-divergence risk (modal says one order, AI expects
-  // another → wrong counts) for no real upside. See conversation
-  // 2026-05-09.
-  const chipById = new Map(chipValues.map(c => [c.id, c]));
+  // the photo.
   const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
 
-  // Build the prompt. Note we deliberately do NOT include a literal
-  // JSON schema example here: per Google's structured-output guidance
-  // (cloud.google.com/vertex-ai/.../control-generated-output) duplicating
-  // the schema in the prompt while ALSO setting `responseSchema` in
-  // generationConfig "might cause the generated output to be lower in
-  // quality". The schema in `generationConfig` is the single source of
-  // truth for the response shape; the prompt only describes the COUNTING
-  // task.
-  const orderLines = orderedChips.map((c, i) =>
-    `  Position ${i + 1}: color="${c.color}", denomination=${c.value}, hex=${c.displayColor}`,
-  ).join('\n');
-
-  const expectedTotalLine = (typeof expectedTotalValue === 'number' && expectedTotalValue > 0)
-    ? `\nThe player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count×denomination across all positions). If your counts produce a total far from this, lower your confidence accordingly. This is a soft sanity check — do NOT invent or remove chips to match it.`
-    : '';
-
-  const prompt = `Count poker chips in a photo and return one entry per stack position.
-
-The photo shows a player's chip stacks, sorted by color into separate vertical stacks, viewed from a slight side angle (about 30-45 degrees) so each chip's edge ring is visible. The stacks are arranged left-to-right in ascending denomination order (smallest value on the left, largest on the right):
-${orderLines}
-
-Total expected stack count: ${orderedChips.length}. Return EXACTLY ${orderedChips.length} entries in the "stacks" array — one per expected position, in order from 1 to ${orderedChips.length} — INCLUDING positions where the player has zero chips (use count=0 for those).
-
-How to count:
-- Each chip in a stack has a clearly visible white-on-color stripe pattern on its edge ring. Count the visible rings on the side of each stack from bottom to top.
-- The top chip's face confirms the color identity for that position. If the color you see at a position does not match the expected color above, still report it at the expected position (the player may have rearranged) and lower your confidence for that stack.
-- If a player has zero chips of a given color, that position will have no stack visible. Report count=0 and confidence=100 for that position.
-- If a stack is split into visible substacks of about 10 chips each separated by a small gap, prefer (substacks × 10) + leftover top chips. This is a hint; only use it when the substack split is clearly visible.
-- Distinguish carefully between yellow and white chips — they can look similar under warm or dim lighting. Use the position cue above as your primary signal: if Position N is "yellow", the chips there are yellow even if they look pale.
-
-Confidence scoring (0-100, be honest):
-- 95-100: clean sharp photo, stack height obvious, no occlusion. Off-by-one is unlikely.
-- 80-94: stack tilted or partially obscured, or the top of a tall stack is fuzzy. Off-by-1 or off-by-2 plausible.
-- 60-79: significant blur, glare, or unusual angle. You can see roughly how many but not exactly.
-- 0-59: you are guessing. The user will be told to recount this stack manually.${expectedTotalLine}`;
+  // Two payloads with different temperatures so the consensus has
+  // useful diversity (same temp → identical answers → no signal).
+  // 0.0 = greedy decoding (most likely tokens), 0.4 = some sampling
+  // — the latter occasionally catches chips the greedy pass missed,
+  // and disagreement between the two is itself the confidence signal.
+  const payload1 = buildChipCountPayload({
+    imageBase64, mimeType, orderedChips, expectedTotalValue, temperature: 0.0,
+  });
+  const payload2 = buildChipCountPayload({
+    imageBase64, mimeType, orderedChips, expectedTotalValue, temperature: 0.4,
+  });
 
   const apiKey = getSettings()?.geminiApiKey || '';
 
-  // Build the multimodal payload once — the same body goes to each
-  // model in the fallback chain. Schema-constrained via responseSchema
-  // so any model that respects it (all in our chain do) returns valid
-  // JSON regardless of how its prompt-following normally behaves.
-  const payload = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        { inline_data: { mime_type: mimeType, data: imageBase64 } },
-      ],
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 1024,
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: 'OBJECT',
-        properties: {
-          stacks: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: {
-                position: { type: 'INTEGER' },
-                count: { type: 'INTEGER' },
-                confidence: { type: 'INTEGER' },
-              },
-              required: ['position', 'count', 'confidence'],
-            },
-          },
-        },
-        required: ['stacks'],
-      },
-    },
-  };
-
-  // Try each model in CHIP_COUNT_MODELS until one returns parseable
-  // results. Errors that are clearly the user's request being cancelled
-  // (`abortSignal.aborted`) short-circuit; everything else (HTTP 429,
-  // 503, 404, network blip, unparseable JSON despite the schema)
-  // advances to the next model. The model that finally succeeds is
-  // recorded in `modelUsed` so the UI can label the result accordingly.
+  // Multi-shot strategy with cascading model fallback:
+  //   For each model in CHIP_COUNT_MODELS:
+  //     1. Try BOTH shots in parallel.
+  //     2. If at least one succeeds, return the consensus result.
+  //     3. If both fail, advance to the next model.
+  //
+  // This gives us the "Pro × 2 = best confidence; Pro × 1 = degraded
+  // but usable; Flash × 2 = fallback consensus; Flash × 1 = last-ditch
+  // single-shot" progression without explicit branching at every step.
   let lastErrorMsg = '';
   let lastErrorCode: PhotoChipCountErrorCode = 'httpError';
-  let lastRawResponseText = '';
 
   for (let attempt = 0; attempt < CHIP_COUNT_MODELS.length; attempt++) {
     const { version, model } = CHIP_COUNT_MODELS[attempt];
     const modelDisplay = MODEL_DISPLAY_NAMES[model] || model;
+
     onProgress?.({
       phase: 'attempting',
       model,
@@ -4058,118 +4425,77 @@ Confidence scoring (0-100, be honest):
 
     if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
 
-    let response: Response;
-    try {
-      response = await proxyGeminiGenerateWithSignal(
-        version,
-        model,
-        apiKey,
-        payload,
-        abortSignal,
-      );
-    } catch (err) {
-      if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
-      lastErrorMsg = err instanceof Error ? err.message : String(err);
-      lastErrorCode = 'network';
-      console.warn(`[countChipsFromPhoto] ${model} network error:`, lastErrorMsg);
-      continue;
-    }
+    // Run both shots in parallel for this model.
+    const [r1, r2] = await Promise.all([
+      runChipCountShot({ version, model, apiKey, payload: payload1, abortSignal }),
+      runChipCountShot({ version, model, apiKey, payload: payload2, abortSignal }),
+    ]);
 
     if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
 
-    if (!response.ok) {
-      lastErrorMsg = `HTTP ${response.status}`;
-      try {
-        const body = await response.json() as { error?: { message?: string } };
-        if (body?.error?.message) lastErrorMsg = body.error.message;
-      } catch { /* keep HTTP status */ }
-      lastErrorCode = 'httpError';
-      console.warn(`[countChipsFromPhoto] ${model} HTTP error:`, lastErrorMsg);
-      continue;
+    // Decide what we have to work with.
+    if (r1.shot && r2.shot) {
+      // Best case: 2-shot consensus.
+      onProgress?.({
+        phase: 'success',
+        model,
+        modelDisplay,
+        attempt,
+        totalModels: CHIP_COUNT_MODELS.length,
+      });
+      return combineShots({
+        shot1: r1.shot,
+        shot2: r2.shot,
+        orderedChips,
+        expectedTotalValue,
+        modelLabel: `${model}×2`,
+        shotsUsed: 2,
+      });
     }
 
-    let parsed: { stacks?: { position?: number; count?: number; confidence?: number }[] };
-    try {
-      const data = await response.json();
-      lastRawResponseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      parsed = parseChipCountResponse(lastRawResponseText);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[countChipsFromPhoto] ${model} parse failed:`, msg, 'raw:', lastRawResponseText.slice(0, 200));
-      lastErrorMsg = `Parse failed (${model}): ${msg}`;
-      lastErrorCode = 'parseFailed';
-      continue;
+    if (r1.shot || r2.shot) {
+      // Degraded: one shot succeeded, one failed (typically rate-limit
+      // on the second). Use the survivor with reduced confidence.
+      const survivor = (r1.shot || r2.shot) as RawShot;
+      onProgress?.({
+        phase: 'success',
+        model,
+        modelDisplay,
+        attempt,
+        totalModels: CHIP_COUNT_MODELS.length,
+      });
+      return combineShots({
+        shot1: survivor,
+        shot2: null,
+        orderedChips,
+        expectedTotalValue,
+        modelLabel: `${model}×1`,
+        shotsUsed: 1,
+      });
     }
 
-    if (!parsed || !Array.isArray(parsed.stacks)) {
-      console.warn(`[countChipsFromPhoto] ${model} unexpected shape:`, lastRawResponseText.slice(0, 200));
-      lastErrorMsg = `Unexpected shape (${model})`;
-      lastErrorCode = 'unexpectedShape';
-      continue;
+    // Both shots failed for this model — record the worst error and
+    // advance. Cancellation short-circuits the whole loop.
+    if (r1.errorCode === 'cancelled' || r2.errorCode === 'cancelled') {
+      return emptyChipCountResult('Cancelled', 'cancelled');
     }
-
-    // Build stacks array in expected position order. Tolerate missing or
-    // extra entries — fill missing with count=0/confidence=0 (so the UI
-    // marks them as low-confidence rather than blanking out the field),
-    // and ignore any positions beyond what we asked for.
-    const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
-      const position = idx + 1;
-      const entry = parsed.stacks!.find(s => s && Number(s.position) === position);
-      const count = entry && Number.isFinite(Number(entry.count)) && Number(entry.count) >= 0
-        ? Math.floor(Number(entry.count))
-        : 0;
-      const confidence = entry && Number.isFinite(Number(entry.confidence))
-        ? clamp(Math.floor(Number(entry.confidence)), 0, 100)
-        : 0;
-      return {
-        position,
-        chipId: chip.id,
-        color: chip.color,
-        count,
-        confidence,
-      };
-    });
-
-    // Geometric mean of per-stack confidences — a single low-confidence
-    // stack should drag the overall % down hard. Skip stacks with 0/0
-    // (player has none of that color, AI is very confident — these
-    // shouldn't pull the average down).
-    const meaningfulConfidences = stacks
-      .filter(s => !(s.count === 0 && s.confidence === 100))
-      .map(s => Math.max(s.confidence, 1));
-    let overallConfidence: number;
-    if (meaningfulConfidences.length === 0) {
-      overallConfidence = 100;
-    } else {
-      const logSum = meaningfulConfidences.reduce((acc, v) => acc + Math.log(v), 0);
-      overallConfidence = Math.round(Math.exp(logSum / meaningfulConfidences.length));
-    }
-
-    const totalValue = stacks.reduce((sum, s) => {
-      const chip = chipById.get(s.chipId);
-      return sum + (chip ? s.count * chip.value : 0);
-    }, 0);
-
-    onProgress?.({
-      phase: 'success',
-      model,
-      modelDisplay,
-      attempt,
-      totalModels: CHIP_COUNT_MODELS.length,
-    });
-    return {
-      stacks,
-      overallConfidence,
-      totalValue,
-      modelUsed: model,
+    // Prefer parseFailed > unexpectedShape > httpError > network when
+    // surfacing the error code (more specific = more useful for debug).
+    const codeRank: Record<PhotoChipCountErrorCode, number> = {
+      missingImage: 0,
+      noChipsConfig: 0,
+      cancelled: 0,
+      network: 1,
+      httpError: 2,
+      unexpectedShape: 3,
+      parseFailed: 4,
     };
+    const pick = codeRank[r1.errorCode] >= codeRank[r2.errorCode] ? r1 : r2;
+    lastErrorMsg = pick.errorMsg || `${model}: both shots failed`;
+    lastErrorCode = pick.errorCode;
   }
 
-  // All models in the chain failed. Surface the most-recent failure's
-  // code (parseFailed > httpError > network) since that's the closest
-  // signal to "we got a response but it was bad" vs "couldn't connect
-  // at all". `lastModel` is the LAST model tried — fine to attribute
-  // the modelUsed slot to it for diagnostic completeness.
+  // All models exhausted with no usable shot. Return error result.
   const lastModel = CHIP_COUNT_MODELS[CHIP_COUNT_MODELS.length - 1].model;
   onProgress?.({
     phase: 'failed',
@@ -4200,8 +4526,4 @@ function emptyChipCountResult(
     error,
     errorCode,
   };
-}
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
 }

@@ -26,10 +26,17 @@ import PhotoCaptureModal from '../components/PhotoCaptureModal';
 // chip-entry inputs (left-border) and the header banner. Kept as a
 // pure function outside the component so it doesn't capture stale
 // closures.
+//
+// Thresholds rebuilt in v5.48 around the new computed-confidence
+// scale (capped at 90%, with real signal from inter-shot agreement,
+// color verification, height penalty, and total-value sanity check):
+//   ≥80 = green  — both shots agree, color matches, stack short, total close
+//   ≥60 = yellow — minor disagreement OR moderate height OR small total drift
+//   <60 = red    — please verify this stack manually
 const confidenceColor = (confidence: number, isMismatch = false): string => {
   if (isMismatch) return 'rgba(239,68,68,0.7)';   // red — contributes to total mismatch
-  if (confidence >= 95) return 'rgba(16,185,129,0.6)';   // green — high
-  if (confidence >= 80) return 'rgba(234,179,8,0.6)';    // yellow — medium
+  if (confidence >= 80) return 'rgba(16,185,129,0.6)';   // green — high
+  if (confidence >= 60) return 'rgba(234,179,8,0.6)';    // yellow — medium
   return 'rgba(239,68,68,0.7)';                          // red — low
 };
 
@@ -800,8 +807,8 @@ const ChipEntryScreen = () => {
                 <span style={{ fontWeight: 700 }}>
                   {t('chips.photo.banner.confidence')}:&nbsp;
                   <span style={{
-                    color: photoResult.overallConfidence >= 95 ? '#10b981'
-                      : photoResult.overallConfidence >= 80 ? '#eab308'
+                    color: photoResult.overallConfidence >= 80 ? '#10b981'
+                      : photoResult.overallConfidence >= 60 ? '#eab308'
                       : '#ef4444',
                   }}>
                     {photoResult.overallConfidence}%
@@ -847,6 +854,25 @@ const ChipEntryScreen = () => {
                   {t('chips.photo.banner.warningOff')}
                 </div>
               )}
+              {/* Honest framing: AI is an estimate, not a final answer.
+                  Always shown — confidence number alone is too easy to
+                  misread as "trust it blindly". v5.48. */}
+              <div style={{
+                marginTop: '0.4rem',
+                fontSize: '0.7rem',
+                color: 'var(--text-muted)',
+                opacity: 0.85,
+              }}>
+                {t('chips.photo.banner.verifyHint')}
+                {photoResult.shotsUsed === 1 && (
+                  <> · <span style={{ color: '#eab308' }}>{t('chips.photo.banner.singleShot')}</span></>
+                )}
+                {photoResult.recountStackIds && photoResult.recountStackIds.length > 0 && (
+                  <> · <span style={{ color: '#fca5a5', fontWeight: 600 }}>
+                    {t('chips.photo.banner.recountCount').replace('{n}', String(photoResult.recountStackIds.length))}
+                  </span></>
+                )}
+              </div>
             </div>
           )}
 
@@ -893,9 +919,24 @@ const ChipEntryScreen = () => {
               const stack = stackByChipId.get(chip.id);
               const isEdited = editedForPlayer.has(chip.id);
               const showAIBorder = !!stack && !isEdited;
+              // v5.48: a stack is "mismatched" when EITHER the total is off
+              // AND its individual confidence is mediocre (< 70%, not 95
+              // — we cap confidence at 90 now), OR the model flagged it
+              // as needing manual recount, OR the top color it saw didn't
+              // match the expected color (= the player likely placed the
+              // wrong chip in this slot). Any of those → red border.
+              const stackIsMismatch = !!stack && (
+                stack.needsRecount === true ||
+                stack.colorMatch === false ||
+                (!totalWithinTolerance && stack.confidence < 70)
+              );
               const aiBorderColor = showAIBorder
-                ? confidenceColor(stack.confidence, !totalWithinTolerance && stack.confidence < 95)
+                ? confidenceColor(stack.confidence, stackIsMismatch)
                 : null;
+              // Extra at-a-glance icons in the header so the user doesn't
+              // have to read the percentage to spot a problem stack.
+              const showRecountIcon = !!stack && stack.needsRecount === true && !isEdited;
+              const showColorMismatchIcon = !!stack && stack.colorMatch === false && !isEdited && stack.count > 0;
               return (
               <div key={chip.id} className="chip-entry-card" style={{ 
                 borderLeft: aiBorderColor
@@ -917,11 +958,33 @@ const ChipEntryScreen = () => {
                     }} 
                   />
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
-                  {showAIBorder && stack && (
+                  {showColorMismatchIcon && (
                     <span
-                      title={`AI: ${stack.confidence}%`}
+                      title={t('chips.photo.stack.colorMismatch')}
                       style={{
                         marginInlineStart: 'auto',
+                        fontSize: '0.85rem',
+                      }}
+                    >⚠</span>
+                  )}
+                  {showRecountIcon && !showColorMismatchIcon && (
+                    <span
+                      title={t('chips.photo.stack.recount')}
+                      style={{
+                        marginInlineStart: 'auto',
+                        fontSize: '0.85rem',
+                      }}
+                    >🔍</span>
+                  )}
+                  {showAIBorder && stack && (
+                    <span
+                      title={
+                        stack.rawCounts && stack.rawCounts.length > 1
+                          ? `AI: ${stack.confidence}% (shots: ${stack.rawCounts.join(', ')})`
+                          : `AI: ${stack.confidence}%`
+                      }
+                      style={{
+                        marginInlineStart: showRecountIcon || showColorMismatchIcon ? 0 : 'auto',
                         fontSize: '0.65rem',
                         color: aiBorderColor || 'var(--text-muted)',
                         fontWeight: 700,

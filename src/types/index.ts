@@ -300,7 +300,27 @@ export interface PhotoChipCountStack {
   chipId: string;       // matches ChipValue.id
   color: string;        // canonical color name from ChipValue.color (for display)
   count: number;
-  confidence: number;   // 0-100
+  // 0-100. As of v5.48 this is COMPUTED externally (stack-height
+  // penalty × inter-shot agreement × color-match × honesty cap), NOT
+  // self-reported by the model. The model's own confidence number
+  // turned out to be near-100% even when the count was wildly wrong,
+  // so we now ignore it and derive a real signal from physical/
+  // mathematical checks. See `computeStackConfidence` in geminiAI.ts.
+  confidence: number;
+  // ── New diagnostic fields (all optional for backward compat). ──
+  // Populated when the multi-shot consensus path was used.
+  rawCounts?: number[];     // counts from each shot, e.g. [7, 8]
+  // The dominant color hex of the TOP chip's face that the model
+  // reported. Used to verify the user actually placed the right
+  // color in the right position (catches "I put them in the wrong
+  // order" silently — confidence drops, UI flags the stack).
+  topColorHex?: string;
+  // Did `topColorHex` match the expected `displayColor` for this
+  // position within tolerance? false → confidence is heavily penalized.
+  colorMatch?: boolean;
+  // True when computed confidence falls below the "please verify
+  // manually" threshold (currently 70%). UI surfaces a recount hint.
+  needsRecount?: boolean;
 }
 
 // Stable error code for photo-based chip counting failures. The UI
@@ -333,9 +353,24 @@ export type PhotoChipCountErrorCode =
 // showing the raw English diagnostic string to Hebrew users.
 export interface PhotoChipCountResult {
   stacks: PhotoChipCountStack[];
-  overallConfidence: number;     // 0-100, geometric mean of per-stack confidences
+  // 0-100. Capped at 90% even when all signals look perfect — the
+  // honest framing is "AI estimate, please verify". 100% would imply
+  // we'd risk the player's money on it, which we won't.
+  overallConfidence: number;
   totalValue: number;            // Σ(count × chipValue) across all returned stacks
-  modelUsed: string;             // e.g. 'gemini-2.5-flash' for diagnostics
+  modelUsed: string;             // e.g. 'gemini-2.5-pro×2' (model + shot count)
+  // ── New diagnostic fields ──
+  // How many parallel shots actually returned usable data (1 or 2).
+  // 1 means we couldn't get a consensus signal → confidence is lower.
+  shotsUsed?: number;
+  // Total-value mismatch as a fraction of expected, signed:
+  //   +0.15 = reported total is 15% over expected
+  //   -0.40 = reported total is 40% under expected
+  // 0 / undefined when no expectedTotalValue was supplied.
+  totalValueDelta?: number;
+  // Chip IDs whose individual confidence dropped below 70%. UI shows
+  // "please recount these" hints next to those input fields.
+  recountStackIds?: string[];
   error?: string;                // English diagnostic for logs/devs
   errorCode?: PhotoChipCountErrorCode;
 }
