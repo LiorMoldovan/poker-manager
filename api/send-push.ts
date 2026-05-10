@@ -1,4 +1,4 @@
-import { verifySupabaseAuth } from './_auth';
+import { verifyAuth } from './_auth';
 import { createClient } from '@supabase/supabase-js';
 
 export const config = { runtime: 'edge' };
@@ -236,8 +236,8 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const authError = await verifySupabaseAuth(req);
-  if (authError) return authError;
+  const auth = await verifyAuth(req);
+  if (!auth.ok) return auth.response;
 
   const vapidPublicKey = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
   const vapidPrivateKey = '39mPz53FHNkirEA3utU_d99xnPsKYBZM2B3lSRukUxg';
@@ -254,10 +254,34 @@ export default async function handler(req: Request): Promise<Response> {
 
     const supabaseUrl = process.env.SUPABASE_URL || 'https://ursjltxklmxmapfvkttj.supabase.co';
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_TzhEQmU6mX2n-utnOUAtwQ_zkGTR13j';
-    const authHeader = req.headers.get('Authorization') || '';
-    const db = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+
+    // Pick the right client based on auth path:
+    //   * user mode → forward the caller's JWT so push_subscriptions RLS
+    //     filters subs to ones the caller can see (admins see all; regular
+    //     members only see their own — but the client only calls send-push
+    //     from admin-gated UI, so the practical effect is "admins fan out").
+    //   * worker mode → use service-role to bypass RLS. The notification
+    //     worker doesn't have a user JWT (it's invoked by the pg_net
+    //     webhook with X-Worker-Secret), but it needs to reach EVERY
+    //     subscriber for a target_filled / confirmed broadcast — not just
+    //     subs the caller can see.
+    let db: ReturnType<typeof createClient>;
+    if (auth.mode === 'worker') {
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceKey) {
+        return new Response(JSON.stringify({ error: { message: 'SUPABASE_SERVICE_ROLE_KEY missing — required for worker-mode push' } }), {
+          status: 500, headers: JSON_HEADERS,
+        });
+      }
+      db = createClient(supabaseUrl, serviceKey, {
+        auth: { persistSession: false },
+      });
+    } else {
+      const authHeader = req.headers.get('Authorization') || '';
+      db = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+    }
 
     let query = db.from('push_subscriptions').select('endpoint, keys_p256dh, keys_auth, player_name').eq('group_id', groupId);
     if (targetPlayerNames && targetPlayerNames.length > 0) {

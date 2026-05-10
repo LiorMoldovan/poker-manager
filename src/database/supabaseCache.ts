@@ -1986,6 +1986,41 @@ export async function enqueuePollNotificationRpc(
   }
 }
 
+// Generic enqueue (migration 066) — for kinds that don't have a DB trigger
+// because the dispatch context (recipient list, custom message, scenario
+// data) is only known on the client. The server-side worker
+// (`/api/notification-worker`) reads the payload as-is and forwards it
+// to /api/send-push and /api/send-email.
+//
+// Payload conventions (worker reads these keys):
+//   * push_title, push_body — push notification text
+//   * email_subject, email_body — email text (RTL wrapping is applied by
+//     /api/send-email; just pass plain Hebrew)
+//   * recipient_player_names — string[] of player names to dispatch to.
+//     The worker resolves push subscriptions and emails server-side.
+//   * url — deep-link URL; defaults to '/' if omitted
+//
+// Used for: reminders (admin-initiated, time-based), training-report
+// notifications (batched per quiz session), training milestones
+// (per-100Q crossing). Poll lifecycle, vote-change, and trivia reports
+// auto-enqueue via DB triggers and don't need this client path.
+export async function enqueueNotificationRpc(
+  kind: 'reminder' | 'training_report_filed' | 'training_report_resolved' | 'training_milestone',
+  groupId: string,
+  payload: Record<string, unknown>,
+  pollId?: string | null,
+): Promise<void> {
+  const { error } = await supabase.rpc('enqueue_notification', {
+    p_kind: kind,
+    p_group_id: groupId,
+    p_poll_id: pollId ?? null,
+    p_payload: payload,
+  });
+  if (error) {
+    console.warn(`enqueue_notification(${kind}) failed:`, error);
+  }
+}
+
 // ─── Notification job queue (migration 061) ───
 //
 // Replaces the legacy claim-then-deliver pattern. Lifecycle transitions

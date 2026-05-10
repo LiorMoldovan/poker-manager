@@ -15,7 +15,6 @@ import type { GamePoll, GamePollDate, GamePollVote, RsvpResponse } from '../type
 import {
   getAllPlayers, getAllPolls,
   getPlayerEmailForNotification, getSettings,
-  getPollChangeRecipients,
 } from '../database/storage';
 import { proxySendPush, proxySendBroadcastEmail, type EmailKind } from './apiProxy';
 import { verbForName, getPlayerGender, type VerbKey } from './hebrewGender';
@@ -1067,33 +1066,27 @@ export function buildVoteEventMessage(
   };
 }
 
+// ─── Vote-change ──
+//
+// HISTORICAL NOTE (v5.49.0, migration 066): vote-change dispatch is now
+// handled fully server-side via the `trg_enqueue_vote_change_on_vote`
+// trigger on `game_poll_votes` → notification_jobs → /api/notification-worker.
+// The trigger fires on every INSERT/UPDATE OF response/comment, so the
+// moment a vote row is upserted, a job exists in the queue and the worker
+// picks it up regardless of who's online.
+//
+// We keep the public function signature so existing call sites in
+// ScheduleTab don't need to change, but the body is now a no-op. The
+// arguments aren't used but stay typed so any future callsite refactor
+// gets a TS error if it drifts.
 export async function sendVoteChangeNotifications(
-  poll: GamePoll,
-  vote: GamePollVote,
-  voterName: string,
-  changedByName: string | null,
-  options?: { isNewVote?: boolean },
+  _poll: GamePoll,
+  _vote: GamePollVote,
+  _voterName: string,
+  _changedByName: string | null,
+  _options?: { isNewVote?: boolean },
 ): Promise<void> {
-  let recipients: { playerName: string }[] = [];
-  try {
-    recipients = await getPollChangeRecipients(poll.id);
-  } catch (err) {
-    console.warn('[schedule-notify/vote_change] recipient lookup failed:', err);
-    return;
-  }
-  // Don't notify the actor about their own action. The actor is whoever
-  // physically clicked — for self-votes that's the voter, for admin proxy
-  // edits that's the admin (changedByName). Filtering them out avoids
-  // pinging the user who just clicked the button.
-  const actorName = changedByName ?? voterName;
-  const names = recipients
-    .map(r => r.playerName)
-    .filter(name => name !== actorName);
-  if (names.length === 0) return;
-  const msg = buildVoteEventMessage(
-    poll, vote, voterName, changedByName, options?.isNewVote ?? false,
-  );
-  await dispatch(poll, 'vote_change', msg, names);
+  // Server-side trigger handles dispatch. Intentionally empty.
 }
 
 // ── Reminder (manual, admin-triggered) ──
@@ -1242,6 +1235,29 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
   return `${greeting}${intro}${deadlineBlock}\n\n${stateHeader}\n${stateLines}`;
 }
 
+// ─── Reminder dispatch ──
+//
+// Reminders are admin-initiated (one click in the UI to send "you haven't
+// voted" pings to the supplied recipient list). As of v5.49.0 / migration
+// 066, dispatch goes through the server-side queue: the client builds the
+// rich Hebrew payload here and enqueues it via `enqueue_notification`;
+// the worker at /api/notification-worker drains the queue and forwards
+// to /api/send-push and /api/send-email.
+//
+// The payload contains everything the worker needs:
+//   * push_title / push_body — rendered identically for every recipient
+//   * email_subject / email_body — identical per recipient (the worker
+//     prepends a "היי {name}," greeting itself before sending)
+//   * recipient_player_names — the names list; worker resolves push subs
+//     and emails server-side via service-role queries
+//   * url — deep-link path to the poll
+//
+// Per-recipient gendered email bodies (the old client path varied
+// `verbForName('completeImp', name)` per recipient) are simplified to a
+// single neutral template because the worker can't easily call the
+// hebrewGender helpers from the Edge runtime. The trade-off is acceptable
+// — reminders are a single Hebrew sentence and the gender-neutral form
+// reads naturally.
 export async function sendReminderNotifications(
   poll: GamePoll,
   recipientNames: string[],
@@ -1249,61 +1265,28 @@ export async function sendReminderNotifications(
   if (recipientNames.length === 0) return;
 
   const settings = getSettings();
-  const pushEnabled = settings.schedulePushEnabled !== false; // default true
+  const pushEnabled   = settings.schedulePushEnabled !== false;
   const emailsEnabled = settings.scheduleEmailsEnabled === true;
 
-  // ── Push ──
-  if (pushEnabled) {
-    const { title, body } = buildReminderPush(poll, poll.dates);
-    try {
-      await proxySendPush({
-        groupId: poll.groupId,
-        title,
-        body,
-        targetPlayerNames: recipientNames,
-        url: deepLinkUrl(poll.id),
-      });
-    } catch (err) {
-      console.warn('[schedule-notify/reminder] push failed:', err);
-    }
-  } else {
-    console.log('[schedule-notify/reminder] push disabled by group setting');
-  }
-
-  // ── Email ──
-  if (!emailsEnabled) {
-    console.log(`[schedule-notify/reminder] emails disabled by group setting, skipping ${recipientNames.length} recipients`);
-    return;
-  }
+  // Build push and email payloads using the existing helpers so the
+  // copy stays consistent with the rest of the schedule notification
+  // surface area. We build these client-side because the message is the
+  // same for every recipient — no per-recipient personalization beyond
+  // the greeting (which the worker handles) is required for reminders.
+  const { title: pushTitle, body: pushBody } = buildReminderPush(poll, poll.dates);
   const link = emailVoteLink(poll);
-  // Trailing CTA + link line. Hebrew-first label keeps the bidi direction
-  // RTL (the URL inside an RTL paragraph correctly renders LTR within an
-  // RTL context — i.e. URL on the left, label on the right, which is the
-  // expected Hebrew-email layout). Computed once outside the loop because
-  // it doesn't vary per recipient.
   const cta = link ? `\n\n👉 להצבעה ולפרטים נוספים: ${link}` : '';
+  const emailBody = `${buildReminderEmailBody(poll)}${cta}`;
 
-  await Promise.allSettled(recipientNames.map(async (name) => {
-    try {
-      const info = await getPlayerEmailForNotification(poll.groupId, name);
-      if (!info?.email) return;
-      // Per-recipient body: greeting uses the player's name, everything
-      // else (deadline / state / cta) is identical for every recipient.
-      // RTL alignment is applied centrally inside
-      // `proxySendBroadcastEmail` (HTML wrapper with `dir="rtl"`).
-      const baseBody = buildReminderEmailBody(poll, name);
-      const fullBody = `${baseBody}${cta}`;
-      const r = await proxySendBroadcastEmail({
-        to: info.email,
-        subject: TITLE_REMINDER,
-        message: fullBody,
-        senderName: 'Poker Manager',
-      });
-      if (!r.ok) console.warn(`[schedule-notify/reminder] email failed for ${name}: ${r.error || 'unknown'}`);
-    } catch (err) {
-      console.warn(`[schedule-notify/reminder] email error for ${name}:`, err);
-    }
-  }));
+  const cacheMod = await import('../database/supabaseCache');
+  await cacheMod.enqueueNotificationRpc('reminder', poll.groupId, {
+    push_title:    pushEnabled ? pushTitle : '',  // empty string skips push at the worker
+    push_body:     pushEnabled ? pushBody  : '',
+    email_subject: emailsEnabled ? TITLE_REMINDER : '',
+    email_body:    emailsEnabled ? emailBody : '',
+    recipient_player_names: recipientNames,
+    url: deepLinkUrl(poll.id),
+  }, poll.id);
 }
 
 // ── Lazy sweep: called from ScheduleTab on mount and after each realtime tick ──

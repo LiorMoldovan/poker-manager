@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.48.0';
+export const APP_VERSION = '5.49.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.49.0',
+    date: '2026-05-10',
+    changes: [
+      '🛰 Notifications now dispatch fully server-side',
+      '⏱ pg_net webhook fires within seconds of any event',
+      '🔁 pg_cron sweep retries any missed job every minute',
+      '🗳 Vote-change pings no longer rely on voter\'s tab',
+      '🚩 Trivia reports trigger pushes from the DB',
+      '🎯 Training milestones + reports queued like everything else',
+      '📣 Reminders survive the admin closing the picker',
+    ],
+  },
   {
     version: '5.48.0',
     date: '2026-05-10',

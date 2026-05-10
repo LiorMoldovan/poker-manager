@@ -1,17 +1,18 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-09 (post v5.47.0 — photo chip counting + home "About You" card + tab-return cache recovery)
+> **Last refreshed**: 2026-05-10 (post v5.49.0 — server-side notification dispatch via pg_net + worker Edge Function)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.47.0` (commit `80c36ca`).
-- **Branch**: `main`. Working tree clean.
-- **No in-flight WIP.** v5.47.0 bundled three parallel agent streams: (1) photo-based chip counting at end-of-game (admin tool in `ChipEntryScreen` + owner test card in Settings → Services, anchored on a configurable left-to-right `chip_color_order` so the AI doesn't need to discriminate colors); (2) home dashboard `AboutYouCard` extracted alongside trivia via a shared `RotatingFactCard`; (3) `useRealtimeRefresh` opt-in `forceRefreshOnReturn` callback + new `forceRefreshPlayersFromDb` / `forceRefreshPollsFromDb` exports so Schedule/Group/Home screens recover from WebSocket gaps after the phone wakes. `npx tsc --noEmit` clean, lints clean.
-- **No pending SQL migrations.** All migrations through `060` are applied to the live DB.
-- **Photo chip counting — known limitations**: gemini-2.5-flash via the existing `/api/gemini` proxy. Owner needs to (a) configure the chip color order under Settings → Chips, (b) shoot at ~30–45° angled side view on a plain background with chips separated into per-color vertical stacks. The owner-only test card under Services lets them validate accuracy on their own chip set + lighting before relying on it in a live game. Like all `/api/*` features, only works on deployed Vercel — not localhost.
+- **Version on `main`**: `5.49.0` (commit pending push).
+- **Branch**: `main`. v5.49.0 about to be pushed.
+- **In-flight WIP**: NONE on the code side. **Operator action still required to fully activate v5.49.0**: add Vercel env vars `WORKER_INTERNAL_SECRET = ACFiKf2rTZOG-H3ABxJEKWVf5G6xaGXiylu4cHJRhkA` and `SUPABASE_SERVICE_ROLE_KEY` (copy from Supabase project → Settings → API → service_role key). Also confirm `OWNER_GROUP_ID` is set (already present from prior work). The matching DB secret is already in the `worker_config` table. Until both Vercel env vars are populated, the worker returns 401 for every webhook and the pg_cron sweep retries every minute — nothing breaks, but nothing dispatches either.
+- **Pending SQL migrations**: `066-server-side-notification-dispatch.sql` and `067-worker-config-table.sql` are both applied to the live DB. Up through 067 is current.
+- **What v5.49.0 changed (architecturally important)**: dispatch is now fully server-side. Every notification — poll lifecycle, vote-change, trivia reports, training reports, milestones, reminders — flows through `notification_jobs` → pg_net `extensions.http_post` trigger → `/api/notification-worker` (Edge Function) → `/api/send-push` + `/api/send-email`. The browser worker (`src/utils/notificationWorker.ts`) is now a redundant fallback only — atomic `FOR UPDATE SKIP LOCKED` claim means both can run concurrently without double-dispatch. DB triggers added in 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path. New extensions: `pg_net`, `pg_cron`. New table: `worker_config (key, value)` — RLS denies anon/authenticated, only service-role and SECURITY DEFINER functions read. `claim_notification_job_internal` and `complete_notification_job_internal` RPCs authenticate via the secret in that table.
+- **Client-side helper changes**: `sendVoteChangeNotifications` and `notifyReporterOfTriviaResolution` + `notifySuperAdminsOfTriviaReport` are now no-op shims (DB triggers handle dispatch). `sendReminderNotifications` and the three `notify*OfTraining*` helpers now enqueue via the new generic `enqueueNotificationRpc` instead of dispatching directly. `proxySendPush`/`proxySendBroadcastEmail` are no longer called from notification paths — only from the test cards in Settings.
 
 ## Active themes (last ~10 versions)
 

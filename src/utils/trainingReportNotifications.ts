@@ -1,14 +1,32 @@
-// Auto-notify question reporters when an admin resolves their training report.
-// Sends a short push summary only. Email was retired in v5.43 to keep us
-// inside the EmailJS free quota — admins now review training resolutions in
-// the UI (Settings → Training tab). The `ai` parameter is still accepted on
-// the public API so callers don't have to change, and so we can revive a
-// richer push payload (or in-app feed) without another caller migration.
+// Training report notifications — server-dispatched via the
+// notification_jobs queue (migration 066, v5.49.0).
+//
+// Three flows trigger pushes from the training UI:
+//   1. notifyReportersOfResolution — when an admin resolves training
+//      reports (player learns whether their flag was accepted/dismissed).
+//   2. notifySuperAdminsOfReports — when a player flags one or more
+//      questions in a training session (super-admins get a single
+//      batched ping per session).
+//   3. notifySuperAdminsOfMilestone — when a player crosses a 100-question
+//      milestone (super-admins get notified to review fresh insights).
+//
+// Previously these called /api/send-push directly from the actor's
+// browser, which lost the push if the actor's tab closed mid-fetch.
+// All three now enqueue a `training_*` job into notification_jobs with
+// the fully-built push payload; the server worker drains the queue and
+// dispatches via /api/send-push, regardless of who's online or what
+// version their cached client is running.
+//
+// The kind enum + DB CHECK constraint (migration 066) covers:
+//   training_report_filed     — super-admins
+//   training_report_resolved  — reporters
+//   training_milestone        — super-admins
+// Email is not used for training (retired in v5.43); the worker treats
+// these as push-only by convention.
 
 import type { PoolScenario, TrainingFlagReport } from '../types';
-import { getGroupId } from '../database/supabaseCache';
+import { getGroupId, enqueueNotificationRpc } from '../database/supabaseCache';
 import { getSuperAdminPlayerNamesInGroup } from '../database/storage';
-import { proxySendPush } from './apiProxy';
 
 export type ReportResolutionOutcome =
   | 'accept_removed' // admin deleted the question (report accepted, question gone)
@@ -56,7 +74,9 @@ export interface NotifyReportersResult {
   errors: string[];
 }
 
-// Best-effort: never throws. Failures are logged but don't block the resolution flow.
+// Best-effort: never throws. The enqueue call is the only network step;
+// failure there means the DB rejected the row (auth, RLS, etc.) and is
+// logged but not surfaced to the caller.
 export async function notifyReportersOfResolution(
   opts: NotifyReportersOptions,
 ): Promise<NotifyReportersResult> {
@@ -77,39 +97,31 @@ export async function notifyReportersOfResolution(
 
   const { title, body: shortBody } = shortPushBody(outcome);
 
-  // Push only: one batched call per group (server filters by player names).
-  // Email was retired in v5.43 — admins review resolutions in the UI.
   try {
-    const pushRes = await proxySendPush({
-      groupId,
-      title,
-      body: shortBody,
-      targetPlayerNames: names,
+    await enqueueNotificationRpc('training_report_resolved', groupId, {
+      push_title: title,
+      push_body: shortBody,
+      recipient_player_names: names,
       url: '/settings?tab=training',
     });
-    if (pushRes && typeof pushRes.sent === 'number') result.pushSent = pushRes.sent;
+    // We optimistically count enqueue success as "sent" — actual delivery
+    // happens server-side and may partially fail per-subscription, but
+    // the caller only needs to know we successfully handed the job off.
+    result.pushSent = names.length;
   } catch (err) {
-    result.errors.push(`push: ${err instanceof Error ? err.message : String(err)}`);
+    result.errors.push(`enqueue: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   if (result.errors.length > 0) {
-    console.warn('[training-report-notify] partial errors:', result.errors);
+    console.warn('[training-report-notify] enqueue errors:', result.errors);
   }
 
   return result;
 }
 
-// ─── Super-admin notifications ──────────────────────────────────────────
-// When email fan-out for training events was retired in v5.43, super-admins
-// were left with no signal that something needed their attention — they
-// only saw new reports / milestone-pending insights when they manually
-// opened Settings → Training. The two helpers below restore that signal
-// as a quiet push (deep-linked to the Training tab) without bringing back
-// any email. Both are best-effort and never throw.
-
-// Fired once per session with the count + first reason of newly-flagged
-// questions in that session. We deliberately don't push per-flag to avoid
-// hammering super-admins during a long quiz with several reports.
+// Fired once per session with the count of newly-flagged questions.
+// We don't push per-flag to avoid hammering super-admins during a long
+// quiz with several reports.
 export async function notifySuperAdminsOfReports(opts: {
   reports: TrainingFlagReport[];
   reporterName: string;
@@ -135,15 +147,14 @@ export async function notifySuperAdminsOfReports(opts: {
     : `${reporterName} דיווח על ${count} שאלות — לבדיקה`;
 
   try {
-    await proxySendPush({
-      groupId,
-      title,
-      body,
-      targetPlayerNames: targets,
+    await enqueueNotificationRpc('training_report_filed', groupId, {
+      push_title: title,
+      push_body: body,
+      recipient_player_names: targets,
       url: '/settings?tab=training',
     });
   } catch (err) {
-    console.warn('[training-super-admin-notify/reports] push failed:', err);
+    console.warn('[training-super-admin-notify/reports] enqueue failed:', err);
   }
 }
 
@@ -176,14 +187,13 @@ export async function notifySuperAdminsOfMilestone(opts: {
     : 'יש לרענן ידנית את התובנות בלשונית האימון';
 
   try {
-    await proxySendPush({
-      groupId,
-      title,
-      body,
-      targetPlayerNames: targets,
+    await enqueueNotificationRpc('training_milestone', groupId, {
+      push_title: title,
+      push_body: body,
+      recipient_player_names: targets,
       url: '/settings?tab=training',
     });
   } catch (err) {
-    console.warn('[training-super-admin-notify/milestone] push failed:', err);
+    console.warn('[training-super-admin-notify/milestone] enqueue failed:', err);
   }
 }

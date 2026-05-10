@@ -1,4 +1,4 @@
-import { verifySupabaseAuth } from './_auth';
+import { verifyAuth } from './_auth';
 import { computeCycleWindow, getCurrentCycleUsage, getMonthlyCap } from './_emailUsage';
 
 export const config = { runtime: 'edge' };
@@ -196,10 +196,16 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const authError = await verifySupabaseAuth(req);
-  if (authError) return authError;
+  const auth = await verifyAuth(req);
+  if (!auth.ok) return auth.response;
 
-  const authHeader = req.headers.get('Authorization') || '';
+  // Worker-mode requests don't have a user JWT to forward to log_email_send /
+  // try_record_quota_alert (those RPCs use SECURITY DEFINER and accept
+  // service-role too). Prefer the caller's Authorization header when
+  // present (user mode); fall back to the service-role key for worker mode.
+  const authHeader = auth.mode === 'worker'
+    ? `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''}`
+    : (req.headers.get('Authorization') || '');
 
   try {
     const body = await req.json();
