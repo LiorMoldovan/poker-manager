@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.53.0';
+export const APP_VERSION = '5.54.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.54.0',
+    date: '2026-05-10',
+    changes: [
+      '🃏 Test card: type real counts and send feedback',
+      '💾 Every test save logs to chip_count_feedback',
+      '🎯 Tune AI accuracy without a real game',
+    ],
+  },
   {
     version: '5.53.0',
     date: '2026-05-10',

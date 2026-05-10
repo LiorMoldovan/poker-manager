@@ -1,20 +1,41 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-10 (post v5.50.2 — trivia scoring hardened against stale-state)
+> **Last refreshed**: 2026-05-10 (post v5.54.0 — test-card now captures ground-truth feedback)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.50.2` (pushed; Vercel deploying).
+- **Version on `main`**: `5.54.0` (pushing now; Vercel deploying). Previous `5.53.0` shipped as `eaaf7c7`.
 - **Branch**: `main`.
-- **In-flight WIP**: NONE. v5.50.2 lands a defensive fix in `TriviaGameScreen.tsx`: correctness is now captured at the moment of click (`setSelectedIsCorrect(...)` inside `handleSelect`) instead of derived later from `q.answers[selectedIdx]?.isCorrect` in the advance-effect. The old pattern was vulnerable to stale-state / re-shuffle scenarios — confirmed harmful in production where Lior had 11 suspicious 0/N sessions on 2026-05-10 while Eyal (same group, same code) reported normal 65% accuracy. Also added a `console.warn('[trivia] suspicious 0-score session', …)` diagnostic when score=0 and total≥5, so any future recurrence drops a per-question audit (templateId, correct answer text, recorded result) into DevTools for triage. Lior's trivia_sessions rows for group `d1998bed-...` were cleaned again post-fix.
+- **In-flight WIP**: NONE. v5.54.0 closes the v5.53 gap on test-card feedback: the Settings → Services photo test card now has editable "actual count" inputs per chip + a "💾 שלחו פידבק" button that posts a `chip_count_feedback` row identical to the real-game flow but with `game_id` / `player_id` / `playerName` all NULL. So Lior can iterate on accuracy without committing to a real game session. Test-card rows are identifiable in mining queries by `game_id IS NULL`. Honors the same `share_chip_photos` opt-in toggle as the real-game flow. v5.53.0 still holds the underlying rebuild: gemini-2.5-pro primary + 3-shot consensus + MAX aggregation + computed-confidence cap at 90% + anti-undercount prompt + the `chip_count_feedback` table (migration 069, applied) + private `chip-count-feedback-photos` storage bucket. Manual chip-entry flow unchanged when no photo was taken.
+- **Pending SQL migrations**: NONE. `069-chip-count-feedback.sql` is the latest, applied via `apply_migration` and verified live (20 columns, 5 RLS policies on the table, 5 RLS policies on the bucket, `settings.share_chip_photos` column with default `false`).
+- **Trivia tweaks merged in same release**: `TriviaGameScreen` report-problem button now shows the localized label "🚩 דווח בעיה" instead of the bare flag emoji (other agent's work). `triviaGenerator.numericDistractors` spread bumped 0.55 → 0.85 so a player with ~±40% ballpark estimate lands on the correct answer. Pre-existing TS errors in `triviaGenerator.ts` mentioned in the prior CONTEXT are now resolved — full project tsc is clean.
 - **Vercel env vars confirmed live**: `WORKER_INTERNAL_SECRET` (matches `worker_config.notification_worker_secret`) and `SUPABASE_SERVICE_ROLE_KEY` are both set and working. `OWNER_GROUP_ID` was already in place from prior work.
-- **Pending SQL migrations**: NONE. `066-server-side-notification-dispatch.sql`, `067-worker-config-table.sql`, and `068-fix-http-post-schema.sql` are all applied to the live DB. Up through 068 is current.
-- **What v5.49.x changed (architecturally important)**: dispatch is now fully server-side. Every notification — poll lifecycle, vote-change, trivia reports, training reports, milestones, reminders — flows through `notification_jobs` → pg_net `net.http_post` trigger → `/api/notification-worker` (Edge Function) → `/api/send-push` + `/api/send-email`. The browser worker (`src/utils/notificationWorker.ts`) is now a redundant fallback only — atomic `FOR UPDATE SKIP LOCKED` claim means both can run concurrently without double-dispatch. DB triggers added in 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path. New extensions: `pg_net` (already in `net` schema — see lesson below), `pg_cron`. New table: `worker_config (key, value)` — RLS denies anon/authenticated, only service-role and SECURITY DEFINER functions read. `claim_notification_job_internal` and `complete_notification_job_internal` RPCs authenticate via the secret in that table.
-- **v5.49.1 hotfix (2026-05-10)**: 066 used `extensions.http_post(...)` everywhere, but Supabase pre-installs pg_net at the `net` schema and our `CREATE EXTENSION ... WITH SCHEMA extensions IF NOT EXISTS` was a no-op (extension already present at `net` — relocation skipped). Both webhook trigger and cron sweep functions silently failed for ~30 minutes between 066 deploy and 068 fix because of `EXCEPTION WHEN OTHERS THEN RAISE NOTICE` blocks. Migration 068 swaps to `net.http_post` in both function bodies. Lesson promoted to `LESSONS.md`.
-- **Client-side helper changes**: `sendVoteChangeNotifications` and `notifyReporterOfTriviaResolution` + `notifySuperAdminsOfTriviaReport` are now no-op shims (DB triggers handle dispatch). `sendReminderNotifications` and the three `notify*OfTraining*` helpers now enqueue via the new generic `enqueueNotificationRpc` instead of dispatching directly. `proxySendPush`/`proxySendBroadcastEmail` are no longer called from notification paths — only from the test cards in Settings.
+- **Notification dispatch (still as of v5.49.x architecture)**: fully server-side. Every notification flows through `notification_jobs` → pg_net `net.http_post` trigger → `/api/notification-worker` Edge Function → `/api/send-push` + `/api/send-email`. Browser worker (`src/utils/notificationWorker.ts`) is redundant fallback only. DB triggers from 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path.
+
+## Spot-check queries
+
+For the in-app feedback loop (what's coming in from real games):
+
+```sql
+SELECT created_at, player_name, model_used, overall_confidence,
+       shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta
+FROM   public.chip_count_feedback
+ORDER BY created_at DESC LIMIT 20;
+```
+
+Healthy = rows showing up after games where the photo button was used; `correct_stacks` ≈ `total_stacks` for in-tolerance counts; `total_chip_delta` skewed positive ⇒ AI still undercounting; near zero ⇒ MAX aggregation worked. Per-stack diffs live in the `stacks` JSONB column for deeper drill-down (`SELECT stacks FROM chip_count_feedback WHERE id = '…'`).
+
+For the notification system (still relevant):
+
+```sql
+SELECT id, kind, status, attempts, last_error, claimed_at, completed_at, created_at
+FROM public.notification_jobs ORDER BY created_at DESC LIMIT 10;
+```
+
+Healthy = all `done` with `attempts=1`, `last_error=null`. `pending` rows older than ~90s mean pg_cron sweep isn't draining (check `cron.job` and `net._http_response` for the failure mode). `failed` after `attempts=3` means the worker rejected the job three times.
 
 ## Spot-check query for live notification health
 
@@ -29,7 +50,8 @@ Healthy = all `done` with `attempts=1`, `last_error=null`. `pending` rows older 
 
 ## Active themes (last ~10 versions)
 
-- **Photo chip counting + multi-stream merge** (v5.47.0, this session): "snap photo → AI proposes counts with per-stack confidence + total reconciliation banner → human confirms or edits" flow. Position-based identity (configurable color order) replaces color discrimination as the accuracy lever. Plus home `AboutYouCard` and tab-return cache recovery shipped in the same release.
+- **Photo chip counting accuracy + feedback loop** (v5.47.0 → v5.49.x → v5.53.0): full evolution from "snap photo → AI proposes counts" (v5.47) through the multi-shot consensus + computed confidence rebuild (v5.49) to the in-app feedback capture infrastructure (v5.53, migration 069). Position-based identity (chips sorted ascending) replaces color discrimination as the accuracy lever, MAX aggregation across 3 parallel shots counters the systematic undercount bias, and silent diff capture in `markPlayerDone` now records (AI vs real) per-stack diffs to `chip_count_feedback` so future tuning can be empirical instead of intuitive.
+- **Trivia hardening + UX polish** (v5.50.x → v5.53.0): stale-state click-time correctness lock (v5.50.2), difficulty moderation with 20-game eligibility floor and bucketed range answers (v5.51), trivia mode redesign — Group=broad, עליי=personal, Mixed=50/50 per-question (v5.52), and same-release tweaks to the report-problem button label + wider `numericDistractors` spread (0.55 → 0.85) so ±40% ballpark estimates win.
 - **Home/schedule UX polish + new-group onboarding** (v5.45.0–v5.46.0): home dashboard forward-looking teaser for brand-new groups; schedule card empty state rewritten; schedule tab empty state shows next auto-create anchor; polls auto-link to games and auto-archive when their game completes; activity log shows live session minutes; observer mode for super admins viewing foreign groups.
 - **Data-integrity hardening** (v5.44.6): row-level `BEFORE DELETE` guard on `game_players` for completed games + parent-existence-based cascade detection. SQL migrations `050` + `051`. Resolved a 5-day-latent bug in 043 where `pg_trigger_depth()` returned the wrong value in AFTER-STATEMENT context.
 - **Realtime cache-recovery on tab return** (v5.47.0): `useRealtimeRefresh` accepts an optional `forceRefreshOnReturn` callback so screens whose underlying tables get write-heavy from peers (votes, member adds) actually re-fetch from Supabase when the tab regains focus, instead of just re-rendering stale in-memory cache.

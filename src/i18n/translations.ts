@@ -2068,6 +2068,16 @@ const he = {
   'settings.photoTest.tryAgain': 'בדיקה נוספת',
   'settings.photoTest.disabledNoKey': 'בקבוצה הזו עדיין אין מפתח Gemini פעיל ואין משחק עם סיכום AI — הזן מפתח בכרטיס "מפתחות API" שלמעלה כדי להפעיל את הבדיקה.',
   'settings.photoTest.disabledNoChips': 'נדרש להגדיר ז\'יטונים לקבוצה — היכנס ללשונית "ז\'יטונים" והוסף ערכים כדי להפעיל את הבדיקה.',
+  // v5.54: in-test ground-truth feedback. Each row gets an editable
+  // "actual count" input next to the AI's proposal so the user can
+  // submit a chip_count_feedback row without committing to a real game.
+  'settings.photoTest.colAi': 'AI',
+  'settings.photoTest.colActual': 'אמיתי',
+  'settings.photoTest.actualHint': 'תקנו את הספירה אם ה-AI טעה',
+  'settings.photoTest.saveFeedback': '💾 שלחו פידבק לשיפור הדיוק',
+  'settings.photoTest.feedbackSaving': 'שומר...',
+  'settings.photoTest.feedbackSaved': '✓ הפידבק נשמר — תודה!',
+  'settings.photoTest.feedbackHelper': 'הזינו את הספירה האמיתית בעמודה "אמיתי" ושלחו — זה עוזר לנו לשפר את האלגוריתם.',
 
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   // The numeric per-stack feedback is captured silently regardless;
@@ -4380,6 +4390,13 @@ const en: Record<keyof typeof he, string> = {
   'settings.photoTest.tryAgain': 'Test again',
   'settings.photoTest.disabledNoKey': 'This group has no active Gemini key and no past game with an AI summary — set a key in the "API Keys" card above to enable the test.',
   'settings.photoTest.disabledNoChips': 'Chip values must be configured for this group — open the "Chips" tab and add values to enable the test.',
+  'settings.photoTest.colAi': 'AI',
+  'settings.photoTest.colActual': 'Actual',
+  'settings.photoTest.actualHint': 'Fix the count if the AI got it wrong',
+  'settings.photoTest.saveFeedback': '💾 Send accuracy feedback',
+  'settings.photoTest.feedbackSaving': 'Saving...',
+  'settings.photoTest.feedbackSaved': '✓ Feedback saved — thanks!',
+  'settings.photoTest.feedbackHelper': 'Type the real count in the "Actual" column and submit — it helps us tune the algorithm.',
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   'settings.chipFeedback.title': '🎯 Improve chip-counting accuracy',
   'settings.chipFeedback.helper': 'Every time you finalize a player after an AI photo count, we save the diff between what the AI suggested and what you actually saved — this helps tune accuracy over time.',

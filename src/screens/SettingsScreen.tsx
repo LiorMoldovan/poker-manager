@@ -32,6 +32,7 @@ import {
   getGroupPushSubscribers,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
@@ -129,9 +130,30 @@ const SettingsScreen = () => {
 
   // Photo chip-counting test (Services tab — owner only).
   // No game context, no settlement impact. Pure accuracy verification.
+  //
+  // The test card doubles as a fast-path FEEDBACK SUBMISSION tool
+  // (v5.54): after the AI returns its proposed counts, the user can
+  // override any wrong values with the real counts and click "save
+  // feedback" — that posts a `chip_count_feedback` row identical
+  // to the real-game flow but with `game_id` / `player_id` = NULL.
+  // This lets Lior accumulate ground-truth-labeled rows without
+  // having to commit to a real game session for each test.
+  //   * `photoTestPreviewMime` is the content-type for `photoTestPreview`
+  //     base64. Plumbed through so the opt-in photo upload path works
+  //     for test-card feedback exactly like real-game feedback does.
+  //   * `photoTestActualCounts` defaults to the AI's proposal so the
+  //     user only needs to edit the chips the AI got wrong (saving
+  //     "this row was correct" is the no-op default action).
+  //   * `photoTestFeedbackSaved` flips true once a row was successfully
+  //     POSTed; the button switches to the "saved ✓" state until the
+  //     user takes the next photo.
   const [photoTestOpen, setPhotoTestOpen] = useState(false);
   const [photoTestResult, setPhotoTestResult] = useState<PhotoChipCountResult | null>(null);
   const [photoTestPreview, setPhotoTestPreview] = useState<string>('');
+  const [photoTestPreviewMime, setPhotoTestPreviewMime] = useState<string>('image/jpeg');
+  const [photoTestActualCounts, setPhotoTestActualCounts] = useState<Record<string, number>>({});
+  const [photoTestFeedbackSaved, setPhotoTestFeedbackSaved] = useState(false);
+  const [photoTestFeedbackSaving, setPhotoTestFeedbackSaving] = useState(false);
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -3061,13 +3083,47 @@ const SettingsScreen = () => {
                     />
                   )}
 
+                  {/* Per-chip rows. v5.54: each row now has an editable
+                      "actual count" input alongside the AI's proposal,
+                      defaulting to the AI's value. The user only needs
+                      to fix the wrong rows; the unchanged rows count as
+                      "AI was right" feedback. */}
                   <div>
+                    {/* Header row labelling the AI / actual columns
+                        so the user knows which input to edit. */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '0.5rem',
+                      padding: '0.25rem 0.5rem 0.4rem',
+                      fontSize: '0.65rem',
+                      color: 'var(--text-muted)',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}>
+                      <span style={{ flex: 1 }}>&nbsp;</span>
+                      <span style={{ minWidth: '2.5rem', textAlign: 'center' }}>{t('settings.photoTest.colAi')}</span>
+                      <span style={{ minWidth: '3.2rem', textAlign: 'center' }}>{t('settings.photoTest.colActual')}</span>
+                      <span style={{ minWidth: '2.5rem', textAlign: 'end' }}>%</span>
+                    </div>
                     {photoTestResult.stacks.map(stack => {
                       const chip = chipValues.find(c => c.id === stack.chipId);
                       if (!chip) return null;
-                      const borderColor = stack.confidence >= 95 ? 'rgba(16,185,129,0.5)'
-                        : stack.confidence >= 80 ? 'rgba(234,179,8,0.5)'
-                        : 'rgba(239,68,68,0.6)';
+                      const actual = photoTestActualCounts[stack.chipId] ?? stack.count;
+                      const diff = actual - stack.count;
+                      // Border color reflects ground-truth-vs-AI diff
+                      // (not just AI confidence) — so the user gets
+                      // immediate feedback while editing: green when
+                      // they confirm AI was right, yellow on small
+                      // disagreement, red on big one. Falls back to
+                      // confidence-based color when the user hasn't
+                      // touched the input yet (diff = 0).
+                      const borderColor = diff === 0
+                        ? (stack.confidence >= 80 ? 'rgba(16,185,129,0.5)'
+                            : stack.confidence >= 60 ? 'rgba(234,179,8,0.5)'
+                            : 'rgba(239,68,68,0.6)')
+                        : Math.abs(diff) <= 1 ? 'rgba(234,179,8,0.6)'
+                        : 'rgba(239,68,68,0.7)';
                       return (
                         <div
                           key={stack.chipId}
@@ -3090,9 +3146,47 @@ const SettingsScreen = () => {
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                             ×{chip.value}
                           </span>
-                          <span style={{ fontWeight: 700, fontSize: '1rem', minWidth: '2.5rem', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              fontSize: '0.95rem',
+                              minWidth: '2.5rem',
+                              textAlign: 'center',
+                              color: 'var(--text-muted)',
+                            }}
+                            title={t('settings.photoTest.colAi')}
+                          >
                             {stack.count}
                           </span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={actual}
+                            onChange={e => {
+                              const raw = parseInt(e.target.value, 10);
+                              const next = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+                              setPhotoTestActualCounts(prev => ({ ...prev, [stack.chipId]: next }));
+                              // Any edit invalidates the "saved" state
+                              // — so the button re-enables and the
+                              // user can save the corrected feedback.
+                              if (photoTestFeedbackSaved) setPhotoTestFeedbackSaved(false);
+                            }}
+                            style={{
+                              minWidth: '3.2rem',
+                              width: '3.2rem',
+                              textAlign: 'center',
+                              padding: '0.3rem 0.2rem',
+                              borderRadius: '6px',
+                              border: `1px solid ${diff === 0 ? 'var(--border)' : Math.abs(diff) <= 1 ? 'rgba(234,179,8,0.6)' : 'rgba(239,68,68,0.7)'}`,
+                              background: 'var(--background)',
+                              color: diff === 0 ? 'var(--text)' : Math.abs(diff) <= 1 ? '#eab308' : '#ef4444',
+                              fontWeight: 700,
+                              fontSize: '0.95rem',
+                              fontFamily: 'inherit',
+                            }}
+                            title={t('settings.photoTest.actualHint')}
+                          />
                           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: '2.5rem', textAlign: 'end' }}>
                             {stack.confidence}%
                           </span>
@@ -3115,11 +3209,97 @@ const SettingsScreen = () => {
                     <span>{photoTestResult.totalValue.toLocaleString()}</span>
                   </div>
 
+                  {/* v5.54: Save Feedback button. POSTs the same
+                      ChipCountFeedback row the real-game flow sends,
+                      but with game_id / player_id / playerName all
+                      NULL since this is a standalone test. The
+                      `finalCounts` map carries whatever the user
+                      typed in the actual-count inputs (defaults to
+                      AI's proposal so "save without editing" is a
+                      valid "AI got everything right" signal).
+                      Honors the same opt-in photo upload toggle as
+                      the real-game flow. */}
+                  <button
+                    type="button"
+                    disabled={photoTestFeedbackSaving || photoTestFeedbackSaved}
+                    onClick={async () => {
+                      if (!photoTestResult || photoTestResult.error) return;
+                      setPhotoTestFeedbackSaving(true);
+                      const res = await submitChipCountFeedback({
+                        photoResult: photoTestResult,
+                        finalCounts: photoTestActualCounts,
+                        chipValues,
+                        // No game / player context for test-card feedback.
+                        gameId: null,
+                        playerId: null,
+                        playerName: null,
+                        photoBase64: photoTestPreview || undefined,
+                        photoMimeType: photoTestPreviewMime,
+                        shareChipPhotos: settings.shareChipPhotos === true,
+                      });
+                      setPhotoTestFeedbackSaving(false);
+                      if (res.ok) {
+                        setPhotoTestFeedbackSaved(true);
+                      } else {
+                        // Non-blocking: log + temporary banner via
+                        // generic `setSaved`-style toast would be
+                        // overkill here. The disabled state wears
+                        // off implicitly the next time the user
+                        // edits an input or retakes the photo.
+                        console.warn('[photoTest] feedback submit failed:', res.error);
+                      }
+                    }}
+                    style={{
+                      marginTop: '0.6rem',
+                      width: '100%',
+                      background: photoTestFeedbackSaved
+                        ? 'rgba(16,185,129,0.18)'
+                        : photoTestFeedbackSaving
+                          ? 'rgba(99,102,241,0.18)'
+                          : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      border: photoTestFeedbackSaved
+                        ? '1px solid rgba(16,185,129,0.5)'
+                        : '1px solid transparent',
+                      color: photoTestFeedbackSaved ? '#10b981' : 'white',
+                      padding: '0.55rem',
+                      borderRadius: '10px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: (photoTestFeedbackSaving || photoTestFeedbackSaved) ? 'default' : 'pointer',
+                      fontFamily: 'inherit',
+                      transition: 'background 0.15s ease, color 0.15s ease',
+                    }}
+                  >
+                    {photoTestFeedbackSaved
+                      ? t('settings.photoTest.feedbackSaved')
+                      : photoTestFeedbackSaving
+                        ? t('settings.photoTest.feedbackSaving')
+                        : t('settings.photoTest.saveFeedback')}
+                  </button>
+                  <p style={{
+                    margin: '0.35rem 0 0',
+                    fontSize: '0.7rem',
+                    color: 'var(--text-muted)',
+                    opacity: 0.85,
+                    lineHeight: 1.45,
+                    textAlign: 'center',
+                  }}>
+                    {t('settings.photoTest.feedbackHelper')}
+                  </p>
+
                   <button
                     type="button"
                     onClick={() => {
+                      // Reset everything tied to the previous photo
+                      // before re-opening the camera, so a fresh shot
+                      // doesn't inherit the prior ground-truth
+                      // overrides or the saved-confirmation state.
                       setPhotoTestResult(null);
                       setPhotoTestPreview('');
+                      setPhotoTestPreviewMime('image/jpeg');
+                      setPhotoTestActualCounts({});
+                      setPhotoTestFeedbackSaved(false);
+                      setPhotoTestFeedbackSaving(false);
                       setPhotoTestOpen(true);
                     }}
                     style={{
@@ -3164,15 +3344,22 @@ const SettingsScreen = () => {
       <PhotoCaptureModal
         isOpen={photoTestOpen}
         onClose={() => setPhotoTestOpen(false)}
-        onResult={(result, previewBase64 /* , previewMimeType */) => {
-          // Note: test card intentionally does NOT submit feedback to
-          // chip_count_feedback. The user can't enter "actual counts"
-          // here, so without ground truth there's no useful diff to
-          // record. The real-game ChipEntryScreen flow produces the
-          // useful feedback signal. (Could add a "what was the real
-          // count?" sidecar in v2 if we want test-card feedback too.)
+        onResult={(result, previewBase64, previewMimeType) => {
           setPhotoTestResult(result);
           setPhotoTestPreview(previewBase64);
+          setPhotoTestPreviewMime(previewMimeType);
+          // Default ground-truth counts to the AI's proposal so the
+          // user just edits the chips the AI got wrong (saving "this
+          // row was correct" is the no-op default action). v5.54.
+          if (!result.error) {
+            const initial: Record<string, number> = {};
+            for (const stack of result.stacks) initial[stack.chipId] = stack.count;
+            setPhotoTestActualCounts(initial);
+          } else {
+            setPhotoTestActualCounts({});
+          }
+          setPhotoTestFeedbackSaved(false);
+          setPhotoTestFeedbackSaving(false);
         }}
         chipValues={chipValues}
         title={t('settings.photoTest.title')}
