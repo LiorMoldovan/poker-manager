@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-10 — `git stash --keep-index` is a footgun on Windows; commit-only-my-files instead
+
+**Incident**: A parallel agent had ~5 unrelated trivia files modified in the working tree alongside my v5.58.0 chip-permissions work. To stage only mine, I ran `git stash --keep-index` after `git add`-ing my 4 files. The expected result was "stash unstaged, leave staged ready for commit". Actual result: the next `git commit` captured `TriviaLandingScreen.tsx` + `translations.ts` + `version.ts` and *missed* `SettingsScreen.tsx` and `supabase/071-…sql` entirely — wrong file mix. Soft-reset undid the bad commit and exposed a separate divergence (other agent committed `b933097 v5.57.2` to local `main` skipping origin's `v5.57.1`). Net cost: ~30 min of git untangling and one panicked `AskQuestion` to the user.
+
+**Root cause**: `git stash --keep-index` actually stashes BOTH staged and unstaged content, then restores ONLY the staged content to the working tree. On Windows + my git version this restoration was unreliable for SOME staged paths (newly-tracked SQL file + a recently-touched .tsx). Compounded by the silent local-vs-origin divergence that `git status` only mentioned in passing.
+
+**Lesson**: Don't reach for `git stash` when the goal is just "extract my files from a mixed working tree". The simpler, more reliable sequence is: `git add <my-files-only>` → `git status` to verify the staged set matches expectation → `git commit` directly. The unstaged other-agent stuff stays in the working tree untouched. If you DO need to stash, prefer `git stash push -- <unwanted-paths>` (path-scoped) over `--keep-index`. And **always run `git log --oneline --all --graph -10` before committing** when `git status` shows divergence with origin — `git status` mentions it but doesn't show whose commit caused it.
+
+**Session**: 2026-05-10 (chip-counting permissions v5.58.0 — uncommitted).
+
+---
+
 ## 2026-05-10 — Lock event-derived values at the click, not in the effect
 
 **Incident**: `TriviaGameScreen.tsx` recorded answer correctness in an advance/reveal `useEffect` by re-deriving from `q.answers[selectedIdx]?.isCorrect` (with `questions` in the dep array). On 2026-05-10 the operator (Lior) reproducibly scored 0/N across 11 separate sessions in `mode=group` while another player in the same group (Eyal) scored a normal 65% on the same code. Code inspection couldn't find the bug — every single boolean evaluated correctly on paper. The asymmetry was the smoking gun: same code, same data, one user's clicks land, the other's don't.

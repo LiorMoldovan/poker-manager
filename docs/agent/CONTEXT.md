@@ -1,19 +1,35 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-10 (post v5.54.0 — test-card now captures ground-truth feedback)
+> **Last refreshed**: 2026-05-10 (post v5.58.0 — combined chip-permissions + trivia kill-switch + leaderboard sort + AI trait diet, all merged in one go)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.54.0` (pushing now; Vercel deploying). Previous `5.53.0` shipped as `eaaf7c7`.
-- **Branch**: `main`.
-- **In-flight WIP**: NONE. v5.54.0 closes the v5.53 gap on test-card feedback: the Settings → Services photo test card now has editable "actual count" inputs per chip + a "💾 שלחו פידבק" button that posts a `chip_count_feedback` row identical to the real-game flow but with `game_id` / `player_id` / `playerName` all NULL. So Lior can iterate on accuracy without committing to a real game session. Test-card rows are identifiable in mining queries by `game_id IS NULL`. Honors the same `share_chip_photos` opt-in toggle as the real-game flow. v5.53.0 still holds the underlying rebuild: gemini-2.5-pro primary + 3-shot consensus + MAX aggregation + computed-confidence cap at 90% + anti-undercount prompt + the `chip_count_feedback` table (migration 069, applied) + private `chip-count-feedback-photos` storage bucket. Manual chip-entry flow unchanged when no photo was taken.
-- **Pending SQL migrations**: NONE. `069-chip-count-feedback.sql` is the latest, applied via `apply_migration` and verified live (20 columns, 5 RLS policies on the table, 5 RLS policies on the bucket, `settings.share_chip_photos` column with default `false`).
-- **Trivia tweaks merged in same release**: `TriviaGameScreen` report-problem button now shows the localized label "🚩 דווח בעיה" instead of the bare flag emoji (other agent's work). `triviaGenerator.numericDistractors` spread bumped 0.55 → 0.85 so a player with ~±40% ballpark estimate lands on the correct answer. Pre-existing TS errors in `triviaGenerator.ts` mentioned in the prior CONTEXT are now resolved — full project tsc is clean.
-- **Vercel env vars confirmed live**: `WORKER_INTERNAL_SECRET` (matches `worker_config.notification_worker_secret`) and `SUPABASE_SERVICE_ROLE_KEY` are both set and working. `OWNER_GROUP_ID` was already in place from prior work.
+- **Version on `origin/main`**: `5.58.0` — combined release that bundled three parallel agents' work: (1) Lior+me opening photo chip-counting test card + accuracy dashboard to all admins so Eyal can co-test, (2) trivia template kill-switch (super-admin can permanently exclude bad questions from a group's pool, restorable from inbox), (3) trivia leaderboard re-sorted to accuracy-first instead of total-correct-first, (4) "My stats" card removed from trivia landing as redundant with leaderboard, (5) AI personality-trait blocks dialed back so prompts lean ~90% on game stats and only sometimes (~70% probability, max 1–2 players per call) surface trait flavor.
+- **No in-flight WIP**: working tree clean after the v5.58.0 merge push.
+- **Applied SQL migrations** (all three new ones live + committed in v5.58.0):
+  - `070-chip-count-tuning.sql` (committed earlier in v5.55).
+  - `071-chip-feedback-admin-read.sql` — replaced `chip_count_feedback_select_owner` with `chip_count_feedback_select_admin` so admins (not just owner) can SELECT feedback rows for the dashboard. INSERT was already group-member-wide; DELETE stays owner-only.
+  - `072-trivia-leaderboard-sort-by-accuracy.sql` — `CREATE OR REPLACE` of `fetch_trivia_leaderboard` so ORDER BY chain is `accuracy DESC NULLS LAST, SUM(score) DESC, SUM(total_questions) DESC, player_name ASC`. Same column shape, only row order changes.
+  - `073-trivia-deleted-templates.sql` — new `trivia_deleted_templates` table + RPCs `delete_trivia_template` / `restore_trivia_template` (super-admin-only via SECURITY DEFINER). Realtime publication added so every client's exclusion set updates live without a reload. **Filename note**: this was authored as `070-…` but renumbered to 073 to avoid an on-disk collision with the already-committed `070-chip-count-tuning.sql`. The DB record (`070_trivia_deleted_templates`) is immutable timestamp-keyed history — only the on-disk filename changed.
+- **Vercel env vars (no change)**: `WORKER_INTERNAL_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_GROUP_ID`, plus per-feature keys (Gemini/ElevenLabs/EmailJS).
 - **Notification dispatch (still as of v5.49.x architecture)**: fully server-side. Every notification flows through `notification_jobs` → pg_net `net.http_post` trigger → `/api/notification-worker` Edge Function → `/api/send-push` + `/api/send-email`. Browser worker (`src/utils/notificationWorker.ts`) is redundant fallback only. DB triggers from 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path.
+
+## Chip-counting permission model (v5.58.0 — live)
+
+The Services tab (`'ai'`) is admin-accessible:
+
+| Card | Visible to | Why |
+|------|-----------|-----|
+| Game Readiness, AI Usage, API Keys, key setup guide, share-photos opt-in | Owner only (`{isOwner && (...)}`) | API/billing config + privacy decisions |
+| Photo Chip Counting Test Card | All admins | Co-tester needs to take photos |
+| Accuracy Dashboard (KPIs, per-color, trend chart) | All admins (`isOwner || role==='admin' || isSuperAdmin`) | RLS migration 071 lets admins SELECT `chip_count_feedback` |
+| Tune button + Revert button | Owner only (read-only hint shown to admins) | RLS on `chip_count_tuning_overrides` INSERT is owner-only — keeps DB and UI aligned |
+| Auto-rollback safety net (`checkAndAutoRollbackIfNeeded`) | Owner only (gated in load `useEffect`) | It writes a revert row → owner-only RLS would reject for admins |
+
+In Lior's group (`Poker Night`, owner = Lior `2c8d9de2-…`): admins are Lior, אייל (`eyalerz@gmail.com`), חרדון. Both non-owner admins will get test-card + dashboard access; only Lior can trigger tunings.
 
 ## Spot-check queries
 
@@ -50,6 +66,7 @@ Healthy = all `done` with `attempts=1`, `last_error=null`. `pending` rows older 
 
 ## Active themes (last ~10 versions)
 
+- **v5.58.0 combined release — three streams merged** (2026-05-10): chip-counting permissions opened to admins (test card + dashboard, tune+revert stay owner-only), trivia template kill-switch landed (super-admin can permanently exclude bad questions, restorable), trivia leaderboard re-sorted accuracy-first, "My stats" card removed from trivia landing, AI personality traits dialed back (≤1–2 players surfaced per call, ~70% inclusion probability, prompts re-tuned to lean 90/10 game-stats vs personal facts in TTS pool — was 80/20).
 - **Photo chip counting accuracy + feedback loop** (v5.47.0 → v5.49.x → v5.53.0): full evolution from "snap photo → AI proposes counts" (v5.47) through the multi-shot consensus + computed confidence rebuild (v5.49) to the in-app feedback capture infrastructure (v5.53, migration 069). Position-based identity (chips sorted ascending) replaces color discrimination as the accuracy lever, MAX aggregation across 3 parallel shots counters the systematic undercount bias, and silent diff capture in `markPlayerDone` now records (AI vs real) per-stack diffs to `chip_count_feedback` so future tuning can be empirical instead of intuitive.
 - **Trivia hardening + UX polish** (v5.50.x → v5.53.0): stale-state click-time correctness lock (v5.50.2), difficulty moderation with 20-game eligibility floor and bucketed range answers (v5.51), trivia mode redesign — Group=broad, עליי=personal, Mixed=50/50 per-question (v5.52), and same-release tweaks to the report-problem button label + wider `numericDistractors` spread (0.55 → 0.85) so ±40% ballpark estimates win.
 - **Home/schedule UX polish + new-group onboarding** (v5.45.0–v5.46.0): home dashboard forward-looking teaser for brand-new groups; schedule card empty state rewritten; schedule tab empty state shows next auto-create anchor; polls auto-link to games and auto-archive when their game completes; activity log shows live session minutes; observer mode for super admins viewing foreign groups.

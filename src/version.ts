@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.57.1';
+export const APP_VERSION = '5.58.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.58.0',
+    date: '2026-05-10',
+    changes: [
+      '🃏 Admins can test photo chip counting',
+      '📊 Accuracy dashboard visible to admin co-testers',
+      '🔒 Tune & revert stay owner-only',
+      '🗑 Super-admin can delete bad trivia questions',
+      '↩ Deleted trivia questions restorable from inbox',
+      '📊 Trivia leaderboard sorts by accuracy first',
+      '🧹 Removed redundant "My stats" card',
+      '🎭 AI uses player traits less often, less repetitively',
+    ],
+  },
   {
     version: '5.57.1',
     date: '2026-05-10',

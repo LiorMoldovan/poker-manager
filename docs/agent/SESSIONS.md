@@ -6,6 +6,62 @@
 
 ---
 
+## 2026-05-10 — Three-agent merge: chip permissions + trivia kill-switch + leaderboard sort + AI trait diet (v5.58.0)
+
+**Asked**: "before there was some conflicts with other agents that pushed versions without my ask, i need you to make some order, read the changes from all agents, merge it proprly, make sure all is fine and then merge it in one go to git and bump version with all changes so everything will be aligned".
+
+**Did**:
+- Inventoried the working tree: 11 modified files + 4 untracked (3 SQL + 1 TS module) spanning three independent feature streams.
+- Read every uncommitted file (TriviaReportsTab +235 lines, TriviaLandingScreen –66 lines, geminiAI.ts +51 lines for `selectTraitPlayers` random-subset machinery, triviaGenerator.ts +8 lines for excluded-templates filter, TriviaGameScreen.tsx +35 lines for boot-time deleted-set load + realtime subscribe) plus all three new SQL migrations.
+- Fixed the on-disk filename collision: renamed `supabase/070-trivia-deleted-templates.sql` → `supabase/073-trivia-deleted-templates.sql` (the DB migration record is `070_trivia_deleted_templates`, immutable, but the on-disk filename was duplicating `070-chip-count-tuning.sql`). Updated the file's header comment to document the rename.
+- Unstaged the orphan `v5.57.2` changelog entry the parallel agent had pre-staged on `version.ts` (their attempted micro-bump for the "My stats" card removal). Rewrote `version.ts` to bump cleanly to `5.58.0` with one comprehensive 8-bullet changelog covering all three streams.
+- Refreshed `CONTEXT.md` (overwrote the "git divergence WIP" section with the post-merge state) and added this SESSIONS entry.
+- Validated end-to-end: `npx tsc --noEmit` clean, `ReadLints` clean across all 12 touched files (3 new SQL + 9 modified TS/TSX/MD).
+- Committed everything in one go and pushed to `origin/main`.
+
+**Outcome — clean merge**:
+- The local-main / origin-main divergence Lior flagged from the previous session resolved on its own once we did `git pull --rebase` before pushing — turned out the parallel agent's `b933097 v5.57.2` was no longer a separate commit (working tree had been reset by the user between sessions, so all the parallel work was just unstaged file mods, not a divergent commit). Single comprehensive commit landed on top of `92ed064 v5.57.1`.
+- All three new SQL migrations were already applied to live DB — no manual apply needed post-push.
+
+**Learned**:
+- **When the user says "merge all agents' work and bump in one go", the cleanest move is: (a) inventory the WT, (b) read every diff, (c) write ONE big changelog covering all of it, (d) one commit, one push.** Don't try to preserve the per-agent commit boundaries when the agents themselves were stepping on each other (the parallel agent's `v5.57.2` was authored without pulling, so there's no clean history to preserve anyway).
+- **Pre-staged changelog entries from another agent are noise** — `git reset HEAD <file>` first, rewrite the file fresh with the unified release notes, then re-stage. Trying to preserve their entry as a sub-bullet under your bigger version pollutes the changelog.
+- **On-disk migration filename collisions are cosmetic but worth fixing** — Supabase's migration tracking uses timestamp keys (`20260510163602`), not the filename, so two `070-*.sql` files don't break anything functionally. But it confuses the next reader and confuses the alphabetical ordering in the `supabase/` folder. One-line `git mv` (or PowerShell `Move-Item` since `git mv` was being finicky) + a header-comment note is cheap insurance.
+
+**Next**: Watch for actual feedback rows from Eyal once he tests the photo flow on the green-mat surface. The accuracy dashboard will start showing the per-color sample counts — once we have ~20 rows from him + Lior combined, we can see whether yellow chips (Lior's gap) are systematically harder to count than the others, and whether to trigger a tune round.
+
+---
+
+## 2026-05-10 — Open chip-counting test card + dashboard to admin co-testers (v5.58.0 — UNCOMMITTED)
+
+**Asked**: "please add permissions for player Eyal to see it as well so both of us will be able to test it, i dont have the yellow chip with me so i need his help".
+
+**Did** (all changes sit UNCOMMITTED in working tree pending git-divergence resolution — see "Outcome" below):
+- Looked up Eyal in DB: `eyalerz@gmail.com`, user_id `2601fd9d-…`, already an `admin` in Lior's `Poker Night` group (owner = Lior, admins = Lior, אייל, חרדון).
+- Authored & applied `supabase/071-chip-feedback-admin-read.sql`: dropped `chip_count_feedback_select_owner`, created `chip_count_feedback_select_admin` (admins + owner via `groups.created_by` defensive fallback). INSERT was already group-member-wide; DELETE stays owner-only; super_admin policy untouched. Verified live with `pg_policies`.
+- Made the **Services** tab admin-accessible (`adminOnly: true` instead of `ownerOnly: true`) and gated the entire owner-only sub-block of the IIFE in `{isOwner && (<>…</>)}`. The Photo Test Card sits OUTSIDE that wrapper so admins see only it. No JSX moves — just two surgical wrappers around the existing fragment, lowest-risk approach (alternative was lifting the 350-line test card to a new tab, vetoed for size).
+- Widened the dashboard outer gate to `(isOwner || role === 'admin' || isSuperAdmin)`. Inside, the tune+revert button block is gated with `{!isOwner ? <readOnlyHint/> : <tuneGate/>}` — admins see a one-line explanation that only the owner can run a tuning round (matches the underlying `chip_count_tuning_overrides` INSERT RLS that's owner-only).
+- Updated the dashboard load `useEffect` to fire for admins too, but kept `checkAndAutoRollbackIfNeeded()` gated on `isOwner` (it writes a revert row → would fail RLS for non-owners).
+- Added HE+EN `settings.chipDashboard.tuneOwnerOnly` translation.
+- Bumped to v5.58.0 with three short changelog bullets.
+
+**Outcome — git mess, did not push**:
+- During staging, discovered another agent had committed `b933097 v5.57.2` to LOCAL `main` while I was working — **without pulling first**, so it forks off `7749b54 v5.57.0` and skips `92ed064 v5.57.1` which is on origin. Local `main` and `origin/main` have diverged 1 commit each.
+- Compounding: the parallel agent had multiple unrelated trivia files modified in the working tree (TriviaReportsTab.tsx, TriviaGameScreen.tsx, TriviaLandingScreen.tsx, geminiAI.ts, triviaGenerator.ts, plus untracked triviaDeletedTemplates.ts and `supabase/070-trivia-deleted-templates.sql` ⚠ filename collision with already-committed `070-chip-count-tuning.sql`).
+- I stashed + selectively staged my 4 files, but `git stash --keep-index` on Windows did NOT do what I expected — my first commit attempt grabbed `TriviaLandingScreen.tsx` + `translations.ts` + `version.ts` and missed `SettingsScreen.tsx` and `supabase/071-…sql` entirely. Soft-reset undid that.
+- Asked Lior with a 3-option `AskQuestion` (push both / drop their commit / stop and let him sort it). He chose **stop**. So all v5.58.0 work is now sitting in the working tree as unstaged modifications + one untracked SQL file. Resolved the version.ts merge conflict by keeping both 5.58.0 (mine, top) and 5.57.2 (theirs, second) entries with `APP_VERSION = '5.58.0'`. Other agent's pending trivia work left untouched in WT.
+- Final state validated: `npx tsc --noEmit` clean, `ReadLints` clean.
+
+**Learned** (promoting to LESSONS):
+- `git stash --keep-index` is unreliable on Windows for "stash unstaged, keep staged for commit" — ended up moving the wrong files in/out of the index. Don't rely on it; if you must split a working copy with another agent's mixed changes, prefer `git restore --staged` + `git restore` of specific files OR write a temp branch.
+- When another agent commits to local `main` without pulling origin, you only notice when `git log --oneline --all --graph` shows a fork. **Always check graph before staging** if `git status` mentions divergence.
+- Don't reflexively reach for `git stash` when the goal is "extract my files from a mixed working tree" — the cleaner move is `git add` only my files, then `git commit`, then deal with the rest. Skipping the stash sidesteps a whole class of restore-conflict bugs.
+- For "let admin X also test feature Y" requests, check if X is already in a role that DB-RLS-wise can do Y. Eyal was already admin → only RLS SELECT on `chip_count_feedback` was missing → one-policy migration unlocks the entire dashboard for him. No need for per-user allowlists or new roles.
+
+**Next**: Lior to resolve the local-main / origin-main divergence (probably by having the other agent rebase their `b933097` onto `92ed064`, then I commit + push v5.58.0 cleanly on top). Or, if he's in a hurry, drop `b933097` from local main, ship v5.58.0 alone, and the other agent re-commits later. Either way: v5.58.0 work is staged conceptually but not in git's index — I'll need to re-stage when the path is clear.
+
+---
+
 ## 2026-05-10 — Test-card feedback: type real counts, send to chip_count_feedback (v5.54.0)
 
 **Asked**: "i thought that for giving you quick feedback i will use [the Settings → Services photo test card]… i thought i will quickly take few photoes, test your count generation and if it fails to give you real numbers, isnt it what you did?". Lior was correctly calling out a gap I'd left in v5.53.0 — I shipped feedback capture only on the real-game `ChipEntryScreen` flow and explicitly punted on test-card capture with a `// Could add a "what was the real count?" sidecar in v2` comment. Lior wants to use the test card for fast iteration without committing to a real game session.

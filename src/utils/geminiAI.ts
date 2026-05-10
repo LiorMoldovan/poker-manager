@@ -178,12 +178,38 @@ export interface RunGeminiTextOptions {
   topK?: number;
 }
 
-/** Build a compact trait block for AI prompts. Returns empty string if no traits exist. */
-function buildTraitBlock(playerNames: string[]): string {
+/** Probability that ANY trait block is included on a given AI call.
+ * Lower = AI text anchored less often on player personality, more on game data. */
+const TRAIT_BLOCK_INCLUSION_PROBABILITY = 0.7;
+
+/** Probability that the trait subset includes 2 players instead of 1, when traits ARE included.
+ * Lower = each trait surfacing is lighter (1 player getting flavor, not 2). */
+const TRAIT_BLOCK_TWO_PLAYER_PROBABILITY = 0.4;
+
+/** Pick which players (if any) should have their traits surfaced for this AI call.
+ * Returns null when traits should be skipped entirely so AI text varies week-to-week
+ * instead of leaning on the same personality blurbs every time. */
+export function selectTraitPlayers(playerNames: string[]): string[] | null {
+  if (Math.random() >= TRAIT_BLOCK_INCLUSION_PROBABILITY) return null;
   const allTraits = getAllPlayerTraits();
-  if (allTraits.size === 0) return '';
+  if (allTraits.size === 0) return null;
+  const withTraits = playerNames.filter(n => allTraits.has(n));
+  if (withTraits.length === 0) return null;
+  const wantTwo = Math.random() < TRAIT_BLOCK_TWO_PLAYER_PROBABILITY;
+  const count = Math.min(withTraits.length, wantTwo ? 2 : 1);
+  const shuffled = [...withTraits].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+/** Build a compact trait block for AI prompts. Returns empty string most of the time —
+ * when present, only includes 1-2 random players' traits as light flavor, never the full roster.
+ * This deliberately under-supplies the AI so personality blurbs don't dominate every generation. */
+function buildTraitBlock(playerNames: string[]): string {
+  const selected = selectTraitPlayers(playerNames);
+  if (!selected) return '';
+  const allTraits = getAllPlayerTraits();
   const lines: string[] = [];
-  for (const name of playerNames) {
+  for (const name of selected) {
     const t = allTraits.get(name);
     if (!t) continue;
     const parts: string[] = [];
@@ -195,7 +221,7 @@ function buildTraitBlock(playerNames: string[]): string {
     if (parts.length > 0) lines.push(`${name}: ${parts.join(', ')}`);
   }
   if (lines.length === 0) return '';
-  return `\n--- תכונות השחקנים (השתמש בזה להעשרת התוכן) ---\n${lines.join('\n')}\n---\n`;
+  return `\n--- רמז אופציונלי על שחקן/ים (השתמש רק אם זה באמת מוסיף ערך, אחרת התעלם) ---\n${lines.join('\n')}\n---\n`;
 }
 
 /** Plain-text Gemini call with model fallback (used by training admin, coaching, etc.). */
@@ -2357,7 +2383,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 ⚠️ דיוק עובדתי:
 - כל מספר, רווח, הפסד, רצף, שיא ודירוג חייבים להגיע ישירות מהנתונים למעלה
 - שינויי דירוג מופיעים ב"שינויים בטבלה" — אם לא מופיע שם, אל תטען שמישהו עלה/ירד/עקף
-- אל תמציא עובדות ביוגרפיות. מותר להשתמש רק בתכונות שחקנים שסופקו למעלה (אם סופקו)
+- אל תמציא עובדות ביוגרפיות. אם סופקו תכונות שחקנים — שלב לכל היותר אזכור אחד קצר, ורק אם זה באמת מוסיף לסיפור. ברוב הסיכומים עדיף בלי בכלל ולהסתמך על נתוני המשחקים
 - אל תמציא שיאים או הישגים שלא מופיעים בנתונים
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
@@ -3209,7 +3235,7 @@ ${milestones.join('\n')}` : ''}${buildTraitBlock(players.map(p => p.name))}
 
 ⚠️ דיוק עובדתי (חובה מוחלטת):
 - כל מספר, דירוג, רצף ותוצאה חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
+- אל תמציא עובדות. אם סופקו תכונות שחקנים — שלב לכל היותר אזכור אחד קצר, ורק אם זה באמת מוסיף לפרופיל. לרוב עדיף לבנות סביב הנתונים הסטטיסטיים בלבד
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
 📤 פורמט הפלט:
@@ -3337,7 +3363,7 @@ ${buildTraitBlock(sorted.map(p => p.playerName))}
 ⚠️ כללים:
 - פסקה אחת זורמת, לא רשימה עם נקודות
 - כל מספר, רצף ודירוג חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
+- אל תמציא עובדות. אם סופקו תכונות שחקנים — שלב לכל היותר אזכור אחד קצר ורק אם זה באמת תורם. לרוב עדיף לבנות סביב הנתונים בלבד
 - "רווח כולל" = סך כל הרווח של השחקן. "פער" = ההפרש בין שני שחקנים סמוכים בטבלה. אלו מספרים שונים! אל תבלבל ביניהם
 - כשמציין פער בטבלה, השתמש במספר מ"פער מהבא" או "פער מלמעלה", לא מהרווח הכולל
 - אם לא בטוח — השמט${isEarlyPeriod ? '\n- התקופה רק התחילה, היזהר ממסקנות גורפות' : ''}
@@ -3411,11 +3437,16 @@ export const generateLiveGameTTSPool = async (
     training: trainingByName[playerNames[i]] || null,
   }));
 
+  // Subset of players whose traits are surfaced in the per-player rendering this run.
+  // Cross-player rivalry detection (sameTeam/sameJob below) still uses the full traits
+  // map — that's fun cross-player flavor, not the repetitive personality dumps.
+  const surfacedTraitNames = new Set(selectTraitPlayers(playerNames) ?? []);
+
   const playerDataLines = players.map(p => {
     const gender = isPlayerFemale(p.name) ? 'נקבה' : 'זכר';
     const lines: string[] = [`═ ${p.name} (${gender}) ═`];
 
-    if (p.traits) {
+    if (p.traits && surfacedTraitNames.has(p.name)) {
       const traitParts: string[] = [];
       if (p.traits.job) traitParts.push(`עבודה: ${p.traits.job}`);
       if (p.traits.team) traitParts.push(`קבוצה: ${p.traits.team}`);
@@ -3482,7 +3513,7 @@ export const generateLiveGameTTSPool = async (
   const prompt = `אתה כותב יצירתי לאפליקציית פוקר. המשימה: ליצור בנק משפטים קצרים בעברית מושלמת להקראה קולית (TTS) בערב פוקר חי.
 💰 כל הסכומים בשקלים. כשאתה מזכיר סכומים, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
-הדרישה המרכזית: כל משפט חייב להיות ספציפי לשחקן ולמצב. אסורים משפטים גנריים שאפשר להגיד על כל אחד. עדיפות ראשונה (לפחות 80% מהמשפטים): נתונים סטטיסטיים אמיתיים מהמשחקים — אחוז נצחונות, רווח/הפסד כולל, רצפים, שיאים, ממוצע קניות, מספר משחקים, תוצאת משחק אחרון, דירוג בטבלה, פער מהשחקן שמעליו/מתחתיו. העדף תמיד נתונים שמשתנים בין משחקים (רצף נוכחי, תוצאה אחרונה, דירוג נוכחי) על פני נתונים קבועים (סה"כ משחקים, אחוז נצחונות כללי). עדיפות שנייה (מקסימום 20%): עובדה אישית אחת בלבד — עבודה, קבוצה, או תכונה. אסור לשלב יותר מעובדה אישית אחת באותו משפט. העובדה האישית היא תבלין ולא המנה העיקרית.
+הדרישה המרכזית: כל משפט חייב להיות ספציפי לשחקן ולמצב. אסורים משפטים גנריים שאפשר להגיד על כל אחד. עדיפות ראשונה (לפחות 90% מהמשפטים): נתונים סטטיסטיים אמיתיים מהמשחקים — אחוז נצחונות, רווח/הפסד כולל, רצפים, שיאים, ממוצע קניות, מספר משחקים, תוצאת משחק אחרון, דירוג בטבלה, פער מהשחקן שמעליו/מתחתיו. העדף תמיד נתונים שמשתנים בין משחקים (רצף נוכחי, תוצאה אחרונה, דירוג נוכחי) על פני נתונים קבועים (סה"כ משחקים, אחוז נצחונות כללי). עדיפות שנייה (אופציונלית, מקסימום 10%): עובדה אישית אחת בלבד — ורק עבור שחקנים שהוצגה עבורם תכונה במפורש למעלה. לשחקנים בלי תכונות שהוצגו, אסור לחלוטין לשלב עובדות אישיות (אל תמציא, אל תנחש). אם בכלל לא הוצגו תכונות הערב — בנה הכל על נתוני המשחקים. עובדה אישית היא תבלין נדיר ולא חובה.
 
 ═══ נתוני השחקנים ═══
 ${playerDataLines}
@@ -3521,7 +3552,7 @@ ${rivalryPairs.length > 0 ? `\n═══ קשרים ═══\n${rivalryPairs.ma
 
 חוקים:
 1. כל משפט ייחודי לחלוטין — גם בין שחקנים שונים! אסור ששני שחקנים יקבלו משפט דומה או עם אותה תבנית. כל משפט חייב להשתמש בנתון ספציפי ששייך רק לאותו שחקן (מספר המשחקים שלו, אחוז הנצחונות שלו, הממוצע שלו). אם כתבת "מנצח ב-X אחוז" לשחקן אחד, אל תכתוב "מנצח ב-Y אחוז" לשחקן אחר — תמצא זווית אחרת (רצף, רווח, הפסד, ממוצע קניות).
-2. עדיפות מוחלטת לנתוני משחקים: לפחות 5 מתוך 6 משפטי generic חייבים להתבסס על נתונים מהמשחקים — רצף נוכחי, תוצאת משחק אחרון, דירוג בטבלה, פער מהשחקן שמעל, ממוצע קניות, שיא רווח/הפסד. העדף נתונים דינמיים שמשתנים (רצף, תוצאה אחרונה, דירוג) על פני נתונים יציבים (סה"כ משחקים, אחוז כללי). מקסימום משפט אחד מתוך 6 יכול להתבסס על עובדה אישית (עבודה/קבוצה/תכונה), ותמיד רק עובדה אחת בודדת.
+2. עדיפות מוחלטת לנתוני משחקים: כמעט כל משפטי generic חייבים להתבסס על נתונים מהמשחקים — רצף נוכחי, תוצאת משחק אחרון, דירוג בטבלה, פער מהשחקן שמעל, ממוצע קניות, שיא רווח/הפסד. העדף נתונים דינמיים שמשתנים (רצף, תוצאה אחרונה, דירוג) על פני נתונים יציבים (סה"כ משחקים, אחוז כללי). שילוב עובדה אישית מותר לכל היותר במשפט אחד מתוך 6, ורק לשחקן שהוצגה עבורו תכונה למעלה. אם לשחקן לא הוצגה תכונה — אל תכניס לו עובדה אישית בכלל, גם אם נראה לך שאתה זוכר משהו.
 3. הומור חברי — ציני אבל חם, בלי לפגוע
 4. שחקן ללא היסטוריה → משפטי "ברוך הבא" ללא המצאת נתונים
 5. בלי פתיחות חוזרות, בלי "נו" חוזר, בלי "עוד קנייה" חוזר

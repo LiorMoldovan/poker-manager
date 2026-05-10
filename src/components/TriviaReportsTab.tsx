@@ -41,6 +41,14 @@ import { getGroupId } from '../database/supabaseCache';
 import { getAllPlayers } from '../database/storage';
 import type { Player } from '../types';
 import { notifyReporterOfTriviaResolution } from '../utils/triviaReportNotifications';
+import {
+  fetchAllDeletedTriviaTemplates,
+  deleteTriviaTemplate,
+  restoreTriviaTemplate,
+  loadDeletedTriviaTemplates,
+  subscribeRealtimeDeletedTemplates,
+  type DeletedTriviaTemplateRow,
+} from '../utils/triviaDeletedTemplates';
 
 type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 type ReportReason = 'wrong_answer' | 'unclear_question' | 'other';
@@ -254,6 +262,12 @@ const TriviaReportsTab: React.FC = () => {
   // player joins.
   const groupPlayers = useMemo<Player[]>(() => getAllPlayers(), []);
 
+  // Deleted-templates state — the kill-switch list. Loaded on mount,
+  // refreshed on realtime, mutated optimistically by deleteFromPool /
+  // restoreFromPool.
+  const [deletedTemplates, setDeletedTemplates] = useState<DeletedTriviaTemplateRow[]>([]);
+  const [poolBusyId, setPoolBusyId] = useState<string | null>(null);
+
   const fetchReports = useCallback(async () => {
     if (!isSuperAdmin) return;
     setLoading(true);
@@ -304,6 +318,32 @@ const TriviaReportsTab: React.FC = () => {
       void fetchPlayerStats();
     }
   }, [view, playerStats, playerStatsLoading, fetchPlayerStats]);
+
+  // Load + subscribe to the per-group "deleted templates" list. Mounted
+  // once when the super-admin opens the tab; the realtime subscription
+  // refreshes the list (and the in-memory exclusion set used by the
+  // trivia generator on every device) whenever a delete or restore
+  // happens — including from another super-admin on another device.
+  const refreshDeletedTemplates = useCallback(async () => {
+    const gid = getGroupId();
+    if (!gid) return;
+    const rows = await fetchAllDeletedTriviaTemplates(gid);
+    setDeletedTemplates(rows);
+  }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const gid = getGroupId();
+    if (!gid) return;
+    void loadDeletedTriviaTemplates(gid).then(() => refreshDeletedTemplates());
+    const unsubscribe = subscribeRealtimeDeletedTemplates(gid);
+    const onCacheUpdate = () => { void refreshDeletedTemplates(); };
+    window.addEventListener('supabase-cache-updated', onCacheUpdate);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('supabase-cache-updated', onCacheUpdate);
+    };
+  }, [isSuperAdmin, refreshDeletedTemplates]);
 
   // Aggregate header for the Players sub-view: total quizzes, total
   // questions answered, group-wide accuracy. Computed from the same
@@ -384,6 +424,65 @@ const TriviaReportsTab: React.FC = () => {
       return;
     }
     await fetchReports();
+  };
+
+  // ── Pool kill-switch ─────────────────────────────────────────
+  // "Delete this question from the pool" — adds the report's
+  // template_id to `trivia_deleted_templates` so it never generates
+  // again for this group. ALSO resolves the report (since we acted
+  // on it) with a note explaining the question was removed, so the
+  // reporter gets the "your report was accepted" push.
+  const handleDeleteFromPool = async (row: TriviaReportRow) => {
+    const confirm = window.confirm(
+      t('triviaReports.confirmDeleteFromPool').replace('{template}', row.template_id),
+    );
+    if (!confirm) return;
+    const gid = getGroupId();
+    if (!gid) return;
+    setBusy(row.id, true);
+    setError(null);
+    const reasonText = noteDrafts[row.id]?.trim() || row.comment?.trim() || null;
+    const result = await deleteTriviaTemplate(gid, row.template_id, reasonText);
+    if (!result.ok) {
+      setBusy(row.id, false);
+      setError(result.error || t('triviaReports.error'));
+      return;
+    }
+    // Best-effort resolve so the report inbox reflects "we acted on
+    // this". The report status flip is non-fatal — if it fails the
+    // template is already removed from the pool, which was the
+    // primary user intent.
+    if (row.status === 'pending') {
+      const noteForReport = t('triviaReports.poolDeletedNote');
+      await supabase.rpc('resolve_trivia_report', {
+        p_report_id: row.id,
+        p_status: 'resolved',
+        p_note: noteForReport,
+      });
+      void notifyReporterOfTriviaResolution({
+        reporterName: row.player_name,
+        outcome: 'accept',
+        questionText: row.question_text,
+      });
+    }
+    setBusy(row.id, false);
+    await fetchReports();
+    await refreshDeletedTemplates();
+  };
+
+  const handleRestoreFromPool = async (templateId: string) => {
+    if (!window.confirm(t('triviaReports.confirmRestore').replace('{template}', templateId))) return;
+    const gid = getGroupId();
+    if (!gid) return;
+    setPoolBusyId(templateId);
+    setError(null);
+    const result = await restoreTriviaTemplate(gid, templateId);
+    setPoolBusyId(null);
+    if (!result.ok) {
+      setError(result.error || t('triviaReports.error'));
+      return;
+    }
+    await refreshDeletedTemplates();
   };
 
   // ── Bulk actions ─────────────────────────────────────────────
@@ -878,19 +977,39 @@ const TriviaReportsTab: React.FC = () => {
                     >
                       ✕ {t('triviaReports.action.dismiss')}
                     </button>
+                    {/* Pool kill-switch — the question type is removed
+                        from future trivia rounds for this group. The
+                        report itself is auto-resolved + the reporter
+                        is pinged. Distinct from "Delete report" below
+                        (which only deletes the paperwork). */}
+                    <button
+                      onClick={() => handleDeleteFromPool(r)}
+                      disabled={busy}
+                      title={t('triviaReports.action.deleteQuestionTitle')}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.12)', color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        padding: '0.4rem 0.85rem', borderRadius: 8,
+                        cursor: busy ? 'default' : 'pointer',
+                        fontSize: '0.72rem', fontWeight: 700, opacity: busy ? 0.5 : 1,
+                      }}
+                    >
+                      🗑 {t('triviaReports.action.deleteQuestion')}
+                    </button>
                     <button
                       onClick={() => handleDelete(r.id)}
                       disabled={busy}
+                      title={t('triviaReports.action.deleteReportTitle')}
                       style={{
-                        background: 'transparent', color: '#ef4444',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        background: 'transparent', color: 'var(--text-muted)',
+                        border: '1px solid var(--border)',
                         padding: '0.4rem 0.7rem', borderRadius: 8,
                         cursor: busy ? 'default' : 'pointer',
                         fontSize: '0.7rem', fontWeight: 600, opacity: busy ? 0.5 : 1,
                         marginInlineStart: 'auto',
                       }}
                     >
-                      🗑 {t('triviaReports.action.delete')}
+                      🗂 {t('triviaReports.action.deleteReport')}
                     </button>
                   </div>
                 </>
@@ -908,19 +1027,38 @@ const TriviaReportsTab: React.FC = () => {
                   >
                     ↺ {t('triviaReports.action.reopen')}
                   </button>
+                  {/* Pool kill-switch — also exposed on already-triaged
+                      reports so an admin can revisit and remove the
+                      template later (e.g. after a second report on the
+                      same template_id). */}
+                  <button
+                    onClick={() => handleDeleteFromPool(r)}
+                    disabled={busy}
+                    title={t('triviaReports.action.deleteQuestionTitle')}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.12)', color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      padding: '0.4rem 0.85rem', borderRadius: 8,
+                      cursor: busy ? 'default' : 'pointer',
+                      fontSize: '0.72rem', fontWeight: 700, opacity: busy ? 0.5 : 1,
+                    }}
+                  >
+                    🗑 {t('triviaReports.action.deleteQuestion')}
+                  </button>
                   <button
                     onClick={() => handleDelete(r.id)}
                     disabled={busy}
+                    title={t('triviaReports.action.deleteReportTitle')}
                     style={{
-                      background: 'transparent', color: '#ef4444',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      background: 'transparent', color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
                       padding: '0.4rem 0.7rem', borderRadius: 8,
                       cursor: busy ? 'default' : 'pointer',
                       fontSize: '0.7rem', fontWeight: 600, opacity: busy ? 0.5 : 1,
                       marginInlineStart: 'auto',
                     }}
                   >
-                    🗑 {t('triviaReports.action.delete')}
+                    🗂 {t('triviaReports.action.deleteReport')}
                   </button>
                 </div>
               )}
@@ -928,6 +1066,91 @@ const TriviaReportsTab: React.FC = () => {
           );
         })}
       </div>
+      )}
+
+      {/* ── Deleted templates ────────────────────────────────────
+          The kill-switch list. Shown only when there's at least
+          one entry — empty state would just be noise. Each row
+          shows what was removed, when, and by whom (best-effort
+          via deleted_by uuid; full name not joined to keep this
+          screen single-query). Restore button reverses the
+          deletion via the `restore_trivia_template` RPC; realtime
+          on `trivia_deleted_templates` then updates every client's
+          generator pool within seconds. */}
+      {view === 'reports' && deletedTemplates.length > 0 && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <div style={{
+            fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)',
+            marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
+          }}>
+            🗑 {t('triviaReports.deletedTemplates.title')}
+            <span style={{
+              fontSize: '0.65rem', padding: '0.1rem 0.45rem', borderRadius: 999,
+              background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 700,
+            }}>{deletedTemplates.length}</span>
+          </div>
+          <div style={{
+            fontSize: '0.7rem', color: 'var(--text-muted)',
+            marginBottom: '0.55rem', lineHeight: 1.4,
+          }}>
+            {t('triviaReports.deletedTemplates.subtitle')}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+            {deletedTemplates.map(d => {
+              const busyRestore = poolBusyId === d.template_id;
+              return (
+                <div
+                  key={d.template_id}
+                  className="card"
+                  style={{
+                    padding: '0.55rem 0.75rem',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    gap: '0.55rem', flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)',
+                      fontFamily: 'monospace', wordBreak: 'break-all',
+                    }}>
+                      {d.template_id}
+                    </div>
+                    {d.reason && (
+                      <div style={{
+                        fontSize: '0.7rem', color: 'var(--text-muted)',
+                        marginTop: '0.2rem', fontStyle: 'italic', lineHeight: 1.35,
+                      }}>
+                        💬 {d.reason}
+                      </div>
+                    )}
+                    <div style={{
+                      fontSize: '0.62rem', color: 'var(--text-muted)',
+                      marginTop: '0.2rem',
+                    }}>
+                      {formatDate(d.deleted_at)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreFromPool(d.template_id)}
+                    disabled={busyRestore || poolBusyId !== null}
+                    title={t('triviaReports.deletedTemplates.restoreTitle')}
+                    style={{
+                      padding: '0.35rem 0.75rem', borderRadius: 8,
+                      fontSize: '0.7rem', fontWeight: 700,
+                      background: 'rgba(34, 197, 94, 0.12)', color: '#22c55e',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      cursor: busyRestore ? 'wait' : (poolBusyId !== null ? 'default' : 'pointer'),
+                      opacity: busyRestore || poolBusyId !== null ? 0.6 : 1,
+                      flex: '0 0 auto',
+                    }}
+                  >
+                    ↺ {t('triviaReports.deletedTemplates.restore')}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ── Players sub-view: per-player adoption + accuracy ─────── */}

@@ -1906,6 +1906,11 @@ export function generateTriviaBatch(
   // Optional category whitelist from the landing screen. Empty / undefined
   // = "all categories". Unknown ids are silently ignored.
   categories?: TriviaCategory[],
+  // Optional set of template ids the super-admin has deleted from the
+  // pool for this group (migration 070, `trivia_deleted_templates`).
+  // Empty / undefined = no exclusions. Filtered out of both pools so
+  // they never appear in any generated batch.
+  excludedTemplateIds?: ReadonlySet<string>,
 ): TriviaQuestion[] {
   const bundle = buildBundle(ctx);
 
@@ -1925,6 +1930,7 @@ export function generateTriviaBatch(
   }
 
   const catFilter = categories && categories.length > 0 ? new Set(categories) : null;
+  const excluded = excludedTemplateIds && excludedTemplateIds.size > 0 ? excludedTemplateIds : null;
 
   // Pre-compute the candidate template pools per scope so we don't
   // re-filter ALL_TEMPLATES inside the per-question loop.
@@ -1934,11 +1940,13 @@ export function generateTriviaBatch(
     // ask about a random non-self subject.
     if (tpl.mode !== 'group' && tpl.mode !== 'players') return false;
     if (catFilter && !catFilter.has(tpl.category)) return false;
+    if (excluded && excluded.has(tpl.id)) return false;
     return true;
   });
   const selfPool = ALL_TEMPLATES.filter(tpl => {
     if (tpl.mode !== 'players') return false;
     if (catFilter && !catFilter.has(tpl.category)) return false;
+    if (excluded && excluded.has(tpl.id)) return false;
     return true;
   });
 

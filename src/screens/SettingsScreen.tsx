@@ -504,9 +504,16 @@ const SettingsScreen = () => {
   //
   // Anti-pattern guard: only fires when the user is actually looking
   // at the Services tab. No point hammering the DB just because the
-  // owner happened to be on Settings → Players.
+  // owner (or an admin co-tester) happened to be on Settings →
+  // Players.
+  //
+  // v5.58: also loads for non-owner admins now that RLS (migration
+  // 071) lets them SELECT chip_count_feedback. Auto-rollback inside
+  // is gated on `isOwner` further down — non-owners can't INSERT
+  // into chip_count_tuning_overrides anyway (RLS), and trying would
+  // produce noisy errors.
   useEffect(() => {
-    if (activeTab !== 'ai' || !isOwner) return;
+    if (activeTab !== 'ai' || (!isOwner && role !== 'admin' && !isSuperAdmin)) return;
     const gid = getGroupId();
     if (!gid) return;
     let cancelled = false;
@@ -515,23 +522,26 @@ const SettingsScreen = () => {
     (async () => {
       try {
         // Phase 3: run the auto-rollback safety net BEFORE loading the
-        // dashboard data. If a rollback fires, the load below will
-        // observe the new state (latest tuning row = the auto-revert)
-        // and reset the rowsSinceLastTuning counter accordingly. The
-        // banner state is set so the owner sees the explanation at
-        // the top of the card. No-op when the latest tuning is
-        // already a revert, when no tuning exists, when fewer than 5
+        // dashboard data. Owner-only — see comment above for why.
+        // If a rollback fires, the load below will observe the new
+        // state (latest tuning row = the auto-revert) and reset the
+        // rowsSinceLastTuning counter accordingly. The banner state
+        // is set so the owner sees the explanation at the top of
+        // the card. No-op when the latest tuning is already a
+        // revert, when no tuning exists, when fewer than 5
         // post-tuning samples exist, or when post-tuning accuracy
         // matches/beats baseline — the common cases.
-        const rollback = await checkAndAutoRollbackIfNeeded();
-        if (cancelled) return;
-        if (rollback.rolledBack && rollback.description && rollback.postAvg !== undefined && rollback.baseline !== undefined && rollback.postSamples !== undefined) {
-          setChipAutoRollback({
-            description: rollback.description,
-            postAvg: rollback.postAvg,
-            baseline: rollback.baseline,
-            postSamples: rollback.postSamples,
-          });
+        if (isOwner) {
+          const rollback = await checkAndAutoRollbackIfNeeded();
+          if (cancelled) return;
+          if (rollback.rolledBack && rollback.description && rollback.postAvg !== undefined && rollback.baseline !== undefined && rollback.postSamples !== undefined) {
+            setChipAutoRollback({
+              description: rollback.description,
+              postAvg: rollback.postAvg,
+              baseline: rollback.baseline,
+              postSamples: rollback.postSamples,
+            });
+          }
         }
 
         // Last 200 saves is plenty for the dashboard math (and the
@@ -580,7 +590,7 @@ const SettingsScreen = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [activeTab, isOwner, chipFeedbackRefreshTick]);
+  }, [activeTab, isOwner, role, isSuperAdmin, chipFeedbackRefreshTick]);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ userId: string | null; playerName: string | null; endpoint: string }[]>([]);
 
@@ -1001,7 +1011,16 @@ const SettingsScreen = () => {
     { id: 'chips', label: t('settings.tabChips'), icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'game', label: t('settings.tabGame'), icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
-    { id: 'ai', label: t('settings.tabAI'), icon: '🔌', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
+    // 'ai' (Services) tab is admin-accessible — admins see only the
+    // Photo Chip Counting Test Card + accuracy dashboard inside; all
+    // other cards (Game Readiness, API Keys, AI Usage, opt-in toggle)
+    // are individually gated on `isOwner`. This lets a non-owner admin
+    // co-tester (e.g. another player with a chip color the owner
+    // doesn't have on hand) help submit feedback rows and watch the
+    // dashboard fill up. The Tune / Revert buttons inside the
+    // dashboard remain owner-only (DB RLS on
+    // chip_count_tuning_overrides + UI gate).
+    { id: 'ai', label: t('settings.tabAI'), icon: '🔌', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'triviaReports', label: t('settings.tabTriviaReports'), icon: '🚩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
@@ -2169,7 +2188,14 @@ const SettingsScreen = () => {
       })()}
 
       {/* AI Tab - Owner Only */}
-      {activeTab === 'ai' && isOwner && (() => {
+      {/* v5.58: outer gate widened from `isOwner` to "admin or
+          owner" so the Photo Test Card (which sits OUTSIDE the
+          inner `{isOwner && (<>…</>)}` wrapper, see below) can
+          render for non-owner admin co-testers. The IIFE-level
+          computations (getTodayActions etc.) are cheap reads,
+          safe to run for admins. All owner-only cards inside the
+          IIFE are gated on isOwner separately. */}
+      {activeTab === 'ai' && (isOwner || role === 'admin' || isSuperAdmin) && (() => {
         const todayActions = getTodayActions();
         const todayTokens = getTodayTokens();
         const todayLog = getTodayLog();
@@ -2191,6 +2217,13 @@ const SettingsScreen = () => {
 
         return (
           <>
+            {/* Owner-only block — everything in the Services tab EXCEPT
+                the Photo Chip Counting Test Card is gated on isOwner.
+                The test card sits outside this wrapper so non-owner
+                admin co-testers (e.g. another player who has access
+                to a chip color the owner doesn't have on hand) can
+                use it. v5.58. */}
+            {isOwner && (<>
             {/* Game Readiness Card */}
             <div className="card" style={{ padding: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -3149,7 +3182,10 @@ const SettingsScreen = () => {
               </p>
             </div>
 
-            {/* Photo Chip Counting Test Card (owner-only, in Services tab) */}
+            </>)}
+            {/* Photo Chip Counting Test Card — visible to ALL admins
+                (owner included) so a co-tester can take photos and
+                contribute feedback rows. v5.58. */}
             <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
               <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
                 {t('settings.photoTest.title')}
@@ -3504,16 +3540,15 @@ const SettingsScreen = () => {
       })()}
 
       {/* Chip-count accuracy dashboard (Phase 1 of the in-app
-          tuning loop, v5.55+). Owner-only, Services tab. Reads
-          everything you've ever saved in the test card OR after a
-          real-game photo and renders the per-color / over-time
-          accuracy picture. The "tune now" button at the bottom is
-          intentionally disabled in Phase 1 — it lights up in
-          Phase 2 once we have the runtime-override loader wired
-          into geminiAI.ts. The counter ("X/10 samples until
-          tuning available") tells the owner exactly how many more
-          test photos they need to save before the button unlocks. */}
-      {activeTab === 'ai' && isOwner && (
+          tuning loop, v5.55+). Visible to ALL admins (v5.58, owner
+          + non-owner admin co-testers) since RLS migration 071
+          opened SELECT to admins. The Tune / Revert buttons inside
+          the dashboard remain owner-only (DB RLS on
+          chip_count_tuning_overrides + UI gate). The counter
+          ("X/10 samples until tuning available") tells how many
+          more test photos are needed before the Tune button
+          unlocks. */}
+      {activeTab === 'ai' && (isOwner || role === 'admin' || isSuperAdmin) && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', gap: '0.5rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>
@@ -3848,8 +3883,25 @@ const SettingsScreen = () => {
                   </div>
                 )}
 
-                {/* Tuning gate. Counter + disabled button. Phase 2
-                    will activate this button. */}
+                {/* Tuning gate. Owner-only — the underlying RLS on
+                    chip_count_tuning_overrides INSERT is owner-only,
+                    so non-owner admins (co-testers) see a small
+                    read-only hint instead of the gate. */}
+                {!isOwner ? (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.55rem 0.75rem',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px dashed var(--border)',
+                    borderRadius: '10px',
+                    fontSize: '0.72rem',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.5,
+                    textAlign: 'center',
+                  }}>
+                    {t('settings.chipDashboard.tuneOwnerOnly')}
+                  </div>
+                ) : (
                 <div style={{
                   marginTop: '0.5rem',
                   padding: '0.6rem 0.75rem',
@@ -4047,6 +4099,7 @@ const SettingsScreen = () => {
                     {t('settings.chipDashboard.tuneHowItWorks')}
                   </p>
                 </div>
+                )}
               </>
             );
           })()}

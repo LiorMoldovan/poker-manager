@@ -41,6 +41,11 @@ import {
 import { hapticTap } from '../utils/haptics';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { notifySuperAdminsOfTriviaReport } from '../utils/triviaReportNotifications';
+import {
+  getDeletedTemplateIds,
+  loadDeletedTriviaTemplates,
+  subscribeRealtimeDeletedTemplates,
+} from '../utils/triviaDeletedTemplates';
 
 // Default round length when the URL doesn't specify ?count=N. The
 // landing screen lets users pick 10 / 20 / 0 (= "unlimited", which
@@ -203,6 +208,12 @@ const TriviaGameScreen = () => {
     const gamePlayers = getAllGamePlayers();
     const playerStats = getPlayerStats();
     const players = getAllPlayers();
+    // Pull the live "deleted templates" set so questions the
+    // super-admin removed for this group never appear. The set is
+    // populated by the boot effect below; if load is still in flight
+    // the empty set is a safe fallback (matches v5.57.x behaviour
+    // before this filter existed).
+    const excluded = getDeletedTemplateIds();
     const batch = generateTriviaBatch(mode, questionCount, {
       games,
       gamePlayers,
@@ -211,7 +222,7 @@ const TriviaGameScreen = () => {
       selfPlayerName: playerName,
       language,
       t,
-    }, categories);
+    }, categories, excluded);
     if (batch.length === 0) {
       setPhase('empty');
     } else {
@@ -226,9 +237,27 @@ const TriviaGameScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, questionCount, playerName]);
 
-  // ── Boot: build a batch from live data ─────────────────────────
+  // ── Boot: load the deleted-templates set, then build a batch ────
+  // The set has to be in memory before `loadBatch` runs the first
+  // time, otherwise the very first round in a session could include
+  // a template the super-admin already removed (the realtime
+  // subscription would catch it on the NEXT batch but the user
+  // would already be playing the wrong question).
   useEffect(() => {
-    loadBatch();
+    const gid = getGroupId();
+    if (!gid) {
+      loadBatch();
+      return;
+    }
+    let cancelled = false;
+    void loadDeletedTriviaTemplates(gid).finally(() => {
+      if (!cancelled) loadBatch();
+    });
+    const unsubscribe = subscribeRealtimeDeletedTemplates(gid);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [loadBatch]);
 
   // ── Per-question countdown ─────────────────────────────────────

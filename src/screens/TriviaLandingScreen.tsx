@@ -400,64 +400,14 @@ const TriviaLandingScreen: React.FC = () => {
         </button>
       </div>
 
-      {/* My stats — moved BELOW the start card so the start CTA is
-          the first thing in the user's eye after the explanatory
-          note. Only renders when the player has data. */}
-      {myRow && (
-        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
-          <div style={{
-            fontSize: '0.75rem', color: 'var(--text-muted)',
-            fontWeight: 600, marginBottom: '0.5rem',
-          }}>
-            {t('trivia.landing.myStatsTitle')}
-          </div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '0.5rem',
-            textAlign: 'center',
-          }}>
-            <div style={{
-              padding: '0.6rem',
-              borderRadius: '10px',
-              background: 'var(--background)',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text)' }}>{myRow.games}</div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {t('trivia.landing.myStats.played')}
-              </div>
-            </div>
-            <div style={{
-              padding: '0.6rem',
-              borderRadius: '10px',
-              background: 'var(--background)',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--success)' }}>{myRow.best_score}</div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {t('trivia.landing.myStats.best')}
-              </div>
-            </div>
-            <div style={{
-              padding: '0.6rem',
-              borderRadius: '10px',
-              background: 'var(--background)',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{
-                fontSize: '1.3rem', fontWeight: 800,
-                color: (myRow.accuracy ?? 0) >= 70 ? 'var(--success)' : (myRow.accuracy ?? 0) >= 40 ? '#3b82f6' : '#f59e0b',
-              }}>
-                {myRow.accuracy != null ? `${myRow.accuracy}%` : '—'}
-              </div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {t('trivia.landing.myStats.accuracy')}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* The "My Stats" card was removed in v5.57.2 — two of its
+          three tiles (quizzes-played and accuracy %) duplicated
+          columns the leaderboard already shows for the user's row,
+          and "personal best single round" alone wasn't worth a
+          dedicated card. `myRow` is still computed in useMemo
+          above because the leaderboard uses it to render an
+          off-podium "you are #N" row when the user isn't in the
+          top 10. */}
 
       {/* Leaderboard — restyled to match the canonical app table
           pattern from `StatisticsScreen.tsx` (the most-used table
