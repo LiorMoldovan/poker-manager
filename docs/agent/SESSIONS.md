@@ -6,6 +6,26 @@
 
 ---
 
+## 2026-05-10 — Trivia 0/N stale-state hardening (v5.50.2)
+
+**Asked**: After cleaning Lior's 11 suspicious 0-score trivia rows earlier in the session, he played one more 10-question round in `mode=group` and again got 0/10. Eyal, in the same group, had 13/20 = 65% — proving the scoring path works for some users but reproducibly fails for Lior. "why again i have this 0 after cleaning my data?" His answer to the diagnostic-options prompt: "just fix it."
+
+**Did**:
+- Traced the full scoring path in `TriviaGameScreen.tsx`: `handleSelect(idx)` → `setSelectedIdx(idx)` → advance/reveal `useEffect` reads `q = questions[currentIdx]` and computes `isCorrect = selectedIdx !== null && q.answers[selectedIdx]?.isCorrect === true` → push to `results` → `correct = results.filter(r => r.correct).length` → DB insert. Looked clean on paper. Could not reproduce locally.
+- Identified the structural risk regardless: deriving `isCorrect` in the effect rather than at the click means **any** subsequent re-set of `questions` (which is in the effect's dep array) — for instance from `loadBatch` re-firing on a `playerName` identity change, a deferred-cache `'supabase-cache-updated'` event reaching `useRealtimeRefresh`, or a React 19 batching corner — could land us reading a freshly-shuffled answers array whose ordering no longer matches the index the user actually clicked. Eyal-vs-Lior asymmetry is consistent with a per-device timing race.
+- **Defensive refactor**: added `selectedIsCorrect: boolean | null` state. Inside `handleSelect`, snapshot `questions[currentIdx]` from the click-render closure and compute `q.answers[idx]?.isCorrect === true` immediately, then `setSelectedIsCorrect(...)` alongside `setSelectedIdx(idx)`. The advance-effect now reads `selectedIsCorrect === true` directly and never re-derives from `q.answers`. Reset paths (post-advance, `restart()`) clear both flags.
+- **Diagnostic**: `console.warn('[trivia] suspicious 0-score session', { playerName, mode, total, questions: [...] })` whenever a session ends with `correct === 0 && total >= 5`. Includes per-question `templateId`, the actual correct answer text, and the recorded result — so if the bug ever recurs we get an audit trail in DevTools immediately.
+- Cleaned Lior's one new fresh 0/10 row (`94eb306c-e597-4cc9-8515-31934d5c9a48`) so post-deploy he sees a clean slate.
+- `npx tsc --noEmit` clean, ReadLints clean. Bumped `5.50.1 → 5.50.2`, committed `f3f59e2`, pushed to main.
+
+**Learned**:
+- **Eyal-works-Lior-doesn't asymmetry is the diagnostic key for state-timing bugs**. When the same code path produces correct results for one user and wrong results for another in the same group, the bug is almost certainly a render-timing / closure-staleness issue specific to one client's rendering schedule, not a logic bug. Lift the flag-capture to the synchronous user event (the click) instead of letting effects re-derive from state that may have moved by the time they run.
+- **"Just fix it" is a license to harden, not just patch**. When inspection can't reproduce a reported bug but the bug is real per data, the right move is to remove the entire class of risk (eliminate the re-derivation), not to add another guard around the existing pattern.
+
+**Next**: Vercel deploying v5.50.2 now. If Lior plays again post-deploy and still gets 0/N with N≥5, the new `console.warn` will give us a definitive per-question audit — at that point the bug is somewhere outside the click-to-results path and worth a fresh look.
+
+---
+
 ## 2026-05-10 — Server-side notification dispatch (v5.49.0)
 
 **Asked**: After v5.48.0 (DB-triggered queue) shipped, the operator confirmed that `target_filled` notifications still failed to deliver when no client was online to drain the queue. Their words: "you are the expert however you are expert post issues and not before, you knew what i expect and yet we keep failing and fixing so simply check the overall flow and as i always ask check edge cases and fix it once and for all". A green light to do the bigger architectural fix in one push.

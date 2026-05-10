@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-10 — Lock event-derived values at the click, not in the effect
+
+**Incident**: `TriviaGameScreen.tsx` recorded answer correctness in an advance/reveal `useEffect` by re-deriving from `q.answers[selectedIdx]?.isCorrect` (with `questions` in the dep array). On 2026-05-10 the operator (Lior) reproducibly scored 0/N across 11 separate sessions in `mode=group` while another player in the same group (Eyal) scored a normal 65% on the same code. Code inspection couldn't find the bug — every single boolean evaluated correctly on paper. The asymmetry was the smoking gun: same code, same data, one user's clicks land, the other's don't.
+
+**Root cause**: Deriving correctness from `q.answers[selectedIdx]` inside an effect that depends on `questions` makes the recorded result vulnerable to **any** intervening re-render that re-sets `questions` between the click and the effect. In our codebase that surface is non-trivial — `loadBatch` is `useCallback([mode, questionCount, playerName])`, the deferred-cache `'supabase-cache-updated'` event fires after login Phase 3, and React 19 batching changed timing. We never reproduced exactly *which* path fired for Lior, but the pattern is fragile: the user's intent (click index 2 → answer "X") becomes a stale lookup against a possibly-different `q.answers` array a few microseconds later. Eyal's render schedule must have avoided the race; Lior's hit it every time.
+
+**Lesson**: When a user event commits a meaningful piece of business state (correctness, selection, captured value), **compute and store the final value in the synchronous event handler**, not in a downstream effect that re-derives from React state. Effects re-run when their deps change; events do not. In this case the fix was a one-line pattern shift — `setSelectedIsCorrect(q.answers[idx]?.isCorrect === true)` inside `handleSelect`, and the effect reads that captured boolean instead of re-looking-up. Generalization: any time you find an effect that does `state.someArray[indexFromUserClick]?.x === y`, treat it as a code smell and lift `x` capture to the click. Also: when one user reports a bug another user can't reproduce on the same code+data, lean toward render-timing / closure-staleness explanations before chasing logic bugs.
+
+**Session**: 2026-05-10 (Trivia 0/N stale-state hardening v5.50.2).
+
+---
+
 ## 2026-05-10 — `CREATE EXTENSION ... WITH SCHEMA X IF NOT EXISTS` does NOT relocate
 
 **Incident**: Migration 066 (v5.49.0) created two SECURITY DEFINER functions that called `extensions.http_post(...)` to fire the notification webhook. The migration also began with `CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;`. I assumed this would either install pg_net into `extensions` or be a no-op. It was a no-op — but pg_net was already installed by Supabase at the `net` schema, so the `WITH SCHEMA extensions` clause was silently discarded. Both webhook trigger and pg_cron sweep then called the non-existent `extensions.http_post`. Each call raised `42883: function does not exist`, but the functions had `EXCEPTION WHEN OTHERS THEN RAISE NOTICE` blocks, so the trigger silently swallowed every failure for ~30 minutes between deploy and detection. No notifications dispatched. The bug surfaced when I gave the user a manual-test SQL using `extensions.http_post` and they got the explicit error — without that, the silent failure would have continued indefinitely.

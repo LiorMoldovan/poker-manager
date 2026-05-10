@@ -1,15 +1,15 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-10 (post v5.49.1 — server-side notification dispatch verified end-to-end)
+> **Last refreshed**: 2026-05-10 (post v5.50.2 — trivia scoring hardened against stale-state)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.49.1` (pushed; Vercel deployed).
+- **Version on `main`**: `5.50.2` (pushed; Vercel deploying).
 - **Branch**: `main`.
-- **In-flight WIP**: NONE. Server-side notification dispatch is **fully live and verified end-to-end** via synthetic test on 2026-05-10 13:29: row insert → pg_net webhook fired in 35ms → worker claimed in 1.2s → marked `done` 200ms later. HTTP 200 with `{ok:true,processed:1,pushOk:1,emailOk:1,failed:0}`. No outstanding operator action.
+- **In-flight WIP**: NONE. v5.50.2 lands a defensive fix in `TriviaGameScreen.tsx`: correctness is now captured at the moment of click (`setSelectedIsCorrect(...)` inside `handleSelect`) instead of derived later from `q.answers[selectedIdx]?.isCorrect` in the advance-effect. The old pattern was vulnerable to stale-state / re-shuffle scenarios — confirmed harmful in production where Lior had 11 suspicious 0/N sessions on 2026-05-10 while Eyal (same group, same code) reported normal 65% accuracy. Also added a `console.warn('[trivia] suspicious 0-score session', …)` diagnostic when score=0 and total≥5, so any future recurrence drops a per-question audit (templateId, correct answer text, recorded result) into DevTools for triage. Lior's trivia_sessions rows for group `d1998bed-...` were cleaned again post-fix.
 - **Vercel env vars confirmed live**: `WORKER_INTERNAL_SECRET` (matches `worker_config.notification_worker_secret`) and `SUPABASE_SERVICE_ROLE_KEY` are both set and working. `OWNER_GROUP_ID` was already in place from prior work.
 - **Pending SQL migrations**: NONE. `066-server-side-notification-dispatch.sql`, `067-worker-config-table.sql`, and `068-fix-http-post-schema.sql` are all applied to the live DB. Up through 068 is current.
 - **What v5.49.x changed (architecturally important)**: dispatch is now fully server-side. Every notification — poll lifecycle, vote-change, trivia reports, training reports, milestones, reminders — flows through `notification_jobs` → pg_net `net.http_post` trigger → `/api/notification-worker` (Edge Function) → `/api/send-push` + `/api/send-email`. The browser worker (`src/utils/notificationWorker.ts`) is now a redundant fallback only — atomic `FOR UPDATE SKIP LOCKED` claim means both can run concurrently without double-dispatch. DB triggers added in 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path. New extensions: `pg_net` (already in `net` schema — see lesson below), `pg_cron`. New table: `worker_config (key, value)` — RLS denies anon/authenticated, only service-role and SECURITY DEFINER functions read. `claim_notification_job_internal` and `complete_notification_job_internal` RPCs authenticate via the secret in that table.
