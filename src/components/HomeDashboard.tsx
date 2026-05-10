@@ -2215,7 +2215,14 @@ function TriviaCard({
       playCta={{
         label: t('home.trivia.playGroup'),
         icon: '🎮',
-        onClick: () => navigate('/trivia?preset=group'),
+        // Land on the trivia landing screen with NO preset — the
+        // landing defaults to 'mixed' mode (🎲 הכל, the broadest
+        // pool covering both group + players questions). The user
+        // reviews the leaderboard + length picker, then taps Start.
+        // Earlier behaviour (preset=group) skipped that review step
+        // and locked them into a narrower pool, which the user
+        // explicitly didn't want.
+        onClick: () => navigate('/trivia'),
       }}
     />
   );
@@ -2803,7 +2810,12 @@ function AboutYouCard({
       playCta={{
         label: t('home.trivia.playPlayers'),
         icon: '🎮',
-        onClick: () => navigate('/trivia?preset=players'),
+        // Land on the trivia landing screen with NO preset — the
+        // landing defaults to 'mixed' mode (🎲 הכל). Mirrors the
+        // same UX as the group-trivia card so both home CTAs feel
+        // consistent. Earlier behaviour (preset=players) locked the
+        // user into a narrower pool without their input.
+        onClick: () => navigate('/trivia'),
       }}
     />
   );

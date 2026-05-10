@@ -1,6 +1,9 @@
-// Trivia game screen — accessed from the home dashboard via the
-// "play" CTAs on the Trivia card (mode=group) and About-You card
-// (mode=players). Single screen owns the entire flow:
+// Trivia game screen — accessed from the trivia landing page
+// (`/trivia`) via the Start button, which serializes the user's
+// chosen mode + length + categories into the URL. Home dashboard
+// cards land on the landing page first so the user can review the
+// leaderboard and tweak settings; they never deep-link to this
+// screen directly. Single screen owns the entire flow:
 //   1. Generate a 10-question batch from live group data.
 //   2. Render one question at a time with a 20-second timer.
 //   3. After answer (or timeout) → reveal correct + brief pause →
