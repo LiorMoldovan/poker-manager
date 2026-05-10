@@ -415,6 +415,15 @@ const he = {
   'trivia.exp.playerAvgProfit': '{name} עם ממוצע {avg} למשחק על פני {games} משחקים (סה"כ {total})',
   'trivia.exp.playerPodiumCount': '{name} על{ah} לפודיום ב-{podiums} מתוך {games} משחקים ({pct}%)',
 
+  // ─── Bucketed numeric answers ────────────────────────────────────
+  // Used by templates that ask about counts/totals where the exact
+  // number is impossible to remember (lifetime profit, total games
+  // played, etc.). Renders the 4 multiple-choice options as ranges.
+  // The user picks the right ballpark instead of the right number.
+  'trivia.bucket.lessThan': 'פחות מ-{value}',
+  'trivia.bucket.range': '{lo}–{hi}',
+  'trivia.bucket.atLeast': '{value} ומעלה',
+
   // ─── Veteran (50+ games) templates ───────────────────────────────
   'trivia.q.veteranTopProfit': 'מבין השחקנים עם 50+ משחקים — מי הרוויח הכי הרבה בכל הזמנים?',
   'trivia.exp.veteranTopProfit': '{name} מוביל את הוותיקים עם רווח מצטבר של {profit} ב-{games} משחקים',
@@ -2800,6 +2809,11 @@ const en: Record<keyof typeof he, string> = {
   'trivia.exp.playerLongestWinStreak': '{name}\'s longest run: {streak} consecutive 1st-place finishes',
   'trivia.exp.playerAvgProfit': '{name} averages {avg} per game across {games} games (total {total})',
   'trivia.exp.playerPodiumCount': '{name} has reached the podium in {podiums} of {games} games ({pct}%)',
+
+  // ─── Bucketed numeric answers ────────────────────────────────────
+  'trivia.bucket.lessThan': 'Less than {value}',
+  'trivia.bucket.range': '{lo}–{hi}',
+  'trivia.bucket.atLeast': '{value}+',
 
   // ─── Veteran (50+ games) templates ───────────────────────────────
   'trivia.q.veteranTopProfit': 'Among players with 50+ games, who has the highest profit all-time?',

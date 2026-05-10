@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.50.2';
+export const APP_VERSION = '5.51.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.51.0',
+    date: '2026-05-10',
+    changes: [
+      '🎯 Trivia: questions now focus on 20+ game regulars',
+      '🪜 Auto-fallback to 10 then 5 games for younger groups',
+      '📏 Wider distractor spread — easier to ballpark',
+      '🎚 Bucketed range answers (פחות מ- / טווח / ומעלה)',
+      '🧮 Used for game count, lifetime profit, totals',
+    ],
+  },
   {
     version: '5.50.2',
     date: '2026-05-10',

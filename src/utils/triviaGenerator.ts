@@ -35,12 +35,23 @@
 // ever" and "who had the biggest win ever") only one is emitted per
 // session to avoid back-to-back redundancy.
 //
-// Player eligibility: per the user requirement, any player with
-// FEWER THAN 5 completed games is silently excluded from question
-// pools (both as the subject of a player-mode question and as a
-// distractor in any "who" question). The 5-game floor keeps the
-// answer set fair for serious regulars and avoids one-off guests
-// polluting the multiple-choice options.
+// Player eligibility: trivia targets the group's "core" — the
+// regulars whose stats group members can plausibly recall. The
+// floor is TIERED so the bar adapts to group maturity:
+//   1. PRIMARY:  ≥20 games (the user's stated preference; this is
+//                the right bar for an established group like
+//                Poker Night where most regulars have 30+ games
+//                and asking about a 7-game guest is unfair).
+//   2. FALLBACK: ≥10 games (if the primary tier yields fewer
+//                than 4 eligible players — needed for the "who"
+//                multiple-choice to have 4 options).
+//   3. FINAL:    ≥5 games (if even ≥10 yields fewer than 4 — keeps
+//                trivia available for younger groups during the
+//                ramp-up phase).
+// `buildBundle` walks these tiers and picks the highest one that
+// produces ≥ 4 eligible players. Reflected in `eligibilityFloor`
+// on the bundle so templates that want to surface the threshold
+// in their explanations can read it.
 
 import type { Game, GamePlayer, Player, PlayerGender, PlayerStats } from '../types';
 import { formatCurrency } from './calculations';
@@ -185,28 +196,174 @@ function niceRound(n: number): number {
 }
 
 // Generate 3 plausible-but-wrong numeric distractors around `correct`.
-// Spread = how far they range from correct (e.g. 0.3 → ±30%). Avoids
-// negatives when correct is positive (and vice versa), and avoids
-// producing duplicates of `correct` after rounding.
-export function numericDistractors(correct: number, spread = 0.35): string[] {
+// Distractors are placed at deliberately different magnitudes around
+// `correct` (one notably below, two above), each with small jitter,
+// so the 4 final answers visibly span a wide arc instead of clustering
+// in a tight ±X% band. Wider spread + deliberate placement makes the
+// "estimate the right ballpark" gameplay loop work — too-tight clusters
+// were the #1 source of "this question is impossible" complaints.
+//
+// `spread` is the OUTER bound (e.g. 0.55 → distractors range from
+// ~45% to ~155% of correct). The default jumped from 0.35 to 0.55
+// in v5.50.x for exactly this reason.
+//
+// Avoids negatives when correct is positive (and vice versa), and
+// avoids producing duplicates of `correct` after rounding.
+export function numericDistractors(correct: number, spread = 0.55): string[] {
   const sign = correct >= 0 ? 1 : -1;
-  const magnitude = Math.abs(correct);
-  const out = new Set<number>();
-  let attempts = 0;
-  while (out.size < 6 && attempts < 50) {
-    attempts++;
-    // Range: [magnitude * (1 - spread), magnitude * (1 + spread)]
-    // but never less than 0 and never equal to correct after rounding.
-    const delta = (Math.random() * 2 - 1) * spread * magnitude;
-    const candidate = niceRound((magnitude + delta) * sign);
-    if (candidate === correct) continue;
-    if (sign > 0 && candidate <= 0) continue;
-    if (sign < 0 && candidate >= 0) continue;
-    out.add(candidate);
+  const m = Math.abs(correct);
+  if (m === 0) {
+    // Fallback for the rare zero case — return distractors offset
+    // by ±spread with a fixed magnitude of 1.
+    return [-1, 1, 2].map(n => formatCurrency(n));
   }
-  return Array.from(out)
-    .slice(0, 3)
-    .map(n => formatCurrency(n));
+  // Three deliberately-spread target ratios around 1.0:
+  //   - one notably below: ~(1 - spread)
+  //   - one above: ~(1 + spread/2)
+  //   - one further above: ~(1 + spread)
+  // Small jitter (±10%) so two questions with the same correct
+  // value don't produce identical distractor sets.
+  const jitter = () => 0.9 + Math.random() * 0.2; // 0.9 - 1.1
+  const targets = [
+    Math.max(0.05, 1 - spread),
+    1 + spread * 0.5,
+    1 + spread,
+  ];
+  const seen = new Set<number>([correct]);
+  const out: number[] = [];
+  for (const t of targets) {
+    // Try jittered target first; if it collapses onto an existing
+    // value after niceRound, retry up to 5 times before falling
+    // back to the un-jittered ratio.
+    let placed = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = niceRound(t * jitter() * m * sign);
+      if (seen.has(candidate)) continue;
+      if (sign > 0 && candidate <= 0) continue;
+      if (sign < 0 && candidate >= 0) continue;
+      seen.add(candidate);
+      out.push(candidate);
+      placed = true;
+      break;
+    }
+    if (!placed) {
+      const fallback = niceRound(t * m * sign);
+      if (!seen.has(fallback) && (sign > 0 ? fallback > 0 : fallback < 0)) {
+        seen.add(fallback);
+        out.push(fallback);
+      }
+    }
+  }
+  // If we somehow ended up with fewer than 3 (e.g. niceRound
+  // collapsed everything for tiny correct values), fill the gap
+  // with broadly-offset values so buildAnswers still has 3 distinct
+  // distractors to work with.
+  let pad = 1;
+  while (out.length < 3 && pad < 8) {
+    const candidate = niceRound(m * sign * (1 + pad * 0.4));
+    if (!seen.has(candidate) && (sign > 0 ? candidate > 0 : candidate < 0)) {
+      seen.add(candidate);
+      out.push(candidate);
+    }
+    pad++;
+  }
+  return out.slice(0, 3).map(n => formatCurrency(n));
+}
+
+// Build a 4-option answer set where each option is a numeric RANGE
+// (e.g. "פחות מ-50", "50–99", "100–149", "150 ומעלה") and exactly
+// one range contains `correct`. Use this for templates where the
+// exact number is borderline-impossible to know but a ballpark
+// estimate is reasonable — lifetime profits, total game counts,
+// total podium counts, etc. Players prefer ranges to exact-number
+// guessing when they don't have the data memorized; the gameplay
+// loop "do I think it's a lot or a little?" stays engaging where
+// "guess within ±35% of 12,400" was just frustrating.
+//
+// Returns null when:
+//   - correct is non-finite or < 6 (ranges of width ≤2 are silly)
+//   - construction can't produce 4 disjoint buckets covering correct
+//     (extremely rare; caller should fall back to numericDistractors)
+//
+// `format` shapes each boundary (use formatCurrency for money,
+// String for raw counts). `t` is the i18n function — uses
+// trivia.bucket.{lessThan, range, atLeast} keys for Hebrew/English.
+//
+// IMPLEMENTATION NOTES:
+// - Bucket size ≈ 28% of magnitude, nice-rounded to a multiple of
+//   5/10/25/100/500 depending on scale, so boundaries read clean.
+// - Correct is placed in bucket index 1 or 2 (the middle pair),
+//   never the edges. Putting correct at "less than X" or "X+" lets
+//   players eliminate the question with one guess.
+// - For positive correct, the lowest boundary (n0) is clamped to 0
+//   — a "less than -50 games played" bucket would be absurd.
+// - Boundaries are inclusive on the lower end and exclusive on the
+//   upper end of "between" buckets, but the displayed text uses
+//   inclusive range "{lo}–{hi-1}" for visual cleanliness ("50–99"
+//   not "50–100").
+export function bucketedNumericAnswers(
+  correct: number,
+  format: (n: number) => string,
+  t: TriviaContext['t'],
+): TriviaAnswer[] | null {
+  if (!Number.isFinite(correct) || correct < 6) return null;
+  const m = correct; // bucketing semantics here are only sensible for non-negative correct
+
+  // Pick a bucket size from a "visually nice" ladder so boundaries
+  // read as 50/100/500/1000/etc. instead of 175/225/3700. Target
+  // bucket size ≈ 28% of correct so 4 buckets span ~110% of the
+  // range around the answer.
+  const NICE_SIZES = [3, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+  const target = m * 0.28;
+  // Pick the largest nice size that's ≤ 2× the target — this gives
+  // nice round boundaries while keeping bucket count near 4 spanning
+  // the answer. Falls back to the smallest size if even that's too
+  // big (only for correct in [6, 9] which uses bucket=3).
+  let bucket = NICE_SIZES[0];
+  for (const s of NICE_SIZES) {
+    if (s <= target * 2) bucket = s;
+  }
+  if (bucket <= 0) return null;
+
+  // Place correct in bucket 1 or 2 (middle of the four).
+  const correctIdx = 1 + Math.floor(Math.random() * 2);
+  // n0 = lower boundary of bucket 0. We want correct ∈ bucket
+  // `correctIdx`, so:
+  //   n0 + correctIdx * bucket  ≤  correct  <  n0 + (correctIdx+1) * bucket
+  // Pick n0 = floor(correct / bucket) * bucket - correctIdx * bucket.
+  const lowerOfCorrectBucket = Math.floor(correct / bucket) * bucket;
+  let n0 = lowerOfCorrectBucket - correctIdx * bucket;
+  if (n0 < 0) n0 = 0;
+
+  // Determine where correct actually lands now (might have shifted
+  // up if we clamped n0 to 0 above).
+  let finalIdx = Math.floor((correct - n0) / bucket);
+  if (finalIdx > 3) finalIdx = 3;
+  if (finalIdx < 0) finalIdx = 0;
+
+  const answers: TriviaAnswer[] = [];
+  for (let i = 0; i < 4; i++) {
+    const lo = n0 + i * bucket;
+    const hi = lo + bucket; // exclusive upper bound of THIS bucket
+    let text: string;
+    if (i === 0) {
+      // "less than (lo+bucket)" — anything < hi belongs here.
+      text = t('trivia.bucket.lessThan', { value: format(hi) });
+    } else if (i === 3) {
+      // "{lo}+" / "{lo} ומעלה" — correct ≥ lo belongs here.
+      text = t('trivia.bucket.atLeast', { value: format(lo) });
+    } else {
+      // "{lo}–{hi-1}" inclusive both ends.
+      text = t('trivia.bucket.range', {
+        lo: format(lo),
+        hi: format(hi - 1),
+      });
+    }
+    answers.push({ text, isCorrect: i === finalIdx });
+  }
+  // Sanity: exactly one correct.
+  if (answers.filter(a => a.isCorrect).length !== 1) return null;
+  return shuffle(answers);
 }
 
 // Generate 3 distractor years near `correct`. Mirrors the numeric
@@ -266,9 +423,16 @@ export interface PlayerGameRow {
 
 export interface BuildBundle {
   ctx: TriviaContext;
-  // Players with ≥ 5 completed games. Subject pool for player-mode
-  // questions and distractor pool for any "who" question.
+  // Players who pass the eligibility floor (see `eligibilityFloor`
+  // below). Subject pool for player-mode questions AND distractor
+  // pool for any "who" question. Capped to the highest tier that
+  // produces ≥4 names — see the doc comment at the top of this
+  // file for the tier ladder.
   eligibleNames: string[];
+  // The actual game-count floor that was applied to produce
+  // `eligibleNames`. Lets templates compose explanation text like
+  // "asked among players with X+ games". One of: 20, 10, 5.
+  eligibilityFloor: number;
   // Indexed view of game_players, filtered to completed games only
   // and joined with the game's date.
   rows: PlayerGameRow[];
@@ -349,9 +513,32 @@ function buildBundle(ctx: TriviaContext): BuildBundle {
       rebuys: gp.rebuys || 0,
     });
   }
-  const eligibleNames = playerStats
-    .filter(s => s.gamesPlayed >= 5)
-    .map(s => s.playerName);
+  // Tiered eligibility — pick the highest floor that still leaves
+  // us at least 4 eligible players (the minimum for a "who"
+  // multiple-choice). Matures with the group automatically:
+  // young groups get the loose ≥5 floor, established groups
+  // (Poker Night) get the tight ≥20 floor that filters out
+  // one-off guests so questions feel fair.
+  const TIER_FLOORS = [20, 10, 5] as const;
+  const MIN_FOR_FOUR_OPTION_QUESTION = 4;
+  let eligibilityFloor: number = 5;
+  let eligibleNames: string[] = [];
+  for (const floor of TIER_FLOORS) {
+    const candidates = playerStats
+      .filter(s => s.gamesPlayed >= floor)
+      .map(s => s.playerName);
+    if (candidates.length >= MIN_FOR_FOUR_OPTION_QUESTION) {
+      eligibilityFloor = floor;
+      eligibleNames = candidates;
+      break;
+    }
+    // Remember the loosest tier we actually saw (used if NONE
+    // of the tiers produced 4+ — caller will return empty batch
+    // anyway via `eligibleNames.length < 4` in generateTriviaBatch,
+    // but at least we report a sensible floor for diagnostics).
+    eligibilityFloor = floor;
+    eligibleNames = candidates;
+  }
   const eligibleSet = new Set(eligibleNames);
 
   // Filter rows to eligible players for distractor pools, but keep
@@ -421,6 +608,7 @@ function buildBundle(ctx: TriviaContext): BuildBundle {
   return {
     ctx,
     eligibleNames,
+    eligibilityFloor,
     rows,
     gameById: completedById,
     rowsByPlayer,
@@ -750,7 +938,9 @@ const GROUP_TEMPLATES: Template[] = [
     },
   },
 
-  // Total games played by the group all-time.
+  // Total games played by the group all-time. Uses bucketed ranges
+  // because exact game counts are not memorable — but fall back to
+  // tight numeric distractors if the bucketing helper rejects.
   {
     id: 'totalGroupGames',
     mode: 'group',
@@ -766,8 +956,11 @@ const GROUP_TEMPLATES: Template[] = [
         if (!earliestIso || g.date < earliestIso) earliestIso = g.date;
       }
       const correct = String(total);
-      const distractors = numericDistractors(total, 0.2);
-      const answers = buildAnswers(correct, distractors);
+      const bucketed = bucketedNumericAnswers(total, String, b.ctx.t);
+      const answers = bucketed ?? (() => {
+        const distractors = numericDistractors(total, 0.3);
+        return buildAnswers(correct, distractors);
+      })();
       if (!answers) return null;
       return {
         text: b.ctx.t('trivia.q.totalGroupGames'),
@@ -1108,7 +1301,9 @@ export function pickSubject(b: BuildBundle, exclude: string | null | undefined =
 }
 
 const PLAYER_TEMPLATES: Template[] = [
-  // Numeric: how many games has X played?
+  // Numeric: how many games has X played? Uses bucketed ranges
+  // ("between 30 and 49 / 50 and up") because exact game counts
+  // are borderline-impossible to remember even for regulars.
   {
     id: 'playerGameCount',
     mode: 'players',
@@ -1118,9 +1313,13 @@ const PLAYER_TEMPLATES: Template[] = [
       if (!subject) return null;
       const stats = b.ctx.playerStats.find(s => s.playerName === subject);
       if (!stats) return null;
-      const correct = String(stats.gamesPlayed);
-      const distractors = numericDistractors(stats.gamesPlayed, 0.3);
-      const answers = buildAnswers(correct, distractors);
+      // Prefer bucketed answers; fall back to spread numeric distractors
+      // for tiny counts (< 6) where buckets would be silly.
+      const bucketed = bucketedNumericAnswers(stats.gamesPlayed, String, b.ctx.t);
+      const answers = bucketed ?? (() => {
+        const distractors = numericDistractors(stats.gamesPlayed, 0.45);
+        return buildAnswers(String(stats.gamesPlayed), distractors);
+      })();
       if (!answers) return null;
       return {
         text: b.ctx.t('trivia.q.playerGameCount', { name: subject, ...gParams(b, subject) }),
@@ -1137,7 +1336,11 @@ const PLAYER_TEMPLATES: Template[] = [
     },
   },
 
-  // Numeric: lifetime profit of X.
+  // Numeric: lifetime profit of X. Uses bucketed ranges
+  // for positive lifetime totals (where the magnitude is in the
+  // hundreds-to-thousands, which nobody tracks exactly), falls back
+  // to spread numeric distractors for negative totals (losses) since
+  // bucketing is positive-only.
   {
     id: 'playerLifetimeProfit',
     mode: 'players',
@@ -1148,8 +1351,13 @@ const PLAYER_TEMPLATES: Template[] = [
       const stats = b.ctx.playerStats.find(s => s.playerName === subject);
       if (!stats) return null;
       const correct = formatCurrency(Math.round(stats.totalProfit));
-      const distractors = numericDistractors(stats.totalProfit, 0.3);
-      const answers = buildAnswers(correct, distractors);
+      const bucketed = stats.totalProfit > 0
+        ? bucketedNumericAnswers(Math.round(stats.totalProfit), formatCurrency, b.ctx.t)
+        : null;
+      const answers = bucketed ?? (() => {
+        const distractors = numericDistractors(stats.totalProfit, 0.5);
+        return buildAnswers(correct, distractors);
+      })();
       if (!answers) return null;
       return {
         text: b.ctx.t('trivia.q.playerLifetimeProfit', { name: subject }),
@@ -1178,8 +1386,14 @@ const PLAYER_TEMPLATES: Template[] = [
       const firsts = b.firstPlaceByPlayer.get(subject) ?? 0;
       if (!stats || firsts < 1) return null;
       const correct = String(firsts);
-      const distractors = numericDistractors(firsts, 0.5);
-      const answers = buildAnswers(correct, distractors);
+      // Bucketed for ≥6 wins (where exact recall is implausible),
+      // exact-with-spread for small counts where the user might
+      // genuinely remember.
+      const bucketed = firsts >= 6 ? bucketedNumericAnswers(firsts, String, b.ctx.t) : null;
+      const answers = bucketed ?? (() => {
+        const distractors = numericDistractors(firsts, 0.6);
+        return buildAnswers(correct, distractors);
+      })();
       if (!answers) return null;
       const pct = stats.gamesPlayed > 0 ? Math.round((firsts / stats.gamesPlayed) * 100) : 0;
       return {
@@ -1540,8 +1754,13 @@ const PLAYER_TEMPLATES: Template[] = [
       }
       if (podiums < 3) return null;
       const correct = String(podiums);
-      const distractors = numericDistractors(podiums, 0.4);
-      const answers = buildAnswers(correct, distractors);
+      // Bucketed for ≥6, exact-with-spread for the small handful
+      // (where users genuinely might know "X has 4 podiums").
+      const bucketed = podiums >= 6 ? bucketedNumericAnswers(podiums, String, b.ctx.t) : null;
+      const answers = bucketed ?? (() => {
+        const distractors = numericDistractors(podiums, 0.5);
+        return buildAnswers(correct, distractors);
+      })();
       if (!answers) return null;
       const subjectStats = b.ctx.playerStats.find(s => s.playerName === subject);
       const totalGames = subjectStats?.gamesPlayed ?? podiums;
