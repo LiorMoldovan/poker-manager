@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.51.0';
+export const APP_VERSION = '5.51.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.51.1',
+    date: '2026-05-10',
+    changes: [
+      '📤 Share trivia leaderboard as PNG via WhatsApp',
+    ],
+  },
   {
     version: '5.51.0',
     date: '2026-05-10',

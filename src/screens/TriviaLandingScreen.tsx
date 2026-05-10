@@ -32,7 +32,7 @@
 //     pluck the row whose player_name matches the signed-in player).
 //     Avoids a second query.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
@@ -44,6 +44,7 @@ import {
   type TriviaMode,
 } from '../utils/triviaGenerator';
 import { hapticTap } from '../utils/haptics';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 
 interface LeaderboardRow {
   player_name: string;
@@ -94,6 +95,18 @@ const TriviaLandingScreen: React.FC = () => {
     return new Set(parsed);
   }, [searchParams]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[] | null>(null);
+  // Capture target for the leaderboard share. We wrap ONLY the
+  // leaderboard card body (title + table) in this ref so the
+  // captured PNG looks like a clean "scoreboard card" without the
+  // surrounding mode picker, length picker, or back button. Reuses
+  // the same captureAndSplit + shareFiles pipeline as the post-game
+  // score share in TriviaGameScreen — same scale, same dark
+  // background, so the screenshot reads consistently.
+  const leaderboardShareRef = useRef<HTMLDivElement | null>(null);
+  // Reentrancy guard: while we're mid-capture, disable the button
+  // and visually fade it. A double-tap could otherwise fire two
+  // html2canvas runs and two share sheets simultaneously.
+  const [isSharingLeaderboard, setIsSharingLeaderboard] = useState(false);
   // Session length — 10 is the floor (smaller rounds end before the
   // player warms up and produce noisy leaderboard scores), 20 is the
   // mid option, and 0 means "unlimited" (run every eligible template
@@ -145,6 +158,43 @@ const TriviaLandingScreen: React.FC = () => {
     // "use every eligible template once".
     if (sessionLength !== 10) params.set('count', String(sessionLength));
     navigate(`/trivia/play?${params.toString()}`);
+  };
+
+  // Share the leaderboard card as a PNG via WhatsApp / native share
+  // sheet. Reuses captureAndSplit + shareFiles (the same pipeline
+  // that the post-game trivia score share and home dashboard cards
+  // use), so the captured image is rasterised at scale=2 with the
+  // app's dark surface background — readable on any phone, not
+  // pixelated when forwarded. We yield one rAF before capture so
+  // a tap that arrived in the same render cycle as a leaderboard
+  // refresh can still see the freshest data in the screenshot.
+  // Failures (user cancels share, html2canvas chokes on a CSS
+  // feature) are swallowed silently — surfacing a toast on share
+  // cancel would just confuse users who tapped "cancel" on purpose.
+  const handleShareLeaderboard = async () => {
+    if (isSharingLeaderboard) return;
+    if (!leaderboard || leaderboard.length === 0) return;
+    hapticTap();
+    setIsSharingLeaderboard(true);
+    try {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!leaderboardShareRef.current) return;
+      const files = await captureAndSplit(
+        leaderboardShareRef.current,
+        'trivia-leaderboard',
+        { backgroundColor: '#0f172a' },
+      );
+      await shareFiles(
+        files,
+        t('trivia.landing.shareLeaderboardTitle'),
+        t('trivia.landing.shareLeaderboardCaption'),
+      );
+    } catch {
+      // Silent — user cancellation or transient capture failure;
+      // re-tap is the recovery path.
+    } finally {
+      setIsSharingLeaderboard(false);
+    }
   };
 
   // Pool sizes per mode — recomputed when the user toggles a
@@ -419,12 +469,58 @@ const TriviaLandingScreen: React.FC = () => {
           borderInlineStart) so the highlight stripe lands on the
           Hebrew-reader start edge — exactly the way Stats does it. */}
       <div className="card" style={{ padding: '0.5rem', marginTop: '0.5rem' }}>
-        <div style={{
-          textAlign: 'center', fontSize: '0.85rem', fontWeight: 600,
-          color: 'var(--text)', marginBottom: '0.5rem',
-        }}>
-          {t('trivia.landing.leaderboardTitle')}
-        </div>
+        {/* The header row holds the title + the share-screenshot
+            button. The button only renders once we have a non-empty
+            leaderboard — sharing "still loading" or "no data" is
+            pointless. Position is `position: absolute` against this
+            relatively-positioned title so the title itself stays
+            perfectly centered (matching the StatisticsScreen table
+            convention) regardless of share-button width. */}
+        <div ref={leaderboardShareRef}>
+          <div style={{
+            position: 'relative',
+            textAlign: 'center', fontSize: '0.85rem', fontWeight: 600,
+            color: 'var(--text)', marginBottom: '0.5rem',
+          }}>
+            {t('trivia.landing.leaderboardTitle')}
+            {leaderboard !== null && leaderboard.length > 0 && (
+              <button
+                type="button"
+                onClick={handleShareLeaderboard}
+                disabled={isSharingLeaderboard}
+                aria-label={t('trivia.landing.shareLeaderboardLabel')}
+                title={t('trivia.landing.shareLeaderboardLabel')}
+                // Excluded from the captured PNG so the screenshot
+                // doesn't include "the share button" pointing at
+                // itself. data-html2canvas-ignore is the official
+                // html2canvas opt-out attribute.
+                data-html2canvas-ignore="true"
+                style={{
+                  position: 'absolute',
+                  // RTL flips: in Hebrew the button sits at the
+                  // visual LEFT (start of line for RTL is right;
+                  // we want the button at the *end* of the line),
+                  // in LTR it sits at the right. `insetInlineEnd`
+                  // does both correctly via writing-direction.
+                  insetInlineEnd: 0,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '0.25rem 0.4rem',
+                  borderRadius: 6,
+                  color: 'var(--text-muted)',
+                  fontSize: '0.95rem',
+                  cursor: isSharingLeaderboard ? 'not-allowed' : 'pointer',
+                  opacity: isSharingLeaderboard ? 0.55 : 1,
+                  transition: 'opacity 0.15s, background 0.15s',
+                  lineHeight: 1,
+                }}
+              >
+                📤
+              </button>
+            )}
+          </div>
         {leaderboard === null ? (
           <div style={{ textAlign: 'center', padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
             {t('trivia.landing.leaderboardLoading')}
@@ -535,6 +631,7 @@ const TriviaLandingScreen: React.FC = () => {
             </tbody>
           </table>
         )}
+        </div>
       </div>
 
       {/* Back to home — matches the training screen footer

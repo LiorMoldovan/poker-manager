@@ -253,6 +253,9 @@ const he = {
   'trivia.landing.leaderboardTitle': '🏆 טבלת מובילים',
   'trivia.landing.leaderboardEmpty': 'עדיין לא שיחק אף אחד — אתם הראשונים!',
   'trivia.landing.leaderboardLoading': 'טוען...',
+  'trivia.landing.shareLeaderboardLabel': 'שיתוף טבלת המובילים',
+  'trivia.landing.shareLeaderboardTitle': 'טבלת מובילים בחידון',
+  'trivia.landing.shareLeaderboardCaption': 'מי בראש? בואו לשחק חידון על הקבוצה',
 
   // Question report flow (mirrors training, simpler)
   'trivia.report.flag': '🚩 דווח על השאלה',
@@ -2666,6 +2669,9 @@ const en: Record<keyof typeof he, string> = {
   'trivia.landing.myStats.accuracy': 'Accuracy',
   'trivia.landing.leaderboardTitle': '🏆 Leaderboard',
   'trivia.landing.leaderboardEmpty': 'Nobody has played yet — you\'re the first!',
+  'trivia.landing.shareLeaderboardLabel': 'Share leaderboard',
+  'trivia.landing.shareLeaderboardTitle': 'Trivia leaderboard',
+  'trivia.landing.shareLeaderboardCaption': 'Who\'s on top? Open the app and play a round',
   'trivia.landing.leaderboardLoading': 'Loading...',
 
   'trivia.report.flag': '🚩 Report this question',
