@@ -156,6 +156,14 @@ const TriviaGameScreen = () => {
   const [phase, setPhase] = useState<'loading' | 'playing' | 'summary' | 'empty'>('loading');
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[] | null>(null);
   const [savedToDb, setSavedToDb] = useState(false);
+  // True when persistAndLoadLeaderboard refuses to save a session
+  // because it looks like a scoring-bug artifact (0 correct out of
+  // ≥5 questions — see the long-form comment in that function for
+  // the rationale). Surfaced to the user as a friendly "this round
+  // wasn't recorded" notice in the summary so they know why their
+  // result didn't appear on the leaderboard, and aren't surprised
+  // by a clean personal-stats card after finishing the round.
+  const [sessionRejected, setSessionRejected] = useState(false);
 
   // ── Question-report flow (mirrors training's flagReports UX, but
   //    much simpler — questions are dynamic so we persist the FULL
@@ -319,14 +327,37 @@ const TriviaGameScreen = () => {
     const correct = results.filter(r => r.correct).length;
     const total = results.length;
     if (total === 0) return;
-    // Diagnostic — if a user finishes a long round with zero
-    // correct answers, that's statistically near-impossible (75%
-    // wrong by chance on 4-option questions ≈ 5.6% odds for 5/5
-    // wrong, ≈ 0.06% for 10/10). Log the full per-question detail
-    // to console so we can correlate with reports of "I answered
-    // correctly and got 0/10". Look for this in DevTools.
-    if (correct === 0 && total >= 5) {
-      console.warn('[trivia] suspicious 0-score session', {
+    // ── HARD GUARD: refuse to persist a "suspicious 0-score" round.
+    //
+    // A round of 5+ questions where the user got every single one
+    // wrong is statistically near-impossible: random clicking on
+    // 4-option multiple-choice gives 25% expected accuracy, so the
+    // odds of 0/5 by chance are 0.75^5 ≈ 23.7%, and 0/10 are
+    // 0.75^10 ≈ 5.6%. (Going zero across multiple full rounds is
+    // sub-percent.) In practice every 0/10 round we've ever seen
+    // on prod has been a scoring-bug artifact (stale closure on
+    // the answers array, mid-round reshuffle from a parent state
+    // flicker, etc.) — never a genuine player who happened to
+    // miss every question.
+    //
+    // We've patched the most plausible mechanisms (v5.50.2 locked
+    // `selectedIsCorrect` at click time; 'players' / 'group' mode
+    // sourcing was rewritten in v5.52.0). But the user has had to
+    // ask for a manual cleanup four times, and "patch and hope"
+    // isn't an answer — so this guard short-circuits the save
+    // unconditionally for the bug shape regardless of what causes
+    // it. The leaderboard and personal stats stay clean, the user
+    // sees a friendly notice, and the per-question diagnostic
+    // (below) still gets logged so we can keep narrowing the root
+    // cause without any data pollution risk.
+    //
+    // Trade-off: a hypothetical real player who genuinely misses
+    // 5+ in a row also gets their session dropped. We're OK with
+    // that — it's a rounding error and doesn't degrade the
+    // experience for anyone in the wild.
+    const looksLikeBug = correct === 0 && total >= 5;
+    if (looksLikeBug) {
+      console.warn('[trivia] rejected 0-score session (likely scoring-bug artifact, NOT saved)', {
         playerName,
         mode,
         total,
@@ -337,8 +368,9 @@ const TriviaGameScreen = () => {
           userResultCorrect: results[i]?.correct,
         })),
       });
+      setSessionRejected(true);
     }
-    if (!savedToDb) {
+    if (!savedToDb && !looksLikeBug) {
       const { error } = await supabase.from('trivia_sessions').insert({
         group_id: gid,
         user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -478,6 +510,7 @@ const TriviaGameScreen = () => {
     setResults([]);
     setLeaderboard(null);
     setSavedToDb(false);
+    setSessionRejected(false);
     setReportedIdxs(new Set());
     setShowReportPanel(false);
     setReportReason(null);
@@ -664,6 +697,25 @@ const TriviaGameScreen = () => {
             ))}
           </div>
         </div>
+
+        {/* Friendly notice when persistAndLoadLeaderboard rejected
+            this session (0 correct / ≥5 questions). The user sees
+            their actual score above for transparency, but we make
+            it explicit that the leaderboard wasn't updated so they
+            don't keep wondering why their result didn't show up. */}
+        {sessionRejected && (
+          <div className="card" style={{
+            marginTop: '0.5rem',
+            padding: '0.6rem 0.75rem',
+            background: 'rgba(234, 179, 8, 0.08)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            fontSize: '0.75rem',
+            color: 'var(--text)',
+            lineHeight: 1.45,
+          }}>
+            {t('trivia.summary.notSavedNotice')}
+          </div>
+        )}
 
         {/* Leaderboard — same canonical app-table pattern as
             StatisticsScreen / TriviaLandingScreen. Centered title,

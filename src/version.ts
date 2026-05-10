@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.57.0';
+export const APP_VERSION = '5.57.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.57.1',
+    date: '2026-05-10',
+    changes: [
+      '🛡 Trivia 0/10 anomaly never persists',
+      '🧹 Cleared Lior\u2019s polluted trivia history',
+      '⚠ Friendly notice shown if a session is rejected',
+    ],
+  },
   {
     version: '5.57.0',
     date: '2026-05-10',
