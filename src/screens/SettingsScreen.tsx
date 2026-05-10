@@ -40,6 +40,7 @@ import {
   type FeedbackStats,
   type RawFeedbackRow,
 } from '../utils/chipFeedbackStats';
+import { tuneAndApply, revertChipTuningToDefault } from '../utils/chipCountTuner';
 import {
   LineChart,
   Line,
@@ -193,6 +194,23 @@ const SettingsScreen = () => {
   const [chipFeedbackLoading, setChipFeedbackLoading] = useState(false);
   const [chipFeedbackError, setChipFeedbackError] = useState<string | null>(null);
   const [chipFeedbackRefreshTick, setChipFeedbackRefreshTick] = useState(0);
+
+  // Tuning button state (Phase 2 of the in-app tuning loop, v5.56+).
+  //   * `chipTuningInFlight` flips true while the tuner LLM call
+  //     + Supabase write are running. Disables the button and
+  //     swaps to a spinner / "tuning..." label.
+  //   * `chipTuningResult` holds the LAST tuning attempt result,
+  //     either { ok: true, description } or { ok: false, error }.
+  //     We surface the description on success ("AI tightened blue
+  //     stack guidance — try a fresh photo to verify") and the
+  //     error on failure. Cleared on the next button click.
+  const [chipTuningInFlight, setChipTuningInFlight] = useState(false);
+  const [chipTuningResult, setChipTuningResult] = useState<
+    | { ok: true; description: string }
+    | { ok: false; error: string }
+    | null
+  >(null);
+  const [chipRevertInFlight, setChipRevertInFlight] = useState(false);
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -3790,34 +3808,162 @@ const SettingsScreen = () => {
                   </div>
                   <button
                     type="button"
-                    disabled
-                    title={t('settings.chipDashboard.tuneDisabledTitle')}
+                    disabled={!tuneAvailable || chipTuningInFlight || chipRevertInFlight}
+                    onClick={async () => {
+                      if (!tuneAvailable || chipTuningInFlight) return;
+                      setChipTuningResult(null);
+                      setChipTuningInFlight(true);
+                      try {
+                        const res = await tuneAndApply({
+                          totalSamples: stats.totalSamples,
+                          totalStacksAll: stats.totalStacksAll,
+                          pctPerfectStacks: stats.pctPerfectStacks,
+                          avgSignedBias: stats.avgSignedBias,
+                          avgAbsError: stats.avgAbsError,
+                          perColor: stats.perColor.map(c => ({
+                            color: c.color,
+                            samples: c.samples,
+                            avgSignedDelta: c.avgSignedDelta,
+                            avgAbsDelta: c.avgAbsDelta,
+                            pctCorrect: c.pctCorrect,
+                          })),
+                          recentAvgAbsDelta: stats.recentAvgAbsDelta,
+                          earlierAvgAbsDelta: stats.earlierAvgAbsDelta,
+                        });
+                        if (res.ok) {
+                          setChipTuningResult({ ok: true, description: res.description });
+                          // Refresh dashboard so the counter resets to 0/10
+                          // (the new tuning row's created_at becomes the
+                          // new "lastTuningAt", so all currently-counted
+                          // samples drop out of `rowsSinceLastTuning`).
+                          setChipFeedbackRefreshTick(t => t + 1);
+                        } else {
+                          setChipTuningResult({ ok: false, error: res.error });
+                        }
+                      } catch (e) {
+                        setChipTuningResult({
+                          ok: false,
+                          error: e instanceof Error ? e.message : 'Tuning failed',
+                        });
+                      } finally {
+                        setChipTuningInFlight(false);
+                      }
+                    }}
+                    title={
+                      tuneAvailable
+                        ? t('settings.chipDashboard.tuneNowTitle')
+                        : t('settings.chipDashboard.tuneLockedTitle')
+                    }
                     style={{
                       width: '100%',
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px dashed var(--border)',
-                      color: 'var(--text-muted)',
-                      padding: '0.5rem',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      cursor: 'not-allowed',
+                      background: !tuneAvailable
+                        ? 'rgba(255,255,255,0.04)'
+                        : chipTuningInFlight
+                          ? 'rgba(99,102,241,0.18)'
+                          : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      border: !tuneAvailable
+                        ? '1px dashed var(--border)'
+                        : '1px solid transparent',
+                      color: !tuneAvailable ? 'var(--text-muted)' : 'white',
+                      padding: '0.55rem',
+                      borderRadius: '10px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: (!tuneAvailable || chipTuningInFlight) ? 'not-allowed' : 'pointer',
                       fontFamily: 'inherit',
+                      transition: 'background 0.15s ease',
                     }}
                   >
-                    {tuneAvailable
-                      ? t('settings.chipDashboard.tuneReadyPhase2')
-                      : `${t('settings.chipDashboard.tuneLocked')} — ${tuneRemaining} ${t('settings.chipDashboard.tuneRemaining')}`}
+                    {chipTuningInFlight
+                      ? t('settings.chipDashboard.tuningInFlight')
+                      : tuneAvailable
+                        ? t('settings.chipDashboard.tuneNow')
+                        : `${t('settings.chipDashboard.tuneLocked')} — ${tuneRemaining} ${t('settings.chipDashboard.tuneRemaining')}`}
                   </button>
+
+                  {/* Tuning result banner — success (green) or error (red). */}
+                  {chipTuningResult && (
+                    <div style={{
+                      marginTop: '0.5rem',
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      lineHeight: 1.5,
+                      background: chipTuningResult.ok
+                        ? 'rgba(16,185,129,0.1)'
+                        : 'rgba(239,68,68,0.1)',
+                      border: `1px solid ${chipTuningResult.ok ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'}`,
+                      color: chipTuningResult.ok ? '#10b981' : '#fca5a5',
+                    }}>
+                      <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>
+                        {chipTuningResult.ok
+                          ? `✓ ${t('settings.chipDashboard.tuneSuccess')}`
+                          : `✗ ${t('settings.chipDashboard.tuneError')}`}
+                      </div>
+                      <div style={{ opacity: 0.9 }}>
+                        {chipTuningResult.ok ? chipTuningResult.description : chipTuningResult.error}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Revert button — always visible so a bad tune can
+                      be undone immediately. Reverts by inserting a
+                      null-strategy row (= "use hardcoded default"). */}
+                  <button
+                    type="button"
+                    disabled={chipRevertInFlight || chipTuningInFlight}
+                    onClick={async () => {
+                      if (chipRevertInFlight) return;
+                      setChipTuningResult(null);
+                      setChipRevertInFlight(true);
+                      try {
+                        const res = await revertChipTuningToDefault();
+                        if (res.ok) {
+                          setChipTuningResult({
+                            ok: true,
+                            description: t('settings.chipDashboard.revertSuccess'),
+                          });
+                          setChipFeedbackRefreshTick(t => t + 1);
+                        } else {
+                          setChipTuningResult({ ok: false, error: res.error });
+                        }
+                      } catch (e) {
+                        setChipTuningResult({
+                          ok: false,
+                          error: e instanceof Error ? e.message : 'Revert failed',
+                        });
+                      } finally {
+                        setChipRevertInFlight(false);
+                      }
+                    }}
+                    style={{
+                      marginTop: '0.4rem',
+                      width: '100%',
+                      background: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-muted)',
+                      padding: '0.4rem',
+                      borderRadius: '8px',
+                      fontSize: '0.72rem',
+                      cursor: chipRevertInFlight ? 'wait' : 'pointer',
+                      fontFamily: 'inherit',
+                      opacity: chipRevertInFlight ? 0.5 : 1,
+                    }}
+                  >
+                    {chipRevertInFlight
+                      ? t('settings.chipDashboard.reverting')
+                      : `↩ ${t('settings.chipDashboard.revertToDefault')}`}
+                  </button>
+
                   <p style={{
-                    margin: '0.4rem 0 0',
+                    margin: '0.5rem 0 0',
                     fontSize: '0.65rem',
                     color: 'var(--text-muted)',
                     opacity: 0.8,
                     lineHeight: 1.4,
                     textAlign: 'center',
                   }}>
-                    {t('settings.chipDashboard.tunePhase2Note')}
+                    {t('settings.chipDashboard.tuneHowItWorks')}
                   </p>
                 </div>
               </>

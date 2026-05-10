@@ -9,6 +9,8 @@ import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, T
 import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
+import { supabase } from '../database/supabaseClient';
+import { getGroupId } from '../database/supabaseCache';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
@@ -4241,14 +4243,62 @@ function combineShots(args: {
 // Build the multimodal payload for ONE chip-counting shot. `temperature`
 // is varied across shots to encourage useful diversity in the consensus
 // (same temp → identical answers → no signal).
+/** Default "CRITICAL counting strategy" prompt block.
+ *
+ *  v5.49 (anti-undercount baseline) — extracted to a named constant
+ *  in v5.56 so the runtime tuner (Phase 2 of the in-app tuning loop)
+ *  can override it per-group via `chip_count_tuning_overrides`.
+ *  The hardcoded default lives here as the safety net: if the latest
+ *  override row has `prompt_strategy = NULL` (= the user reverted),
+ *  or no override has ever been set for the group, this is what
+ *  ships in the prompt.
+ *
+ *  Field-test feedback: vision LLMs reliably MISS 1-2 chips per
+ *  stack, always undercounting, never overcounting. Two structural
+ *  causes:
+ *    1. The TOPMOST chip's edge ring is partially hidden by its own
+ *       face (the chip face overhangs the ring slightly). Models
+ *       tend to merge it visually with the chip below.
+ *    2. The BOTTOMMOST chip's ring blurs into the surface shadow on
+ *       most casual phone shots.
+ *  We instruct the model to specifically check both ends of each
+ *  stack and to break ties UPWARD (prefer 7 over 6 when uncertain).
+ *  We also run 3 shots and take the MAX externally — the prompt is
+ *  only half the fix.
+ *
+ *  IMPORTANT for the tuner: this block is the ONLY tunable part of
+ *  the chip-count prompt. Everything around it (output schema,
+ *  position layout, color reporting rules) stays fixed because it's
+ *  load-bearing for the JSON parser downstream. The tuner LLM is
+ *  prompted to return a replacement for THIS block only. */
+export const DEFAULT_CHIP_COUNT_STRATEGY = `CRITICAL counting strategy — READ THIS CAREFULLY:
+
+Vision models systematically UNDERCOUNT chip stacks because:
+  (a) The TOPMOST chip's edge ring is partially hidden by its own face — its ring blends into the chip face above. It's easy to count it as part of the chip below.
+  (b) The BOTTOMMOST chip's ring may merge into the surface shadow.
+  (c) Adjacent chips of identical color can visually fuse in the middle of a stack.
+
+To counter this:
+1. Count from BOTTOM to TOP, one chip at a time.
+2. Examine the TOPMOST chip especially carefully — its visible face IS a chip, even when its edge ring is half-hidden behind itself. Add it to the count.
+3. Examine the BOTTOMMOST chip carefully — even if its ring is dark, if you can see the top of its rim, count it.
+4. When you're between two possible counts (e.g. "I see 5 or 6 rings"), choose the HIGHER count. The systematic bias is toward undercounting, so erring high cancels it.
+5. Do NOT, however, invent chips beyond what's actually visible. If you see exactly 4 chips, say 4 — don't say 5 because of the bias rule. The "round up when uncertain" rule applies only to GENUINE ambiguity.`;
+
 function buildChipCountPayload(args: {
   imageBase64: string;
   mimeType: string;
   orderedChips: ChipValue[];
   expectedTotalValue: number | undefined;
   temperature: number;
+  /** Runtime override of the CRITICAL counting strategy block.
+   *  When undefined or empty string, falls back to
+   *  DEFAULT_CHIP_COUNT_STRATEGY. Set by `countChipsFromPhoto`
+   *  after consulting `chip_count_tuning_overrides` for the
+   *  group (Phase 2 of the in-app tuning loop). */
+  strategyBlock?: string;
 }): unknown {
-  const { imageBase64, mimeType, orderedChips, expectedTotalValue, temperature } = args;
+  const { imageBase64, mimeType, orderedChips, expectedTotalValue, temperature, strategyBlock } = args;
 
   const orderLines = orderedChips.map((c, i) =>
     `  Position ${i + 1}: color="${c.color}", denomination=${c.value}, hex=${c.displayColor}`,
@@ -4258,19 +4308,10 @@ function buildChipCountPayload(args: {
     ? `\nFor reference: the player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count × denomination across all positions). DO NOT invent or remove chips to match this — count what you actually see. We use this only to flag results that look implausible.`
     : '';
 
-  // v5.49 prompt — explicit anti-undercount guidance.
-  //
-  // Field-test feedback: vision LLMs reliably MISS 1-2 chips per stack,
-  // always undercounting, never overcounting. Two structural causes:
-  //   1. The TOPMOST chip's edge ring is partially hidden by its own
-  //      face (the chip face overhangs the ring slightly). Models tend
-  //      to merge it visually with the chip below.
-  //   2. The BOTTOMMOST chip's ring blurs into the surface shadow on
-  //      most casual phone shots.
-  // We instruct the model to specifically check both ends of each stack
-  // and to break ties UPWARD (prefer 7 over 6 when uncertain). We also
-  // run 3 shots and take the MAX externally — the prompt is only half
-  // the fix.
+  const activeStrategy = (strategyBlock && strategyBlock.trim().length > 0)
+    ? strategyBlock
+    : DEFAULT_CHIP_COUNT_STRATEGY;
+
   const prompt = `Count poker chips in this photo. For each stack visible left to right, report:
 - position (1-indexed, left to right)
 - count (the number of chips you can see in that stack)
@@ -4283,19 +4324,7 @@ ${orderLines}
 
 Return EXACTLY ${orderedChips.length} entries — one per expected position 1..${orderedChips.length} — INCLUDING positions where the player has zero chips of that color (use count=0 and topColorHex="#000000" for empty positions).
 
-CRITICAL counting strategy — READ THIS CAREFULLY:
-
-Vision models systematically UNDERCOUNT chip stacks because:
-  (a) The TOPMOST chip's edge ring is partially hidden by its own face — its ring blends into the chip face above. It's easy to count it as part of the chip below.
-  (b) The BOTTOMMOST chip's ring may merge into the surface shadow.
-  (c) Adjacent chips of identical color can visually fuse in the middle of a stack.
-
-To counter this:
-1. Count from BOTTOM to TOP, one chip at a time.
-2. Examine the TOPMOST chip especially carefully — its visible face IS a chip, even when its edge ring is half-hidden behind itself. Add it to the count.
-3. Examine the BOTTOMMOST chip carefully — even if its ring is dark, if you can see the top of its rim, count it.
-4. When you're between two possible counts (e.g. "I see 5 or 6 rings"), choose the HIGHER count. The systematic bias is toward undercounting, so erring high cancels it.
-5. Do NOT, however, invent chips beyond what's actually visible. If you see exactly 4 chips, say 4 — don't say 5 because of the bias rule. The "round up when uncertain" rule applies only to GENUINE ambiguity.
+${activeStrategy}
 
 For each stack:
 - Each chip has a clear pattern of stripes around its edge ring. Count the visible stripe patterns on the SIDE of the stack from bottom to top.
@@ -4413,6 +4442,222 @@ async function runChipCountShot(args: {
   };
 }
 
+/** Tuner LLM choice. Text-only, fast, cheap — the tuner produces
+ *  a small JSON output and benefits more from quick iteration than
+ *  from Pro-level reasoning. Pro is reserved for the actual
+ *  chip-counting hot path. Falls back through the Flash variants
+ *  if the primary is unavailable for the group's API key. */
+const CHIP_TUNER_MODELS: ReadonlyArray<{ version: string; model: string }> = [
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+];
+
+/** Empirical feedback summary the tuner consumes. Subset of
+ *  `FeedbackStats` from chipFeedbackStats.ts — we duplicate the
+ *  fields here as a thin DTO instead of importing the full type
+ *  to keep the geminiAI.ts module free of UI-shaped imports. */
+export interface ChipTuningInput {
+  totalSamples: number;
+  totalStacksAll: number;
+  pctPerfectStacks: number;
+  avgSignedBias: number;
+  avgAbsError: number;
+  perColor: Array<{
+    color: string;
+    samples: number;
+    avgSignedDelta: number;
+    avgAbsDelta: number;
+    pctCorrect: number;
+  }>;
+  /** Most recent N (default 10) saves' avg absolute error. Provides
+   *  the tuner with "is the current strategy already improving
+   *  trend, or stuck?" signal so it can decide between aggressive
+   *  rewrite vs. incremental tweak. */
+  recentAvgAbsDelta: number | null;
+  earlierAvgAbsDelta: number | null;
+}
+
+export type ChipTuningResult =
+  | { ok: true; strategy: string; description: string; modelUsed: string }
+  | { ok: false; error: string };
+
+/** Run the tuning LLM and return a proposed new strategy block +
+ *  a one-line description of the change. Does NOT write to the
+ *  database — that's the caller's responsibility (so the caller
+ *  can add baseline metadata, ownership checks, etc.).
+ *
+ *  Phase 2 of the in-app tuning loop, v5.56+. */
+export async function tuneChipCountStrategy(input: {
+  stats: ChipTuningInput;
+  currentStrategy: string;
+}): Promise<ChipTuningResult> {
+  const { stats, currentStrategy } = input;
+
+  if (stats.totalSamples === 0) {
+    return { ok: false, error: 'No feedback samples to tune from' };
+  }
+
+  // Format per-color block as a readable table the model can
+  // pattern-match over. Sorted by sample count desc inside
+  // FeedbackStats already.
+  const perColorLines = stats.perColor.length === 0
+    ? '  (no per-color data yet)'
+    : stats.perColor.map(c => {
+        const sign = c.avgSignedDelta > 0 ? '+' : '';
+        return `  - ${c.color}: ${c.samples} samples, signed bias ${sign}${c.avgSignedDelta.toFixed(2)}, abs error ${c.avgAbsDelta.toFixed(2)}, ${(c.pctCorrect * 100).toFixed(0)}% correct`;
+      }).join('\n');
+
+  const trendLine = (stats.recentAvgAbsDelta !== null && stats.earlierAvgAbsDelta !== null)
+    ? `\n- Recent ${stats.recentAvgAbsDelta.toFixed(2)} abs error vs earlier ${stats.earlierAvgAbsDelta.toFixed(2)} abs error (${stats.recentAvgAbsDelta < stats.earlierAvgAbsDelta ? 'improving' : 'getting worse'})`
+    : '';
+
+  // The tuner prompt. Hard constraints on output shape are
+  // load-bearing — the parser downstream EXPECTS the strategy
+  // block to start with the literal "CRITICAL counting strategy"
+  // header, and the JSON wrapper is enforced by responseSchema.
+  const tunerPrompt = `You are tuning the prompt of a chip-counting AI for a poker app. The chip-counter receives a photo of poker chips arranged in vertical color-separated stacks and must count the chips in each stack. We have empirical feedback comparing what the AI counted vs the actual count.
+
+YOUR TASK: produce an improved version of the "CRITICAL counting strategy" prompt block, based on the empirical evidence below. Target the specific failure modes you see in the data.
+
+HARD CONSTRAINTS on your output (strategy field):
+- It MUST start with the literal header "CRITICAL counting strategy — READ THIS CAREFULLY:" (the downstream prompt template depends on this).
+- It MUST be a clear list of counting instructions, numbered or bulleted, addressing the chip-counting task only.
+- DO NOT change the output format, JSON schema, or position layout — those are fixed elsewhere in the prompt and you must NOT touch them.
+- It MUST be in English (the chip-counting LLM works in English).
+- It SHOULD be no longer than ~25 lines. Concise + targeted beats verbose.
+
+INTERPRETATION RULES for the empirical data:
+- Negative "signed bias" = AI is UNDERCOUNTING (this is the most common failure for vision LLMs).
+- Positive "signed bias" = AI is OVERCOUNTING.
+- A specific color with much higher abs error than others = that color confuses the model (likely color similarity, low contrast, or unusual edge ring pattern).
+- "% correct" near 100% = stable, leave that color alone. Near 50% = needs help.
+
+CURRENT strategy block (which you are REPLACING in full):
+"""
+${currentStrategy}
+"""
+
+EMPIRICAL feedback from ${stats.totalSamples} ground-truth comparisons (${stats.totalStacksAll} total stacks):
+- Perfect-stack rate: ${stats.pctPerfectStacks.toFixed(0)}%
+- Average signed bias: ${stats.avgSignedBias.toFixed(2)} chips per session (negative = undercount, positive = overcount)
+- Average absolute error: ${stats.avgAbsError.toFixed(2)} chips per session${trendLine}
+- Per-color breakdown:
+${perColorLines}
+
+Now return your tuning. The "description" field must be ONE short sentence (≤20 words) summarizing what your changes are targeting (this gets shown to the human owner in the version history).`;
+
+  const apiKey = getSettings()?.geminiApiKey || '';
+
+  let lastError = '';
+  for (const { version, model } of CHIP_TUNER_MODELS) {
+    try {
+      const resp = await proxyGeminiGenerate(version, model, apiKey, {
+        contents: [{ parts: [{ text: tunerPrompt }] }],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              strategy: { type: 'STRING' },
+              description: { type: 'STRING' },
+            },
+            required: ['strategy', 'description'],
+          },
+        },
+      });
+      if (!resp.ok) {
+        let msg = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json() as { error?: { message?: string } };
+          if (body?.error?.message) msg = body.error.message;
+        } catch { /* keep status */ }
+        lastError = msg;
+        console.warn(`[tuneChipCount] ${model} failed:`, msg);
+        continue;
+      }
+      const data = await resp.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      let parsed: { strategy?: string; description?: string };
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : 'Parse failed';
+        console.warn(`[tuneChipCount] ${model} parse failed:`, raw.slice(0, 200));
+        continue;
+      }
+      const strategy = (parsed.strategy || '').trim();
+      const description = (parsed.description || '').trim();
+      if (!strategy.startsWith('CRITICAL counting strategy')) {
+        // Reject results that don't honor the header constraint —
+        // the chip-counting prompt template glues this directly
+        // into the larger prompt, so a malformed header would
+        // silently degrade every photo count for the group.
+        lastError = 'Strategy missing required header';
+        console.warn(`[tuneChipCount] ${model} returned malformed strategy:`, strategy.slice(0, 100));
+        continue;
+      }
+      if (strategy.length < 100 || strategy.length > 4000) {
+        lastError = 'Strategy length out of bounds';
+        console.warn(`[tuneChipCount] ${model} strategy length suspicious:`, strategy.length);
+        continue;
+      }
+      return {
+        ok: true,
+        strategy,
+        description: description || 'AI-generated tuning',
+        modelUsed: model,
+      };
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      console.warn(`[tuneChipCount] ${model} threw:`, lastError);
+    }
+  }
+
+  return { ok: false, error: lastError || 'Tuner failed' };
+}
+
+/** Load the active runtime override of the chip-counting strategy
+ *  block, if any. Reads the LATEST row from
+ *  `chip_count_tuning_overrides` for the current group. Returns
+ *  null when there is no row, when the latest row's
+ *  `prompt_strategy` is null (= group-owner reverted to default),
+ *  or on any read error.
+ *
+ *  Called once per `countChipsFromPhoto` invocation. The added
+ *  latency is one indexed lookup (idx_cctun_group_created), which
+ *  is dwarfed by the Gemini call itself — totally fine in the
+ *  hot path.
+ *
+ *  Phase 2 of the in-app tuning loop, v5.56+. */
+async function loadActiveChipCountStrategy(): Promise<string | null> {
+  const gid = getGroupId();
+  if (!gid) return null;
+  try {
+    const { data, error } = await supabase
+      .from('chip_count_tuning_overrides')
+      .select('prompt_strategy')
+      .eq('group_id', gid)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) {
+      console.warn('[chip-count] override load failed:', error.message);
+      return null;
+    }
+    if (!data || data.length === 0) return null;
+    const row = data[0] as { prompt_strategy: string | null };
+    if (!row.prompt_strategy || row.prompt_strategy.trim().length === 0) {
+      // Latest row is an explicit "revert to default" entry.
+      return null;
+    }
+    return row.prompt_strategy;
+  } catch (e) {
+    console.warn('[chip-count] override load threw:', e);
+    return null;
+  }
+}
+
 export async function countChipsFromPhoto(
   input: CountChipsFromPhotoInput,
 ): Promise<PhotoChipCountResult> {
@@ -4431,6 +4676,13 @@ export async function countChipsFromPhoto(
   // the photo.
   const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
 
+  // Load any group-specific runtime tuning override BEFORE building
+  // the payloads. All three shots use the SAME strategy block — we
+  // rely on temperature spread for diversity, not prompt diversity.
+  // If the load fails or no override exists, the hardcoded default
+  // is used (buildChipCountPayload handles the null case).
+  const strategyOverride = await loadActiveChipCountStrategy();
+
   // v5.49: 3 payloads with spread temperatures so the MAX-aggregation
   // catches chips that any one shot missed.
   //   t=0.0 — greedy decoding, most "honest" baseline pass
@@ -4444,6 +4696,7 @@ export async function countChipsFromPhoto(
   // parallel so they all consume from the SAME 60s window (3 of 5 RPM).
   const payloads = [0.0, 0.3, 0.6].map(temperature => buildChipCountPayload({
     imageBase64, mimeType, orderedChips, expectedTotalValue, temperature,
+    strategyBlock: strategyOverride ?? undefined,
   }));
 
   const apiKey = getSettings()?.geminiApiKey || '';

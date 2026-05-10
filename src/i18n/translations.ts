@@ -2105,9 +2105,22 @@ const he = {
   'settings.chipDashboard.tuneCounter': 'דגימות עד הכיוונון הבא',
   'settings.chipDashboard.tuneLocked': 'נדרשות עוד דגימות',
   'settings.chipDashboard.tuneRemaining': 'דגימות',
-  'settings.chipDashboard.tuneReadyPhase2': '🔧 כוונן את ה-AI (יופעל בגרסה 5.56)',
-  'settings.chipDashboard.tuneDisabledTitle': 'הכפתור יופעל בגרסה הבאה — Phase 2 של מעגל הכיוונון',
-  'settings.chipDashboard.tunePhase2Note': 'הכפתור יופעל בגרסה הבאה. בינתיים — תמשיכו לצלם ולשלוח פידבק כדי לבנות סטטיסטיקה.',
+  // v5.56: Phase 2 — tune button is now live. The "Phase 2" placeholder
+  // strings stay in the translations bundle for back-compat (older
+  // bundles in flight) but the active dashboard uses the new keys below.
+  'settings.chipDashboard.tuneReadyPhase2': '🔧 כוונן את ה-AI',
+  'settings.chipDashboard.tuneDisabledTitle': 'נדרשות עוד דגימות לפני כיוונון',
+  'settings.chipDashboard.tunePhase2Note': 'הכיוונון משתמש בדגימות שלכם כדי לעדכן את הוראות הספירה של ה-AI.',
+  'settings.chipDashboard.tuneNow': '🔧 כוונן את ה-AI עכשיו',
+  'settings.chipDashboard.tuningInFlight': 'מכוונן...',
+  'settings.chipDashboard.tuneNowTitle': 'הריצו את ה-AI על הסטטיסטיקה כדי לעדכן את הוראות הספירה',
+  'settings.chipDashboard.tuneLockedTitle': 'נדרשות לפחות 10 דגימות מאז הכיוונון האחרון',
+  'settings.chipDashboard.tuneSuccess': 'הכיוונון הוחל',
+  'settings.chipDashboard.tuneError': 'הכיוונון נכשל',
+  'settings.chipDashboard.revertToDefault': 'חזרה להוראות ברירת המחדל',
+  'settings.chipDashboard.reverting': 'משחזר...',
+  'settings.chipDashboard.revertSuccess': 'חזרה לברירת המחדל הושלמה',
+  'settings.chipDashboard.tuneHowItWorks': 'הכיוונון לא משנה את הקוד או דורש פריסה מחדש — הוא רק מחליף את הוראות הספירה ששולחים ל-AI. אם משהו השתבש, אפשר לחזור לברירת המחדל בכפתור למעלה.',
 
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   // The numeric per-stack feedback is captured silently regardless;
@@ -4451,9 +4464,19 @@ const en: Record<keyof typeof he, string> = {
   'settings.chipDashboard.tuneCounter': 'Samples until next tuning',
   'settings.chipDashboard.tuneLocked': 'Need more samples',
   'settings.chipDashboard.tuneRemaining': 'remaining',
-  'settings.chipDashboard.tuneReadyPhase2': '🔧 Tune the AI (activates in v5.56)',
-  'settings.chipDashboard.tuneDisabledTitle': 'Button activates in the next version — Phase 2 of the tuning loop',
-  'settings.chipDashboard.tunePhase2Note': 'Button activates in the next release. In the meantime — keep taking photos and submitting feedback to build stats.',
+  'settings.chipDashboard.tuneReadyPhase2': '🔧 Tune the AI',
+  'settings.chipDashboard.tuneDisabledTitle': 'More samples needed before tuning',
+  'settings.chipDashboard.tunePhase2Note': 'Tuning uses your samples to update the counting instructions sent to the AI.',
+  'settings.chipDashboard.tuneNow': '🔧 Tune the AI now',
+  'settings.chipDashboard.tuningInFlight': 'Tuning...',
+  'settings.chipDashboard.tuneNowTitle': 'Run the AI on the stats to update counting instructions',
+  'settings.chipDashboard.tuneLockedTitle': 'At least 10 samples needed since the last tuning',
+  'settings.chipDashboard.tuneSuccess': 'Tuning applied',
+  'settings.chipDashboard.tuneError': 'Tuning failed',
+  'settings.chipDashboard.revertToDefault': 'Revert to default counting instructions',
+  'settings.chipDashboard.reverting': 'Reverting...',
+  'settings.chipDashboard.revertSuccess': 'Reverted to default',
+  'settings.chipDashboard.tuneHowItWorks': 'Tuning does not change code or require redeploy — it only swaps the counting instructions sent to the AI. If something goes wrong, use the revert button above.',
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   'settings.chipFeedback.title': '🎯 Improve chip-counting accuracy',
   'settings.chipFeedback.helper': 'Every time you finalize a player after an AI photo count, we save the diff between what the AI suggested and what you actually saved — this helps tune accuracy over time.',

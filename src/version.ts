@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.55.0';
+export const APP_VERSION = '5.56.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.56.0',
+    date: '2026-05-10',
+    changes: [
+      '🔧 Tune button: AI updates its own counting prompt',
+      '↩ Revert to default in one click',
+      '🚀 No code change or redeploy needed',
+    ],
+  },
   {
     version: '5.55.0',
     date: '2026-05-10',
