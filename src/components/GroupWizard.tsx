@@ -1142,8 +1142,8 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
               { icon: '📊', text: t('settings.setup.welcomeStats') },
               { icon: '📈', text: t('settings.setup.welcomeGraphs') },
               { icon: '🏋️', text: t('settings.setup.welcomeTraining') },
+              { icon: '🧠', text: t('settings.setup.welcomeTrivia') },
               { icon: '📤', text: t('settings.setup.welcomeShare') },
-              { icon: '🔔', text: t('settings.setup.welcomeNotify') },
             ].map((item, i, arr) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
@@ -1166,8 +1166,8 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                     { icon: '📊', key: 'settings.setup.welcomeStats' },
                     { icon: '📈', key: 'settings.setup.welcomeGraphs' },
                     { icon: '🏋️', key: 'settings.setup.welcomeTraining' },
+                    { icon: '🧠', key: 'settings.setup.welcomeTrivia' },
                     { icon: '📤', key: 'settings.setup.welcomeShare' },
-                    { icon: '🔔', key: 'settings.setup.welcomeNotify' },
                   ] as const;
                   const lines = items.map(i => `${i.icon} ${t(i.key)}`).join('\n');
                   shareToWhatsApp(`${t('settings.setup.welcomeTitle')}\n${t('settings.setup.welcomeSubtitle')}\n\n${lines}`);

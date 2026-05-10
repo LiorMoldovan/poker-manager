@@ -321,6 +321,18 @@ const ChipEntryScreen = () => {
     };
   }, [chipCounts, players, isLoading, saveChipCounts]);
 
+  // Auto-dismiss the photo error toast after a few seconds.
+  // IMPORTANT: keep this hook above the `if (isLoading)` / `if (gameNotFound)`
+  // early returns below — moving it after them violates the Rules of Hooks
+  // (React would call a different number of hooks across renders once the
+  // game loads, throwing "Rendered more hooks than during the previous
+  // render" and tripping the ErrorBoundary).
+  useEffect(() => {
+    if (!photoErrorToast) return;
+    const id = setTimeout(() => setPhotoErrorToast(''), 5000);
+    return () => clearTimeout(id);
+  }, [photoErrorToast]);
+
   const loadData = () => {
     if (!gameId) {
       setGameNotFound(true);
@@ -461,13 +473,6 @@ const ChipEntryScreen = () => {
     setPhotoResults(prev => ({ ...prev, [playerId]: result }));
     setPhotoErrorToast('');
   };
-
-  // Auto-dismiss the photo error toast after a few seconds.
-  useEffect(() => {
-    if (!photoErrorToast) return;
-    const id = setTimeout(() => setPhotoErrorToast(''), 5000);
-    return () => clearTimeout(id);
-  }, [photoErrorToast]);
 
   const openNumpad = (playerId: string, chipIndex: number) => {
     if (!isAdmin) return;
@@ -1123,7 +1128,6 @@ const ChipEntryScreen = () => {
             }}
             onResult={(result) => applyPhotoResult(result, targetPlayer.id)}
             chipValues={chipValues}
-            chipColorOrder={getSettings().chipColorOrder}
             expectedTotalValue={targetPlayer.rebuys * chipsPerRebuy}
             title={`📷 ${targetPlayer.playerName}`}
           />

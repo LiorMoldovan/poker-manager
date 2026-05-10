@@ -22,11 +22,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { usePermissions } from '../App';
 import {
   runSchedulerSweep,
-  sendInvitationToPermanentMembers,
   sendReminderNotifications,
-  sendConfirmedNotifications,
-  sendTargetFilledNotifications,
-  sendCancellationNotifications,
   sendVoteChangeNotifications,
 } from '../utils/scheduleNotifications';
 import { supabase } from '../database/supabaseClient';
@@ -671,8 +667,9 @@ export default function ScheduleTab() {
           allowMaybe: fresh.scheduleDefaultAllowMaybe !== false,
           note: null,
         });
-        sendInvitationToPermanentMembers(newPoll).catch(err =>
-          console.warn('sendInvitationToPermanentMembers (auto) failed:', err));
+        // Notification dispatch: trg_enqueue_poll_notification fires on the
+        // INSERT and the worker drains the queue. No client-side fan-out.
+        void newPoll;
         showMsg('success', t('schedule.autoCreated'));
       } catch (err) {
         console.warn('auto-create poll failed:', err);
@@ -698,29 +695,12 @@ export default function ScheduleTab() {
     const previousResponse = previousVote?.response ?? null;
     try {
       const updated = await castVote(dateId, response);
-      // If this vote crossed the threshold, fire confirmed notifications
-      if (updated.status === 'confirmed' && !updated.confirmedNotificationsSentAt) {
-        sendConfirmedNotifications(updated).catch(err =>
-          console.warn('sendConfirmedNotifications failed:', err));
-      }
-      // Migration 051: post-pin seat-fill announcement. Fires only on a
-      // confirmed poll whose pinned date just reached the seat target
-      // AND that didn't already burn the target_filled claim slot.
-      // The at-target confirmed flow above preemptively claims the slot
-      // (see `sendConfirmedNotifications`), so this never double-fires
-      // when the poll hits target at the same moment as confirmation.
-      if (updated.status === 'confirmed'
-          && updated.confirmedDateId
-          && !updated.targetFilledNotificationsSentAt) {
-        const yesCount = updated.votes.reduce(
-          (n, v) => n + (v.dateId === updated.confirmedDateId && v.response === 'yes' ? 1 : 0),
-          0,
-        );
-        if (yesCount >= updated.targetPlayerCount) {
-          sendTargetFilledNotifications(updated).catch(err =>
-            console.warn('sendTargetFilledNotifications failed:', err));
-        }
-      }
+      // Status transitions ('confirmed' from auto-close, 'target_filled'
+      // from the post-pin trigger) are now enqueued atomically by DB
+      // triggers from migration 061 — no client-side dispatch needed.
+      // Vote-event notifications still fire fresh below since they're
+      // not claim-gated and missing one is acceptable noise.
+
       // Vote-event notification: fire on a fresh INSERT (no prior row)
       // OR on an UPDATE that actually CHANGED the response. Same-response
       // re-clicks are filtered two ways: the previousResponse comparison
@@ -787,7 +767,8 @@ export default function ScheduleTab() {
       if (!fresh || fresh.status !== 'confirmed' || fresh.confirmedDateId !== requestedDateId) {
         showMsg('error', t('schedule.manualCloseNoop'));
       } else {
-        sendConfirmedNotifications(fresh).catch(() => {});
+        // Notification dispatch handled by trg_enqueue_poll_notification
+        // (migration 061) on the status='confirmed' transition.
         showMsg('success', t(
           isRepin ? 'schedule.manualRepinSuccess' : 'schedule.manualCloseSuccess',
           { date: dateLabel },
@@ -3327,7 +3308,7 @@ function CreatePollModal(props: CreatePollModalProps) {
 
     setSubmitting(true);
     try {
-      const newPoll = await createPoll({
+      await createPoll({
         dates: filledDates.map(d => ({
           proposedDate: d.proposedDate,
           proposedTime: d.proposedTime || null,
@@ -3339,9 +3320,8 @@ function CreatePollModal(props: CreatePollModalProps) {
         allowMaybe,
         note: note || null,
       });
-      // Fire-and-forget invitation broadcast
-      sendInvitationToPermanentMembers(newPoll).catch(err =>
-        console.warn('sendInvitationToPermanentMembers failed:', err));
+      // Notification dispatch: trg_enqueue_poll_notification fires on the
+      // INSERT (status='open') and the worker drains the 'creation' job.
       onSuccess(t('schedule.invitationSent'));
       onClose();
     } catch (e) {
@@ -3535,11 +3515,8 @@ function CancelPollModal(props: CancelPollModalProps) {
     setSubmitting(true);
     try {
       await cancelPoll(pollId, reason || undefined);
-      // Re-fetch and trigger cancellation notifications
-      const poll = getAllPolls().find(p => p.id === pollId);
-      if (poll && poll.status === 'cancelled') {
-        sendCancellationNotifications(poll).catch(() => {});
-      }
+      // Notification dispatch handled by trg_enqueue_poll_notification
+      // (migration 061) on the status='cancelled' transition.
       onSuccess(t('schedule.cancellationSent'));
       onClose();
     } catch (e) {
@@ -3638,36 +3615,12 @@ function EditPollModal(props: EditPollModalProps) {
         defaultLocation: defaultLocation.trim() || null,
         allowMaybe,
       });
-      // Lowering the target can flip the poll to 'confirmed' inside the
-      // RPC (mirrors update_poll_target's threshold re-eval). Detect that
-      // here and broadcast confirmation notifications immediately —
-      // otherwise the runSchedulerSweep recovery only fires on
-      // polls.length changes, leaving the notification stuck for hours.
-      const refreshed = getAllPolls().find(p => p.id === poll.id);
-      if (refreshed
-          && refreshed.status === 'confirmed'
-          && !refreshed.confirmedNotificationsSentAt) {
-        sendConfirmedNotifications(refreshed).catch(err =>
-          console.warn('sendConfirmedNotifications failed:', err));
-      }
-      // Lowering the target can also retroactively satisfy the seat
-      // count on an already-confirmed poll (yes count was 6 with target
-      // 7, admin drops target to 6). Fire the post-pin "המשחק מלא"
-      // follow-up here so the yes-voters get the announcement without
-      // waiting for someone else to vote.
-      if (refreshed
-          && refreshed.status === 'confirmed'
-          && refreshed.confirmedDateId
-          && !refreshed.targetFilledNotificationsSentAt) {
-        const yesCount = refreshed.votes.reduce(
-          (n, v) => n + (v.dateId === refreshed.confirmedDateId && v.response === 'yes' ? 1 : 0),
-          0,
-        );
-        if (yesCount >= refreshed.targetPlayerCount) {
-          sendTargetFilledNotifications(refreshed).catch(err =>
-            console.warn('sendTargetFilledNotifications failed:', err));
-        }
-      }
+      // Notification side-effects (status flip to 'confirmed' on lower
+      // target, retroactive target_filled when yes_count already meets
+      // the new target) are now handled by the database trigger
+      // trg_enqueue_poll_notification (migration 062). The notification
+      // worker drains those jobs as they're enqueued, so the client
+      // doesn't need to dispatch anything here.
       onSuccess(t('schedule.editPollSaved'));
       onClose();
     } catch (e) {
@@ -4050,36 +4003,11 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
           }
         }
       }
-      // If this bulk-cast tipped the poll into 'confirmed' (auto-close
-      // trigger fired server-side), broadcast the confirmation banner
-      // immediately. Without this, the runSchedulerSweep recovery only
-      // re-runs when polls.length changes — a confirmed-via-proxy poll
-      // could otherwise wait until the next poll create/delete to ping
-      // members. claimPollNotifications inside sendConfirmedNotifications
-      // is atomic, so this is safe vs the sweep firing concurrently.
-      if (refreshed
-          && refreshed.status === 'confirmed'
-          && !refreshed.confirmedNotificationsSentAt) {
-        sendConfirmedNotifications(refreshed).catch(err =>
-          console.warn('sendConfirmedNotifications failed:', err));
-      }
-      // Bulk proxy yes-votes can also fill the seat target on an
-      // already-confirmed (manually-pinned-below-target) poll. Mirror
-      // the cast-vote handler so the post-pin "המשחק מלא" follow-up
-      // fires immediately instead of waiting for a sweep tick.
-      if (refreshed
-          && refreshed.status === 'confirmed'
-          && refreshed.confirmedDateId
-          && !refreshed.targetFilledNotificationsSentAt) {
-        const yesCount = refreshed.votes.reduce(
-          (n, v) => n + (v.dateId === refreshed.confirmedDateId && v.response === 'yes' ? 1 : 0),
-          0,
-        );
-        if (yesCount >= refreshed.targetPlayerCount) {
-          sendTargetFilledNotifications(refreshed).catch(err =>
-            console.warn('sendTargetFilledNotifications failed:', err));
-        }
-      }
+      // Confirmation and target_filled side-effects are handled by
+      // database triggers (migrations 061/062): the auto-close trigger
+      // flips status to 'confirmed' (enqueues 'confirmed' job), and the
+      // game_poll_votes trigger enqueues 'target_filled' when a yes
+      // vote tips the seat count. The notification worker picks both up.
       onSuccess(
         selectedCount > 1
           ? t('schedule.proxy.savedBulk', { count: selectedCount })

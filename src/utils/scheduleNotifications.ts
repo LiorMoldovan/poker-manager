@@ -1,10 +1,19 @@
 // Schedule notifications: push + email fan-out for poll lifecycle events.
-// All helpers are claim-gated via claim_poll_notifications so multiple online
-// clients can race to send and exactly one wins.
+//
+// Architecture (v5.48.0+, migration 061):
+// Lifecycle transitions on game_polls / game_poll_votes atomically enqueue
+// jobs via DB triggers. The notificationWorker (`utils/notificationWorker.ts`)
+// claims jobs and calls the dispatchX helpers exported here. The legacy
+// sendX wrappers (kept as no-op shims) used to claim+dispatch directly
+// from the actor's browser, which lost notifications when the actor's
+// tab closed mid-fetch (see incident 2026-05-10, poll 16259f05).
+//
+// Reminder + vote-change notifications still fire fresh (no queue) since
+// they're not claim-gated and a missed one is acceptable noise.
 
 import type { GamePoll, GamePollDate, GamePollVote, RsvpResponse } from '../types';
 import {
-  getAllPlayers, getAllPolls, claimPollNotifications,
+  getAllPlayers, getAllPolls,
   getPlayerEmailForNotification, getSettings,
   getPollChangeRecipients,
 } from '../database/storage';
@@ -816,21 +825,34 @@ async function dispatch(
 }
 
 // ── Public API ──
+//
+// dispatchX functions: pure dispatch — no claim-gate. Called by the
+// notification worker (utils/notificationWorker.ts) once it has claimed
+// a job from the queue. They return:
+//   { atTargetConfirm: true } from `dispatchConfirmed` when the poll was
+//   confirmed AT-target (yesCount >= target), so the worker can preempt
+//   the redundant 'target_filled' job. Otherwise undefined.
+// Errors thrown by these functions surface to the worker, which marks
+// the job failed (with retry up to attempts=3).
 
-export async function sendInvitationToPermanentMembers(poll: GamePoll): Promise<void> {
-  const claimed = await claimPollNotifications(poll.id, 'creation');
-  if (!claimed) return;
+export type DispatchResult = { atTargetConfirm?: boolean } | void;
+
+export async function dispatchInvitation(poll: GamePoll): Promise<void> {
   const recipientIds = resolveRecipientPlayerIds(poll, 'creation');
   const names = playerNamesForIds(recipientIds);
   await dispatch(poll, 'creation', buildInvitationMessage(poll), names);
 }
 
-export async function sendConfirmedNotifications(poll: GamePoll): Promise<void> {
-  if (!poll.confirmedDateId) return;
-  const claimed = await claimPollNotifications(poll.id, 'confirmed');
-  if (!claimed) return;
+export async function dispatchExpanded(poll: GamePoll): Promise<void> {
+  const recipientIds = resolveRecipientPlayerIds(poll, 'expanded');
+  const names = playerNamesForIds(recipientIds);
+  await dispatch(poll, 'expanded', buildExpandedMessage(poll), names);
+}
+
+export async function dispatchConfirmed(poll: GamePoll): Promise<DispatchResult> {
+  if (!poll.confirmedDateId) throw new Error('poll has no confirmedDateId');
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
-  if (!confirmedDate) return;
+  if (!confirmedDate) throw new Error('confirmed date not in poll.dates');
 
   // Pinned-date yes-voters are always one of the two audiences. Computing
   // the set up front (instead of via resolveRecipientPlayerIds) lets us
@@ -846,27 +868,25 @@ export async function sendConfirmedNotifications(poll: GamePoll): Promise<void> 
   const missing = Math.max(0, poll.targetPlayerCount - yesCount);
 
   if (missing === 0) {
-    // Seat target reached at the same moment as the confirmed transition
-    // — single "ניפגש בערב פוקר" flow to yes-voters. We preemptively
-    // burn the `target_filled` claim too so the post-pin "המשחק מלא"
-    // follow-up can't double-fire on top of "המשחק נסגר!" — they'd be
-    // saying the same thing one after the other.
-    await Promise.allSettled([
-      dispatch(
-        poll,
-        'confirmed',
-        buildConfirmedMessage(poll, confirmedDate, yesNames),
-        yesNames,
-      ),
-      claimPollNotifications(poll.id, 'target_filled'),
-    ]);
-    return;
+    // At-target: single "ניפגש בערב פוקר" flow to yes-voters. We tell the
+    // worker to preempt the 'target_filled' job (if one was enqueued by
+    // the trigger in the same xact, which the trigger normally avoids
+    // via its 500ms-since-confirmed_at guard, but defensive belt-and-
+    // suspenders for the case where confirmed_at lags slightly).
+    await dispatch(
+      poll,
+      'confirmed',
+      buildConfirmedMessage(poll, confirmedDate, yesNames),
+      yesNames,
+    );
+    return { atTargetConfirm: true };
   }
 
   // Below target: split the audience and tailor the copy. Both dispatches
-  // share the same `kind` ("confirmed") so they're treated as a single
-  // logical event by the dispatcher's logging — the claim was already
-  // burned at function entry, so racing senders won't double-send.
+  // run in parallel under one Promise.allSettled — partial failure is
+  // acceptable (the worker still marks the job done since at least one
+  // audience got their message; the other will be retried via the sweep
+  // recovery if its sentinel is still null).
   const otherIds = resolveConfirmedBelowTargetOthers(poll, yesOnPinnedSet);
   const otherNames = playerNamesForIds(otherIds);
 
@@ -884,19 +904,10 @@ export async function sendConfirmedNotifications(poll: GamePoll): Promise<void> 
       otherNames,
     ),
   ]);
+  return undefined;
 }
 
-export async function sendExpandedInvitations(poll: GamePoll): Promise<void> {
-  const claimed = await claimPollNotifications(poll.id, 'expanded');
-  if (!claimed) return;
-  const recipientIds = resolveRecipientPlayerIds(poll, 'expanded');
-  const names = playerNamesForIds(recipientIds);
-  await dispatch(poll, 'expanded', buildExpandedMessage(poll), names);
-}
-
-export async function sendCancellationNotifications(poll: GamePoll): Promise<void> {
-  const claimed = await claimPollNotifications(poll.id, 'cancellation');
-  if (!claimed) return;
+export async function dispatchCancellation(poll: GamePoll): Promise<void> {
   const recipientIds = resolveRecipientPlayerIds(poll, 'cancellation');
   const names = playerNamesForIds(recipientIds);
   await dispatch(poll, 'cancellation', buildCancellationMessage(poll), names);
@@ -904,26 +915,22 @@ export async function sendCancellationNotifications(poll: GamePoll): Promise<voi
 
 // Fires when a confirmed-below-target poll reaches its seat target via
 // post-pin yes-votes. Yes-voters on the pinned date get a final
-// "המשחק מלא — ניפגש!" announcement so they know the wait is over and
-// the lineup is locked. Idempotent via the migration-051 claim slot:
-// at-target confirmed transitions claim the slot preemptively (see
-// sendConfirmedNotifications), so this function no-ops in that path.
-// Skipped when:
-//   * Poll has no confirmed_date_id (still open / cancelled / expired).
-//   * The seat target hasn't actually been reached yet (caller bug).
-//   * Claim slot is already burned (already sent, or preemptively
-//     claimed by the at-target confirmed flow).
-export async function sendTargetFilledNotifications(poll: GamePoll): Promise<void> {
-  if (poll.status !== 'confirmed' || !poll.confirmedDateId) return;
+// "המשחק מלא — ניפגש!" announcement. Skipped when the seat target
+// hasn't actually been reached yet (caller bug — the trigger only
+// enqueues this kind when count >= target, but defensive).
+export async function dispatchTargetFilled(poll: GamePoll): Promise<void> {
+  if (poll.status !== 'confirmed' || !poll.confirmedDateId) {
+    throw new Error('target_filled fired on non-confirmed poll');
+  }
   const yesVotes = poll.votes.filter(
     v => v.dateId === poll.confirmedDateId && v.response === 'yes'
   );
   const yesPlayerIds = Array.from(new Set(yesVotes.map(v => v.playerId)));
-  if (yesPlayerIds.length < poll.targetPlayerCount) return;
-  const claimed = await claimPollNotifications(poll.id, 'target_filled');
-  if (!claimed) return;
+  if (yesPlayerIds.length < poll.targetPlayerCount) {
+    throw new Error('target_filled fired below target');
+  }
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
-  if (!confirmedDate) return;
+  if (!confirmedDate) throw new Error('confirmed date not in poll.dates');
   const yesNames = playerNamesForIds(yesPlayerIds);
 
   // Email-dedup: anyone whose yes-vote on the pinned date predates the
@@ -933,13 +940,9 @@ export async function sendTargetFilledNotifications(poll: GamePoll): Promise<voi
   // push still fires for everyone (the celebratory buzz is the point).
   // Only the NEW yes-voter(s) — whose vote was cast after the confirm
   // broadcast — get the email so they know they're now in the game.
-  // Falls back to "email everyone" when:
-  //   * The poll was confirmed AT-target (no `confirmed-below-target-yes`
-  //     ever sent — that path preempts target_filled, so we don't reach
-  //     here in practice, but defensive).
-  //   * `confirmedNotificationsSentAt` is null (legacy polls predating the
-  //     timestamp field, or polls where the confirm dispatch failed —
-  //     better to over-email than to silently drop a "you're in" message).
+  // Falls back to "email everyone" when `confirmedNotificationsSentAt`
+  // is null (legacy polls or polls where the confirm dispatch failed
+  // entirely — better to over-email than silently drop "you're in").
   const cutoffMs = poll.confirmedNotificationsSentAt
     ? new Date(poll.confirmedNotificationsSentAt).getTime()
     : null;
@@ -959,6 +962,34 @@ export async function sendTargetFilledNotifications(poll: GamePoll): Promise<voi
     yesNames,
     { emailRecipientNames: emailNames },
   );
+}
+
+// ── Deprecated shims ──
+//
+// Retained as no-ops so older call-sites in ScheduleTab.tsx don't crash
+// during the rollout window. The DB triggers in migration 061 enqueue the
+// notification job atomically with the lifecycle transition, and the
+// worker drains it. All remaining call-sites should be removed; these
+// shims will be deleted in a follow-up cleanup pass.
+
+export async function sendInvitationToPermanentMembers(_poll: GamePoll): Promise<void> {
+  // No-op: handled by trg_enqueue_poll_notification + notificationWorker.
+}
+
+export async function sendConfirmedNotifications(_poll: GamePoll): Promise<void> {
+  // No-op: handled by trg_enqueue_poll_notification + notificationWorker.
+}
+
+export async function sendExpandedInvitations(_poll: GamePoll): Promise<void> {
+  // No-op: handled by trg_enqueue_poll_notification + notificationWorker.
+}
+
+export async function sendCancellationNotifications(_poll: GamePoll): Promise<void> {
+  // No-op: handled by trg_enqueue_poll_notification + notificationWorker.
+}
+
+export async function sendTargetFilledNotifications(_poll: GamePoll): Promise<void> {
+  // No-op: handled by trg_enqueue_target_filled_on_vote + notificationWorker.
 }
 
 // ── Vote-event notifications ──
@@ -1276,47 +1307,53 @@ export async function sendReminderNotifications(
 }
 
 // ── Lazy sweep: called from ScheduleTab on mount and after each realtime tick ──
+//
+// Two responsibilities:
+//   1. Lazy expansion: poll older than `expansion_delay_hours` flips to
+//      'expanded' (the lifecycle trigger then enqueues the 'expanded' job).
+//   2. Backfill enqueue: any poll whose state implies a notification is owed
+//      (status set, sentinel still null) but whose original lifecycle trigger
+//      never fired (e.g. row pre-dates migration 061). The
+//      enqueue_poll_notification RPC is idempotent on (poll_id, kind), so
+//      re-enqueueing rows that DID fire is a safe no-op.
+//   3. Drain the queue via the notification worker.
 
 export async function runSchedulerSweep(): Promise<void> {
   const polls = getAllPolls();
   const now = Date.now();
 
-  for (const poll of polls) {
-    // 1. Recover from failed creation broadcast (any group member can trigger)
-    if (poll.status === 'open' && !poll.creationNotificationsSentAt) {
-      sendInvitationToPermanentMembers(poll).catch(err =>
-        console.warn('runSchedulerSweep/creation', err));
-    }
+  // Lazy import to avoid a circular dep on storage / cache RPCs in this
+  // file's static graph. Same reason the expansion call below uses one.
+  const cacheMod = await import('../database/supabaseCache');
 
-    // 2. Lazy expansion: if 48h elapsed and still open, try to expand
+  for (const poll of polls) {
+    // Lazy expansion: if expansion_delay_hours elapsed and the poll is
+    // still 'open', flip status to 'expanded'. The DB trigger will then
+    // enqueue the 'expanded' notification.
     if (poll.status === 'open' && poll.creationNotificationsSentAt) {
       const created = new Date(poll.createdAt).getTime();
       const delayMs = poll.expansionDelayHours * 60 * 60 * 1000;
       if (now - created >= delayMs) {
-        // Lazy import to avoid a circular dep on storage in this file's static graph
         import('../database/storage').then(m => m.expandPoll(poll.id))
           .catch(err => console.warn('runSchedulerSweep/expand', err));
       }
     }
 
-    // 3. Expanded notifications recovery
+    // Backfill enqueue for legacy polls whose triggers never ran.
+    // Idempotent — the partial unique index on (poll_id, kind) where
+    // status IN ('pending','running') makes redundant enqueues a no-op.
+    if (poll.status === 'open' && !poll.creationNotificationsSentAt) {
+      cacheMod.enqueuePollNotificationRpc?.(poll.id, 'creation').catch(() => {});
+    }
     if (poll.status === 'expanded' && !poll.expandedNotificationsSentAt) {
-      sendExpandedInvitations(poll).catch(err =>
-        console.warn('runSchedulerSweep/expanded', err));
+      cacheMod.enqueuePollNotificationRpc?.(poll.id, 'expanded').catch(() => {});
     }
-
-    // 4. Confirmed notifications recovery
     if (poll.status === 'confirmed' && !poll.confirmedNotificationsSentAt) {
-      sendConfirmedNotifications(poll).catch(err =>
-        console.warn('runSchedulerSweep/confirmed', err));
+      cacheMod.enqueuePollNotificationRpc?.(poll.id, 'confirmed').catch(() => {});
     }
-
-    // 4b. Target-filled recovery (migration 051) — confirmed poll whose
-    //     pinned date has reached the seat target but the post-pin
-    //     "המשחק מלא" notification hasn't fired yet. Re-checks every
-    //     sweep so a yes-vote that closes the gap eventually triggers
-    //     the announcement even if the in-flight client crashed before
-    //     dispatching. Claim slot keeps it idempotent.
+    if (poll.status === 'cancelled' && !poll.cancellationNotificationsSentAt) {
+      cacheMod.enqueuePollNotificationRpc?.(poll.id, 'cancellation').catch(() => {});
+    }
     if (poll.status === 'confirmed'
         && poll.confirmedDateId
         && !poll.targetFilledNotificationsSentAt) {
@@ -1325,16 +1362,15 @@ export async function runSchedulerSweep(): Promise<void> {
         0,
       );
       if (yesCount >= poll.targetPlayerCount) {
-        sendTargetFilledNotifications(poll).catch(err =>
-          console.warn('runSchedulerSweep/target_filled', err));
+        cacheMod.enqueuePollNotificationRpc?.(poll.id, 'target_filled').catch(() => {});
       }
     }
-
-    // 5. Cancellation notifications recovery
-    if (poll.status === 'cancelled' && !poll.cancellationNotificationsSentAt) {
-      sendCancellationNotifications(poll).catch(err =>
-        console.warn('runSchedulerSweep/cancellation', err));
-    }
   }
+
+  // Drain the queue. Worker is idempotent and rate-limited; calling it
+  // every sweep is intentional.
+  const workerMod = await import('./notificationWorker');
+  workerMod.processNotificationJobs().catch(err =>
+    console.warn('runSchedulerSweep/worker', err));
 }
 

@@ -54,6 +54,7 @@ import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
+import TriviaReportsTab from '../components/TriviaReportsTab';
 import GroupManagementTab from '../components/GroupManagementTab';
 import ScheduleTab from '../components/ScheduleTab';
 import { NumericInput } from '../components/NumericInput';
@@ -143,6 +144,7 @@ const SettingsScreen = () => {
   const [activityMembers, setActivityMembers] = useState<GroupMember[]>([]);
   const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
   const [trainingActionCount, setTrainingActionCount] = useState(0);
+  const [triviaPendingCount, setTriviaPendingCount] = useState(0);
   // Pending-vote state — drives the small dot on the Schedule tab nav button.
   // Hook handles realtime + minute-tick updates internally.
   const pendingVote = usePendingVote();
@@ -262,8 +264,8 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
-  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
+  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'triviaReports' | 'superadmin' | 'push' | 'report';
+  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'triviaReports', 'superadmin', 'push', 'report'];
   const location = useLocation();
   const getDefaultTab = (): TabId => {
     // Honor ?tab=<id> URL param (used by deep links from push notifications)
@@ -376,6 +378,26 @@ const SettingsScreen = () => {
     })();
     return () => { cancelled = true; };
   }, [isSuperAdmin]);
+
+  // Trivia-reports badge: lightweight RPC that returns 0 for non
+  // super admins. Re-run when the tab is opened (so the badge clears
+  // after the super-admin triages reports inside the tab).
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error: err } = await supabase.rpc('count_pending_trivia_reports');
+        if (cancelled) return;
+        if (err) {
+          setTriviaPendingCount(0);
+          return;
+        }
+        setTriviaPendingCount(typeof data === 'number' ? data : 0);
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isSuperAdmin, activeTab]);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ userId: string | null; playerName: string | null; endpoint: string }[]>([]);
 
@@ -798,6 +820,7 @@ const SettingsScreen = () => {
     { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'ai', label: t('settings.tabAI'), icon: '🔌', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
+    { id: 'triviaReports', label: t('settings.tabTriviaReports'), icon: '🚩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
@@ -1003,6 +1026,7 @@ const SettingsScreen = () => {
                     color: '#34d399',
                   } : {}),
                   ...(tab.id === 'training' && trainingActionCount > 0 && !isActive ? { position: 'relative' as const } : {}),
+                  ...(tab.id === 'triviaReports' && triviaPendingCount > 0 && !isActive ? { position: 'relative' as const } : {}),
                 }}
               >
                 {tab.label}
@@ -1016,6 +1040,18 @@ const SettingsScreen = () => {
                     lineHeight: 1,
                   }}>
                     {trainingActionCount}
+                  </span>
+                )}
+                {tab.id === 'triviaReports' && triviaPendingCount > 0 && (
+                  <span style={{
+                    marginInlineStart: '0.3rem',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: '16px', height: '16px', padding: '0 4px',
+                    borderRadius: '8px', fontSize: '0.6rem', fontWeight: 700,
+                    background: '#ef4444', color: '#fff',
+                    lineHeight: 1,
+                  }}>
+                    {triviaPendingCount}
                   </span>
                 )}
                 {showScheduleDot && (
@@ -1482,138 +1518,6 @@ const SettingsScreen = () => {
             </div>
           )}
 
-          {/* Chip Color Order — used by photo chip-counting (no-op without chips configured) */}
-          {chipValues.length > 0 && (() => {
-            // Resolve current order: configured ids that still exist,
-            // then any chip values not yet in the configured order
-            // (newly added colors appear at the end).
-            const configuredOrder = settings.chipColorOrder || [];
-            const idToChip = new Map(chipValues.map(c => [c.id, c]));
-            const orderedIds: string[] = [];
-            for (const id of configuredOrder) {
-              if (idToChip.has(id)) orderedIds.push(id);
-            }
-            for (const c of chipValues) {
-              if (!orderedIds.includes(c.id)) orderedIds.push(c.id);
-            }
-
-            const moveColor = (idx: number, delta: number) => {
-              const next = [...orderedIds];
-              const target = idx + delta;
-              if (target < 0 || target >= next.length) return;
-              [next[idx], next[target]] = [next[target], next[idx]];
-              handleSettingsChange('chipColorOrder', next);
-            };
-
-            const resetOrder = () => {
-              handleSettingsChange('chipColorOrder', []);
-            };
-
-            return (
-              <div style={{
-                marginTop: '1rem',
-                paddingTop: '1rem',
-                borderTop: '1px solid var(--border)',
-              }}>
-                <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.4rem 0', fontWeight: 700 }}>
-                  {t('settings.chips.colorOrderTitle')}
-                </h3>
-                <p style={{
-                  margin: '0 0 0.75rem 0',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: 1.5,
-                }}>
-                  {t('settings.chips.colorOrderHelper')}
-                </p>
-                <div>
-                  {orderedIds.map((id, idx) => {
-                    const chip = idToChip.get(id);
-                    if (!chip) return null;
-                    return (
-                      <div key={id} className="settings-row">
-                        <span style={{
-                          minWidth: '1.4rem',
-                          textAlign: 'center',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                          fontWeight: 700,
-                        }}>{idx + 1}</span>
-                        <div
-                          className="chip-circle"
-                          style={{
-                            backgroundColor: chip.displayColor,
-                            border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
-                            flexShrink: 0,
-                            width: '1.5rem',
-                            height: '1.5rem',
-                          }}
-                        />
-                        <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>
-                          {translateChipColor(chip.color, t)}
-                        </span>
-                        {canEditChips && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => moveColor(idx, -1)}
-                              disabled={idx === 0}
-                              title={t('settings.chips.colorOrderMoveUp')}
-                              style={{
-                                background: 'transparent',
-                                border: '1px solid var(--border)',
-                                color: idx === 0 ? 'var(--text-muted)' : 'var(--text)',
-                                borderRadius: '6px',
-                                padding: '0.2rem 0.45rem',
-                                fontSize: '0.85rem',
-                                cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                opacity: idx === 0 ? 0.4 : 1,
-                              }}
-                            >⬆</button>
-                            <button
-                              type="button"
-                              onClick={() => moveColor(idx, 1)}
-                              disabled={idx === orderedIds.length - 1}
-                              title={t('settings.chips.colorOrderMoveDown')}
-                              style={{
-                                background: 'transparent',
-                                border: '1px solid var(--border)',
-                                color: idx === orderedIds.length - 1 ? 'var(--text-muted)' : 'var(--text)',
-                                borderRadius: '6px',
-                                padding: '0.2rem 0.45rem',
-                                fontSize: '0.85rem',
-                                cursor: idx === orderedIds.length - 1 ? 'not-allowed' : 'pointer',
-                                opacity: idx === orderedIds.length - 1 ? 0.4 : 1,
-                              }}
-                            >⬇</button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {canEditChips && configuredOrder.length > 0 && (
-                  <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={resetOrder}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        fontSize: '0.75rem',
-                        textDecoration: 'underline',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {t('settings.chips.colorOrderReset')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
         </div>
       )}
 
@@ -3211,7 +3115,6 @@ const SettingsScreen = () => {
           setPhotoTestPreview(previewBase64);
         }}
         chipValues={chipValues}
-        chipColorOrder={settings.chipColorOrder}
         title={t('settings.photoTest.title')}
       />
 
@@ -3614,6 +3517,9 @@ const SettingsScreen = () => {
 
       {/* Training Admin Tab - Super Admin Only */}
       {activeTab === 'training' && isSuperAdmin && <TrainingAdminTab />}
+
+      {/* Trivia Reports Tab - Super Admin Only */}
+      {activeTab === 'triviaReports' && isSuperAdmin && <TriviaReportsTab />}
 
       {/* Super Admin Dashboard */}
       {activeTab === 'superadmin' && isSuperAdmin && (() => {
@@ -5954,8 +5860,8 @@ const SettingsScreen = () => {
               { icon: '📊', text: t('settings.setup.welcomeStats') },
               { icon: '📈', text: t('settings.setup.welcomeGraphs') },
               { icon: '🏋️', text: t('settings.setup.welcomeTraining') },
+              { icon: '🧠', text: t('settings.setup.welcomeTrivia') },
               { icon: '📤', text: t('settings.setup.welcomeShare') },
-              { icon: '🔔', text: t('settings.setup.welcomeNotify') },
             ].map((item, i, arr) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
@@ -5984,8 +5890,8 @@ const SettingsScreen = () => {
                     { icon: '📊', key: 'settings.setup.welcomeStats' },
                     { icon: '📈', key: 'settings.setup.welcomeGraphs' },
                     { icon: '🏋️', key: 'settings.setup.welcomeTraining' },
+                    { icon: '🧠', key: 'settings.setup.welcomeTrivia' },
                     { icon: '📤', key: 'settings.setup.welcomeShare' },
-                    { icon: '🔔', key: 'settings.setup.welcomeNotify' },
                   ] as const;
                   const lines = items.map(i => `${i.icon} ${t(i.key)}`).join('\n');
                   shareToWhatsApp(`${t('settings.setup.welcomeTitle')}\n${t('settings.setup.welcomeSubtitle')}\n\n${lines}`);

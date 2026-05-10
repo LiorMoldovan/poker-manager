@@ -1583,6 +1583,26 @@ export function subscribeToRealtime(): void {
     );
   }
 
+  // Notification queue (migration 061): every INSERT or UPDATE on
+  // notification_jobs wakes the worker. Doesn't go through the cache-
+  // refresh path because the worker doesn't read from in-memory
+  // notification state — it claims directly from the DB. Kept on the
+  // SAME channel so we don't burn a second WebSocket subscription per
+  // tab; fires on inserts (new jobs from peer transitions) and updates
+  // (e.g. lease expiry → status flips back to pending → another tab
+  // can re-claim).
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'notification_jobs' } as { event: '*'; schema: 'public'; table: string },
+    () => {
+      // Lazy import to avoid circular deps in this module's static graph.
+      void import('../utils/notificationWorker').then(m =>
+        m.processNotificationJobs().catch(err =>
+          console.warn('[realtime/notification_jobs] worker failed:', err))
+      );
+    }
+  );
+
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
       console.log('Realtime: subscribed to group data changes');
@@ -1651,7 +1671,10 @@ export function getAnyResponseVoterIds(pollId: string): string[] {
   return Array.from(ids);
 }
 
-async function refreshPollsNow(): Promise<void> {
+// Exported so utils/notificationWorker.ts can ensure a fresh poll snapshot
+// before processing a job (a job that just enqueued may reference a poll
+// whose realtime tick hasn't landed in this tab yet).
+export async function refreshPollsNow(): Promise<void> {
   if (!state) return;
   const polls = await loadGamePolls(state.groupId);
   state.data.set(STORAGE_KEYS.GAME_POLLS, polls);
@@ -1944,6 +1967,105 @@ export async function claimPollNotificationsRpc(
   });
   if (error) { console.warn('claim_poll_notifications failed:', error); return false; }
   return data === true;
+}
+
+// Idempotent enqueue (used by runSchedulerSweep backfill for legacy polls
+// whose lifecycle trigger never fired). The DB enforces uniqueness on
+// (poll_id, kind) where status IN ('pending','running'), so callers can
+// fire freely without dedup logic.
+export async function enqueuePollNotificationRpc(
+  pollId: string,
+  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled',
+): Promise<void> {
+  const { error } = await supabase.rpc('enqueue_poll_notification', {
+    p_poll_id: pollId,
+    p_kind: kind,
+  });
+  if (error) {
+    console.warn(`enqueue_poll_notification(${kind}) failed:`, error);
+  }
+}
+
+// ─── Notification job queue (migration 061) ───
+//
+// Replaces the legacy claim-then-deliver pattern. Lifecycle transitions
+// on game_polls / game_poll_votes auto-enqueue jobs via DB triggers; any
+// online group member's browser drains the queue via these RPCs. See
+// supabase/061-notification-job-queue.sql for the full design.
+
+export type NotificationJobKind =
+  | 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled';
+
+export type ClaimedNotificationJob = {
+  id: string;
+  pollId: string;
+  kind: NotificationJobKind;
+  attempts: number;
+};
+
+// Atomic SELECT FOR UPDATE SKIP LOCKED claim. Returns null when the queue
+// is empty for this group. The RPC enforces group-membership via auth.uid().
+export async function claimNotificationJobRpc(
+  groupId: string,
+): Promise<ClaimedNotificationJob | null> {
+  const { data, error } = await supabase.rpc('claim_notification_job', {
+    p_group_id: groupId,
+  });
+  if (error) {
+    console.warn('claim_notification_job failed:', error);
+    return null;
+  }
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const row = data[0] as { id: string; poll_id: string; kind: string; attempts: number };
+  if (
+    row.kind !== 'creation' && row.kind !== 'expanded' &&
+    row.kind !== 'confirmed' && row.kind !== 'cancellation' &&
+    row.kind !== 'target_filled'
+  ) {
+    console.warn('claim_notification_job: unknown kind', row.kind);
+    return null;
+  }
+  return {
+    id: row.id,
+    pollId: row.poll_id,
+    kind: row.kind,
+    attempts: row.attempts,
+  };
+}
+
+// Mark a claimed job done OR failed. On failure with attempts < 3 the RPC
+// reverts status to 'pending' for retry; on attempts >= 3 it marks 'failed'
+// (terminal). On success the legacy *_notifications_sent_at sentinel on
+// game_polls is mirrored too, keeping UI labels and the recovery sweep
+// consistent with the new flow.
+export async function completeNotificationJobRpc(
+  jobId: string,
+  success: boolean,
+  errorMessage?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('complete_notification_job', {
+    p_job_id: jobId,
+    p_success: success,
+    p_error: errorMessage ?? null,
+  });
+  if (error) {
+    // Logged but not thrown — losing a complete-RPC call would just mean
+    // the job sits in 'running' until the 5-min lease expires and a
+    // future worker re-claims it. Self-healing by design.
+    console.warn('complete_notification_job failed:', error);
+  }
+}
+
+// Preempt a 'target_filled' job when the worker just processed an at-target
+// 'confirmed' job. Mirrors the original "המשחק נסגר!" / "המשחק מלא"
+// dedup semantics — without this preemption the recipient would get the
+// "table is full" message immediately after "the date is locked" for the
+// same fill state.
+export async function preemptTargetFilledJobRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('preempt_target_filled_job', {
+    p_poll_id: pollId,
+  });
+  if (error) console.warn('preempt_target_filled_job failed:', error);
 }
 
 export async function linkPollToGameRpc(pollId: string, gameId: string): Promise<void> {

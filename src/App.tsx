@@ -44,6 +44,8 @@ const TrainingHandScreen = lazy(() => import('./screens/TrainingHandScreen'));
 const QuickTrainingScreen = lazy(() => import('./screens/QuickTrainingScreen'));
 const SharedTrainingScreen = lazy(() => import('./screens/SharedTrainingScreen'));
 const SharedQuickPlayScreen = lazy(() => import('./screens/SharedQuickPlayScreen'));
+const TriviaGameScreen = lazy(() => import('./screens/TriviaGameScreen'));
+const TriviaLandingScreen = lazy(() => import('./screens/TriviaLandingScreen'));
 
 // Short-form deep link for schedule polls. The full URL is
 // `/settings?tab=schedule&poll=<id>` which is correct but reads as a
@@ -610,6 +612,17 @@ function SupabaseApp() {
         setDataReady(true);
         subscribeToRealtime();
         prefetchNavScreens();
+        // Drain the notification queue once at boot. Migration 061's DB
+        // triggers enqueue jobs atomically with lifecycle transitions, but
+        // the realtime subscription only fires on NEW events — any job
+        // enqueued before this tab connected (or carried over from a
+        // closed peer client whose dispatch was interrupted) needs an
+        // initial kick. The worker is rate-limited and stampede-guarded,
+        // so this is safe to fire eagerly.
+        void import('./utils/notificationWorker').then(m =>
+          m.processNotificationJobs().catch(err =>
+            console.warn('[boot] notification worker kick failed:', err))
+        );
       })
       .catch(err => {
         if (!isCacheForGroup(targetGroupId)) return;
@@ -1123,7 +1136,13 @@ function SupabaseApp() {
     );
   }
 
-  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play', '/shared-training/play'].some(path =>
+  // Focus-mode routes — the bottom navigation is hidden so the
+  // active flow gets the full viewport. `/trivia/play` belongs here
+  // (same family as training quizzes): the trivia screen needs every
+  // pixel to fit question + 2×2 answers + reveal banner + report
+  // pill on short mobile screens, and the bottom nav was overlapping
+  // the report row.
+  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play', '/shared-training/play', '/trivia/play'].some(path =>
     location.pathname.startsWith(path)
   );
 
@@ -1458,7 +1477,15 @@ function SupabaseApp() {
         {pushNudge}
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
-          <main className="main-content">
+          {/* On focus-mode routes (hideNav) we drop the global
+              `.main-content { padding-bottom: 6rem }` reservation
+              for the now-hidden bottom nav. Otherwise the trivia /
+              live-game flows lose ~96 px of usable viewport that
+              they need for their content to fit on small screens. */}
+          <main
+            className="main-content"
+            style={hideNav ? { paddingBottom: '1rem' } : undefined}
+          >
             {/* Global vote-reminder banner. Hidden on no-nav screens
                 (live-game / chip-entry / game-summary) since the user is
                 mid-game and shouldn't be prompted to do scheduling actions. */}
@@ -1495,6 +1522,8 @@ function SupabaseApp() {
                 {isSuperAdmin && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
                 {trainingEnabled && <Route path="/shared-training" element={<SharedTrainingScreen />} />}
                 {trainingEnabled && <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />}
+                <Route path="/trivia" element={<TriviaLandingScreen />} />
+                <Route path="/trivia/play" element={<TriviaGameScreen />} />
                 <Route path="*" element={<Navigate to={defaultRoute} replace />} />
               </Routes>
             </Suspense>

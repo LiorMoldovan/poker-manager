@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.47.2';
+export const APP_VERSION = '5.48.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.48.0',
+    date: '2026-05-10',
+    changes: [
+      '🩹 Notifications survive actor closing tab',
+      '⚙️ DB-triggered notification queue (SQL 061)',
+      '🩹 Re-pin + lower target also notify (SQL 062)',
+      '🎯 Trivia mini-game launched',
+      '🎲 Three modes: group, players, mixed',
+      '📊 Trivia leaderboard + reports tab',
+      '🏠 Home dashboard refresh',
+      '📷 Photo chip-count polish',
+    ],
+  },
   {
     version: '5.47.2',
     date: '2026-05-09',

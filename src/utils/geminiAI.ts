@@ -5,14 +5,14 @@
 
 import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
-import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits, TTSPlaceholder, TTSAnticipatedCategory, ChipValue, PhotoChipCountResult, PhotoChipCountStack } from '../types';
+import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits, TTSPlaceholder, TTSAnticipatedCategory, ChipValue, PhotoChipCountResult, PhotoChipCountStack, PhotoChipCountErrorCode } from '../types';
 import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
-import { proxyGeminiGenerate, proxyGeminiModels, pollinationsImage } from './apiProxy';
+import { proxyGeminiGenerate, proxyGeminiGenerateWithSignal, proxyGeminiModels, pollinationsImage } from './apiProxy';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 
@@ -3851,54 +3851,124 @@ export interface CountChipsFromPhotoInput {
   imageBase64: string;       // raw base64, no data: prefix (from imageUtils.downscaleImage)
   mimeType: string;          // 'image/jpeg' typically
   chipValues: ChipValue[];   // the group's chip set
-  /** Per-group fixed left-to-right photo order (chipValue.id list). When
-   *  empty/undefined we fall back to chipValues' natural order. */
-  chipColorOrder?: string[];
   /** Optional: total chip-VALUE the player is expected to hold (e.g.
    *  (1+rebuys)*rebuyValue). When provided, the prompt asks the model
    *  to lower confidence if its counts × values are far from this. */
   expectedTotalValue?: number;
   abortSignal?: AbortSignal;
+  /** Optional progress callback. Fires once per model attempt with the
+   *  display name (e.g. "3 Flash") and the attempt index (0-based) so
+   *  the UI can show "Asking 3 Flash…" then "Trying 2.5 Flash…" if the
+   *  first model fails. Last call has `phase: 'success'` or `'failed'`. */
+  onProgress?: (info: {
+    phase: 'attempting' | 'success' | 'failed';
+    model: string;
+    modelDisplay: string;
+    attempt: number;
+    totalModels: number;
+  }) => void;
 }
 
-const PHOTO_CHIP_COUNT_MODEL = 'gemini-2.5-flash';
+// Cascading fallback for the photo chip-counting flow. All entries
+// must (a) be on the FREE Gemini tier (per project policy) and (b)
+// support multimodal input + responseSchema-constrained JSON output.
+//
+// Order rationale:
+//   1. gemini-3-flash-preview     — newest, best vision benchmarks (free
+//      preview tier). Try first for highest accuracy on chip-ring
+//      counting; if it's overloaded / 429 we drop to the proven path.
+//   2. gemini-2.5-flash           — stable workhorse, our reference for
+//      structured-output reliability (used elsewhere in the app for
+//      bbox detection — see line 2991). The "if all else fails this
+//      will work" tier.
+//   3. gemini-3.1-flash-lite-preview — last resort. Cheapest / fastest
+//      free model; lower vision quality but still uses responseSchema
+//      so we won't get malformed JSON back.
+//
+// Models are attempted in order. First non-error response wins; the
+// model that succeeded is reported back via `PhotoChipCountResult.modelUsed`.
+const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
+  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
+];
+
+// Tolerant JSON parser for the chip-count response. Strict JSON.parse
+// is tried first (the responseSchema in generationConfig should make
+// this succeed every time), but if Gemini still violates strict JSON
+// — markdown code fences, unquoted property names, single quotes,
+// trailing commas — we apply a minimal sequence of textual repairs
+// and try again before giving up. Throws on irrecoverable input so
+// the caller's catch can surface a "Parse failed" message.
+function parseChipCountResponse(raw: string): {
+  stacks?: { position?: number; count?: number; confidence?: number }[];
+} {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    /* fall through to repair pass */
+  }
+  let candidate = trimmed
+    // Strip markdown code fences (```json ... ``` or ``` ... ```).
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  // Pull just the outermost {...} in case Gemini wrapped commentary
+  // around the JSON despite the prompt forbidding it.
+  const firstBrace = candidate.indexOf('{');
+  const lastBrace = candidate.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    candidate = candidate.slice(firstBrace, lastBrace + 1);
+  }
+  // Quote unquoted property names: `count: 5` -> `"count": 5`.
+  // Only matches property names at start-of-string, after `{`, or
+  // after `,` so we don't accidentally rewrite values.
+  candidate = candidate.replace(
+    /([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g,
+    '$1"$2"$3',
+  );
+  // Convert single-quoted strings to double-quoted. Conservative —
+  // only touches `'...'` that don't contain double quotes inside.
+  candidate = candidate.replace(/'([^'"]*)'/g, '"$1"');
+  // Drop trailing commas in objects and arrays.
+  candidate = candidate.replace(/,\s*([}\]])/g, '$1');
+  return JSON.parse(candidate);
+}
 
 export async function countChipsFromPhoto(
   input: CountChipsFromPhotoInput,
 ): Promise<PhotoChipCountResult> {
-  const { imageBase64, mimeType, chipValues, chipColorOrder, expectedTotalValue, abortSignal } = input;
+  const { imageBase64, mimeType, chipValues, expectedTotalValue, abortSignal, onProgress } = input;
 
   if (!imageBase64) {
-    return emptyChipCountResult('Missing image data');
+    return emptyChipCountResult('Missing image data', 'missingImage');
   }
   if (chipValues.length === 0) {
-    return emptyChipCountResult('No chip values configured for this group');
+    return emptyChipCountResult('No chip values configured for this group', 'noChipsConfig');
   }
 
-  // Resolve the ordered chip list. If chipColorOrder is configured,
-  // use it; otherwise fall back to chipValues' natural order. Skip
-  // any IDs in chipColorOrder that no longer exist in chipValues
-  // (defensive — the user could have deleted a chip after configuring
-  // the order).
+  // Single canonical photo order: ascending by denomination (small → high).
+  // This matches what the modal instructs the user to do, so the AI's
+  // position-1/2/3/... assignment lines up with what's physically in
+  // the photo. No per-group configuration needed — every group sees
+  // the same rule, the order is derived from their own chip values.
+  // Reasoning for this design: an earlier version had a separate
+  // configurable "photo order" setting per group, but it added a
+  // configuration-divergence risk (modal says one order, AI expects
+  // another → wrong counts) for no real upside. See conversation
+  // 2026-05-09.
   const chipById = new Map(chipValues.map(c => [c.id, c]));
-  const orderedChips: ChipValue[] = (() => {
-    if (chipColorOrder && chipColorOrder.length > 0) {
-      const ordered = chipColorOrder
-        .map(id => chipById.get(id))
-        .filter((c): c is ChipValue => !!c);
-      // Tail-append any chip values not mentioned in the configured
-      // order (e.g. a new color added after the order was set).
-      for (const c of chipValues) {
-        if (!chipColorOrder.includes(c.id)) ordered.push(c);
-      }
-      return ordered;
-    }
-    return [...chipValues];
-  })();
+  const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
 
-  // Build the prompt. Single block, no patches. The position list is
-  // the load-bearing piece — it tells the model exactly which color is
-  // at which slot so it doesn't need to identify colors at all.
+  // Build the prompt. Note we deliberately do NOT include a literal
+  // JSON schema example here: per Google's structured-output guidance
+  // (cloud.google.com/vertex-ai/.../control-generated-output) duplicating
+  // the schema in the prompt while ALSO setting `responseSchema` in
+  // generationConfig "might cause the generated output to be lower in
+  // quality". The schema in `generationConfig` is the single source of
+  // truth for the response shape; the prompt only describes the COUNTING
+  // task.
   const orderLines = orderedChips.map((c, i) =>
     `  Position ${i + 1}: color="${c.color}", denomination=${c.value}, hex=${c.displayColor}`,
   ).join('\n');
@@ -3907,12 +3977,12 @@ export async function countChipsFromPhoto(
     ? `\nThe player is expected to hold approximately ${expectedTotalValue} in total chip value (sum of count×denomination across all positions). If your counts produce a total far from this, lower your confidence accordingly. This is a soft sanity check — do NOT invent or remove chips to match it.`
     : '';
 
-  const prompt = `You are counting poker chips in a photo. Output STRICT JSON only.
+  const prompt = `Count poker chips in a photo and return one entry per stack position.
 
-The photo shows a player's chip stacks, sorted by color into separate vertical stacks, viewed from a slight side angle (about 30-45 degrees) so each chip's edge ring is visible. The stacks are arranged left-to-right in this fixed order:
+The photo shows a player's chip stacks, sorted by color into separate vertical stacks, viewed from a slight side angle (about 30-45 degrees) so each chip's edge ring is visible. The stacks are arranged left-to-right in ascending denomination order (smallest value on the left, largest on the right):
 ${orderLines}
 
-Total expected stack count: ${orderedChips.length}.
+Total expected stack count: ${orderedChips.length}. Return EXACTLY ${orderedChips.length} entries in the "stacks" array — one per expected position, in order from 1 to ${orderedChips.length} — INCLUDING positions where the player has zero chips (use count=0 for those).
 
 How to count:
 - Each chip in a stack has a clearly visible white-on-color stripe pattern on its edge ring. Count the visible rings on the side of each stack from bottom to top.
@@ -3925,129 +3995,210 @@ Confidence scoring (0-100, be honest):
 - 95-100: clean sharp photo, stack height obvious, no occlusion. Off-by-one is unlikely.
 - 80-94: stack tilted or partially obscured, or the top of a tall stack is fuzzy. Off-by-1 or off-by-2 plausible.
 - 60-79: significant blur, glare, or unusual angle. You can see roughly how many but not exactly.
-- 0-59: you are guessing. The user will be told to recount this stack manually.${expectedTotalLine}
-
-Output schema (STRICT — no markdown, no commentary, no extra fields):
-{
-  "stacks": [
-    { "position": 1, "count": <integer>, "confidence": <integer 0-100> }
-  ]
-}
-
-You MUST return exactly ${orderedChips.length} entries in the "stacks" array, one per expected position, in order from 1 to ${orderedChips.length}. Even for positions where the player has zero chips, include an entry with count=0.
-
-Return only the JSON object.`;
+- 0-59: you are guessing. The user will be told to recount this stack manually.${expectedTotalLine}`;
 
   const apiKey = getSettings()?.geminiApiKey || '';
 
-  let response: Response;
-  try {
-    response = await proxyGeminiGenerate(
-      'v1beta',
-      PHOTO_CHIP_COUNT_MODEL,
-      apiKey,
-      {
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: imageBase64 } },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1024,
-          responseMimeType: 'application/json',
+  // Build the multimodal payload once — the same body goes to each
+  // model in the fallback chain. Schema-constrained via responseSchema
+  // so any model that respects it (all in our chain do) returns valid
+  // JSON regardless of how its prompt-following normally behaves.
+  const payload = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType, data: imageBase64 } },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          stacks: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                position: { type: 'INTEGER' },
+                count: { type: 'INTEGER' },
+                confidence: { type: 'INTEGER' },
+              },
+              required: ['position', 'count', 'confidence'],
+            },
+          },
         },
+        required: ['stacks'],
       },
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (abortSignal?.aborted) return emptyChipCountResult('Cancelled');
-    return emptyChipCountResult(`Network error: ${msg}`);
-  }
-
-  if (abortSignal?.aborted) return emptyChipCountResult('Cancelled');
-
-  if (!response.ok) {
-    let errMsg = `HTTP ${response.status}`;
-    try {
-      const body = await response.json() as { error?: { message?: string } };
-      if (body?.error?.message) errMsg = body.error.message;
-    } catch { /* keep HTTP status */ }
-    return emptyChipCountResult(errMsg);
-  }
-
-  let parsed: { stacks?: { position?: number; count?: number; confidence?: number }[] };
-  try {
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    parsed = JSON.parse(text);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return emptyChipCountResult(`Parse failed: ${msg}`);
-  }
-
-  if (!parsed || !Array.isArray(parsed.stacks)) {
-    return emptyChipCountResult('AI returned an unexpected shape');
-  }
-
-  // Build stacks array in expected position order. Tolerate missing or
-  // extra entries — fill missing with count=0/confidence=0 (so the UI
-  // marks them as low-confidence rather than blanking out the field),
-  // and ignore any positions beyond what we asked for.
-  const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
-    const position = idx + 1;
-    const entry = parsed.stacks!.find(s => s && Number(s.position) === position);
-    const count = entry && Number.isFinite(Number(entry.count)) && Number(entry.count) >= 0
-      ? Math.floor(Number(entry.count))
-      : 0;
-    const confidence = entry && Number.isFinite(Number(entry.confidence))
-      ? clamp(Math.floor(Number(entry.confidence)), 0, 100)
-      : 0;
-    return {
-      position,
-      chipId: chip.id,
-      color: chip.color,
-      count,
-      confidence,
-    };
-  });
-
-  // Geometric mean of per-stack confidences — a single low-confidence
-  // stack should drag the overall % down hard. Skip stacks with 0/0
-  // (player has none of that color, AI is very confident — these
-  // shouldn't pull the average down).
-  const meaningfulConfidences = stacks
-    .filter(s => !(s.count === 0 && s.confidence === 100)) // exclude the "definitely zero" case
-    .map(s => Math.max(s.confidence, 1)); // floor at 1 to avoid log(0)
-  let overallConfidence: number;
-  if (meaningfulConfidences.length === 0) {
-    overallConfidence = 100;
-  } else {
-    const logSum = meaningfulConfidences.reduce((acc, v) => acc + Math.log(v), 0);
-    overallConfidence = Math.round(Math.exp(logSum / meaningfulConfidences.length));
-  }
-
-  const totalValue = stacks.reduce((sum, s) => {
-    const chip = chipById.get(s.chipId);
-    return sum + (chip ? s.count * chip.value : 0);
-  }, 0);
-
-  return {
-    stacks,
-    overallConfidence,
-    totalValue,
-    modelUsed: PHOTO_CHIP_COUNT_MODEL,
+    },
   };
-}
 
-function emptyChipCountResult(error: string): PhotoChipCountResult {
+  // Try each model in CHIP_COUNT_MODELS until one returns parseable
+  // results. Errors that are clearly the user's request being cancelled
+  // (`abortSignal.aborted`) short-circuit; everything else (HTTP 429,
+  // 503, 404, network blip, unparseable JSON despite the schema)
+  // advances to the next model. The model that finally succeeds is
+  // recorded in `modelUsed` so the UI can label the result accordingly.
+  let lastErrorMsg = '';
+  let lastErrorCode: PhotoChipCountErrorCode = 'httpError';
+  let lastRawResponseText = '';
+
+  for (let attempt = 0; attempt < CHIP_COUNT_MODELS.length; attempt++) {
+    const { version, model } = CHIP_COUNT_MODELS[attempt];
+    const modelDisplay = MODEL_DISPLAY_NAMES[model] || model;
+    onProgress?.({
+      phase: 'attempting',
+      model,
+      modelDisplay,
+      attempt,
+      totalModels: CHIP_COUNT_MODELS.length,
+    });
+
+    if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
+
+    let response: Response;
+    try {
+      response = await proxyGeminiGenerateWithSignal(
+        version,
+        model,
+        apiKey,
+        payload,
+        abortSignal,
+      );
+    } catch (err) {
+      if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
+      lastErrorMsg = err instanceof Error ? err.message : String(err);
+      lastErrorCode = 'network';
+      console.warn(`[countChipsFromPhoto] ${model} network error:`, lastErrorMsg);
+      continue;
+    }
+
+    if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
+
+    if (!response.ok) {
+      lastErrorMsg = `HTTP ${response.status}`;
+      try {
+        const body = await response.json() as { error?: { message?: string } };
+        if (body?.error?.message) lastErrorMsg = body.error.message;
+      } catch { /* keep HTTP status */ }
+      lastErrorCode = 'httpError';
+      console.warn(`[countChipsFromPhoto] ${model} HTTP error:`, lastErrorMsg);
+      continue;
+    }
+
+    let parsed: { stacks?: { position?: number; count?: number; confidence?: number }[] };
+    try {
+      const data = await response.json();
+      lastRawResponseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      parsed = parseChipCountResponse(lastRawResponseText);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[countChipsFromPhoto] ${model} parse failed:`, msg, 'raw:', lastRawResponseText.slice(0, 200));
+      lastErrorMsg = `Parse failed (${model}): ${msg}`;
+      lastErrorCode = 'parseFailed';
+      continue;
+    }
+
+    if (!parsed || !Array.isArray(parsed.stacks)) {
+      console.warn(`[countChipsFromPhoto] ${model} unexpected shape:`, lastRawResponseText.slice(0, 200));
+      lastErrorMsg = `Unexpected shape (${model})`;
+      lastErrorCode = 'unexpectedShape';
+      continue;
+    }
+
+    // Build stacks array in expected position order. Tolerate missing or
+    // extra entries — fill missing with count=0/confidence=0 (so the UI
+    // marks them as low-confidence rather than blanking out the field),
+    // and ignore any positions beyond what we asked for.
+    const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
+      const position = idx + 1;
+      const entry = parsed.stacks!.find(s => s && Number(s.position) === position);
+      const count = entry && Number.isFinite(Number(entry.count)) && Number(entry.count) >= 0
+        ? Math.floor(Number(entry.count))
+        : 0;
+      const confidence = entry && Number.isFinite(Number(entry.confidence))
+        ? clamp(Math.floor(Number(entry.confidence)), 0, 100)
+        : 0;
+      return {
+        position,
+        chipId: chip.id,
+        color: chip.color,
+        count,
+        confidence,
+      };
+    });
+
+    // Geometric mean of per-stack confidences — a single low-confidence
+    // stack should drag the overall % down hard. Skip stacks with 0/0
+    // (player has none of that color, AI is very confident — these
+    // shouldn't pull the average down).
+    const meaningfulConfidences = stacks
+      .filter(s => !(s.count === 0 && s.confidence === 100))
+      .map(s => Math.max(s.confidence, 1));
+    let overallConfidence: number;
+    if (meaningfulConfidences.length === 0) {
+      overallConfidence = 100;
+    } else {
+      const logSum = meaningfulConfidences.reduce((acc, v) => acc + Math.log(v), 0);
+      overallConfidence = Math.round(Math.exp(logSum / meaningfulConfidences.length));
+    }
+
+    const totalValue = stacks.reduce((sum, s) => {
+      const chip = chipById.get(s.chipId);
+      return sum + (chip ? s.count * chip.value : 0);
+    }, 0);
+
+    onProgress?.({
+      phase: 'success',
+      model,
+      modelDisplay,
+      attempt,
+      totalModels: CHIP_COUNT_MODELS.length,
+    });
+    return {
+      stacks,
+      overallConfidence,
+      totalValue,
+      modelUsed: model,
+    };
+  }
+
+  // All models in the chain failed. Surface the most-recent failure's
+  // code (parseFailed > httpError > network) since that's the closest
+  // signal to "we got a response but it was bad" vs "couldn't connect
+  // at all". `lastModel` is the LAST model tried — fine to attribute
+  // the modelUsed slot to it for diagnostic completeness.
+  const lastModel = CHIP_COUNT_MODELS[CHIP_COUNT_MODELS.length - 1].model;
+  onProgress?.({
+    phase: 'failed',
+    model: lastModel,
+    modelDisplay: MODEL_DISPLAY_NAMES[lastModel] || lastModel,
+    attempt: CHIP_COUNT_MODELS.length - 1,
+    totalModels: CHIP_COUNT_MODELS.length,
+  });
   return {
     stacks: [],
     overallConfidence: 0,
     totalValue: 0,
-    modelUsed: PHOTO_CHIP_COUNT_MODEL,
+    modelUsed: lastModel,
+    error: lastErrorMsg || 'All models failed',
+    errorCode: lastErrorCode,
+  };
+}
+
+function emptyChipCountResult(
+  error: string,
+  errorCode: PhotoChipCountErrorCode,
+): PhotoChipCountResult {
+  return {
+    stacks: [],
+    overallConfidence: 0,
+    totalValue: 0,
+    modelUsed: CHIP_COUNT_MODELS[0].model,
     error,
+    errorCode,
   };
 }
 

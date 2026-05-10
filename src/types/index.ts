@@ -288,8 +288,8 @@ export interface ChipValue {
 }
 
 // One stack the AI saw in a chip-counting photo.
-// `position` is 1-indexed in the configured chipColorOrder (or
-// the default chipValues order when no order is configured).
+// `position` is 1-indexed in the canonical chip order — always
+// chipValues sorted by denomination ascending (small → high).
 // `count` may be 0 when the player has none of that denomination.
 // `confidence` is the AI's self-reported certainty (0-100); we treat
 // it as a soft signal, not a probability — the per-stack colored
@@ -303,17 +303,41 @@ export interface PhotoChipCountStack {
   confidence: number;   // 0-100
 }
 
+// Stable error code for photo-based chip counting failures. The UI
+// translates these into the user's language; `error` itself stays
+// English so it's still useful in console logs.
+//
+//   missingImage    — no image data was sent (caller bug)
+//   noChipsConfig   — group has no chip values defined
+//   network         — fetch threw before a response came back
+//   httpError       — proxy/upstream returned non-2xx (message in `error`)
+//   parseFailed     — model returned text we couldn't parse as JSON
+//                     even after the tolerant repair pass
+//   unexpectedShape — JSON parsed OK but `stacks` array is missing
+//   cancelled       — caller aborted the request before it finished
+export type PhotoChipCountErrorCode =
+  | 'missingImage'
+  | 'noChipsConfig'
+  | 'network'
+  | 'httpError'
+  | 'parseFailed'
+  | 'unexpectedShape'
+  | 'cancelled';
+
 // Result of one photo-based chip count attempt. Returned by
 // countChipsFromPhoto in geminiAI.ts. `error` is set only when the
 // flow couldn't produce usable counts (network error, malformed JSON,
 // no chips detected) — UI should surface it as a toast and leave the
-// existing manual-entry state untouched.
+// existing manual-entry state untouched. `errorCode` is set whenever
+// `error` is, and lets the UI pick a localized message instead of
+// showing the raw English diagnostic string to Hebrew users.
 export interface PhotoChipCountResult {
   stacks: PhotoChipCountStack[];
   overallConfidence: number;     // 0-100, geometric mean of per-stack confidences
   totalValue: number;            // Σ(count × chipValue) across all returned stacks
   modelUsed: string;             // e.g. 'gemini-2.5-flash' for diagnostics
-  error?: string;                // present only on failure
+  error?: string;                // English diagnostic for logs/devs
+  errorCode?: PhotoChipCountErrorCode;
 }
 
 export interface BlockedTransferPair {
@@ -348,11 +372,13 @@ export interface Settings {
   scheduleAutoCreateDay?: number;          // 0=Sun..6=Sat, default 0 (Sunday)
   scheduleAutoCreateTime?: string;         // 'HH:MM' 24h, default '18:00'
   scheduleAutoCreatedAt?: string;          // ISO timestamp of last auto-create fire (re-fire guard)
-  // Conventional left-to-right photo order for chip stacks, as a list
-  // of ChipValue.id. When set, the photo-counting AI prompt uses this
-  // ordering so it doesn't need to identify colors from scratch — only
-  // count rings at known positions. When null/empty, callers fall back
-  // to the natural order of getChipValues().
+  // DEPRECATED (2026-05-09). Was a configurable left-to-right photo
+  // order for chip stacks. Replaced by a single canonical rule:
+  // "always sort by denomination ascending (small → high)" — derived
+  // at call sites from getChipValues(). The DB column
+  // `settings.chip_color_order` and this field are retained so existing
+  // rows still load cleanly through the cache mappers; nothing reads
+  // them anymore. Safe to drop in a future cleanup migration.
   chipColorOrder?: string[];
 }
 

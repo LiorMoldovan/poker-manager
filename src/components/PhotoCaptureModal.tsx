@@ -1,8 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChipValue, PhotoChipCountResult } from '../types';
-import { downscaleImage, varianceOfLaplacian } from '../utils/imageUtils';
+import { ChipValue, PhotoChipCountResult, PhotoChipCountErrorCode } from '../types';
+import { downscaleImage, enhanceForChipCounting, varianceOfLaplacian } from '../utils/imageUtils';
 import { countChipsFromPhoto } from '../utils/geminiAI';
-import { useTranslation } from '../i18n';
+import { useTranslation, type TranslationKey } from '../i18n';
+
+// Static map from PhotoChipCountErrorCode to translation key. Built
+// statically (rather than concatenating `chips.photo.error.code.${code}`
+// at call sites) so TypeScript's strict TranslationKey union catches
+// any drift between the code enum and the i18n bundle. Adding a new
+// code without adding the matching key here is a compile error, which
+// is what we want.
+const ERROR_CODE_TO_TRANSLATION: Record<PhotoChipCountErrorCode, TranslationKey> = {
+  missingImage:    'chips.photo.error.code.missingImage',
+  noChipsConfig:   'chips.photo.error.code.noChipsConfig',
+  network:         'chips.photo.error.code.network',
+  httpError:       'chips.photo.error.code.httpError',
+  parseFailed:     'chips.photo.error.code.parseFailed',
+  unexpectedShape: 'chips.photo.error.code.unexpectedShape',
+  cancelled:       'chips.photo.error.code.cancelled',
+};
 
 /**
  * Reusable modal for capturing a chip photo and getting back per-color
@@ -35,7 +51,6 @@ interface PhotoCaptureModalProps {
   onClose: () => void;
   onResult: (result: PhotoChipCountResult, previewBase64: string) => void;
   chipValues: ChipValue[];
-  chipColorOrder?: string[];
   expectedTotalValue?: number;
   /** Title shown in the modal header. Defaults to a generic Hebrew string. */
   title?: string;
@@ -46,12 +61,17 @@ const PhotoCaptureModal = ({
   onClose,
   onResult,
   chipValues,
-  chipColorOrder,
   expectedTotalValue,
   title,
 }: PhotoCaptureModalProps) => {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('instruction');
+
+  // Canonical photo arrangement order shown in the instructions —
+  // ascending by denomination, exactly the order countChipsFromPhoto
+  // also uses to label positions. Computed here (not as a prop) so the
+  // modal and the AI ALWAYS agree on what the user is being told to do.
+  const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [previewBase64, setPreviewBase64] = useState<string>('');
   const [previewMimeType, setPreviewMimeType] = useState<string>('image/jpeg');
@@ -97,17 +117,32 @@ const PhotoCaptureModal = ({
     setStatusMsg(t('chips.photo.status.preparing'));
 
     try {
-      const downscaled = await downscaleImage(file, 1024);
-      setPreviewBase64(downscaled.base64);
-      setPreviewMimeType(downscaled.mimeType);
+      // Step 1 — downscale to 1280px @ JPEG 0.92. Blocks payload size
+      // for the Vercel proxy and gives the AI consistent input sizing.
+      const downscaled = await downscaleImage(file, 1280);
 
-      // Build a blob URL preview (cheaper than re-decoding the base64
-      // for an <img>).
+      // Step 2 — vision-targeted preprocessing: auto-crop to the
+      // chip-stack region (Sobel edge bounding box + 8% padding) and
+      // per-channel histogram stretch to restore contrast on the
+      // white-on-color edge rings. Falls back to the unenhanced
+      // downscale on any failure (always returns a usable image).
+      setStatusMsg(t('chips.photo.status.enhancing'));
+      const enhanced = await enhanceForChipCounting(downscaled);
+
+      setPreviewBase64(enhanced.base64);
+      setPreviewMimeType(enhanced.mimeType);
+
+      // Build a blob URL preview FROM THE ORIGINAL file (so the user
+      // sees what they shot, not the auto-cropped version we send to
+      // the AI). Cheaper than re-decoding the base64 for an <img>.
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
 
       setStatusMsg(t('chips.photo.status.checking'));
-      const blur = await varianceOfLaplacian(downscaled.base64, downscaled.mimeType);
+      // Run blur check on the ENHANCED image (the one we'll actually
+      // send) — the histogram stretch might bump a borderline-blurry
+      // photo above the threshold by sharpening the edge contrast.
+      const blur = await varianceOfLaplacian(enhanced.base64, enhanced.mimeType);
       if (blur > 0 && blur < BLUR_THRESHOLD) {
         setPhase('error');
         setErrorMsg(t('chips.photo.error.blurry'));
@@ -135,16 +170,36 @@ const PhotoCaptureModal = ({
         imageBase64: previewBase64,
         mimeType: previewMimeType,
         chipValues,
-        chipColorOrder,
         expectedTotalValue,
         abortSignal: controller.signal,
+        // Live status updates as the function tries each model in the
+        // fallback chain. First attempt shows the model name; later
+        // attempts add an "alternate model" label so the user knows
+        // we're not stuck — we're recovering from a hiccup.
+        onProgress: ({ phase, modelDisplay, attempt }) => {
+          if (phase === 'attempting') {
+            const key: TranslationKey = attempt === 0
+              ? 'chips.photo.status.askingModel'
+              : 'chips.photo.status.tryingFallback';
+            setStatusMsg(`${t(key)} (${modelDisplay})`);
+          }
+        },
       });
 
       if (controller.signal.aborted) return;
 
       if (result.error) {
         setPhase('error');
-        setErrorMsg(result.error);
+        // Prefer the localized message keyed off `errorCode` if the
+        // function set one — falls back to the raw English `error`
+        // string for legacy/unknown cases. The raw string also stays
+        // useful in the console (`countChipsFromPhoto` logs it on
+        // parse failures) for debugging without round-tripping
+        // through the user.
+        const localized = result.errorCode
+          ? t(ERROR_CODE_TO_TRANSLATION[result.errorCode])
+          : '';
+        setErrorMsg(localized || result.error);
         return;
       }
 
@@ -253,7 +308,57 @@ const PhotoCaptureModal = ({
                 {t('chips.photo.instructionTitle')}
               </div>
               <ul style={{ margin: 0, paddingInlineStart: '1.25rem' }}>
-                <li>{t('chips.photo.instructionStep1')}</li>
+                <li>
+                  {t('chips.photo.instructionStep1')}
+                  {orderedChips.length > 0 && (
+                    /* Visual order strip: colored swatches left-to-right
+                       in the EXACT sequence the AI will use to interpret
+                       the photo (positions 1..N, ascending by denomination).
+                       This is the load-bearing UX guarantee that arrangement
+                       and AI interpretation can never disagree. */
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.4rem',
+                      marginTop: '0.5rem',
+                      direction: 'ltr', // photo arrangement is ALWAYS left→right ascending, regardless of UI language
+                    }}>
+                      {orderedChips.map((chip, idx) => (
+                        <div key={chip.id} style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                          minWidth: '38px',
+                        }}>
+                          <div style={{
+                            fontSize: '0.65rem',
+                            color: 'var(--text-secondary, #9ca3af)',
+                            lineHeight: 1,
+                          }}>
+                            {idx + 1}
+                          </div>
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '50%',
+                            background: chip.displayColor,
+                            border: '2px solid rgba(255,255,255,0.85)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                          }} title={`${chip.color} — ${chip.value}`} />
+                          <div style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            color: 'var(--text)',
+                            lineHeight: 1.1,
+                          }}>
+                            {chip.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
                 <li>{t('chips.photo.instructionStep2')}</li>
                 <li>{t('chips.photo.instructionStep3')}</li>
                 <li>{t('chips.photo.instructionStep4')}</li>
