@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.50.1';
+export const APP_VERSION = '5.50.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.50.2',
+    date: '2026-05-10',
+    changes: [
+      '🎯 Trivia: lock answer correctness at click time',
+      '🛡 Fixes rare 0/10 score bug from stale state',
+      '🔍 Diagnostic log on suspicious 0-score sessions',
+    ],
+  },
   {
     version: '5.50.1',
     date: '2026-05-10',

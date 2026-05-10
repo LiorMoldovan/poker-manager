@@ -139,6 +139,15 @@ const TriviaGameScreen = () => {
   const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  // Captured at the moment of click (not derived later from
+  // `q.answers[selectedIdx]`). Eliminates an entire class of bugs
+  // where a re-render between the click and the result-recording
+  // effect could read a stale or reshuffled answers array — which
+  // historically caused some users (specifically Lior on
+  // 2026-05-10) to get persistent 0/10 even when they answered
+  // correctly. The advance/reveal effect now reads this flag
+  // directly instead of recomputing.
+  const [selectedIsCorrect, setSelectedIsCorrect] = useState<boolean | null>(null);
   // `timedOut` distinguishes "user picked wrong" from "user ran out
   // of clock" so the reveal banner can phrase it differently.
   const [timedOut, setTimedOut] = useState(false);
@@ -268,7 +277,14 @@ const TriviaGameScreen = () => {
     if (showReportPanel) return;
     const q = questions[currentIdx];
     if (!q) return;
-    const isCorrect = selectedIdx !== null && q.answers[selectedIdx]?.isCorrect === true;
+    // Use the click-captured `selectedIsCorrect` flag, falling back
+    // to false on timeout (no answer = wrong by definition). Do NOT
+    // re-derive from `q.answers[selectedIdx]` here — `questions` is
+    // in this effect's deps, and any incidental re-set of state
+    // (which has happened in production) can land us with a fresh
+    // shuffle whose answer ordering no longer matches the index the
+    // user clicked.
+    const isCorrect = selectedIsCorrect === true;
     setResults(prev => {
       // Guard against a re-fire on the same question by length check.
       if (prev.length > currentIdx) return prev;
@@ -284,6 +300,7 @@ const TriviaGameScreen = () => {
       } else {
         setCurrentIdx(i => i + 1);
         setSelectedIdx(null);
+        setSelectedIsCorrect(null);
         setTimedOut(false);
       }
     }, pauseMs);
@@ -293,7 +310,7 @@ const TriviaGameScreen = () => {
         advanceTimeoutRef.current = null;
       }
     };
-  }, [selectedIdx, timedOut, currentIdx, phase, questions, showReportPanel]);
+  }, [selectedIdx, selectedIsCorrect, timedOut, currentIdx, phase, questions, showReportPanel]);
 
   // ── End-of-game: persist + load leaderboard ────────────────────
   const persistAndLoadLeaderboard = useCallback(async () => {
@@ -302,6 +319,25 @@ const TriviaGameScreen = () => {
     const correct = results.filter(r => r.correct).length;
     const total = results.length;
     if (total === 0) return;
+    // Diagnostic — if a user finishes a long round with zero
+    // correct answers, that's statistically near-impossible (75%
+    // wrong by chance on 4-option questions ≈ 5.6% odds for 5/5
+    // wrong, ≈ 0.06% for 10/10). Log the full per-question detail
+    // to console so we can correlate with reports of "I answered
+    // correctly and got 0/10". Look for this in DevTools.
+    if (correct === 0 && total >= 5) {
+      console.warn('[trivia] suspicious 0-score session', {
+        playerName,
+        mode,
+        total,
+        questions: questions.map((q, i) => ({
+          idx: i,
+          templateId: q.templateId,
+          correctAnswerText: q.answers.find(a => a.isCorrect)?.text,
+          userResultCorrect: results[i]?.correct,
+        })),
+      });
+    }
     if (!savedToDb) {
       const { error } = await supabase.from('trivia_sessions').insert({
         group_id: gid,
@@ -332,8 +368,16 @@ const TriviaGameScreen = () => {
   // ── Handlers ───────────────────────────────────────────────────
   const handleSelect = (idx: number) => {
     if (selectedIdx !== null || timedOut) return;
+    // Compute correctness AT THE MOMENT OF CLICK — using the
+    // `questions[currentIdx]` snapshot from this render's closure.
+    // Whatever happens to `questions` in subsequent renders cannot
+    // change this stored boolean. This is the single most important
+    // line in the scoring path; do not move it to an effect.
+    const q = questions[currentIdx];
+    const isCorrect = !!q && q.answers[idx]?.isCorrect === true;
     hapticTap();
     setSelectedIdx(idx);
+    setSelectedIsCorrect(isCorrect);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -428,6 +472,7 @@ const TriviaGameScreen = () => {
   const restart = () => {
     setCurrentIdx(0);
     setSelectedIdx(null);
+    setSelectedIsCorrect(null);
     setTimedOut(false);
     setSecondsLeft(SECONDS_PER_QUESTION);
     setResults([]);
