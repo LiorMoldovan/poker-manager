@@ -1,18 +1,31 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-10 (post v5.49.0 — server-side notification dispatch via pg_net + worker Edge Function)
+> **Last refreshed**: 2026-05-10 (post v5.49.1 — server-side notification dispatch verified end-to-end)
 
 ---
 
 ## Right now
 
-- **Version on `main`**: `5.49.0` (commit pending push).
-- **Branch**: `main`. v5.49.0 about to be pushed.
-- **In-flight WIP**: NONE on the code side. **Operator action still required to fully activate v5.49.0**: add Vercel env vars `WORKER_INTERNAL_SECRET = ACFiKf2rTZOG-H3ABxJEKWVf5G6xaGXiylu4cHJRhkA` and `SUPABASE_SERVICE_ROLE_KEY` (copy from Supabase project → Settings → API → service_role key). Also confirm `OWNER_GROUP_ID` is set (already present from prior work). The matching DB secret is already in the `worker_config` table. Until both Vercel env vars are populated, the worker returns 401 for every webhook and the pg_cron sweep retries every minute — nothing breaks, but nothing dispatches either.
-- **Pending SQL migrations**: `066-server-side-notification-dispatch.sql` and `067-worker-config-table.sql` are both applied to the live DB. Up through 067 is current.
-- **What v5.49.0 changed (architecturally important)**: dispatch is now fully server-side. Every notification — poll lifecycle, vote-change, trivia reports, training reports, milestones, reminders — flows through `notification_jobs` → pg_net `extensions.http_post` trigger → `/api/notification-worker` (Edge Function) → `/api/send-push` + `/api/send-email`. The browser worker (`src/utils/notificationWorker.ts`) is now a redundant fallback only — atomic `FOR UPDATE SKIP LOCKED` claim means both can run concurrently without double-dispatch. DB triggers added in 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path. New extensions: `pg_net`, `pg_cron`. New table: `worker_config (key, value)` — RLS denies anon/authenticated, only service-role and SECURITY DEFINER functions read. `claim_notification_job_internal` and `complete_notification_job_internal` RPCs authenticate via the secret in that table.
+- **Version on `main`**: `5.49.1` (pushed; Vercel deployed).
+- **Branch**: `main`.
+- **In-flight WIP**: NONE. Server-side notification dispatch is **fully live and verified end-to-end** via synthetic test on 2026-05-10 13:29: row insert → pg_net webhook fired in 35ms → worker claimed in 1.2s → marked `done` 200ms later. HTTP 200 with `{ok:true,processed:1,pushOk:1,emailOk:1,failed:0}`. No outstanding operator action.
+- **Vercel env vars confirmed live**: `WORKER_INTERNAL_SECRET` (matches `worker_config.notification_worker_secret`) and `SUPABASE_SERVICE_ROLE_KEY` are both set and working. `OWNER_GROUP_ID` was already in place from prior work.
+- **Pending SQL migrations**: NONE. `066-server-side-notification-dispatch.sql`, `067-worker-config-table.sql`, and `068-fix-http-post-schema.sql` are all applied to the live DB. Up through 068 is current.
+- **What v5.49.x changed (architecturally important)**: dispatch is now fully server-side. Every notification — poll lifecycle, vote-change, trivia reports, training reports, milestones, reminders — flows through `notification_jobs` → pg_net `net.http_post` trigger → `/api/notification-worker` (Edge Function) → `/api/send-push` + `/api/send-email`. The browser worker (`src/utils/notificationWorker.ts`) is now a redundant fallback only — atomic `FOR UPDATE SKIP LOCKED` claim means both can run concurrently without double-dispatch. DB triggers added in 066: `trg_enqueue_vote_change_on_vote` on `game_poll_votes`, `trg_enqueue_trivia_report_on_insert` + `trg_enqueue_trivia_report_on_resolve` on `trivia_reports`, plus the `trg_http_dispatch_notification_job` webhook on `notification_jobs`. pg_cron job `notification-jobs-sweep` runs every minute as the retry path. New extensions: `pg_net` (already in `net` schema — see lesson below), `pg_cron`. New table: `worker_config (key, value)` — RLS denies anon/authenticated, only service-role and SECURITY DEFINER functions read. `claim_notification_job_internal` and `complete_notification_job_internal` RPCs authenticate via the secret in that table.
+- **v5.49.1 hotfix (2026-05-10)**: 066 used `extensions.http_post(...)` everywhere, but Supabase pre-installs pg_net at the `net` schema and our `CREATE EXTENSION ... WITH SCHEMA extensions IF NOT EXISTS` was a no-op (extension already present at `net` — relocation skipped). Both webhook trigger and cron sweep functions silently failed for ~30 minutes between 066 deploy and 068 fix because of `EXCEPTION WHEN OTHERS THEN RAISE NOTICE` blocks. Migration 068 swaps to `net.http_post` in both function bodies. Lesson promoted to `LESSONS.md`.
 - **Client-side helper changes**: `sendVoteChangeNotifications` and `notifyReporterOfTriviaResolution` + `notifySuperAdminsOfTriviaReport` are now no-op shims (DB triggers handle dispatch). `sendReminderNotifications` and the three `notify*OfTraining*` helpers now enqueue via the new generic `enqueueNotificationRpc` instead of dispatching directly. `proxySendPush`/`proxySendBroadcastEmail` are no longer called from notification paths — only from the test cards in Settings.
+
+## Spot-check query for live notification health
+
+If anything ever feels off, run this in the SQL editor:
+
+```sql
+SELECT id, kind, status, attempts, last_error, claimed_at, completed_at, created_at
+FROM public.notification_jobs ORDER BY created_at DESC LIMIT 10;
+```
+
+Healthy = all `done` with `attempts=1`, `last_error=null`. `pending` rows older than ~90s mean pg_cron sweep isn't draining (check `cron.job` and `net._http_response` for the failure mode). `failed` after `attempts=3` means the worker rejected the job three times — `last_error` will say why.
 
 ## Active themes (last ~10 versions)
 
