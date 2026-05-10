@@ -40,7 +40,7 @@ import {
   type FeedbackStats,
   type RawFeedbackRow,
 } from '../utils/chipFeedbackStats';
-import { tuneAndApply, revertChipTuningToDefault } from '../utils/chipCountTuner';
+import { tuneAndApply, revertChipTuningToDefault, checkAndAutoRollbackIfNeeded } from '../utils/chipCountTuner';
 import {
   LineChart,
   Line,
@@ -211,6 +211,17 @@ const SettingsScreen = () => {
     | null
   >(null);
   const [chipRevertInFlight, setChipRevertInFlight] = useState(false);
+  // Auto-rollback banner (Phase 3 of the in-app tuning loop, v5.57+).
+  // Set when `checkAndAutoRollbackIfNeeded` actually fires a rollback
+  // during a dashboard load; rendered as a yellow warning banner at
+  // the TOP of the dashboard card so the owner sees it immediately
+  // (not buried under the KPI tiles). Dismissible.
+  const [chipAutoRollback, setChipAutoRollback] = useState<{
+    description: string;
+    postAvg: number;
+    baseline: number;
+    postSamples: number;
+  } | null>(null);
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -503,6 +514,26 @@ const SettingsScreen = () => {
     setChipFeedbackError(null);
     (async () => {
       try {
+        // Phase 3: run the auto-rollback safety net BEFORE loading the
+        // dashboard data. If a rollback fires, the load below will
+        // observe the new state (latest tuning row = the auto-revert)
+        // and reset the rowsSinceLastTuning counter accordingly. The
+        // banner state is set so the owner sees the explanation at
+        // the top of the card. No-op when the latest tuning is
+        // already a revert, when no tuning exists, when fewer than 5
+        // post-tuning samples exist, or when post-tuning accuracy
+        // matches/beats baseline — the common cases.
+        const rollback = await checkAndAutoRollbackIfNeeded();
+        if (cancelled) return;
+        if (rollback.rolledBack && rollback.description && rollback.postAvg !== undefined && rollback.baseline !== undefined && rollback.postSamples !== undefined) {
+          setChipAutoRollback({
+            description: rollback.description,
+            postAvg: rollback.postAvg,
+            baseline: rollback.baseline,
+            postSamples: rollback.postSamples,
+          });
+        }
+
         // Last 200 saves is plenty for the dashboard math (and the
         // trend chart can't display more than a couple hundred
         // points usefully anyway). Order asc/desc doesn't matter
@@ -3512,6 +3543,56 @@ const SettingsScreen = () => {
           <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
             {t('settings.chipDashboard.helper')}
           </p>
+
+          {/* Auto-rollback banner (Phase 3 safety net) — shown only
+              when the last dashboard load detected that a recent
+              tuning made things worse and reverted automatically.
+              Dismissible — closing it just clears the local state
+              for this session, the underlying revert row stays in
+              the DB. */}
+          {chipAutoRollback && (
+            <div style={{
+              padding: '0.65rem 0.8rem',
+              background: 'rgba(234,179,8,0.12)',
+              border: '1px solid rgba(234,179,8,0.4)',
+              borderRadius: '8px',
+              fontSize: '0.78rem',
+              lineHeight: 1.5,
+              color: '#fbbf24',
+              marginBottom: '0.6rem',
+              position: 'relative',
+            }}>
+              <button
+                type="button"
+                onClick={() => setChipAutoRollback(null)}
+                style={{
+                  position: 'absolute',
+                  insetInlineEnd: '0.3rem',
+                  insetBlockStart: '0.3rem',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fbbf24',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  padding: '0.2rem 0.4rem',
+                  fontFamily: 'inherit',
+                }}
+                aria-label={t('settings.chipDashboard.autoRollbackDismiss')}
+              >
+                ×
+              </button>
+              <div style={{ fontWeight: 700, marginBottom: '0.3rem' }}>
+                ⚠ {t('settings.chipDashboard.autoRollbackTitle')}
+              </div>
+              <div style={{ opacity: 0.95 }}>
+                {t('settings.chipDashboard.autoRollbackDetail')
+                  .replace('{post}', chipAutoRollback.postAvg.toFixed(2))
+                  .replace('{baseline}', chipAutoRollback.baseline.toFixed(2))
+                  .replace('{n}', String(chipAutoRollback.postSamples))}
+              </div>
+            </div>
+          )}
 
           {chipFeedbackError && (
             <div style={{

@@ -110,11 +110,134 @@ export async function tuneAndApply(
   };
 }
 
+/** Number of post-tuning feedback samples that need to accumulate
+ *  before the auto-rollback safety net evaluates whether the tuning
+ *  helped or hurt. 5 is the smallest number where comparing the
+ *  post-tuning avg to the baseline starts being meaningful — fewer
+ *  than that is pure noise (one bad photo could swing it). */
+export const AUTO_ROLLBACK_SAMPLES = 5;
+
+/** Auto-rollback safety net (Phase 3 of the in-app tuning loop, v5.57+).
+ *
+ *  Runs at every dashboard load. Looks at the LATEST tuning row for
+ *  the group; if it's a real tuning (not a manual revert) AND has a
+ *  baseline recorded AND has at least AUTO_ROLLBACK_SAMPLES feedback
+ *  rows that came in AFTER it, computes the avg total_abs_delta of
+ *  those post-tuning rows. If that's WORSE than the baseline that
+ *  was captured at apply-time, automatically inserts a revert row
+ *  and returns the rollback reason for the UI to surface as a
+ *  banner.
+ *
+ *  Idempotent: a second call after a rollback already happened
+ *  returns { rolledBack: false } because the latest row is now a
+ *  revert (prompt_strategy = null), which short-circuits the check.
+ *
+ *  Doesn't throw — best-effort, errors are logged + treated as
+ *  "no rollback needed" so the dashboard load isn't blocked. */
+export async function checkAndAutoRollbackIfNeeded(): Promise<{
+  rolledBack: boolean;
+  description?: string;
+  postAvg?: number;
+  baseline?: number;
+  postSamples?: number;
+}> {
+  const gid = getGroupId();
+  if (!gid) return { rolledBack: false };
+
+  try {
+    // Read the latest tuning row + its baseline metadata.
+    const { data: latestRows, error: latestErr } = await supabase
+      .from('chip_count_tuning_overrides')
+      .select('id, created_at, prompt_strategy, baseline_avg_abs_delta, description')
+      .eq('group_id', gid)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (latestErr) {
+      console.warn('[auto-rollback] latest fetch failed:', latestErr.message);
+      return { rolledBack: false };
+    }
+    if (!latestRows || latestRows.length === 0) return { rolledBack: false };
+
+    const latest = latestRows[0] as {
+      id: string;
+      created_at: string;
+      prompt_strategy: string | null;
+      baseline_avg_abs_delta: number | null;
+      description: string | null;
+    };
+
+    // Short-circuit: latest row is a revert (no strategy) OR has no
+    // baseline (legacy row from a manually-inserted entry).
+    if (!latest.prompt_strategy || latest.baseline_avg_abs_delta === null) {
+      return { rolledBack: false };
+    }
+
+    // Count + sum the feedback rows that came in AFTER this tuning.
+    const { data: postRows, error: postErr } = await supabase
+      .from('chip_count_feedback')
+      .select('total_abs_delta')
+      .eq('group_id', gid)
+      .gt('created_at', latest.created_at);
+    if (postErr) {
+      console.warn('[auto-rollback] post-rows fetch failed:', postErr.message);
+      return { rolledBack: false };
+    }
+    if (!postRows || postRows.length < AUTO_ROLLBACK_SAMPLES) {
+      return { rolledBack: false };
+    }
+
+    const postAvg = postRows.reduce(
+      (s, r) => s + ((r as { total_abs_delta: number }).total_abs_delta || 0),
+      0,
+    ) / postRows.length;
+    const baseline = latest.baseline_avg_abs_delta;
+
+    // Stay applied if the new strategy is at least as good as the
+    // baseline (or only marginally worse — the 0.3-chip slack
+    // matches the trendVerdict noise floor in chipFeedbackStats).
+    if (postAvg <= baseline + 0.3) {
+      return { rolledBack: false };
+    }
+
+    // Worse. Insert a revert row.
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
+      console.warn('[auto-rollback] user fetch failed:', userErr?.message);
+      return { rolledBack: false };
+    }
+
+    const description = `Auto-rollback: post-tuning avg ${postAvg.toFixed(2)} > baseline ${baseline.toFixed(2)} after ${postRows.length} samples`;
+    const { error: insErr } = await supabase
+      .from('chip_count_tuning_overrides')
+      .insert({
+        group_id: gid,
+        created_by: userData.user.id,
+        prompt_strategy: null,
+        description,
+      });
+    if (insErr) {
+      console.warn('[auto-rollback] revert insert failed:', insErr.message);
+      return { rolledBack: false };
+    }
+
+    return {
+      rolledBack: true,
+      description,
+      postAvg,
+      baseline,
+      postSamples: postRows.length,
+    };
+  } catch (e) {
+    console.warn('[auto-rollback] threw:', e);
+    return { rolledBack: false };
+  }
+}
+
 /** Revert to the hardcoded default strategy by inserting a
  *  null-strategy row. This preserves the full history (the previous
  *  tune is still there, just no longer the latest) so the user can
  *  see "we tried v3 on May 5, reverted on May 8" in the future
- *  history view (Phase 3). */
+ *  history view. */
 export async function revertChipTuningToDefault(): Promise<
   | { ok: true }
   | { ok: false; error: string }

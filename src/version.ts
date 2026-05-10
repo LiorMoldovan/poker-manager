@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.56.0';
+export const APP_VERSION = '5.57.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.57.0',
+    date: '2026-05-10',
+    changes: [
+      '🛡 Auto-rollback if a tuning hurts accuracy',
+      '⚠ Banner explains why + how to retry',
+      '🎯 Baseline tracked at apply, checked after 5 saves',
+    ],
+  },
   {
     version: '5.56.0',
     date: '2026-05-10',

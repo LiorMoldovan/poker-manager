@@ -2121,6 +2121,10 @@ const he = {
   'settings.chipDashboard.reverting': 'משחזר...',
   'settings.chipDashboard.revertSuccess': 'חזרה לברירת המחדל הושלמה',
   'settings.chipDashboard.tuneHowItWorks': 'הכיוונון לא משנה את הקוד או דורש פריסה מחדש — הוא רק מחליף את הוראות הספירה ששולחים ל-AI. אם משהו השתבש, אפשר לחזור לברירת המחדל בכפתור למעלה.',
+  // v5.57: auto-rollback safety net banner.
+  'settings.chipDashboard.autoRollbackTitle': 'הכיוונון האחרון הורע את הדיוק — חזרנו אוטומטית לברירת המחדל',
+  'settings.chipDashboard.autoRollbackDetail': 'הטעות הממוצעת אחרי הכיוונון הייתה {post} ז\'יטונים, לעומת {baseline} לפני (אחרי {n} דגימות חדשות). כדי לנסות כיוונון אחר, צברו עוד 10 דגימות ולחצו "כוונן את ה-AI" שוב.',
+  'settings.chipDashboard.autoRollbackDismiss': 'סגור',
 
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   // The numeric per-stack feedback is captured silently regardless;
@@ -4477,6 +4481,9 @@ const en: Record<keyof typeof he, string> = {
   'settings.chipDashboard.reverting': 'Reverting...',
   'settings.chipDashboard.revertSuccess': 'Reverted to default',
   'settings.chipDashboard.tuneHowItWorks': 'Tuning does not change code or require redeploy — it only swaps the counting instructions sent to the AI. If something goes wrong, use the revert button above.',
+  'settings.chipDashboard.autoRollbackTitle': 'Last tuning made accuracy worse — auto-reverted to default',
+  'settings.chipDashboard.autoRollbackDetail': 'Average error after tuning was {post} chips vs {baseline} before (after {n} new samples). To try a different tuning, accumulate 10 more samples and click "Tune the AI" again.',
+  'settings.chipDashboard.autoRollbackDismiss': 'Dismiss',
   // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
   'settings.chipFeedback.title': '🎯 Improve chip-counting accuracy',
   'settings.chipFeedback.helper': 'Every time you finalize a player after an AI photo count, we save the diff between what the AI suggested and what you actually saved — this helps tune accuracy over time.',
