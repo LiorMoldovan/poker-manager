@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.54.0';
+export const APP_VERSION = '5.55.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.55.0',
+    date: '2026-05-10',
+    changes: [
+      '🎯 Settings: chip-counting accuracy dashboard',
+      '📊 Per-color + over-time error charts',
+      '🔧 Counter toward the upcoming tune button',
+    ],
+  },
   {
     version: '5.54.0',
     date: '2026-05-10',

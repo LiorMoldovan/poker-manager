@@ -33,6 +33,26 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { submitChipCountFeedback } from '../utils/chipCountFeedback';
+import {
+  aggregateFeedback,
+  trendVerdict,
+  TUNE_THRESHOLD_SAMPLES,
+  type FeedbackStats,
+  type RawFeedbackRow,
+} from '../utils/chipFeedbackStats';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  BarChart,
+  Bar,
+  Cell,
+} from 'recharts';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
@@ -154,6 +174,25 @@ const SettingsScreen = () => {
   const [photoTestActualCounts, setPhotoTestActualCounts] = useState<Record<string, number>>({});
   const [photoTestFeedbackSaved, setPhotoTestFeedbackSaved] = useState(false);
   const [photoTestFeedbackSaving, setPhotoTestFeedbackSaving] = useState(false);
+
+  // Chip-count accuracy dashboard state (Phase 1 of the in-app
+  // tuning loop — v5.55+).
+  //   * `chipFeedbackStats` is the aggregated view of
+  //     `chip_count_feedback` rows that powers the dashboard card.
+  //     `null` while loading; populated (possibly with totalSamples=0)
+  //     after the first successful load.
+  //   * Reload triggers: tab switch onto Services, isOwner becomes
+  //     true, and any successful test-card feedback save (so the
+  //     dashboard updates immediately after the user clicks
+  //     "send feedback"). Manual "refresh" button also available
+  //     in the dashboard card for sanity.
+  //   * `chipFeedbackError` is non-null only on hard load failure
+  //     (RLS, network) — empty data is NOT an error, it renders
+  //     the empty state.
+  const [chipFeedbackStats, setChipFeedbackStats] = useState<FeedbackStats | null>(null);
+  const [chipFeedbackLoading, setChipFeedbackLoading] = useState(false);
+  const [chipFeedbackError, setChipFeedbackError] = useState<string | null>(null);
+  const [chipFeedbackRefreshTick, setChipFeedbackRefreshTick] = useState(0);
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -420,6 +459,79 @@ const SettingsScreen = () => {
     })();
     return () => { cancelled = true; };
   }, [isSuperAdmin, activeTab]);
+
+  // Chip-count accuracy dashboard loader (Phase 1, v5.55+).
+  // Loads `chip_count_feedback` rows + the latest tuning override
+  // timestamp for the group, runs them through `aggregateFeedback`,
+  // and stuffs the result into `chipFeedbackStats`.
+  //
+  // Triggers:
+  //   * When the user switches into the Services tab (`activeTab === 'ai'`).
+  //   * When ownership flips to true (e.g. someone transferring it).
+  //   * When `chipFeedbackRefreshTick` is bumped — used by the test-card
+  //     feedback save handler and by the dashboard's manual refresh
+  //     button to force a reload without relying on Supabase
+  //     realtime (which we don't have on this table).
+  //
+  // Anti-pattern guard: only fires when the user is actually looking
+  // at the Services tab. No point hammering the DB just because the
+  // owner happened to be on Settings → Players.
+  useEffect(() => {
+    if (activeTab !== 'ai' || !isOwner) return;
+    const gid = getGroupId();
+    if (!gid) return;
+    let cancelled = false;
+    setChipFeedbackLoading(true);
+    setChipFeedbackError(null);
+    (async () => {
+      try {
+        // Last 200 saves is plenty for the dashboard math (and the
+        // trend chart can't display more than a couple hundred
+        // points usefully anyway). Order asc/desc doesn't matter
+        // because aggregateFeedback re-sorts.
+        const [{ data: rows, error: rowsErr }, { data: tunings, error: tuneErr }] = await Promise.all([
+          supabase
+            .from('chip_count_feedback')
+            .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks')
+            .eq('group_id', gid)
+            .order('created_at', { ascending: false })
+            .limit(200),
+          supabase
+            .from('chip_count_tuning_overrides')
+            .select('created_at')
+            .eq('group_id', gid)
+            .order('created_at', { ascending: false })
+            .limit(1),
+        ]);
+        if (cancelled) return;
+        if (rowsErr) {
+          setChipFeedbackError(rowsErr.message);
+          setChipFeedbackStats(null);
+          return;
+        }
+        // Tuning-table errors are non-fatal — the dashboard still
+        // works without "rows since last tuning" being accurate.
+        if (tuneErr) {
+          console.warn('[chip-feedback] tuning history load failed:', tuneErr.message);
+        }
+        const lastTuningAt = (tunings && tunings.length > 0)
+          ? (tunings[0] as { created_at: string }).created_at
+          : null;
+        const stats = aggregateFeedback(
+          (rows ?? []) as RawFeedbackRow[],
+          lastTuningAt,
+        );
+        setChipFeedbackStats(stats);
+      } catch (e) {
+        if (cancelled) return;
+        setChipFeedbackError(e instanceof Error ? e.message : 'load failed');
+        setChipFeedbackStats(null);
+      } finally {
+        if (!cancelled) setChipFeedbackLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, isOwner, chipFeedbackRefreshTick]);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ userId: string | null; playerName: string | null; endpoint: string }[]>([]);
 
@@ -3240,6 +3352,10 @@ const SettingsScreen = () => {
                       setPhotoTestFeedbackSaving(false);
                       if (res.ok) {
                         setPhotoTestFeedbackSaved(true);
+                        // Reload the dashboard so the new sample
+                        // shows up immediately (no realtime on
+                        // chip_count_feedback — explicit poke).
+                        setChipFeedbackRefreshTick(t => t + 1);
                       } else {
                         // Non-blocking: log + temporary banner via
                         // generic `setSaved`-style toast would be
@@ -3337,6 +3453,378 @@ const SettingsScreen = () => {
           </>
         );
       })()}
+
+      {/* Chip-count accuracy dashboard (Phase 1 of the in-app
+          tuning loop, v5.55+). Owner-only, Services tab. Reads
+          everything you've ever saved in the test card OR after a
+          real-game photo and renders the per-color / over-time
+          accuracy picture. The "tune now" button at the bottom is
+          intentionally disabled in Phase 1 — it lights up in
+          Phase 2 once we have the runtime-override loader wired
+          into geminiAI.ts. The counter ("X/10 samples until
+          tuning available") tells the owner exactly how many more
+          test photos they need to save before the button unlocks. */}
+      {activeTab === 'ai' && isOwner && (
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', gap: '0.5rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>
+              {t('settings.chipDashboard.title')}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setChipFeedbackRefreshTick(t => t + 1)}
+              disabled={chipFeedbackLoading}
+              title={t('settings.chipDashboard.refresh')}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                width: '1.8rem',
+                height: '1.8rem',
+                borderRadius: '50%',
+                fontSize: '0.85rem',
+                cursor: chipFeedbackLoading ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+                opacity: chipFeedbackLoading ? 0.5 : 1,
+              }}
+            >
+              ↻
+            </button>
+          </div>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+            {t('settings.chipDashboard.helper')}
+          </p>
+
+          {chipFeedbackError && (
+            <div style={{
+              padding: '0.6rem 0.75rem',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '8px',
+              fontSize: '0.78rem',
+              color: '#fca5a5',
+              marginBottom: '0.5rem',
+            }}>
+              {chipFeedbackError}
+            </div>
+          )}
+
+          {chipFeedbackLoading && !chipFeedbackStats && (
+            <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              {t('common.loading')}
+            </div>
+          )}
+
+          {chipFeedbackStats && chipFeedbackStats.totalSamples === 0 && !chipFeedbackLoading && (
+            <div style={{
+              padding: '1.25rem 1rem',
+              textAlign: 'center',
+              color: 'var(--text-muted)',
+              fontSize: '0.85rem',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px dashed var(--border)',
+              borderRadius: '10px',
+              lineHeight: 1.5,
+            }}>
+              {t('settings.chipDashboard.empty')}
+            </div>
+          )}
+
+          {chipFeedbackStats && chipFeedbackStats.totalSamples > 0 && (() => {
+            // Local helpers scoped to the dashboard render so we
+            // don't pollute the SettingsScreen module surface.
+            const stats = chipFeedbackStats;
+            const verdict = trendVerdict(stats);
+            // Bar/dot color resolver — maps the free-form `color`
+            // string to a recognizable swatch. Falls back to a
+            // neutral gray for groups with custom colors.
+            const colorHex = (c: string): string => {
+              const k = (c || '').trim().toLowerCase();
+              if (k === 'white') return '#f3f4f6';
+              if (k === 'red')   return '#ef4444';
+              if (k === 'blue')  return '#3b82f6';
+              if (k === 'green') return '#10b981';
+              if (k === 'black') return '#1f2937';
+              if (k === 'yellow' || k === 'gold') return '#eab308';
+              return '#6b7280';
+            };
+            const formatSigned = (n: number): string =>
+              `${n > 0 ? '+' : ''}${n.toFixed(1)}`;
+            const tuneAvailable = stats.rowsSinceLastTuning >= TUNE_THRESHOLD_SAMPLES;
+            const tuneRemaining = Math.max(0, TUNE_THRESHOLD_SAMPLES - stats.rowsSinceLastTuning);
+
+            return (
+              <>
+                {/* KPI grid: 2x2 on phone, 4-up on wider screens. Every
+                    tile is a "label on top, value on bottom" stack so the
+                    typography reads cleanly in RTL Hebrew. */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+                  gap: '0.5rem',
+                  marginBottom: '0.75rem',
+                }}>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.65rem',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {t('settings.chipDashboard.kpiSamples')}
+                    </div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', marginTop: '0.15rem' }}>
+                      {stats.totalSamples}
+                    </div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.65rem',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {t('settings.chipDashboard.kpiPerfect')}
+                    </div>
+                    <div style={{
+                      fontSize: '1.25rem',
+                      fontWeight: 800,
+                      marginTop: '0.15rem',
+                      color: stats.pctPerfectStacks >= 80 ? '#10b981'
+                        : stats.pctPerfectStacks >= 60 ? '#eab308'
+                        : '#ef4444',
+                    }}>
+                      {Math.round(stats.pctPerfectStacks)}%
+                    </div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.65rem',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {t('settings.chipDashboard.kpiBias')}
+                    </div>
+                    <div style={{
+                      fontSize: '1.25rem',
+                      fontWeight: 800,
+                      marginTop: '0.15rem',
+                      color: Math.abs(stats.avgSignedBias) < 0.5 ? '#10b981'
+                        : Math.abs(stats.avgSignedBias) < 1.5 ? '#eab308'
+                        : '#ef4444',
+                    }}>
+                      {formatSigned(stats.avgSignedBias)}
+                    </div>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                      {stats.avgSignedBias < -0.3 ? t('settings.chipDashboard.biasUnder')
+                        : stats.avgSignedBias > 0.3 ? t('settings.chipDashboard.biasOver')
+                        : t('settings.chipDashboard.biasNone')}
+                    </div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.65rem',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {t('settings.chipDashboard.kpiAvgError')}
+                    </div>
+                    <div style={{
+                      fontSize: '1.25rem',
+                      fontWeight: 800,
+                      marginTop: '0.15rem',
+                      color: stats.avgAbsError < 1 ? '#10b981'
+                        : stats.avgAbsError < 3 ? '#eab308'
+                        : '#ef4444',
+                    }}>
+                      {stats.avgAbsError.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trend pill: only render once we have enough history
+                    to compare two consecutive RECENT_WINDOW slices. */}
+                {verdict && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.45rem 0.7rem',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    marginBottom: '0.75rem',
+                    background: verdict.direction === 'better' ? 'rgba(16,185,129,0.12)'
+                      : verdict.direction === 'worse' ? 'rgba(239,68,68,0.12)'
+                      : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${verdict.direction === 'better' ? 'rgba(16,185,129,0.35)'
+                      : verdict.direction === 'worse' ? 'rgba(239,68,68,0.35)'
+                      : 'var(--border)'}`,
+                    color: verdict.direction === 'better' ? '#10b981'
+                      : verdict.direction === 'worse' ? '#ef4444'
+                      : 'var(--text-muted)',
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>
+                      {verdict.direction === 'better' ? '📈' : verdict.direction === 'worse' ? '📉' : '➡️'}
+                    </span>
+                    <span>
+                      {verdict.direction === 'better'
+                        ? t('settings.chipDashboard.trendBetter')
+                        : verdict.direction === 'worse'
+                          ? t('settings.chipDashboard.trendWorse')
+                          : t('settings.chipDashboard.trendFlat')}
+                      {' '}
+                      ({formatSigned(-verdict.deltaAbs)})
+                    </span>
+                  </div>
+                )}
+
+                {/* Per-color absolute-error bar chart. Bars are colored
+                    by their chip color so the user can scan visually
+                    ("the red bar is the tallest = red is the worst"). */}
+                {stats.perColor.length > 0 && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.35rem' }}>
+                      {t('settings.chipDashboard.perColorTitle')}
+                    </div>
+                    <div style={{ width: '100%', height: 140, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '0.4rem 0.2rem' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.perColor.map(c => ({
+                          color: translateChipColor(c.color, t),
+                          rawColor: c.color,
+                          avgAbsDelta: Number(c.avgAbsDelta.toFixed(2)),
+                          samples: c.samples,
+                        }))} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis dataKey="color" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+                          <RechartsTooltip
+                            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.75rem' }}
+                            labelStyle={{ color: 'var(--text)' }}
+                            formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { samples?: number } }) => {
+                              const samples = item.payload?.samples ?? 0;
+                              const v = typeof value === 'number' ? value : 0;
+                              return [`${v} (${samples} ${t('settings.chipDashboard.tooltipSamples')})`, t('settings.chipDashboard.tooltipAvgError')];
+                            }}
+                          />
+                          <Bar dataKey="avgAbsDelta" radius={[4, 4, 0, 0]}>
+                            {stats.perColor.map((entry, idx) => (
+                              <Cell key={`cell-${idx}`} fill={colorHex(entry.color)} stroke={entry.color.toLowerCase() === 'white' ? '#9ca3af' : 'transparent'} strokeWidth={1} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {/* Over-time trend line. X axis is sample index
+                    (chronological), Y is total absolute error per
+                    session. Lower is better; reference line at 0
+                    marks the goal. */}
+                {stats.trend.length >= 2 && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.35rem' }}>
+                      {t('settings.chipDashboard.trendTitle')}
+                    </div>
+                    <div style={{ width: '100%', height: 140, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '0.4rem 0.2rem' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={stats.trend} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis dataKey="idx" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+                          <ReferenceLine y={0} stroke="rgba(16,185,129,0.4)" strokeDasharray="3 3" />
+                          <RechartsTooltip
+                            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.75rem' }}
+                            labelStyle={{ color: 'var(--text)' }}
+                            formatter={(value: number | undefined) => [typeof value === 'number' ? value : 0, t('settings.chipDashboard.tooltipAbsError')]}
+                            labelFormatter={(label: number) => `${t('settings.chipDashboard.tooltipSampleN')} ${label + 1}`}
+                          />
+                          <Line type="monotone" dataKey="absDelta" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tuning gate. Counter + disabled button. Phase 2
+                    will activate this button. */}
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.6rem 0.75rem',
+                  background: tuneAvailable ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${tuneAvailable ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+                  borderRadius: '10px',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-muted)',
+                    marginBottom: '0.4rem',
+                  }}>
+                    <span>{t('settings.chipDashboard.tuneCounter')}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                      {Math.min(stats.rowsSinceLastTuning, TUNE_THRESHOLD_SAMPLES)}/{TUNE_THRESHOLD_SAMPLES}
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{
+                    height: '4px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                    marginBottom: '0.55rem',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(100, (stats.rowsSinceLastTuning / TUNE_THRESHOLD_SAMPLES) * 100)}%`,
+                      background: tuneAvailable
+                        ? 'linear-gradient(90deg, #6366f1, #8b5cf6)'
+                        : 'rgba(99,102,241,0.5)',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                  <button
+                    type="button"
+                    disabled
+                    title={t('settings.chipDashboard.tuneDisabledTitle')}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px dashed var(--border)',
+                      color: 'var(--text-muted)',
+                      padding: '0.5rem',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'not-allowed',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {tuneAvailable
+                      ? t('settings.chipDashboard.tuneReadyPhase2')
+                      : `${t('settings.chipDashboard.tuneLocked')} — ${tuneRemaining} ${t('settings.chipDashboard.tuneRemaining')}`}
+                  </button>
+                  <p style={{
+                    margin: '0.4rem 0 0',
+                    fontSize: '0.65rem',
+                    color: 'var(--text-muted)',
+                    opacity: 0.8,
+                    lineHeight: 1.4,
+                    textAlign: 'center',
+                  }}>
+                    {t('settings.chipDashboard.tunePhase2Note')}
+                  </p>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Photo Test Modal — mounted at the SettingsScreen root so it
           works regardless of which tab is active (only the trigger
