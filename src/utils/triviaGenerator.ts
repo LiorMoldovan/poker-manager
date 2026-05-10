@@ -73,10 +73,36 @@ export function formatExplanationDate(iso: string, language: Language): string {
 
 // ─── Public types ────────────────────────────────────────────────
 
-// 'mixed' = no mode filter (the user picked "all questions" on the
-// landing screen). Templates are still tagged with their natural mode
-// — only generateTriviaBatch consumes 'mixed' as "draw from both pools".
+// Trivia mode — drives both the template pool AND the subject scope:
+//
+//   'group'   — broad: about everyone in the group. Pulls from BOTH
+//               group-level templates (top profit all-time, biggest
+//               win all-time) AND player-level templates with a
+//               RANDOM subject (excluding self — asking the user
+//               about themselves is too easy in this mode).
+//
+//   'players' — personal: always about the logged-in player. Pulls
+//               from player-level templates only, with the subject
+//               forced to selfPlayerName. Renamed from "random
+//               player" semantics on 2026-05-10 per user request.
+//
+//   'mixed'   — coin-flip per question: 50% broad (group templates
+//               or random-subject player templates), 50% personal
+//               (player templates with self subject). Best of both
+//               worlds; default mode on the landing screen.
+//
+// Templates themselves are tagged 'group' or 'players' for their
+// NATURAL pool. The driver (`generateTriviaBatch`) decides which
+// templates participate based on the mode + per-question coin flip
+// in mixed.
 export type TriviaMode = 'group' | 'players' | 'mixed';
+
+// Subject scope for player-mode templates. Set per-template-call by
+// the driver so 'mixed' mode can flip-flop within one batch.
+//   'random' — pick a non-self eligible player as subject
+//   'self'   — force selfPlayerName as subject (template returns
+//              null if user isn't eligible / not logged in)
+export type SubjectScope = 'random' | 'self';
 
 // Coarse topic taxonomy mirrored on the landing screen. Lives next
 // to the templates themselves so we can never silently ship a new
@@ -433,6 +459,12 @@ export interface BuildBundle {
   // `eligibleNames`. Lets templates compose explanation text like
   // "asked among players with X+ games". One of: 20, 10, 5.
   eligibilityFloor: number;
+  // Subject scope for the CURRENT template invocation. Mutated by
+  // `generateTriviaBatch` per question — `pickSubject` reads this
+  // to decide whether to return self or a random non-self name.
+  // Default 'random' so any template that runs outside the driver
+  // (e.g. unit tests) keeps its pre-2026-05-10 behavior.
+  subjectScope: SubjectScope;
   // Indexed view of game_players, filtered to completed games only
   // and joined with the game's date.
   rows: PlayerGameRow[];
@@ -609,6 +641,7 @@ function buildBundle(ctx: TriviaContext): BuildBundle {
     ctx,
     eligibleNames,
     eligibilityFloor,
+    subjectScope: 'random',
     rows,
     gameById: completedById,
     rowsByPlayer,
@@ -1284,15 +1317,31 @@ const GROUP_TEMPLATES: Template[] = [
 // uses `selfPlayerName` as the subject because asking the user a
 // question about themselves is too easy.
 
-// Pick a random eligible player as the subject of a player-mode
-// question. Defaults to excluding `selfPlayerName` because:
-//   1. Asking the user about themselves is too easy — they already
-//      know their own biggest win, lifetime profit, etc.
-//   2. The "About You" home card already serves up personal facts;
-//      trivia is meant to test what the user knows about OTHERS.
-// Pass `exclude = null` explicitly if a template legitimately wants
-// to allow self as the subject (no current template does).
-export function pickSubject(b: BuildBundle, exclude: string | null | undefined = b.ctx.selfPlayerName): string | null {
+// Pick the subject of a player-mode question. Behavior depends on
+// the bundle's current `subjectScope`:
+//
+//   'self'   — return selfPlayerName if the logged-in user is in
+//              the eligible pool. Otherwise return null (the caller
+//              skips the template). Used by the 'players' (personal)
+//              mode and by the personal half of 'mixed' mode.
+//
+//   'random' — pick a non-self eligible player. Same behavior as
+//              before subjectScope existed: asking the user about
+//              themselves is too easy in this scope. Used by 'group'
+//              mode and by the broad half of 'mixed' mode.
+//
+// `exclude` is honored only in 'random' scope (in 'self' the answer
+// is fixed). Most templates pass selfPlayerName as the default, but
+// some (matchup templates) pass it explicitly to be obvious.
+export function pickSubject(
+  b: BuildBundle,
+  exclude: string | null | undefined = b.ctx.selfPlayerName,
+): string | null {
+  if (b.subjectScope === 'self') {
+    const self = b.ctx.selfPlayerName;
+    if (self && b.eligibleNames.includes(self)) return self;
+    return null;
+  }
   const pool = exclude
     ? b.eligibleNames.filter(n => n !== exclude)
     : b.eligibleNames;
@@ -1805,12 +1854,29 @@ const ALL_TEMPLATES: Template[] = [
   ...FACTORY_GENERATED_TEMPLATES,
 ];
 
-// Generate a session of questions. We try multiple distinct
-// templates first (so the user sees variety), and only repeat
-// templates with fresh subjects when the eligible-template pool
-// is exhausted. Player templates can naturally produce many
-// variants (different subject players) so they typically don't
-// need to repeat the same subject within one session.
+// Generate a session of questions. Mode-aware template + scope
+// selection:
+//   'group'   → eligible = group + players templates, scope='random'
+//                (every question is about the group as a whole or a
+//                non-self regular). Mirrors the user's "broad,
+//                anything goes" mental model.
+//   'players' → eligible = players templates only, scope='self'
+//                (every question is personalised to the logged-in
+//                user). Skips silently when the user isn't linked to
+//                an eligible player — UI surfaces "play more games
+//                to unlock self-trivia" via the empty-batch path.
+//   'mixed'   → eligible = group + players, scope flips per-question
+//                via a fair coin. The COIN result also constrains
+//                the template pick: when scope='self' for the
+//                question, only player templates are considered
+//                (group templates don't honor scope and would just
+//                produce a broad question regardless). The bundle's
+//                `subjectScope` is mutated each iteration so
+//                `pickSubject` reads the right value.
+//
+// We try distinct templates first (so the user sees variety) and
+// only repeat templates with fresh subjects when the eligible pool
+// is exhausted.
 export function generateTriviaBatch(
   mode: TriviaMode,
   count: number,
@@ -1826,30 +1892,75 @@ export function generateTriviaBatch(
   // friendly "play more games to unlock trivia" message.
   if (bundle.eligibleNames.length < 4) return [];
 
+  // For 'players' mode we additionally require the user to be in
+  // the eligible pool — otherwise every template would return null
+  // and we'd produce an empty batch with no useful explanation.
+  // Caller (TriviaGameScreen) shows a generic empty-state today;
+  // refining the message to "play more yourself" is a follow-up.
+  if (mode === 'players') {
+    const self = ctx.selfPlayerName;
+    if (!self || !bundle.eligibleNames.includes(self)) return [];
+  }
+
   const catFilter = categories && categories.length > 0 ? new Set(categories) : null;
-  const eligibleTemplates = ALL_TEMPLATES.filter(tpl => {
-    if (mode !== 'mixed' && tpl.mode !== mode) return false;
+
+  // Pre-compute the candidate template pools per scope so we don't
+  // re-filter ALL_TEMPLATES inside the per-question loop.
+  const broadPool = ALL_TEMPLATES.filter(tpl => {
+    // Broad scope = either a group template (group-wide facts,
+    // doesn't care about scope) OR a player template that will
+    // ask about a random non-self subject.
+    if (tpl.mode !== 'group' && tpl.mode !== 'players') return false;
     if (catFilter && !catFilter.has(tpl.category)) return false;
     return true;
   });
-  if (eligibleTemplates.length === 0) return [];
+  const selfPool = ALL_TEMPLATES.filter(tpl => {
+    if (tpl.mode !== 'players') return false;
+    if (catFilter && !catFilter.has(tpl.category)) return false;
+    return true;
+  });
+
+  // Decide eligible-template + scope choice per question. For
+  // 'group' and 'players' modes this is constant; for 'mixed' we
+  // flip a coin each iteration.
+  const pickScopeAndPool = (): { scope: SubjectScope; pool: Template[] } => {
+    if (mode === 'group') return { scope: 'random', pool: broadPool };
+    if (mode === 'players') return { scope: 'self', pool: selfPool };
+    // mixed
+    return Math.random() < 0.5
+      ? { scope: 'self', pool: selfPool }
+      : { scope: 'random', pool: broadPool };
+  };
 
   const out: TriviaQuestion[] = [];
   const usedTemplateIds = new Set<string>();
   const usedGroups = new Set<string>();
 
-  // First pass: try each shuffled template once. Skip templates
-  // sharing a `group` token with one already used so we don't ask
-  // the same fact two ways in one session.
+  // Per-question loop. We don't do a "full pass over all templates
+  // per round" any more because the scope-per-question model means
+  // each iteration picks from a (possibly different) pool. The
+  // attempts cap (count * 8) prevents infinite loops when every
+  // pool entry returns null (e.g. self has no podiums yet).
   let attempts = 0;
-  const maxAttempts = count * 6;
+  const maxAttempts = count * 8;
   while (out.length < count && attempts < maxAttempts) {
     attempts++;
-    const shuffled = shuffle(eligibleTemplates);
-    let added = 0;
+    const { scope, pool } = pickScopeAndPool();
+    if (pool.length === 0) {
+      // Pool empty (e.g. self mode but the category filter excluded
+      // everything) — break out, caller will see fewer questions
+      // than requested rather than an infinite loop.
+      if (mode !== 'mixed') break;
+      continue;
+    }
+    bundle.subjectScope = scope;
+    // Shuffle once per iteration; stop on the first template that
+    // produces a non-null question and isn't already used (unless
+    // we've exhausted the pool).
+    const shuffled = shuffle(pool);
+    let placed = false;
     for (const tpl of shuffled) {
-      if (out.length >= count) break;
-      if (usedTemplateIds.has(tpl.id) && eligibleTemplates.length > count) continue;
+      if (usedTemplateIds.has(tpl.id) && pool.length > count) continue;
       if (tpl.group && usedGroups.has(tpl.group)) continue;
       const built = tpl.build(bundle);
       if (!built) continue;
@@ -1865,12 +1976,15 @@ export function generateTriviaBatch(
       });
       usedTemplateIds.add(tpl.id);
       if (tpl.group) usedGroups.add(tpl.group);
-      added++;
+      placed = true;
+      break;
     }
-    // If a full pass added nothing new (every template either
-    // already-used or rejected as null) we break to avoid an
-    // infinite loop.
-    if (added === 0) break;
+    // If we couldn't place anything in this iteration AND we're not
+    // in mixed mode, allow used templates to repeat by clearing the
+    // used set — gives us more questions when the pool is small.
+    if (!placed && mode !== 'mixed' && usedTemplateIds.size === pool.length) {
+      usedTemplateIds.clear();
+    }
   }
 
   return out;
@@ -1884,25 +1998,23 @@ export function getTemplateIds(mode?: TriviaMode): string[] {
     .map(tpl => tpl.id);
 }
 
-// Count how many distinct templates exist for a given mode (and
-// optional category whitelist). Used by the landing screen to show
-// the question pool size next to each mode chip — same affordance
-// the training screen shows on its scenario-mode chips. NOTE: this
-// counts TEMPLATES, not questions. Player templates expand into
-// many subject-specific questions at run time, so the actual pool
-// of unique questions is much larger than the template count for
-// 'players' / 'mixed'. We expose the template count anyway because
-// it's a stable, bounded number that doesn't change with group
-// composition (a player count would mislead — "300 questions" then
-// drop to 30 when a small group runs it).
+// Count how many distinct templates a mode draws from. Used by
+// the landing screen to show the pool size next to each mode chip.
+// Reflects the post-2026-05-10 mode semantics:
+//   'group'   → group templates + player templates (broad pool)
+//   'players' → player templates only (self-mode)
+//   'mixed'   → same as 'group' (the broadest superset; mixed flips
+//                scope per question but the TEMPLATE pool is the
+//                broad one). Showing the broad count is honest:
+//                "this many distinct questions can be asked".
 export function countTemplates(
   mode: TriviaMode,
   categories?: TriviaCategory[],
 ): number {
   const catFilter = categories && categories.length > 0 ? new Set(categories) : null;
   return ALL_TEMPLATES.filter(tpl => {
-    if (mode !== 'mixed' && tpl.mode !== mode) return false;
     if (catFilter && !catFilter.has(tpl.category)) return false;
-    return true;
+    if (mode === 'players') return tpl.mode === 'players';
+    return tpl.mode === 'group' || tpl.mode === 'players';
   }).length;
 }

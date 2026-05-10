@@ -177,7 +177,7 @@ const he = {
 
   // ── Trivia game (quiz) ──────────────────────────────────────────
   'trivia.mode.group': 'חידון הקבוצה',
-  'trivia.mode.players': 'חידון השחקנים',
+  'trivia.mode.players': 'חידון אישי',
   'trivia.loading': 'מכין שאלות מהנתונים שלכם...',
   'trivia.empty.title': 'אין מספיק נתונים עדיין',
   'trivia.empty.body': 'אין מספיק נתונים בנושאים שנבחרו. נסו לבחור עוד נושאים, להחליף מצב, או לשחק עוד משחקים — וזה יפתח אוטומטית.',
@@ -227,11 +227,11 @@ const he = {
   'trivia.landing.back': '← חזרה לדף הראשי',
   'trivia.landing.modeTitle': 'איזה סוג חידון?',
   'trivia.landing.mode.group': '🌍 קבוצתי',
-  'trivia.landing.mode.players': '👥 שחקנים',
+  'trivia.landing.mode.players': '🙋 עליי',
   'trivia.landing.mode.mixed': '🎲 הכל',
-  'trivia.landing.mode.groupHelp': 'שאלות על הקבוצה כולה — שיאים, היסטוריה ומובילים לאורך השנים',
-  'trivia.landing.mode.playersHelp': 'שאלות על שחקנים בודדים — היריב הקבוע, רווחים לאורך השנים ועוד',
-  'trivia.landing.mode.mixedHelp': 'תערובת של שני סוגי השאלות',
+  'trivia.landing.mode.groupHelp': 'שאלות על כל השחקנים בקבוצה — כל סוג של שאלה',
+  'trivia.landing.mode.playersHelp': 'שאלות שמתמקדות בך — מה אתה יודע על עצמך?',
+  'trivia.landing.mode.mixedHelp': 'תערובת — חצי על הקבוצה, חצי עליך',
   'trivia.landing.mode.count': 'שאלות',
   // Categories filter: in-app picker was removed; deep links via
   // ?cats=... still work but the four labels below are no longer
@@ -2608,7 +2608,7 @@ const en: Record<keyof typeof he, string> = {
 
   // ── Trivia game (quiz) ──────────────────────────────────────────
   'trivia.mode.group': 'Group Quiz',
-  'trivia.mode.players': 'Players Quiz',
+  'trivia.mode.players': 'Personal Quiz',
   'trivia.loading': 'Building questions from your data...',
   'trivia.empty.title': 'Not enough data yet',
   'trivia.empty.body': 'Not enough data for the topics you picked. Try selecting more topics, switching modes, or play a few more games — it\'ll open automatically.',
@@ -2647,11 +2647,11 @@ const en: Record<keyof typeof he, string> = {
   'trivia.landing.back': '← Back home',
   'trivia.landing.modeTitle': 'What kind of trivia?',
   'trivia.landing.mode.group': '🌍 Group',
-  'trivia.landing.mode.players': '👥 Players',
+  'trivia.landing.mode.players': '🙋 About me',
   'trivia.landing.mode.mixed': '🎲 Mixed',
-  'trivia.landing.mode.groupHelp': 'Questions about the whole group — records, history, all-time leaders',
-  'trivia.landing.mode.playersHelp': 'Questions about specific players — their nemesis, lifetime profit, more',
-  'trivia.landing.mode.mixedHelp': 'A blend of both pools',
+  'trivia.landing.mode.groupHelp': 'Questions about all players in the group — any topic',
+  'trivia.landing.mode.playersHelp': 'Questions focused on you — how well do you know yourself?',
+  'trivia.landing.mode.mixedHelp': 'A blend — half about the group, half about you',
   'trivia.landing.mode.count': 'questions',
   // (See HE block — categories filter UI was removed.)
   'trivia.landing.start': 'Start trivia',
