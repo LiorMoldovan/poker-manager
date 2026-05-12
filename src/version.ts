@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.59.0';
+export const APP_VERSION = '5.59.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.59.1',
+    date: '2026-05-12',
+    changes: [
+      '🔔 Fixed: schedule push & email silently failing on protected deploys',
+      '🛠 Worker now self-calls via the production alias, never the SSO-walled deployment URL',
+      '🪪 Added optional Vercel Protection Bypass header for staging/preview tests',
+    ],
+  },
   {
     version: '5.59.0',
     date: '2026-05-10',

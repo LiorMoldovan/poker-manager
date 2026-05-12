@@ -144,11 +144,7 @@ function deepLinkUrl(pollId: string): string {
 
 // Absolute URL for email bodies (push uses the relative path above).
 function emailVoteLink(pollIdOrSlug: string): string {
-  // The deployment public origin. Edge runtime doesn't have window — use
-  // VERCEL_URL or a hardcoded production fallback.
-  const origin = process.env.PUBLIC_APP_ORIGIN
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://poker-manager-blond.vercel.app');
-  return `${origin}/p/${encodeURIComponent(pollIdOrSlug)}`;
+  return `${resolvePublicOrigin()}/p/${encodeURIComponent(pollIdOrSlug)}`;
 }
 
 // Two-NBSP indent so HTML email's `white-space: normal` doesn't collapse
@@ -638,14 +634,10 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
 async function postSendPush(plan: DispatchPlan): Promise<{ ok: boolean; status: number; bodyText: string }> {
-  const url = new URL('/api/send-push', resolveOrigin()).toString();
-  const secret = process.env.WORKER_INTERNAL_SECRET || '';
+  const url = new URL('/api/send-push', resolveInternalOrigin()).toString();
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Worker-Secret': secret,
-    },
+    headers: workerRequestHeaders(),
     body: JSON.stringify({
       groupId: plan.groupId,
       title: plan.message.pushTitle,
@@ -659,14 +651,10 @@ async function postSendPush(plan: DispatchPlan): Promise<{ ok: boolean; status: 
 }
 
 async function postSendEmailFor(name: string, email: string, plan: DispatchPlan): Promise<{ ok: boolean; status: number; bodyText: string }> {
-  const url = new URL('/api/send-email', resolveOrigin()).toString();
-  const secret = process.env.WORKER_INTERNAL_SECRET || '';
+  const url = new URL('/api/send-email', resolveInternalOrigin()).toString();
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Worker-Secret': secret,
-    },
+    headers: workerRequestHeaders(),
     body: JSON.stringify({
       to: email,
       subject: plan.message.emailSubject,
@@ -680,10 +668,46 @@ async function postSendEmailFor(name: string, email: string, plan: DispatchPlan)
   return { ok: res.ok, status: res.status, bodyText: text };
 }
 
-function resolveOrigin(): string {
+// Public origin used in customer-facing URLs (emails, deep links).
+// Always prefer the stable production alias — Vercel's auto-injected
+// VERCEL_URL points at the deployment-specific URL, which is gated by
+// Deployment Protection when "Standard Protection" / "Vercel
+// Authentication" is enabled, so it would render an SSO wall instead
+// of the app for any recipient who follows the link.
+function resolvePublicOrigin(): string {
   if (process.env.PUBLIC_APP_ORIGIN) return process.env.PUBLIC_APP_ORIGIN;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'https://poker-manager-blond.vercel.app';
+}
+
+// Internal origin used by the worker to call /api/send-push and
+// /api/send-email on the same deployment. We MUST NOT use VERCEL_URL
+// here for the same reason as above: that URL is behind Deployment
+// Protection on Standard Protection deployments, so the worker's
+// self-call gets intercepted by Vercel's SSO wall and returns an HTML
+// 401 ("Authentication Required") long before our handler runs.
+// Sticking to the production alias keeps the call public; the request
+// is still authenticated end-to-end by the X-Worker-Secret header that
+// /api/_auth.verifyAuth checks.
+function resolveInternalOrigin(): string {
+  if (process.env.WORKER_INTERNAL_ORIGIN) return process.env.WORKER_INTERNAL_ORIGIN;
+  return resolvePublicOrigin();
+}
+
+// Headers for worker→worker HTTP calls. Includes the shared secret
+// expected by /api/_auth, plus an optional Vercel Protection Bypass
+// header so the call still works if someone deliberately points
+// WORKER_INTERNAL_ORIGIN at a Deployment-Protected URL (e.g. a
+// preview deploy for testing). The bypass secret is only set in
+// envs that enable Deployment Protection; in production with the
+// public alias it's an unused no-op.
+function workerRequestHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Worker-Secret': process.env.WORKER_INTERNAL_SECRET || '',
+  };
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  if (bypass) headers['x-vercel-protection-bypass'] = bypass;
+  return headers;
 }
 
 async function fetchEmailsFor(groupId: string, names: string[]): Promise<Array<{ name: string; email: string }>> {
