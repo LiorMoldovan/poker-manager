@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.59.1';
+export const APP_VERSION = '5.59.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.59.2',
+    date: '2026-05-13',
+    changes: [
+      '📅 Fixed: schedule emails showed wrong weekday (Thursday rendered as Friday)',
+      '🌐 Hebrew weekday now computed in UTC, immune to Edge runtime timezone shifts',
+    ],
+  },
   {
     version: '5.59.1',
     date: '2026-05-12',

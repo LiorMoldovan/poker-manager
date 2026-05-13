@@ -105,17 +105,23 @@ function db(): SupabaseClient {
 
 // ─── Hebrew formatters ─────────────────────────────────────────────────────
 
-const TZ = 'Asia/Jerusalem';
+// Resolve the Hebrew weekday for a YYYY-MM-DD calendar date.
+// IMPORTANT: do NOT combine the date with the wall-clock time and then
+// pass timeZone:'Asia/Jerusalem' to toLocaleDateString. The Edge runtime
+// is in UTC, so `new Date('2026-05-14T21:00')` parses as 2026-05-14T21:00Z;
+// shifting that to Asia/Jerusalem (UTC+3 in DST) bumps it past midnight
+// to 2026-05-15 and the weekday renders one day late ("14/5 יום שישי"
+// instead of "14/5 יום חמישי"). Anchor at noon UTC and read the weekday
+// in UTC so the calendar date is immune to any reasonable TZ offset.
+function hebrewWeekdayForDate(dateIso: string): string {
+  const d = new Date(`${dateIso}T12:00:00Z`);
+  return d.toLocaleDateString('he-IL', { weekday: 'long', timeZone: 'UTC' });
+}
 
 function formatHebrewDateTime(dateIso: string, timeStr: string | null): string {
   try {
-    // Build a Date in the right TZ. proposed_date is YYYY-MM-DD; combining
-    // with proposed_time (HH:MM) gives a local-time wallclock — we surface
-    // it as-typed without timezone math (group is single-TZ, no need to
-    // convert).
     const t = timeStr ? timeStr.slice(0, 5) : '21:00';
-    const d = new Date(`${dateIso}T${t}`);
-    const weekday = d.toLocaleDateString('he-IL', { weekday: 'long', timeZone: TZ });
+    const weekday = hebrewWeekdayForDate(dateIso);
     const day = Number(dateIso.slice(8, 10));
     const month = Number(dateIso.slice(5, 7));
     return `${day}/${month} ${weekday} ${t}`;
@@ -127,8 +133,7 @@ function formatHebrewDateTime(dateIso: string, timeStr: string | null): string {
 function formatHebrewDateTimeVerbose(dateIso: string, timeStr: string | null): string {
   try {
     const t = timeStr ? timeStr.slice(0, 5) : null;
-    const d = new Date(`${dateIso}T${t || '21:00'}`);
-    const weekday = d.toLocaleDateString('he-IL', { weekday: 'long', timeZone: TZ });
+    const weekday = hebrewWeekdayForDate(dateIso);
     const day = Number(dateIso.slice(8, 10));
     const month = Number(dateIso.slice(5, 7));
     const timeLabel = t ? ` בשעה ${t}` : '';
