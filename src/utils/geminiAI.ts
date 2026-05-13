@@ -88,8 +88,18 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         const errMsg = errData?.error?.message || `Status ${response.status}`;
+        const errCode = errData?.error?.code;
         console.warn(`   ${label}: ${config.model} failed: ${errMsg}`);
         lastError = errMsg;
+        // Server-side gate: this group has no Gemini key configured AND
+        // isn't the platform-owner group, so the proxy refused the call
+        // (see `api/gemini.ts` v5.60.3+). Every fallback model would fail
+        // the same way — fail fast with the canonical NO_API_KEY sentinel
+        // so the calling screen renders the friendly "set your key" notice
+        // instead of cycling through retries and surfacing a red error.
+        if (response.status === 403 && (errCode === 'aiKeyRequired' || errMsg.includes('Gemini API key'))) {
+          throw new Error('NO_API_KEY');
+        }
         if (response.status === 429) {
           const rlHeaders = readRateLimitHeaders(response);
           recordRateLimit(config.model, rlHeaders, errMsg);
@@ -160,7 +170,7 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
       return { text, model: config.model, usage };
     } catch (err) {
-      if (err instanceof Error && err.message === 'INVALID_API_KEY') throw err;
+      if (err instanceof Error && (err.message === 'INVALID_API_KEY' || err.message === 'NO_API_KEY')) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`   ${label}: ${config.model} error: ${msg}`);
       lastError = msg;

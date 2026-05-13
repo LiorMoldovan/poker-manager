@@ -1643,8 +1643,12 @@ const NewGameScreen = () => {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
         
-        if (err.message === 'NO_API_KEY') {
-          setAiError(t('newGame.noApiKey'));
+        if (err.message === 'NO_API_KEY' || err.message?.includes('aiKeyRequired')) {
+          // No key configured — fall back to the static forecast silently.
+          // The <AIKeyMissingNotice/> beneath the forecast button row
+          // already explains why "AI" was unavailable; surfacing a red
+          // error on top of that would be redundant noise.
+          setAiError(null);
           setCachedForecasts(generateForecasts());
         } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
           // Start countdown timer for rate limit

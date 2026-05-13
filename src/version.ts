@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.6';
+export const APP_VERSION = '5.60.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,32 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.9',
+    date: '2026-05-13',
+    changes: [
+      '🗑️ Delete Group now actually deletes the group',
+      '🛡️ Bulk-delete guards relaxed only for verified owner',
+      '⚠️ Destructive-action errors now appear inside the modal',
+    ],
+  },
+  {
+    version: '5.60.8',
+    date: '2026-05-13',
+    changes: [
+      '📝 No-key notices now explain what each feature unlocks',
+      '🎯 Training, chronicle, comic also routed to friendly notice',
+      '⚡ All training paths fail fast on missing key',
+    ],
+  },
+  {
+    version: '5.60.7',
+    date: '2026-05-13',
+    changes: [
+      '🤝 No-AI-key now shows friendly notice, not red error',
+      '⚡ Skip retries when server says key is missing',
+    ],
+  },
   {
     version: '5.60.6',
     date: '2026-05-13',

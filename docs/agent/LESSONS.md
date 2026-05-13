@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-13 — Postgres FK cascade order does not respect inter-child dependencies
+
+**Incident**: `delete_group(uuid)` shipped in migration 014 as `DELETE FROM groups WHERE id = $1`, trusting that every child table's `ON DELETE CASCADE` would handle cleanup. It silently failed for every group with at least one game. Lior clicked Delete Group on his test group, typed the confirmation, and nothing happened (the secondary UX bug — toast at top, action at bottom — hid the real error from him too). Root cause when reproduced via MCP: `update or delete on table "players" violates foreign key constraint "game_players_player_id_fkey" on table "game_players"` (sqlstate 23503). The `game_players.player_id → players` FK is `NO ACTION` on purpose (DB-side safety for the UI's `playerHasGames()` guard against single-player deletes). When PG fans out cascades from `DELETE FROM groups`, it processes `groups → players` and `groups → games → game_players` in implementation-dependent order, and the `players` cascade runs while `game_players` rows still reference each player.
+
+**Root cause**: I (and the original migration 014 author) treated "every child has ON DELETE CASCADE back to groups" as sufficient. It isn't, when one child has a NO-ACTION FK to another child. PG processes each cascade independently and the FK check fires at end-of-statement against the in-progress state. The cascade fan-out is not a topological sort of the FK graph — it's roughly OID order, which happens to be insertion order, which is the order the tables were created in `schema.sql`. The fact that this had worked for months for groups with 0 games was pure luck.
+
+**Lesson**: Whenever a parent table has cascade rules to two or more children AND any of those children has a NO-ACTION FK to another, the cascade is a foot-gun — write a sandbox test (DELETE the parent row in a rolled-back transaction, read SQLERRM) before claiming the cascade is enough. If the FK can be made CASCADE without breaking semantics, do that. If it can't (as here — losing per-player roster history on single-player delete would be data destruction), orchestrate the deletion manually in dependency order, inside the SECURITY DEFINER RPC that's the only legitimate caller. Companion lesson on writing migrations that touch trigger logic: every "no inbound FKs" or "no cascade context to detect" claim in a migration's prose has a half-life. Migration 051 was correct for the `games → game_players` chain it was reasoning about, and the prose generalization was wrong for the `groups → players → game_players` chain the author hadn't considered. Future agents who touch a guard trigger should re-derive the FK graph from `pg_constraint` rather than trusting the older migration's prose summary. The graph is one query away and tells the truth.
+
+**Session**: 2026-05-13 (v5.60.9 — delete_group rewrite + migration 076 flag-gated guard escape).
+
+---
+
 ## 2026-05-13 — A "reconciliation strip" against a meaningless target panics the user
 
 **Incident**: v5.60.5 item 1 added a `running / expected` chip-points strip in the numpad header, color-coded red on overcount. Lior took a real photo on his phone, saw `(+2,000) 1,000 / 3,000` in red for a player who'd had a successful game, and asked "i think something is wrong, lets assume i did 2 rebuys and then i ended the game with more chips it simply means i completed the game in profit". He was right — per-player `running != expected` IS profit/loss, never an error. The strip was painting winning players red. Reverted entirely in v5.60.6.

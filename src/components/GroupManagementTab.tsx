@@ -59,6 +59,13 @@ export default function GroupManagementTab({
     name?: string;
   } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  // In-modal error for destructive actions whose trigger button is far
+  // from the top-of-page actionMsg toast (delete group / leave group).
+  // Rendering the failure where the user clicked makes silent server-side
+  // rejections actually visible. See migration 076 + v5.60.x session
+  // notes for the bug class this is guarding against.
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalBusy, setModalBusy] = useState(false);
   const [personalInvite, setPersonalInvite] = useState<{
     playerName: string;
     code: string;
@@ -125,21 +132,33 @@ export default function GroupManagementTab({
 
   const handleDeleteGroup = async () => {
     if (!deleteGroup) return;
+    setModalError(null);
+    setModalBusy(true);
     const { error } = await deleteGroup();
+    setModalBusy(false);
+    if (error) {
+      // Keep the modal open so the user actually sees the failure where
+      // they took the action. The action-msg toast renders at the top of
+      // a long settings page; users who hit "delete" at the bottom miss it
+      // entirely.
+      setModalError((error as { message?: string })?.message || t('groupMgmt.errorDeleteGroup'));
+      return;
+    }
     setConfirmAction(null);
     setDeleteConfirmText('');
-    if (error) {
-      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorDeleteGroup'));
-    }
   };
 
   const handleLeaveGroup = async () => {
     if (!leaveGroup) return;
+    setModalError(null);
+    setModalBusy(true);
     const { error } = await leaveGroup();
-    setConfirmAction(null);
+    setModalBusy(false);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorLeaveGroup'));
+      setModalError((error as { message?: string })?.message || t('groupMgmt.errorLeaveGroup'));
+      return;
     }
+    setConfirmAction(null);
   };
 
   const handleRegenerate = async () => {
@@ -663,7 +682,13 @@ export default function GroupManagementTab({
 
       {/* Confirmation Modal */}
       {confirmAction && (
-        <div className="modal-overlay" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            if (modalBusy) return;
+            setConfirmAction(null); setDeleteConfirmText(''); setModalError(null);
+          }}
+        >
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
@@ -673,7 +698,13 @@ export default function GroupManagementTab({
                 {confirmAction.type === 'delete_group' && t('groupMgmt.deleteGroupConfirmTitle')}
                 {confirmAction.type === 'leave_group' && t('groupMgmt.leaveGroupConfirmTitle')}
               </h3>
-              <button className="modal-close" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>×</button>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  if (modalBusy) return;
+                  setConfirmAction(null); setDeleteConfirmText(''); setModalError(null);
+                }}
+              >×</button>
             </div>
 
             {confirmAction.type === 'remove' && (
@@ -743,14 +774,30 @@ export default function GroupManagementTab({
               </>
             )}
 
+            {modalError && (
+              <div style={{
+                padding: '0.6rem 0.8rem', borderRadius: '8px', marginBottom: '0.75rem',
+                background: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                border: '1px solid rgba(239,68,68,0.35)',
+                fontSize: '0.85rem', fontWeight: 500,
+                textAlign: isRTL ? 'right' : 'left',
+              }}>
+                {modalError}
+              </div>
+            )}
+
             <div className="actions">
-              <button className="btn btn-secondary" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>
+              <button
+                className="btn btn-secondary"
+                disabled={modalBusy}
+                onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); setModalError(null); }}
+              >
                 {t('common.cancel')}
               </button>
               <button
                 className={confirmAction.type === 'transfer' ? 'btn' : 'btn btn-danger'}
                 style={confirmAction.type === 'transfer' ? { background: '#A855F7', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontFamily: 'Outfit, sans-serif' } : undefined}
-                disabled={confirmAction.type === 'delete_group' && deleteConfirmText !== groupName}
+                disabled={modalBusy || (confirmAction.type === 'delete_group' && deleteConfirmText !== groupName)}
                 onClick={() => {
                   if (confirmAction.type === 'remove' && confirmAction.userId) handleRemove(confirmAction.userId);
                   if (confirmAction.type === 'transfer' && confirmAction.userId) handleTransfer(confirmAction.userId);

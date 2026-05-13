@@ -661,7 +661,15 @@ export const generateTrainingHand = async (
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         const msg = err?.error?.message || `HTTP ${response.status}`;
+        const code = err?.error?.code;
         console.warn(`Training [${config.model}]: ${msg}`);
+        // 403 aiKeyRequired: this group has no Gemini key and isn't the
+        // platform-owner group. Fail fast — every fallback model would
+        // hit the same gate. Use the canonical NO_API_KEY sentinel so
+        // the caller can render the friendly notice.
+        if (response.status === 403 && (code === 'aiKeyRequired' || msg.includes('Gemini API key'))) {
+          throw new Error('NO_API_KEY');
+        }
         if (response.status === 429 || response.status === 404 || response.status === 503) {
           lastError = msg;
           break;
@@ -902,7 +910,13 @@ export const generateQuickBatch = async (
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         const msg = err?.error?.message || `HTTP ${response.status}`;
+        const code = err?.error?.code;
         console.warn(`QuickTraining [${config.model}]: ${msg}`);
+        if (response.status === 403 && (code === 'aiKeyRequired' || msg.includes('Gemini API key'))) {
+          // Same rationale as generateTrainingHand — surface the clean
+          // NO_API_KEY sentinel rather than cycling all fallback models.
+          throw new Error('NO_API_KEY');
+        }
         if (response.status === 400 && msg.includes('API key')) {
           throw new Error('INVALID_API_KEY');
         }
@@ -1813,6 +1827,13 @@ const generateSingleBatch = async (
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           const msg = (err as { error?: { message?: string } })?.error?.message || `HTTP ${response.status}`;
+          const code = (err as { error?: { code?: string } })?.error?.code;
+          // 403 aiKeyRequired = group has no Gemini key. Bail out with
+          // NO_API_KEY so the batch-coaching flow can show the friendly
+          // notice instead of a cryptic "model X 403" diagnostic line.
+          if (response.status === 403 && (code === 'aiKeyRequired' || msg.includes('Gemini API key'))) {
+            throw new Error('NO_API_KEY');
+          }
           if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
           diag.push(`${label} HTTP ${response.status}: ${msg}`);
           if (response.status === 404) {

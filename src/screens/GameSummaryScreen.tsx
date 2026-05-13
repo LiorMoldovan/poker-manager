@@ -82,6 +82,11 @@ const GameSummaryScreen = () => {
   const [aiSummaryModel, setAiSummaryModel] = useState<string>('');
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  // Set when the AI call comes back with a 403 aiKeyRequired (or upstream
+  // throws NO_API_KEY) — keeps the friendly empty-state notice visible
+  // even when the local `getGeminiApiKey()` heuristic still says "yes".
+  // Cleared by setAiSummary on success and on regenerate-attempt start.
+  const [aiKeyMissing, setAiKeyMissing] = useState(false);
   // ─── Comic state ───
   const [comicUrl, setComicUrl] = useState<string | null>(null);
   const [comicScript, setComicScript] = useState<ComicScript | null>(null);
@@ -271,6 +276,7 @@ const GameSummaryScreen = () => {
     );
     setAiSummary(null);
     setAiSummaryError(null);
+    setAiKeyMissing(false);
     setIsLoadingAiSummary(false);
     forceGenerateRef.current = true;
     loadData();
@@ -333,8 +339,13 @@ const GameSummaryScreen = () => {
       // Always capture the raw upstream error so it can be shown in the UI for
       // mobile diagnostics (no devtools available).
       setComicErrorDetail({ stage, raw: msg });
-      if (msg === 'NO_API_KEY') {
-        setComicError(t('summary.comicNoApiKey'));
+      if (msg === 'NO_API_KEY' || msg.includes('aiKeyRequired')) {
+        // Suppress the red error — the friendly <AIKeyMissingNotice
+        // feature="comic"/> rendered above the generate button already
+        // explains the situation. Also clear the diagnostic blob so the
+        // raw 403 body doesn't leak into a "details" disclosure.
+        setComicError(null);
+        setComicErrorDetail(null);
       } else if (msg === 'OFFLINE') {
         setComicError(t('summary.aiQuotaError'));
       } else if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
@@ -1125,6 +1136,7 @@ const GameSummaryScreen = () => {
       };
 
       setAiSummaryError(null);
+      setAiKeyMissing(false);
       withAITiming('game_summary', () => generateGameNightSummary(summaryPayload))
         .then(async result => {
           const modelDisplay = getModelDisplayName(result.meta.model);
@@ -1144,6 +1156,7 @@ const GameSummaryScreen = () => {
           setAiSummary(result.text);
           setAiSummaryModel(modelDisplay);
           setAiSummaryError(null);
+          setAiKeyMissing(false);
           if (shouldAutoGenerate) {
             import('../utils/backgroundAI').then(({ regenerateAIInBackground }) => {
               regenerateAIInBackground();
@@ -1155,8 +1168,15 @@ const GameSummaryScreen = () => {
           const msg = err?.message || String(err);
           if (msg.includes('quota') || msg.includes('429') || msg.includes('rate')) {
             setAiSummaryError(t('summary.aiQuotaError'));
-          } else if (msg.includes('NO_API_KEY')) {
-            setAiSummaryError(t('summary.noKeyError'));
+          } else if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
+            // NOT an error — this is the expected state for groups that
+            // haven't configured a Gemini key. Clear any error and let the
+            // empty-state branch render <AIKeyMissingNotice/> below. We
+            // also flag `aiKeyMissing` so the friendly notice shows even
+            // when the upstream `getGeminiApiKey()` heuristic disagrees
+            // (e.g. brief race between settings cache and the actual call).
+            setAiSummaryError(null);
+            setAiKeyMissing(true);
           } else {
             setAiSummaryError(t('summary.aiGenError'));
           }
@@ -1952,7 +1972,7 @@ const GameSummaryScreen = () => {
                 </span>
               </div>
             )}
-            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
+            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && !aiKeyMissing && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -1963,7 +1983,16 @@ const GameSummaryScreen = () => {
                 </span>
               </div>
             )}
-            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && !getGeminiApiKey() && (
+            {/* Friendly notice when AI is unavailable for this group.
+                Two trigger paths:
+                  1. Pre-flight — `getGeminiApiKey()` returns null (we
+                     never even tried because we know the group has no
+                     key + isn't the platform-owner group).
+                  2. Post-flight — `aiKeyMissing` was set when the call
+                     came back with 403 aiKeyRequired (defends against
+                     race conditions where the call fired before the
+                     pre-flight gate caught up). */}
+            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && (!getGeminiApiKey() || aiKeyMissing) && (
               <AIKeyMissingNotice feature="summary" style={{ marginBottom: '0.5rem' }} />
             )}
             {!collapsedSections.aiSummary && (

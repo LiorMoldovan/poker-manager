@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import {
   TrainingHand,
@@ -231,6 +232,11 @@ const TrainingHandScreen = () => {
   const [hand, setHand] = useState<TrainingHand | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Tracked separately from `error` because no-key isn't a failure —
+  // it's the expected state for groups without a Gemini key. We render
+  // the friendly <AIKeyMissingNotice/> for this case instead of the
+  // 😕 "שגיאה" page.
+  const [keyMissing, setKeyMissing] = useState(false);
   const [trainingModelName, setTrainingModelName] = useState<string>('');
   const [currentStreetIdx, setCurrentStreetIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -277,6 +283,7 @@ const TrainingHandScreen = () => {
 
     setLoading(true);
     setError(null);
+    setKeyMissing(false);
     setHand(null);
 
     try {
@@ -286,8 +293,11 @@ const TrainingHandScreen = () => {
       setTrainingModelName(getLastTrainingModelDisplay());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      if (msg === 'NO_API_KEY') {
-        setError('כדי להשתמש באימון, הגדר מפתח בהגדרות');
+      if (msg === 'NO_API_KEY' || msg.includes('aiKeyRequired')) {
+        // Expected state — no key configured for this group. Skip the
+        // "שגיאה" page and let the keyMissing branch render the
+        // friendly notice with role-aware CTA.
+        setKeyMissing(true);
       } else if (msg === 'INVALID_API_KEY') {
         setError('המפתח שהוגדר לא תקין, בדוק בהגדרות');
       } else if (msg.startsWith('ALL_MODELS_FAILED')) {
@@ -434,6 +444,17 @@ const TrainingHandScreen = () => {
   // ════════════════════════════════════════════════════════════
   // ERROR STATE
   // ════════════════════════════════════════════════════════════
+
+  if (keyMissing) {
+    return (
+      <div className="fade-in" style={{ padding: '2rem 1rem', maxWidth: '480px', margin: '0 auto' }}>
+        <AIKeyMissingNotice feature="training" />
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.25rem' }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/training')}>חזרה</button>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (

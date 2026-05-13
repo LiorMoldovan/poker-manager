@@ -6,10 +6,11 @@ import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
-import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName } from '../utils/geminiAI';
+import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName, getGeminiApiKey } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { hapticTap } from '../utils/haptics';
 
@@ -3050,7 +3051,13 @@ const StatisticsScreen = () => {
 
             // ===== AUTO-GENERATE AI STORIES (owner only) =====
             const periodKey = getChronicleKey();
-            const canGenerateAI = isOwner;
+            // Generation requires (1) owner role and (2) a working Gemini
+            // path for this group — either a per-group key in settings or
+            // the platform-owner env-var fallback. Without (2) the AI call
+            // would 403 immediately, so don't bother firing — render the
+            // friendly notice instead (see the keyMissing branch below).
+            const hasAIKey = !!getGeminiApiKey();
+            const canGenerateAI = isOwner && hasAIKey;
             const cached = getChronicleProfiles(periodKey);
             // Only auto-generate if there are games newer than the cached chronicle
             const hasNewData = latestGameDate && (!cached || latestGameDate.getTime() > new Date(cached.generatedAt).getTime());
@@ -3112,7 +3119,15 @@ const StatisticsScreen = () => {
 
                 } catch (err) {
                   console.error('Chronicle generation failed:', err);
-                  setChronicleError(err instanceof Error ? err.message : 'Generation failed');
+                  const msg = err instanceof Error ? err.message : 'Generation failed';
+                  // No-key isn't a failure — it's expected. Suppress the
+                  // red error line; the keyMissing branch below already
+                  // shows the friendly notice for owners.
+                  if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
+                    setChronicleError(null);
+                  } else {
+                    setChronicleError(msg);
+                  }
                   if (cached) setChronicleStories(cached.profiles);
                 } finally {
                   setChronicleLoading(false);
@@ -3176,7 +3191,12 @@ const StatisticsScreen = () => {
 
               } catch (err) {
                 console.error('Chronicle regeneration failed:', err);
-                setChronicleError(err instanceof Error ? err.message : 'Generation failed');
+                const msg = err instanceof Error ? err.message : 'Generation failed';
+                if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
+                  setChronicleError(null);
+                } else {
+                  setChronicleError(msg);
+                }
               } finally {
                 setChronicleLoading(false);
               }
@@ -3307,7 +3327,15 @@ const StatisticsScreen = () => {
 
                 {!chronicleLoading && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {!hasAiStories && !canGenerateAI && totalPeriodGames > 0 && (
+                    {/* Owner without a Gemini key: explain why the
+                        chronicle is empty and how to fix it. Members fall
+                        through to the existing `chronicleNotCreated`
+                        copy because they can't add the key themselves —
+                        the owner has to do it. */}
+                    {!hasAiStories && isOwner && !hasAIKey && totalPeriodGames > 0 && (
+                      <AIKeyMissingNotice feature="generic" />
+                    )}
+                    {!hasAiStories && !canGenerateAI && !(isOwner && !hasAIKey) && totalPeriodGames > 0 && (
                       <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
                         {t('stats.chronicleNotCreated')}
                       </div>

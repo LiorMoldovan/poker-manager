@@ -324,7 +324,15 @@ const GraphsScreen = () => {
         setInsightsModelName(modelDisplay);
       } catch (err) {
         console.error('Graph insights auto-generation failed:', err);
-        setInsightsError(err instanceof Error ? err.message : t('graphs.errorInsights'));
+        const msg = err instanceof Error ? err.message : String(err);
+        // 403 / NO_API_KEY = expected state for groups without a key —
+        // suppress the red error so the friendly empty-state notice
+        // (rendered above) stays the only signal.
+        if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
+          setInsightsError(null);
+        } else {
+          setInsightsError(msg || t('graphs.errorInsights'));
+        }
       } finally {
         setInsightsLoading(false);
       }
@@ -335,7 +343,10 @@ const GraphsScreen = () => {
     if (insightsLoading) return;
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      setInsightsError(t('graphs.noApiKey'));
+      // Don't surface a red error — the friendly <AIKeyMissingNotice/>
+      // already explains the situation in the empty state. Just clear
+      // any prior error so the notice has a clean slot to render in.
+      setInsightsError(null);
       return;
     }
 
@@ -373,7 +384,14 @@ const GraphsScreen = () => {
       setInsightsModelName(modelDisplay);
     } catch (err) {
       console.error('Graph insights generation failed:', err);
-      setInsightsError(err instanceof Error ? err.message : t('graphs.errorInsights'));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
+        // Same rationale as the auto-generation path — let the friendly
+        // notice carry the message instead of a red error banner.
+        setInsightsError(null);
+      } else {
+        setInsightsError(msg || t('graphs.errorInsights'));
+      }
     } finally {
       setInsightsLoading(false);
     }

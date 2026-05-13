@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import {
   QuickScenario,
@@ -44,6 +45,8 @@ const QuickTrainingScreen = () => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` — no-key is expected state, not a failure.
+  const [keyMissing, setKeyMissing] = useState(false);
   const [results, setResults] = useState<{ correct: boolean; categoryId: string }[]>([]);
   const [showSummary, setShowSummary] = useState(false);
   const [quickModelName, setQuickModelName] = useState<string>('');
@@ -51,6 +54,7 @@ const QuickTrainingScreen = () => {
   const loadBatch = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setKeyMissing(false);
     try {
       const catIds = categoriesParam ? categoriesParam.split(',').filter(Boolean) : undefined;
       const batch = await withAITiming('quick_training', () => generateQuickBatch(maxHands, catIds));
@@ -62,8 +66,9 @@ const QuickTrainingScreen = () => {
       setShowSummary(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'NO_API_KEY') {
-        setError('כדי להשתמש באימון, הגדר מפתח בהגדרות');
+      if (msg === 'NO_API_KEY' || msg.includes('aiKeyRequired')) {
+        // Expected state, not an error — render the friendly notice.
+        setKeyMissing(true);
       } else if (msg === 'INVALID_API_KEY') {
         setError('המפתח שהוגדר לא תקין, בדוק בהגדרות');
       } else if (msg.startsWith('ALL_MODELS_FAILED')) {
@@ -144,6 +149,20 @@ const QuickTrainingScreen = () => {
             יוצר סט אימון מהיר
           </div>
           <AIProgressBar operationKey="quick_training" />
+        </div>
+      </div>
+    );
+  }
+
+  // Friendly empty state when no Gemini key is configured for this group.
+  // Rendered BEFORE the generic error block so the no-key path doesn't get
+  // routed through the 😕 page.
+  if (keyMissing) {
+    return (
+      <div className="fade-in" style={{ padding: '2rem 1rem', maxWidth: '480px', margin: '0 auto' }}>
+        <AIKeyMissingNotice feature="training" />
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.25rem' }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/training')}>חזרה</button>
         </div>
       </div>
     );

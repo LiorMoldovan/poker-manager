@@ -1,13 +1,13 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-13
+> **Last refreshed**: 2026-05-13 (post v5.60.9)
 
 ---
 
 ## Right now
 
-- **`origin/main`**: `5.60.6` (reverted the v5.60.5 numpad running-total strip after Lior caught the framing bug — per-player chip running != expected IS profit/loss, NOT an error; aggregate signal is correctly handled by the existing top-of-screen progress bar + the chip-gap warning at finalize. Also patched a stale-preview bug in the chip-gap warning where editing counts after the first calculate tap would bypass the second-tap confirmation).
+- **`origin/main`**: `5.60.9` — bundled merge of three queued versions. (a) v5.60.7/v5.60.8: friendly-notice copy polish for the no-AI-key empty states across summary/forecast/insights/comic/tts/photo/training (sibling-agent work that had been sitting in the working tree). (b) v5.60.9: Delete-Group RPC fully rewritten — was silently broken for any group with games due to FK-cascade ordering (`game_players.player_id → players` NO ACTION) compounded by the bulk-delete + completed-game guards from migrations 043/050/051 having no escape hatch for owner-driven full-group teardown. Migration 076 adds a transaction-local `app.cascade_group_delete` flag set only by the SECURITY DEFINER `delete_group` RPC; guard functions check it and exit early; RPC body now does an explicit ordered cleanup (`game_players → games → players → groups`). Also patched the secondary UX bug where errors from destructive actions were rendered as a top-of-page toast invisible to a user scrolled to the delete button at the bottom of the page — modal now stays open on error and renders the failure inline.
 - **CRLF ghost files** in `git status` (TriviaReportsTab, TriviaGameScreen, supabaseCache, types/index, geminiAI, triviaGenerator, triviaReportNotifications, etc.) — `git diff --numstat` shows 0/0 line delta. Pure CRLF noise; resolves itself on next real edit.
 
 ## Open follow-ups
@@ -20,7 +20,7 @@
 - **Notification dispatch (v5.49.x)**: server-side via `notification_jobs` → pg_net → `/api/notification-worker` → send-push + send-email. Browser worker is redundant fallback. pg_cron `notification-jobs-sweep` retries every minute.
 - **Chip-counting permission model (v5.58.0)**: Services tab admin-accessible; Test Card + Accuracy Dashboard for all admins; Tune+Revert + auto-rollback owner-only (RLS-aligned).
 - **Vercel env vars**: `WORKER_INTERNAL_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_GROUP_ID`, per-feature keys (Gemini/ElevenLabs/EmailJS).
-- **Recently-applied SQL** (do not re-apply): `070`–`075`. See `supabase/` folder for current set.
+- **Recently-applied SQL** (do not re-apply): `070`–`076`. See `supabase/` folder for current set. `076` rewrites `delete_group` + relaxes `block_bulk_direct_delete` + `block_completed_game_player_delete` to honor a transaction-local `app.cascade_group_delete` flag.
 
 ## Spot-check queries (when debugging)
 
@@ -36,6 +36,8 @@ FROM public.notification_jobs ORDER BY created_at DESC LIMIT 10;
 
 ## Active themes (last ~5 versions)
 
+- **v5.60.9** — Delete Group RPC actually deletes the group. Two-bug compound: (1) `delete_group` body was `DELETE FROM groups WHERE id = X` and trusted cascades, but the `game_players.player_id → players` NO-ACTION FK is checked while `players` cascade runs before `game_players` is cleaned (PG cascade order ≠ FK dependency order), so the delete failed with a 23503; (2) even with manual ordering, the bulk-delete + completed-game guards from 043/050/051 would block the cleanup (051's claim that `games`/`players` have "no inbound FKs" missed `groups`). Migration 076 introduces a transaction-local `app.cascade_group_delete` flag honored by both guards; `delete_group` sets it and does ordered `game_players → games → players → groups`. UX side: modal now stays open + renders the error inline on failure (was a top-of-page toast invisible to a user at the delete button at the bottom).
+- **v5.60.7 / v5.60.8** — friendly-notice copy polish for the no-AI-key empty states. Each notice now explains what specifically is missing (summary / forecast / insights / comic / TTS / photo / training) with owner-vs-member variants, plus tighter "fail fast on missing key" wiring on training paths.
 - **v5.60.6** — reverted the v5.60.5 numpad running-total strip (framing bug — per-player running ≠ expected is profit/loss, not error; aggregate signal already covered by top progress bar + chip-gap warning). Also patched a stale-preview bug: chip-gap warning now invalidated on `chipCounts` change so editing counts after the first calculate tap forces a fresh re-confirmation.
 - **v5.60.5** — chip-entry self-correction polish: `handleCalculate` requires a second tap when `|gap| >= 1₪` and surfaces the per-player deduction/credit, photo modal gates auto-apply on `overallConfidence < 50` via new `'lowConfidence'` review phase, and the SettingsScreen test card aggregates multi-stack same-color rows for display + sums them when seeding initial actual counts. (The fourth item — numpad running-total strip — was reverted in v5.60.6.)
 - **v5.60.3–v5.60.4** — per-group AI key enforcement: server gates `groupId === OWNER_GROUP_ID` or 403; client `aiEligibility.ts` + friendly `AIKeyMissingNotice` across 6 surfaces.
