@@ -1,0 +1,47 @@
+v5.60.6 - Revert numpad running-total strip + fix stale chip-gap banner
+
+Two fixes after Lior caught a framing bug in v5.60.5 within minutes of
+the mobile test:
+
+1. REVERTED v5.60.5 item 1 — the numpad running-total reconciliation
+   strip. The framing was fundamentally wrong: per-player
+   `running != expected` is profit/loss, NOT an error. Chips conserve
+   table-wide (across all players), not per-player. The strip was
+   painting winning players RED with an "overage" badge, which is
+   exactly the opposite of helpful. The legitimate aggregate signal
+   (Σ counted vs Σ buy-ins) is already covered twice elsewhere:
+     - Top-of-screen progress bar in ChipEntryScreen
+     - Chip-gap warning at finalize (v5.60.5 item 3)
+   Adding a third surface for the same signal at the wrong granularity
+   was net-negative. Removed all 3 callsites: NumpadModalProps
+   interface, NumpadModal body JSX, and the props at the render site.
+   Left a NOTE comment in the interface flagging "don't re-add a
+   per-player strip here without explicit profit/loss framing" for
+   future agents.
+
+2. FIXED a stale-state bug in the chip-gap warning (v5.60.5 item 3).
+   Trace: admin clicks "calculate" → sees gap banner "gap +20₪, each
+   player −5₪" → goes back, edits counts → returns and clicks again.
+   The `chipGapPreview` state was still set from the previous click,
+   so the `!chipGapPreview` early-return guard in stage 2 of
+   handleCalculate skipped showing the new banner and finalized
+   against the new gap without explicit re-confirmation. Added a
+   useEffect that clears chipGapPreview on any chipCounts change.
+   CRITICAL: chipCounts is the ONLY dependency — including chipGapPreview
+   in deps would cause the effect to fire when handleCalculate SETS
+   the preview, immediately clearing it and breaking the banner. Added
+   an eslint-disable comment explaining why.
+
+Both items 2 (test card aggregation) and 4 (low-confidence photo
+review) from v5.60.5 were audited and confirmed clean — no similar
+bugs.
+
+Pre-merge validation: `npx tsc --noEmit` clean (exit 0), ReadLints
+clean on the touched file. Mental-traced the revert (no strip, dots
+back to original spacing) and the stale-banner fix (first click
+shows banner, edit-counts clears it, second click re-shows banner
+with current values).
+
+Agent memory: refreshed CONTEXT.md right-now block + active themes,
+appended a SESSIONS.md entry, added a LESSONS.md entry titled
+"A reconciliation strip against a meaningless target panics the user".

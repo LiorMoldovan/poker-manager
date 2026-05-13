@@ -64,16 +64,13 @@ interface NumpadModalProps {
   // typing flow stays byte-identical when the button isn't tapped.
   showPhotoButton?: boolean;
   onPhotoRequest?: () => void;
-  // Optional running-total reconciliation: current chip points
-  // already entered for this player (does NOT include the value
-  // being typed in the numpad — that's confirmed on advance) and
-  // the player's expected chip total (rebuys × chipsPerRebuy).
-  // When both are supplied, a thin strip is rendered below the
-  // dots showing `running / expected` with a color cue. Lets the
-  // admin notice an over/undercount mid-flow without exiting the
-  // numpad to look at the per-player overview.
-  runningChipPoints?: number;
-  expectedChipPoints?: number;
+  // NOTE (v5.60.6 revert): a `runningChipPoints / expectedChipPoints`
+  // reconciliation strip was added in v5.60.5 and removed here. The
+  // framing was wrong — per-player `running != expected` is profit/
+  // loss, not an error. Aggregate (table-wide) reconciliation is
+  // already covered by the progress bar at the top of ChipEntryScreen
+  // and the chip-gap warning at finalize. Resist the urge to re-add
+  // a per-player strip here without explicit profit/loss framing.
 }
 
 const NumpadModal = ({
@@ -91,8 +88,6 @@ const NumpadModal = ({
   isLastChip,
   showPhotoButton = false,
   onPhotoRequest,
-  runningChipPoints,
-  expectedChipPoints,
 }: NumpadModalProps) => {
   const { t } = useTranslation();
   const [value, setValue] = useState(currentValue.toString());
@@ -195,13 +190,11 @@ const NumpadModal = ({
         </div>
         
         {/* Progress indicator */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '0.35rem',
-          marginBottom: typeof runningChipPoints === 'number' && typeof expectedChipPoints === 'number' && expectedChipPoints > 0
-            ? '0.35rem'
-            : '0.75rem',
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '0.35rem', 
+          marginBottom: '0.75rem' 
         }}>
           {Array.from({ length: totalChips }).map((_, i) => (
             <div
@@ -216,41 +209,6 @@ const NumpadModal = ({
             />
           ))}
         </div>
-
-        {/* Running-total reconciliation strip — only when parent
-            passes the props. Helps admins spot an over/undercount
-            mid-flow without exiting the numpad to check the per-
-            player overview. Updates AFTER each numpad confirm
-            advances to the next chip (the value being typed isn't
-            included in `runningChipPoints` until confirm). Color
-            cue: green on exact match, red on overcount (any
-            positive delta), muted neutral while ramping up — the
-            running total is tiny by design early in the flow, so
-            painting that red would be misleading. */}
-        {typeof runningChipPoints === 'number' && typeof expectedChipPoints === 'number' && expectedChipPoints > 0 && (() => {
-          const delta = runningChipPoints - expectedChipPoints;
-          const exactMatch = delta === 0 && runningChipPoints > 0;
-          const overCount = delta > 0;
-          const color = exactMatch
-            ? '#22c55e'
-            : overCount
-            ? '#ef4444'
-            : 'var(--text-muted)';
-          return (
-            <div style={{
-              textAlign: 'center',
-              fontSize: '0.7rem',
-              color,
-              marginBottom: '0.75rem',
-              fontFamily: 'monospace',
-              letterSpacing: '0.02em',
-            }}>
-              {runningChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()}
-              {exactMatch && ' ✓'}
-              {overCount && ` (\u200E+${delta.toLocaleString()})`}
-            </div>
-          );
-        })()}
         
         <div style={{ 
           fontSize: '2.5rem', 
@@ -364,6 +322,18 @@ const ChipEntryScreen = () => {
   } | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
+  // v5.60.6: stale-preview guard. If the admin clicks "calculate"
+  // once (sees the gap banner), then goes back and changes a chip
+  // count, the preview from the previous click reflects the OLD
+  // gap — but `handleCalculate`'s `!chipGapPreview` early-return
+  // guard would then SKIP showing the new banner on the second
+  // click and finalize against a gap the user never explicitly
+  // acknowledged. Resetting on any `chipCounts` change forces a
+  // fresh preview tap so the user re-confirms with current
+  // numbers. Cheap: just clears one state slot when the user
+  // edits chips, with a `chipGapPreview` guard so we don't
+  // dispatch a no-op state set on every chip type-and-confirm.
+
   // Photo chip-counting state — purely additive, lives alongside the
   // existing manual flow. Per-player; survives switching between
   // players in the same session but is intentionally NOT persisted
@@ -462,6 +432,19 @@ const ChipEntryScreen = () => {
     const id = setTimeout(() => setPhotoErrorToast(''), 5000);
     return () => clearTimeout(id);
   }, [photoErrorToast]);
+
+  // v5.60.6: clear the chip-gap preview whenever chip counts change.
+  // Without this, an admin who clicks "calculate" → sees the gap
+  // banner → goes back to edit → returns and clicks again would
+  // bypass the (stale) banner via the `!chipGapPreview` early-return
+  // guard and finalize against a gap they never explicitly saw at
+  // its current value. Resetting forces a fresh acknowledgement.
+  // Guarded so we don't dispatch a no-op state set on every chip
+  // edit — only fires when there's actually a stale preview to clear.
+  useEffect(() => {
+    if (chipGapPreview) setChipGapPreview(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chipCounts]);
 
   const loadData = () => {
     if (!gameId) {
@@ -1586,13 +1569,6 @@ const ChipEntryScreen = () => {
         nextChipDisplayColor={nextChip?.displayColor}
         isLastChip={numpadChipIndex >= chipValues.length - 1}
         showPhotoButton={photoAvailable && !!numpadPlayerId && !photoResults[numpadPlayerId]}
-        runningChipPoints={numpadPlayerId ? getPlayerChipPoints(numpadPlayerId) : undefined}
-        expectedChipPoints={(() => {
-          if (!numpadPlayerId) return undefined;
-          const p = players.find(pl => pl.id === numpadPlayerId);
-          if (!p) return undefined;
-          return p.rebuys * chipsPerRebuy;
-        })()}
         onPhotoRequest={() => {
           // Close the numpad and open the photo modal targeting the
           // same player. After the photo flow completes (or is

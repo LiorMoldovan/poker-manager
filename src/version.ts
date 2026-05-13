@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.5';
+export const APP_VERSION = '5.60.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,10 +14,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.60.6',
+    date: '2026-05-13',
+    changes: [
+      '🔁 Reverted numpad running-total strip (was misreading profit as error)',
+      '🐛 Chip-gap banner now refreshes if you edit counts after first tap',
+    ],
+  },
+  {
     version: '5.60.5',
     date: '2026-05-13',
     changes: [
-      '🔢 Running chip-total now shown in numpad header',
       '⚠️ Warning before chip-gap is silently distributed',
       '📷 Low-confidence photo result asks before applying',
       '🧪 Test card merges same-color stacks into one row',

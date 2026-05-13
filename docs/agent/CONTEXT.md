@@ -7,7 +7,7 @@
 
 ## Right now
 
-- **`origin/main`**: `5.60.5` (chip-entry self-correction polish: running total in numpad, chip-gap surfaced before finalize, low-confidence photo gate, test-card same-color aggregation — shipped together with the queued v5.60.3 per-group-key enforcement and v5.60.4 friendly notices in one push, see SESSIONS 2026-05-13).
+- **`origin/main`**: `5.60.6` (reverted the v5.60.5 numpad running-total strip after Lior caught the framing bug — per-player chip running != expected IS profit/loss, NOT an error; aggregate signal is correctly handled by the existing top-of-screen progress bar + the chip-gap warning at finalize. Also patched a stale-preview bug in the chip-gap warning where editing counts after the first calculate tap would bypass the second-tap confirmation).
 - **CRLF ghost files** in `git status` (TriviaReportsTab, TriviaGameScreen, supabaseCache, types/index, geminiAI, triviaGenerator, triviaReportNotifications, etc.) — `git diff --numstat` shows 0/0 line delta. Pure CRLF noise; resolves itself on next real edit.
 
 ## Open follow-ups
@@ -36,7 +36,8 @@ FROM public.notification_jobs ORDER BY created_at DESC LIMIT 10;
 
 ## Active themes (last ~5 versions)
 
-- **v5.60.5** — chip-entry self-correction polish: numpad header now shows `running / expected` chip-points strip (color-coded), `handleCalculate` requires a second tap when `|gap| >= 1₪` and surfaces the per-player deduction/credit, photo modal gates auto-apply on `overallConfidence < 50` via new `'lowConfidence'` review phase, and the SettingsScreen test card aggregates multi-stack same-color rows for display + sums them when seeding initial actual counts.
+- **v5.60.6** — reverted the v5.60.5 numpad running-total strip (framing bug — per-player running ≠ expected is profit/loss, not error; aggregate signal already covered by top progress bar + chip-gap warning). Also patched a stale-preview bug: chip-gap warning now invalidated on `chipCounts` change so editing counts after the first calculate tap forces a fresh re-confirmation.
+- **v5.60.5** — chip-entry self-correction polish: `handleCalculate` requires a second tap when `|gap| >= 1₪` and surfaces the per-player deduction/credit, photo modal gates auto-apply on `overallConfidence < 50` via new `'lowConfidence'` review phase, and the SettingsScreen test card aggregates multi-stack same-color rows for display + sums them when seeding initial actual counts. (The fourth item — numpad running-total strip — was reverted in v5.60.6.)
 - **v5.60.3–v5.60.4** — per-group AI key enforcement: server gates `groupId === OWNER_GROUP_ID` or 403; client `aiEligibility.ts` + friendly `AIKeyMissingNotice` across 6 surfaces.
 - **v5.60.0–v5.60.2** — `/schedule` promoted out of Settings (rich single-date home card, auto-elevation); photo chip tip rewritten + defensive same-color sum in `applyPhotoResult`.
 - **v5.59.0** — photo chip-counting rebuild: per-stack LLM + 3 geometric methods + weighted vote, chip selfies, white balance, total-value sanity check. Auto-tuner is the improvement lever.

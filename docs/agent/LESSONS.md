@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-13 — A "reconciliation strip" against a meaningless target panics the user
+
+**Incident**: v5.60.5 item 1 added a `running / expected` chip-points strip in the numpad header, color-coded red on overcount. Lior took a real photo on his phone, saw `(+2,000) 1,000 / 3,000` in red for a player who'd had a successful game, and asked "i think something is wrong, lets assume i did 2 rebuys and then i ended the game with more chips it simply means i completed the game in profit". He was right — per-player `running != expected` IS profit/loss, never an error. The strip was painting winning players red. Reverted entirely in v5.60.6.
+
+**Root cause**: I built the strip from the audit text I'd written earlier ("the mid-flow running total is invisible — self-correcting feedback during entry instead of after"). That sentence only makes sense if there's a target the running total should converge to. Per-player there isn't one — chips conserve table-wide, not per-player. Aggregate-level reconciliation (Σ counted vs Σ expected) WAS already covered by the top-of-screen progress bar AND the chip-gap warning at finalize (item 3). I added a third surface for the same signal but at the wrong granularity, and gave it the most alarming color. Cost: shipped a bug to production for ~3 hours and reverted in the next session.
+
+**Lesson**: Before adding a "feedback / reconciliation / sanity-check" UI element, write down — in one sentence — what condition you expect the element to flag as "wrong". If the answer is "this number being different from that number", check whether there's a *legitimate* reason the numbers can differ. If yes (profit/loss, partial entry, queued vs committed, etc.), either drop the element or reframe it explicitly as "informational, not error" with non-alarming colors. **A red color cue is a promise that something is broken; only use it when something actually is.** Also: the user's audit-time enthusiasm for an idea doesn't validate the idea's premise. The audit said "running total is invisible" — that was the symptom; the proposed cure was "expose it with color cues". The right question to ask before building was "is the comparison meaningful at this granularity?" — not asked, so the bug shipped.
+
+**Session**: 2026-05-13 (v5.60.5 → v5.60.6 — running-total strip revert).
+
+---
+
 ## 2026-05-13 — Truthy sentinel return values silently bypass UI gates
 
 **Incident**: `getGeminiApiKey()` and `getElevenLabsApiKey()` returned the sentinel string `'server-managed'` whenever a group had no per-group API key set — the intent was "the server will use the env-var fallback, treat it as available". But every UI gate across the app (`if (!getGeminiApiKey())` in NewGameScreen, GameSummaryScreen, GraphsScreen, ChipEntryScreen, LiveGameScreen, TrainingScreen, backgroundAI, comicGeneration, pokerTraining, etc.) checked it as a boolean. `'server-managed'` is a non-empty truthy string → every gate returned `true` → AI features fired for every group, regardless of whether they had a key. Combined with the server-side fallback being un-gated by group, this meant every non-owner group's AI usage silently drained Lior's platform Gemini quota for who knows how long. A friend opened a brand-new group, never added a key, used AI features extensively, and Lior got billed.
