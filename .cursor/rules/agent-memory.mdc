@@ -5,91 +5,105 @@ alwaysApply: true
 
 # Agent Memory
 
-This project keeps a small living memory in `docs/agent/` so a fresh chat doesn't re-discover what previous chats already figured out. **You are required to participate in it.**
+Small living memory in `docs/agent/` so a fresh chat doesn't re-discover what previous chats already figured out. **Be ruthlessly brief — the end ritual must take <2 min total.**
 
 ## The three files
 
 | File | Purpose | Update style |
 |---|---|---|
-| `docs/agent/CONTEXT.md` | 30-second orientation: what's in flight, recent themes, things not in `AGENTS.md` or rules | Refreshed in place (overwrite) |
-| `docs/agent/SESSIONS.md` | Chronological journal of agent sessions, newest first | Append-only at the top |
-| `docs/agent/LESSONS.md` | Hard-won lessons from real incidents — never generic best practices | Append at the bottom, only when earned |
+| `docs/agent/CONTEXT.md` | 30-second orientation for next chat | Refreshed in place (overwrite). Keep tight. |
+| `docs/agent/SESSIONS.md` | WIP handoffs only — NOT a bug-fix journal | Append-only at the top. Skip by default. |
+| `docs/agent/LESSONS.md` | Hard lessons future-me would re-hit without this note | Append. Earn it. |
 
 These complement (don't duplicate) `AGENTS.md` (project map) and `.cursor/rules/*.mdc` (standing rules).
 
 ## Start ritual — MANDATORY on first user message of a chat
 
-Before issuing **any** other tool call (other than reading these three files), you must:
+Before any other tool call (other than reading these files):
 
 1. Read `docs/agent/CONTEXT.md` in full.
-2. Read `docs/agent/SESSIONS.md` — at minimum the top 3 entries, more if relevant to the user's request.
+2. Read top 3 entries of `docs/agent/SESSIONS.md` (more only if directly relevant).
 3. Read `docs/agent/LESSONS.md` in full (it's small by design).
 
-Then, in your first reply to Lior, include a single concise line acknowledging state, e.g.:
+Then, in your first reply, include ONE concise line acknowledging state. Example:
 
-> Session loaded — current state: WIP on push-subscriber dedup (`supabaseCache.ts` + `SettingsScreen.tsx`), `main` at v5.44.0.
+> Session loaded — `main` at v5.60.6, WIP on push-subscriber dedup.
 
-Keep it to one line. Do not lecture back the contents.
+No lecturing the contents back.
 
-**Exceptions** (skip the ritual): purely conversational messages with no engineering intent ("hi", "thanks", "what's the weather"). When in doubt, do the ritual.
+**Skip the ritual** for purely conversational messages ("hi", "thanks"). When in doubt, do the ritual.
 
-## End ritual — only when there's something worth remembering
+## End ritual — be lazy
 
-Trigger the end ritual when **any** of these happen:
+Trigger when: Lior says "wrap up" / commits + pushes / explicitly accepts work and moves on.
 
-- Lior says "session end", "wrap up", "we're done", or similar.
-- You commit and/or push (the merge pipeline from `git-workflow.mdc`).
-- The user explicitly accepts a piece of work as complete and moves to a different topic.
+### SESSIONS.md — DEFAULT IS WRITE NOTHING
 
-### Default: SKIP the SESSIONS.md entry
+**Bug fixes and feature adds NEVER qualify** — `git log` + the changelog + the migration/code comments already tell that story. If you're about to write "fixed X" or "added Y", STOP.
 
-Most commits don't deserve a journal entry. **Skip the `SESSIONS.md` append** unless the session produced at least one of:
+Write a SESSIONS entry **only** if at least one of these is true:
 
-- A real lesson going to `LESSONS.md` (write the session entry as context for the lesson).
-- A non-trivial architectural decision (multiple paths considered, chose one for reasons future-me would want).
-- A multi-file fix where the root cause was non-obvious and future-me might re-hit the same symptom.
-- A deliberately-incomplete handoff (WIP left in working tree, blocked on external action, etc.).
+- WIP handoff (work left uncommitted, blocked on external action, half-done flow that next chat needs to pick up).
+- Architectural decision not visible in code or commit (e.g. "chose pg_net over Database Webhooks because X" — and only if the reasoning isn't already in the SQL header).
+- A real lesson going to `LESSONS.md` (write the entry as context for the lesson).
 
-If you're about to write "fixed X bug" or "added Y feature, matched existing pattern" — **skip the entry**. `git log` and the changelog already have it. Don't journal for the sake of journaling.
+If you DO write one, **hard cap 8 lines**. Format:
 
-### When you DO write a SESSIONS entry
+```
+## YYYY-MM-DD — Title (≤8 words)
 
-Cap it at **~15 lines / 5 bullets**. One line per bullet. No multi-paragraph "Did" sections — if it needs that, it belongs in the commit message body, not here. Format: date — title / asked / did (≤3 bullets) / learned (skip if nothing new) / next (skip if nothing pending).
+**Asked**: one sentence.
+**Did**: ≤3 short bullets.
+**Next** (only if pending): ≤2 short bullets.
+```
 
-### CONTEXT.md refresh — overwrite, don't accumulate
+No "Learned" section here — that lives in LESSONS.md or it doesn't exist. No multi-paragraph autopsies — those go in the commit message body if anywhere.
 
-Refresh `CONTEXT.md` **in place** when state materially changed (new version on `main`, new WIP, new pending migrations, follow-ups resolved). Hard rules:
+### LESSONS.md — only when transferable
 
-- **"Right now" section: cap at ~10 lines.** Current `main` version + uncommitted/WIP + open follow-ups only. **No stacking old versions** — when a new version ships, the previous version's blurb gets deleted, not pushed down.
-- **"Active themes" section: keep the 3–5 most recent, one line each.** Trim or merge older themes; they belong in `git log` if anyone needs to dig.
+Append only when a real incident exposed a pattern future agents would re-hit. **Hard cap 5 lines** per lesson. Format:
+
+```
+## YYYY-MM-DD — Short title
+
+**Incident**: one sentence.
+**Root cause**: one sentence.
+**Lesson**: one actionable sentence.
+**Session**: YYYY-MM-DD.
+```
+
+If the lesson needs more than 5 lines, it's probably a rule — promote it to `.cursor/rules/` instead. An empty LESSONS after a clean session is the correct outcome.
+
+### CONTEXT.md — bullets, not paragraphs
+
+Refresh in place when state materially changed (new version on `main`, new WIP, follow-ups resolved). Hard rules:
+
+- **"Right now" section: ≤8 lines, bullet points only, NO paragraphs.** Current `main` version + uncommitted/WIP + open follow-ups.
+- **"Active themes" section: 3 entries max, ONE line each.** Older themes get deleted, not pushed down. `git log` is the archive.
 - Update the "Last refreshed" date.
+- If `CONTEXT.md` grows past ~60 lines, prune.
 
-If `CONTEXT.md` grows past ~80 lines, prune.
+### Tell Lior what you logged
 
-### LESSONS.md — unchanged, append only when earned
+One short line. If you skipped writes, say "no memory entry needed".
 
-Append only if a real incident produced a real lesson. **Do not invent lessons** to look productive. An empty LESSONS section after a clean session is the correct outcome. Keep each lesson under ~10 lines.
+## What does NOT belong here
 
-### Briefly tell Lior what you logged
-
-One line per file touched. If you skipped a write, say "no session entry needed" — don't pretend you wrote one.
-
-## What does NOT belong in agent memory
-
-- Generic best practices ("always run tsc") → these are `.cursor/rules/`.
-- Project architecture and file maps → these are `AGENTS.md`.
-- User-facing release notes → these are `src/version.ts` CHANGELOG.
-- API documentation, schema reference → live next to the code or in `supabase/`.
-- Commit-message-level detail → `git log` already has it.
+- Generic best practices → `.cursor/rules/`.
+- Project architecture → `AGENTS.md`.
+- User-facing release notes → `src/version.ts` CHANGELOG.
+- Implementation autopsies, file lists, validation outputs → commit message body or just `git diff`.
+- Detail already in the SQL/code comments → just point to the file.
 
 If you find yourself writing the same thing in two places, stop and pick one. Documentation sprawl is the enemy.
 
 ## Promoting a lesson to a rule
 
-When a lesson in `LESSONS.md` is cited 3+ times across sessions or otherwise becomes "how we work":
+When a lesson is cited 3+ times or becomes "how we work":
 
-1. Create or extend a `.cursor/rules/*.mdc` file with the rule.
+1. Create/extend a `.cursor/rules/*.mdc` file.
 2. Replace the lesson body with a one-line pointer: `Promoted to .cursor/rules/<name>.mdc on YYYY-MM-DD.`
-3. Note the promotion in the active session entry.
 
-This keeps `LESSONS.md` from bloating and gets durable wisdom into the always-loaded rule set where it actually shapes behavior.
+## Time budget
+
+End ritual: **<2 minutes total** across all three files. If you find yourself writing more, you're doing it wrong — most of what you want to write belongs in the commit message, the changelog, or nowhere.
