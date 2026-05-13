@@ -47,6 +47,10 @@ const QuickTrainingScreen = () => {
   const [error, setError] = useState<string | null>(null);
   // Separate from `error` — no-key is expected state, not a failure.
   const [keyMissing, setKeyMissing] = useState(false);
+  // Same UX shape as keyMissing but for the "AI proxy not reachable in
+  // this environment" case (typically: localhost dev). Routes to the
+  // dedicated proxy-unavailable notice instead of a raw error page.
+  const [proxyDown, setProxyDown] = useState(false);
   const [results, setResults] = useState<{ correct: boolean; categoryId: string }[]>([]);
   const [showSummary, setShowSummary] = useState(false);
   const [quickModelName, setQuickModelName] = useState<string>('');
@@ -55,6 +59,7 @@ const QuickTrainingScreen = () => {
     setLoading(true);
     setError(null);
     setKeyMissing(false);
+    setProxyDown(false);
     try {
       const catIds = categoriesParam ? categoriesParam.split(',').filter(Boolean) : undefined;
       const batch = await withAITiming('quick_training', () => generateQuickBatch(maxHands, catIds));
@@ -69,6 +74,10 @@ const QuickTrainingScreen = () => {
       if (msg === 'NO_API_KEY' || msg.includes('aiKeyRequired')) {
         // Expected state, not an error — render the friendly notice.
         setKeyMissing(true);
+      } else if (msg === 'AI_PROXY_UNAVAILABLE' || msg.includes('aiProxyUnavailable')) {
+        // Localhost dev / undeployed env — surface the proxy-unavailable
+        // notice instead of a generic error.
+        setProxyDown(true);
       } else if (msg === 'INVALID_API_KEY') {
         setError('המפתח שהוגדר לא תקין, בדוק בהגדרות');
       } else if (msg.startsWith('ALL_MODELS_FAILED')) {
@@ -161,6 +170,17 @@ const QuickTrainingScreen = () => {
     return (
       <div className="fade-in" style={{ padding: '2rem 1rem', maxWidth: '480px', margin: '0 auto' }}>
         <AIKeyMissingNotice feature="training" />
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.25rem' }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/training')}>חזרה</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (proxyDown) {
+    return (
+      <div className="fade-in" style={{ padding: '2rem 1rem', maxWidth: '480px', margin: '0 auto' }}>
+        <AIKeyMissingNotice feature="training" reason="proxyUnavailable" />
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.25rem' }}>
           <button className="btn btn-secondary" onClick={() => navigate('/training')}>חזרה</button>
         </div>

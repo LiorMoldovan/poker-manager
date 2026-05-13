@@ -218,6 +218,11 @@ const NewGameScreen = () => {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiModelName, setAiModelName] = useState<string>('');
   const [aiError, setAiError] = useState<string | null>(null);
+  // Localhost-dev / undeployed environment marker — set when the
+  // forecast call comes back with the AI_PROXY_UNAVAILABLE sentinel
+  // (synthesized by `apiProxy.ts` for HTML-404 responses to /api/*).
+  // Drives the in-modal "AI runs only on the deployed site" notice.
+  const [aiProxyDown, setAiProxyDown] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [showMismatchDialog, setShowMismatchDialog] = useState(false);
   const [mismatchInfo, setMismatchInfo] = useState<{
@@ -1570,6 +1575,7 @@ const NewGameScreen = () => {
       setShowForecast(true);
       setIsLoadingAI(true);
       setAiError(null);
+      setAiProxyDown(false);
       setAiForecasts(null);
       
       try {
@@ -1649,6 +1655,13 @@ const NewGameScreen = () => {
           // already explains why "AI" was unavailable; surfacing a red
           // error on top of that would be redundant noise.
           setAiError(null);
+          setCachedForecasts(generateForecasts());
+        } else if (err.message === 'AI_PROXY_UNAVAILABLE' || err.message?.includes('aiProxyUnavailable')) {
+          // Localhost dev / undeployed env — same UX shape as NO_API_KEY:
+          // silently fall back to the static forecast and let the
+          // proxy-unavailable notice in the modal tell the story.
+          setAiError(null);
+          setAiProxyDown(true);
           setCachedForecasts(generateForecasts());
         } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
           // Start countdown timer for rate limit
@@ -2897,6 +2910,29 @@ const NewGameScreen = () => {
                     {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </div>
                 </div>
+                {/* Explain WHY this is the static fallback (not the AI
+                    one) right inside the modal — the user is staring
+                    at "🔮 static forecast" and otherwise has no clue
+                    where the AI version went. The notice card under
+                    the forecast button is hidden behind the modal
+                    overlay, so we surface it again here for owners
+                    with no Gemini key. */}
+                {isOwner && !aiProxyDown && !getGeminiApiKey() && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <AIKeyMissingNotice feature="forecast" />
+                  </div>
+                )}
+
+                {/* Same modal-context need, different reason: the AI
+                    proxy isn't reachable from this environment (e.g.
+                    localhost dev). Shown after a failed call so it
+                    explains why the static forecast is the only thing
+                    in the modal. */}
+                {aiProxyDown && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <AIKeyMissingNotice feature="forecast" reason="proxyUnavailable" />
+                  </div>
+                )}
 
                 {/* Player forecasts - sorted by expected profit (highest first) */}
                 <div style={{ marginBottom: '1rem' }}>

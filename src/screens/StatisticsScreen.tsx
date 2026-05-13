@@ -97,6 +97,11 @@ const StatisticsScreen = () => {
   const [chronicleStories, setChronicleStories] = useState<Record<string, string>>({});
   const [chronicleLoading, setChronicleLoading] = useState(false);
   const [chronicleError, setChronicleError] = useState<string | null>(null);
+  // Marks "AI proxy isn't reachable in this environment" — typically
+  // localhost dev (Vite doesn't serve /api/*). Routed from the
+  // AI_PROXY_UNAVAILABLE sentinel and rendered via the friendly
+  // proxy-unavailable notice instead of a raw error.
+  const [chronicleProxyDown, setChronicleProxyDown] = useState(false);
   const [isSharingChronicle, setIsSharingChronicle] = useState(false);
   const [chronicleModelName, setChronicleModelName] = useState<string>('');
   const [chronicleGeneratedAt, setChronicleGeneratedAt] = useState<string>('');
@@ -3069,6 +3074,7 @@ const StatisticsScreen = () => {
               const buildPayloadAndGenerate = async () => {
                 setChronicleLoading(true);
                 setChronicleError(null);
+                setChronicleProxyDown(false);
                 try {
                   const payloadPlayers: ChroniclePlayerData[] = rankedByProfit.map((p, idx) => {
                     const lg = p.lastGameResults || [];
@@ -3125,6 +3131,10 @@ const StatisticsScreen = () => {
                   // shows the friendly notice for owners.
                   if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
                     setChronicleError(null);
+                    setChronicleProxyDown(false);
+                  } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+                    setChronicleError(null);
+                    setChronicleProxyDown(true);
                   } else {
                     setChronicleError(msg);
                   }
@@ -3141,6 +3151,7 @@ const StatisticsScreen = () => {
               chronicleGenRef.current = false;
               setChronicleLoading(true);
               setChronicleError(null);
+              setChronicleProxyDown(false);
               try {
                 const payloadPlayers: ChroniclePlayerData[] = rankedByProfit.map((p, idx) => {
                   const lg = p.lastGameResults || [];
@@ -3194,6 +3205,10 @@ const StatisticsScreen = () => {
                 const msg = err instanceof Error ? err.message : 'Generation failed';
                 if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
                   setChronicleError(null);
+                  setChronicleProxyDown(false);
+                } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+                  setChronicleError(null);
+                  setChronicleProxyDown(true);
                 } else {
                   setChronicleError(msg);
                 }
@@ -3332,8 +3347,15 @@ const StatisticsScreen = () => {
                         through to the existing `chronicleNotCreated`
                         copy because they can't add the key themselves —
                         the owner has to do it. */}
-                    {!hasAiStories && isOwner && !hasAIKey && totalPeriodGames > 0 && (
+                    {!hasAiStories && isOwner && !hasAIKey && !chronicleProxyDown && totalPeriodGames > 0 && (
                       <AIKeyMissingNotice feature="generic" />
+                    )}
+                    {/* Proxy unreachable in this environment (typically:
+                        localhost dev). Shown for owners after a failed
+                        chronicle attempt — explains why the AI tried but
+                        no story rendered. */}
+                    {!hasAiStories && isOwner && chronicleProxyDown && totalPeriodGames > 0 && (
+                      <AIKeyMissingNotice feature="generic" reason="proxyUnavailable" />
                     )}
                     {!hasAiStories && !canGenerateAI && !(isOwner && !hasAIKey) && totalPeriodGames > 0 && (
                       <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>

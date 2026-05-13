@@ -100,6 +100,14 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         if (response.status === 403 && (errCode === 'aiKeyRequired' || errMsg.includes('Gemini API key'))) {
           throw new Error('NO_API_KEY');
         }
+        // Synthesized 503 from `apiProxy.ts` when the /api/* Edge Function
+        // route doesn't exist in this environment (typically: localhost dev
+        // server). Every fallback model would hit the same wall — fail fast
+        // with a clean sentinel so the calling screen renders the
+        // "AI proxy unavailable" notice instead of cycling through retries.
+        if (response.status === 503 && errCode === 'aiProxyUnavailable') {
+          throw new Error('AI_PROXY_UNAVAILABLE');
+        }
         if (response.status === 429) {
           const rlHeaders = readRateLimitHeaders(response);
           recordRateLimit(config.model, rlHeaders, errMsg);
@@ -170,7 +178,11 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
       return { text, model: config.model, usage };
     } catch (err) {
-      if (err instanceof Error && (err.message === 'INVALID_API_KEY' || err.message === 'NO_API_KEY')) throw err;
+      if (err instanceof Error && (
+        err.message === 'INVALID_API_KEY' ||
+        err.message === 'NO_API_KEY' ||
+        err.message === 'AI_PROXY_UNAVAILABLE'
+      )) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`   ${label}: ${config.model} error: ${msg}`);
       lastError = msg;
@@ -1572,8 +1584,31 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMsg = errorData?.error?.message || `Status ${response.status}`;
+        const errorCode = errorData?.error?.code;
         console.log(`   ❌ ${config.model}: ${errorMsg}`);
-        
+
+        // 403 aiKeyRequired = server-side enforcement: this group has
+        // no Gemini key + isn't the platform-owner group. Every fallback
+        // model would hit the same gate, AND the existing "all models
+        // failed" fallthrow at the bottom of this loop says "rate
+        // limited or unavailable" — which the NewGameScreen catch
+        // matches against `.includes('rate limit')` and then triggers
+        // a 60s retry countdown. That's badly wrong for a no-key
+        // group: there's nothing to retry. Fail fast with the
+        // canonical NO_API_KEY sentinel so the catch hits the silent
+        // fallback path and the user sees the friendly notice instead.
+        if (response.status === 403 && (errorCode === 'aiKeyRequired' || errorMsg.includes('Gemini API key'))) {
+          throw new Error('NO_API_KEY');
+        }
+        // Synthesized 503 from `apiProxy.ts` when /api/* isn't served
+        // (typically: localhost dev). Fail fast so NewGameScreen's catch
+        // routes to the silent local-forecast fallback + shows the
+        // friendly "AI proxy unavailable" notice in the modal — instead
+        // of cycling through models and triggering the 60s rate-limit
+        // countdown via the `ALL_MODELS_FAILED` fallthrow at the bottom.
+        if (response.status === 503 && errorCode === 'aiProxyUnavailable') {
+          throw new Error('AI_PROXY_UNAVAILABLE');
+        }
         if (response.status === 429) {
           const rlHeaders = readRateLimitHeaders(response);
           recordRateLimit(config.model, rlHeaders, errorMsg);
@@ -2013,6 +2048,14 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       return forecasts;
 
     } catch (fetchError) {
+      // NO_API_KEY / AI_PROXY_UNAVAILABLE are infrastructure sentinels —
+      // re-throw so the caller's catch can route to the friendly notice
+      // instead of getting swallowed and turned into the misleading
+      // "rate limited" final throw below.
+      if (fetchError instanceof Error && (
+        fetchError.message === 'NO_API_KEY' ||
+        fetchError.message === 'AI_PROXY_UNAVAILABLE'
+      )) throw fetchError;
       console.log(`   ❌ ${config.model} fetch error:`, fetchError);
       continue; // Try next model
     }

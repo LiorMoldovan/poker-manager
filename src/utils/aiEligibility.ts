@@ -64,3 +64,49 @@ export function isElevenLabsEnabledForCurrentGroup(): boolean {
 // for groups that had been silently using the platform owner's key. The
 // only honest signal now is "do we have a working call path right now?".
 export const isAIEnabledForCurrentGroup = isGeminiEnabledForCurrentGroup;
+
+// ──────────────────────────────────────────────────────────────────────
+// AI proxy environment availability
+// ──────────────────────────────────────────────────────────────────────
+//
+// The Gemini / ElevenLabs proxies live as Vercel Edge Functions in
+// `api/*.ts` and only exist on the deployed Vercel site. The standard
+// localhost dev server (Vite) does NOT serve them — every fetch to
+// `/api/gemini` from `npm run dev` returns 404 with an HTML body. That
+// 404 then cascades through every retry loop in `geminiAI.ts` /
+// `pokerTraining.ts` and surfaces as the unhelpful red-banner string
+// "ALL_MODELS_FAILED: Status 404" — which says nothing about the real
+// cause (proxy not deployed in this environment).
+//
+// We track availability with a tristate cache:
+//   null        → never tried; assume available (don't pre-block)
+//   true        → first call succeeded; AI works in this environment
+//   false       → first call returned HTML 404; proxy unreachable here
+//
+// `vercel dev` ALSO runs on localhost but DOES serve `/api/*`, so we
+// can't gate on hostname alone — we have to discover by trying. Once
+// the first call resolves, every subsequent call short-circuits based
+// on the cached result, costing one wasted fetch on cold-start in
+// localhost dev (acceptable price for never blocking `vercel dev`).
+
+let _aiProxyAvailable: boolean | null = null;
+
+export function getAIProxyAvailable(): boolean | null {
+  return _aiProxyAvailable;
+}
+
+export function markAIProxyAvailable(): void {
+  _aiProxyAvailable = true;
+}
+
+export function markAIProxyUnavailable(): void {
+  _aiProxyAvailable = false;
+}
+
+// True when we know for sure the proxy can't be reached from this
+// environment (typically: localhost without `vercel dev`). UI surfaces
+// can render a "deploy to test AI" notice instead of attempting the
+// call and showing a confusing raw "Status 404" error.
+export function isAIProxyKnownUnavailable(): boolean {
+  return _aiProxyAvailable === false;
+}

@@ -2,6 +2,58 @@ import { supabase } from '../database/supabaseClient';
 import { getSettings } from '../database/storage';
 import { getGroupId } from '../database/supabaseCache';
 import { isEmailEnabledForCurrentGroup, notifyEmailDisabled } from './emailEligibility';
+import { markAIProxyAvailable, markAIProxyUnavailable, isAIProxyKnownUnavailable } from './aiEligibility';
+
+// Synthesize a 503 response with a stable error code so every retry
+// loop downstream can recognize "the AI proxy isn't reachable in this
+// environment" without parsing raw status codes or HTML 404 bodies.
+// Returned both as the short-circuit when we already know the proxy is
+// down AND as a replacement for HTML 404s that come back from Vite.
+function aiProxyUnavailableResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'aiProxyUnavailable',
+        message: 'AI proxy not available in this environment (likely localhost dev — /api/* only runs on the deployed site)',
+      },
+    }),
+    {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+// Wrapped fetch for `/api/*` routes. Tracks proxy availability so the
+// FIRST 404-with-HTML response (Vite's "no such route" reply) flips
+// the cache; every subsequent AI call then short-circuits with a clean
+// 503 instead of wasting another network round-trip + retry cycle.
+async function aiFetch(url: string, init: RequestInit): Promise<Response> {
+  if (isAIProxyKnownUnavailable() && url.startsWith('/api/')) {
+    return aiProxyUnavailableResponse();
+  }
+  const res = await fetch(url, init);
+  if (url.startsWith('/api/')) {
+    if (res.ok) {
+      // Any successful proxy response confirms the route exists. Mark
+      // available so e.g. `vercel dev` (which DOES serve /api on
+      // localhost) doesn't get falsely blocked by the localhost
+      // hostname.
+      markAIProxyAvailable();
+    } else if (res.status === 404) {
+      // Distinguish "Vite has no such route" (HTML body) from "Google
+      // says this model name is unknown" (JSON error from the proxy
+      // pass-through). Only the HTML 404 means the proxy itself is
+      // missing.
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('text/html') || ct === '') {
+        markAIProxyUnavailable();
+        return aiProxyUnavailableResponse();
+      }
+    }
+  }
+  return res;
+}
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
@@ -46,7 +98,7 @@ export async function proxyGeminiGenerate(
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
-  return fetch('/api/gemini', {
+  return aiFetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ version, model, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
@@ -63,7 +115,7 @@ export async function proxyGeminiGenerateWithSignal(
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
-  return fetch('/api/gemini', {
+  return aiFetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ version, model, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
@@ -90,7 +142,7 @@ export async function proxyGeminiImage(
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
-  return fetch('/api/gemini', {
+  return aiFetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({
@@ -187,7 +239,7 @@ export async function proxyGeminiModels(_apiKey: string, version = 'v1beta'): Pr
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
-  return fetch('/api/gemini-models', {
+  return aiFetch('/api/gemini-models', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ version, groupId, ...(groupKey && { apiKey: groupKey }) }),
@@ -204,7 +256,7 @@ export async function proxyElevenLabsTTS(
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
   const groupId = getGroupId();
-  return fetch('/api/elevenlabs-tts', {
+  return aiFetch('/api/elevenlabs-tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ voiceId, outputFormat, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
@@ -216,7 +268,7 @@ export async function proxyElevenLabsUsage(_apiKey: string): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
   const groupId = getGroupId();
-  return fetch('/api/elevenlabs-usage', {
+  return aiFetch('/api/elevenlabs-usage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ groupId, ...(groupKey && { apiKey: groupKey }) }),

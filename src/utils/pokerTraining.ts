@@ -670,6 +670,12 @@ export const generateTrainingHand = async (
         if (response.status === 403 && (code === 'aiKeyRequired' || msg.includes('Gemini API key'))) {
           throw new Error('NO_API_KEY');
         }
+        // Synthesized 503 from `apiProxy.ts` when /api/* isn't served
+        // (typically: localhost dev). Bail out with a clean sentinel so
+        // the training UI shows the "AI proxy unavailable" notice.
+        if (response.status === 503 && code === 'aiProxyUnavailable') {
+          throw new Error('AI_PROXY_UNAVAILABLE');
+        }
         if (response.status === 429 || response.status === 404 || response.status === 503) {
           lastError = msg;
           break;
@@ -916,6 +922,12 @@ export const generateQuickBatch = async (
           // Same rationale as generateTrainingHand — surface the clean
           // NO_API_KEY sentinel rather than cycling all fallback models.
           throw new Error('NO_API_KEY');
+        }
+        if (response.status === 503 && code === 'aiProxyUnavailable') {
+          // Localhost / undeployed environment — bail with the dedicated
+          // sentinel so the training UI renders the proxy-unavailable
+          // notice instead of cycling models.
+          throw new Error('AI_PROXY_UNAVAILABLE');
         }
         if (response.status === 400 && msg.includes('API key')) {
           throw new Error('INVALID_API_KEY');
@@ -1833,6 +1845,13 @@ const generateSingleBatch = async (
           // notice instead of a cryptic "model X 403" diagnostic line.
           if (response.status === 403 && (code === 'aiKeyRequired' || msg.includes('Gemini API key'))) {
             throw new Error('NO_API_KEY');
+          }
+          // Localhost / undeployed environment — bail with the dedicated
+          // sentinel so the batch-coaching flow surfaces the
+          // proxy-unavailable notice rather than retrying models that
+          // will all fail the same way.
+          if (response.status === 503 && code === 'aiProxyUnavailable') {
+            throw new Error('AI_PROXY_UNAVAILABLE');
           }
           if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
           diag.push(`${label} HTTP ${response.status}: ${msg}`);

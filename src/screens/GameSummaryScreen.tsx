@@ -87,6 +87,11 @@ const GameSummaryScreen = () => {
   // even when the local `getGeminiApiKey()` heuristic still says "yes".
   // Cleared by setAiSummary on success and on regenerate-attempt start.
   const [aiKeyMissing, setAiKeyMissing] = useState(false);
+  // Tracks the "AI proxy isn't reachable in this environment" state
+  // (typically: localhost dev — /api/* only runs on Vercel). Routed
+  // from the AI_PROXY_UNAVAILABLE sentinel so the user sees a clean
+  // "deploy to test AI" notice instead of a raw "Status 404" error.
+  const [aiProxyDown, setAiProxyDown] = useState(false);
   // ─── Comic state ───
   const [comicUrl, setComicUrl] = useState<string | null>(null);
   const [comicScript, setComicScript] = useState<ComicScript | null>(null);
@@ -277,6 +282,7 @@ const GameSummaryScreen = () => {
     setAiSummary(null);
     setAiSummaryError(null);
     setAiKeyMissing(false);
+    setAiProxyDown(false);
     setIsLoadingAiSummary(false);
     forceGenerateRef.current = true;
     loadData();
@@ -292,6 +298,7 @@ const GameSummaryScreen = () => {
     setIsGeneratingComic(true);
     setComicError(null);
     setComicErrorDetail(null);
+    setAiProxyDown(false);
     setComicProgress('script');
     setComicArtPanel(null);
     // Open the comic section so the progress is visible.
@@ -346,6 +353,12 @@ const GameSummaryScreen = () => {
         // raw 403 body doesn't leak into a "details" disclosure.
         setComicError(null);
         setComicErrorDetail(null);
+      } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+        // Localhost dev / undeployed env — surface the clean
+        // "AI proxy unavailable" notice instead of a raw 404 banner.
+        setComicError(null);
+        setComicErrorDetail(null);
+        setAiProxyDown(true);
       } else if (msg === 'OFFLINE') {
         setComicError(t('summary.aiQuotaError'));
       } else if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
@@ -1137,6 +1150,7 @@ const GameSummaryScreen = () => {
 
       setAiSummaryError(null);
       setAiKeyMissing(false);
+      setAiProxyDown(false);
       withAITiming('game_summary', () => generateGameNightSummary(summaryPayload))
         .then(async result => {
           const modelDisplay = getModelDisplayName(result.meta.model);
@@ -1177,6 +1191,11 @@ const GameSummaryScreen = () => {
             // (e.g. brief race between settings cache and the actual call).
             setAiSummaryError(null);
             setAiKeyMissing(true);
+          } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+            // Localhost dev — /api/* not served. Show the clean
+            // "AI proxy unavailable" notice instead of a generic error.
+            setAiSummaryError(null);
+            setAiProxyDown(true);
           } else {
             setAiSummaryError(t('summary.aiGenError'));
           }
@@ -1972,7 +1991,7 @@ const GameSummaryScreen = () => {
                 </span>
               </div>
             )}
-            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && !aiKeyMissing && (
+            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && !aiKeyMissing && !aiProxyDown && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -1992,8 +2011,11 @@ const GameSummaryScreen = () => {
                      came back with 403 aiKeyRequired (defends against
                      race conditions where the call fired before the
                      pre-flight gate caught up). */}
-            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && (!getGeminiApiKey() || aiKeyMissing) && (
+            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && !aiProxyDown && (!getGeminiApiKey() || aiKeyMissing) && (
               <AIKeyMissingNotice feature="summary" style={{ marginBottom: '0.5rem' }} />
+            )}
+            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && aiProxyDown && (
+              <AIKeyMissingNotice feature="summary" reason="proxyUnavailable" style={{ marginBottom: '0.5rem' }} />
             )}
             {!collapsedSections.aiSummary && (
               <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
@@ -2105,7 +2127,7 @@ const GameSummaryScreen = () => {
             {!collapsedSections.comic && (
               <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
                 {/* Owner action row — varies by state */}
-                {isOwner && !isGeneratingComic && (
+                {isOwner && !isGeneratingComic && !aiProxyDown && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
                     {!comicUrl && getGeminiApiKey() && (
                       <span
@@ -2116,7 +2138,7 @@ const GameSummaryScreen = () => {
                         {t('summary.comicGenerate')}
                       </span>
                     )}
-                    {comicUrl && comicRegenCount < MAX_REGENERATIONS_PER_GAME && (
+                    {comicUrl && comicRegenCount < MAX_REGENERATIONS_PER_GAME && getGeminiApiKey() && (
                       <span
                         className="btn btn-sm"
                         style={{ background: '#2a1f3d', color: '#A855F7', border: '1px solid #4a2f6e', fontSize: '0.7rem', padding: '0.25rem 0.6rem', cursor: 'pointer' }}
@@ -2131,8 +2153,15 @@ const GameSummaryScreen = () => {
                 {/* No-API-key hint (admin only) — clickable card that
                     routes to Settings → Services. Member view skipped
                     because comic generation is owner-only anyway. */}
-                {isOwner && !comicUrl && !getGeminiApiKey() && (
+                {isOwner && !comicUrl && !aiProxyDown && !getGeminiApiKey() && (
                   <AIKeyMissingNotice feature="comic" accent="#A855F7" style={{ marginBottom: '0.5rem' }} />
+                )}
+
+                {/* Proxy unreachable in this environment — same situation
+                    as the summary block above; one notice covers the
+                    whole AI surface. */}
+                {isOwner && !comicUrl && aiProxyDown && (
+                  <AIKeyMissingNotice feature="comic" reason="proxyUnavailable" style={{ marginBottom: '0.5rem' }} />
                 )}
 
                 {/* Generating state */}

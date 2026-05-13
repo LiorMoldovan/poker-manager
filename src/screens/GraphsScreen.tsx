@@ -110,6 +110,11 @@ const GraphsScreen = () => {
   const [insightsText, setInsightsText] = useState<string>('');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+  // Tracks the "AI proxy isn't reachable in this environment" state
+  // (typically: localhost dev — /api/* only runs on Vercel). We surface
+  // a dedicated friendly notice instead of the raw "Status 404" red
+  // banner that the underlying error would otherwise produce.
+  const [insightsProxyDown, setInsightsProxyDown] = useState(false);
   const [insightsGeneratedAt, setInsightsGeneratedAt] = useState<string>('');
   const [insightsModelName, setInsightsModelName] = useState<string>('');
   const insightsGenRef = useRef(false);
@@ -294,6 +299,7 @@ const GraphsScreen = () => {
     (async () => {
       setInsightsLoading(true);
       setInsightsError(null);
+      setInsightsProxyDown(false);
       try {
         const dateFilter = getDateFilter();
         const stats = getPlayerStats(dateFilter)
@@ -330,6 +336,12 @@ const GraphsScreen = () => {
         // (rendered above) stays the only signal.
         if (msg.includes('NO_API_KEY') || msg.includes('aiKeyRequired')) {
           setInsightsError(null);
+          setInsightsProxyDown(false);
+        } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+          // Localhost dev / undeployed env — show the dedicated
+          // "proxy unavailable" notice instead of a raw 404 error.
+          setInsightsError(null);
+          setInsightsProxyDown(true);
         } else {
           setInsightsError(msg || t('graphs.errorInsights'));
         }
@@ -352,6 +364,7 @@ const GraphsScreen = () => {
 
     setInsightsLoading(true);
     setInsightsError(null);
+    setInsightsProxyDown(false);
     try {
       const dateFilter = getDateFilter();
       const stats = getPlayerStats(dateFilter)
@@ -389,6 +402,10 @@ const GraphsScreen = () => {
         // Same rationale as the auto-generation path — let the friendly
         // notice carry the message instead of a red error banner.
         setInsightsError(null);
+        setInsightsProxyDown(false);
+      } else if (msg.includes('AI_PROXY_UNAVAILABLE') || msg.includes('aiProxyUnavailable')) {
+        setInsightsError(null);
+        setInsightsProxyDown(true);
       } else {
         setInsightsError(msg || t('graphs.errorInsights'));
       }
@@ -1302,7 +1319,14 @@ const GraphsScreen = () => {
         <div ref={insightsRef} className="card" style={{ animation: 'contentFadeIn 0.3s ease-out 0.15s backwards' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.aiInsights')}</h2>
-            {isOwner && !insightsLoading && filteredGames.length > 0 && (
+            {/* Hide the generate/regenerate button when this group can't
+                actually call the AI. Without this gate the user taps a
+                live-looking button and gets a silent no-op (see the
+                early-return in `handleGenerateInsights` for `!apiKey`).
+                The friendly <AIKeyMissingNotice/> renders just below
+                instead, so the screen still explains what they're
+                missing and how to enable it. */}
+            {isOwner && !insightsLoading && filteredGames.length > 0 && getGeminiApiKey() && (
               <button
                 onClick={handleGenerateInsights}
                 style={{
@@ -1337,8 +1361,16 @@ const GraphsScreen = () => {
               group (no per-group key + not the platform-owner group).
               Renders BEFORE the user clicks "Create insights" so they
               know why the auto-generate path was silently skipped. */}
-          {!insightsText && !insightsLoading && !insightsError && !getGeminiApiKey() && (
+          {!insightsText && !insightsLoading && !insightsError && !insightsProxyDown && !getGeminiApiKey() && (
             <AIKeyMissingNotice feature="insights" accent="#8B5CF6" style={{ marginBottom: '0.5rem' }} />
+          )}
+
+          {/* Proxy unreachable in this environment (typically: localhost
+              dev — /api/* only runs on Vercel). Shown after a failed
+              call so we don't preemptively block users running
+              `vercel dev`, which DOES serve /api on localhost. */}
+          {insightsProxyDown && !insightsLoading && (
+            <AIKeyMissingNotice feature="insights" reason="proxyUnavailable" style={{ marginBottom: '0.5rem' }} />
           )}
 
           {insightsError && (

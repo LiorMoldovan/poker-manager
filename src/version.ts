@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.9';
+export const APP_VERSION = '5.60.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,25 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.11',
+    date: '2026-05-13',
+    changes: [
+      '🛠️ Friendly notice when AI proxy isn\'t deployed (localhost dev)',
+      '🚫 Killed raw "ALL_MODELS_FAILED: Status 404" red banners',
+      '⚡ AI calls short-circuit after first 404 (no wasted retries)',
+    ],
+  },
+  {
+    version: '5.60.10',
+    date: '2026-05-13',
+    changes: [
+      '🐛 Forecast no-key now skips static — was hitting fake rate-limit countdown',
+      '🔇 Hide Insights button when no Gemini key (was silent no-op)',
+      '🔁 Forecast modal now shows the no-key notice inside it',
+      '🎨 Comic regenerate button hidden when key removed',
+    ],
+  },
   {
     version: '5.60.9',
     date: '2026-05-13',
