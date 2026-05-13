@@ -21,7 +21,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GamePlayer, PlayerStats, TrainingPlayerData } from '../types';
-import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, linkPollToGame } from '../database/storage';
+import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, getSettings, linkPollToGame } from '../database/storage';
+import { computeNextScheduledTrigger } from './ScheduleTab';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
@@ -176,7 +177,7 @@ interface HomeDashboardProps {
 
 export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnabled, hasActiveGame }: HomeDashboardProps) {
   const showAdminCta = isAdmin && !hasActiveGame;
-  const { t } = useTranslation();
+  const { t, language: i18nLanguage } = useTranslation();
   const navigate = useNavigate();
   // Observer mode (super admin browsing a non-member group): suppress
   // personal framing on the schedule card. The synthetic playerName
@@ -217,6 +218,39 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   const polls = getAllPolls();
   const allGames = getAllGames();
   const allGamePlayers = getAllGamePlayers();
+  const settings = getSettings();
+
+  // Auto-create anchor for the empty Schedule card. When the group has
+  // `scheduleAutoCreateEnabled` set, surface the exact day/date/time
+  // the next poll will auto-open so the card stops promising vague
+  // "soon" and starts showing reality. The Schedule page renders the
+  // same info via `computeNextScheduledTrigger` (now exported from
+  // ScheduleTab) — keeping a single source of truth means the home
+  // card and /schedule never disagree on the next anchor.
+  //
+  // Returns `null` when:
+  //   * auto-create is disabled (or never configured), OR
+  //   * the computation fails (shouldn't happen for valid 0-6 / HH:MM).
+  // Callers must handle the null branch with the generic "soon"
+  // fallback. Localised to the active language via the day-of-week
+  // translation keys we already use for the trivia card.
+  const nextAutoPoll = useMemo<{ dayName: string; date: string; time: string } | null>(() => {
+    if (settings.scheduleAutoCreateEnabled !== true) return null;
+    const day = settings.scheduleAutoCreateDay ?? 0;
+    const time = settings.scheduleAutoCreateTime ?? '18:00';
+    try {
+      const next = new Date(computeNextScheduledTrigger(day, time, new Date()));
+      const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+      const dayName = t(`home.trivia.dayOfWeek.${dayKeys[next.getDay()]}` as TranslationKey);
+      const date = i18nLanguage === 'he'
+        ? next.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
+        : next.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+      return { dayName, date, time };
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.scheduleAutoCreateEnabled, settings.scheduleAutoCreateDay, settings.scheduleAutoCreateTime, i18nLanguage]);
 
   // Most relevant active poll: confirmed-pending-game wins over open.
   // `!p.confirmedGameId` is the single source of truth — once a poll
@@ -355,18 +389,22 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
     return Math.max(0, Math.floor(ms / 86_400_000));
   }, [myStats]);
 
-  // Always land on the Schedule tab itself — never auto-open the
+  // Always land on the Schedule page itself — never auto-open the
   // create-poll modal. The previous shortcut (admin + no active poll
   // → `?action=create-poll`) was a UX mismatch with the empty card's
   // teaser copy ("מי בפנים? ההצבעה הבאה תיפתח בקרוב — לחצו לצפייה
   // בלוח הזמנים"): the user reasonably expects to *see* the schedule,
   // not to be dropped straight into a write-action modal that
   // members can't use anyway. Admins who do want to start a new poll
-  // tap the `+` button on the Schedule tab itself — one extra tap,
+  // tap the `+` button on the Schedule page itself — one extra tap,
   // worth it for predictable navigation.
+  //
+  // Destination is the top-level `/schedule` route (promoted out of
+  // `/settings?tab=schedule` in v5.60). Old deep links continue to
+  // work via the redirect in SettingsScreen.
   const goSchedule = () => {
     hapticTap();
-    navigate('/settings?tab=schedule');
+    navigate('/schedule');
   };
   const goLastGame = () => { if (lastGame) { hapticTap(); navigate(`/game/${lastGame.id}`, { state: { from: 'home' } }); } };
   const goNewGame = () => { hapticTap(); navigate('/new-game'); };
@@ -456,6 +494,8 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         poll={activePoll}
         myPlayerId={myStats?.playerId ?? null}
         playerName={effectivePlayerName}
+        isAdmin={isAdmin}
+        nextAutoPoll={nextAutoPoll}
         onClick={goSchedule}
       />
       {/* "About you" — personal rotating-fact card. Hidden when
@@ -863,10 +903,26 @@ interface ScheduleCardProps extends SectionProps {
   // Display name for the personalized title. Falls back to a generic
   // title when null.
   playerName: string | null;
+  // Whether the viewer can create polls (admin / owner / super-admin —
+  // see App.tsx line ~592 for the union). Only consulted on the
+  // empty-state branch, where the CTA flips from member-passive
+  // ("next vote opens soon, come back") to admin-active ("open the
+  // next poll"). The destination is identical either way — taps land
+  // on the top-level `/schedule` route, which is where the `+` button
+  // lives.
+  isAdmin: boolean;
+  // Pre-formatted next-auto-poll anchor when the group has scheduled
+  // auto-create enabled — `{ dayName, date, time }` with date already
+  // localised. `null` when auto-create is off (or never configured)
+  // OR when no poll is currently absent (consumed only on the empty
+  // state). Lets the empty subtitle show the concrete day/time
+  // instead of a vague "soon" — same computation the Schedule page
+  // uses internally so the two surfaces never disagree.
+  nextAutoPoll: { dayName: string; date: string; time: string } | null;
   onClick: () => void;
 }
 
-function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }: ScheduleCardProps) {
+function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
   if (!poll) {
     // Empty state is purely forward-looking — a teaser inviting the
     // viewer to come back when the next vote opens. We deliberately
@@ -876,33 +932,126 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
     // card was redundant and made the dashboard read as backwards-
     // looking. Card click already routes to the schedule polls page,
     // so the CTA in the subtitle is honored.
+    //
+    // The subtitle has two axes of variation:
+    //
+    //   1. **Role** — a member sees the passive "next vote opens
+    //      soon" / notification-promise teaser, while an admin sees
+    //      an active "open the next poll" nudge. The amber accent
+    //      on the admin variant mirrors how state 3 (your-vote-is-
+    //      waiting) nudges members — same visual language for
+    //      "action required from you".
+    //
+    //   2. **Auto-create configured?** — when the group has
+    //      `scheduleAutoCreateEnabled` set, swap in the concrete
+    //      day/date/time (`nextAutoPoll`) instead of vague "soon".
+    //      This honours the reality that the next poll opens on a
+    //      *specific* date the admin already decided; surfacing
+    //      that date on Home means members stop wondering when and
+    //      admins see a "tap to open one early" framing instead of
+    //      a generic "start from scratch" prompt.
+    //
+    // Tap destination is identical across all four sub-states: the
+    // `/schedule` page, where the `+` button lives for admins and
+    // the empty-board explainer + history shows for members.
+    const subtitleKey: TranslationKey = nextAutoPoll
+      ? (isAdmin ? 'home.schedule.emptyHelperAdminAuto' : 'home.schedule.emptyHelperAuto')
+      : (isAdmin ? 'home.schedule.emptyHelperAdmin' : 'home.schedule.emptyHelper');
+    const subtitle = nextAutoPoll
+      ? t(subtitleKey, { dayName: nextAutoPoll.dayName, date: nextAutoPoll.date, time: nextAutoPoll.time })
+      : t(subtitleKey);
     return (
       <HomeCard
         order={order}
         step={step}
-        icon="🗓"
-        title={t('home.schedule.emptyTitle')}
-        subtitle={t('home.schedule.emptyHelper')}
+        icon={isAdmin ? '🗳' : '🗓'}
+        title={t(isAdmin ? 'home.schedule.emptyTitleAdmin' : 'home.schedule.emptyTitle')}
+        subtitle={subtitle}
+        accent={isAdmin ? 'warning' : undefined}
         onClick={onClick}
       />
     );
   }
 
   const isConfirmed = poll.status === 'confirmed';
+  // When the admin hasn't formally pinned a winner but the poll only
+  // has one proposed date in the first place, there's nothing to
+  // disambiguate — the single date IS the game night. Promote the
+  // home card to the same rich layout (date + countdown + location
+  // + attendee list) the confirmed branch uses, instead of showing
+  // the lean per-date glance-rows view that's only useful when
+  // there are multiple options to compare.
+  //
+  // Both `open` (permanents-only) and `expanded` (guests welcome)
+  // count as "still accepting votes" for this branch. Without the
+  // expanded check, a single-date poll that auto-promotes to
+  // guest-mode would visually regress from the rich view to the
+  // lean glance rows, even though the underlying poll is just
+  // wider-audience now — same date, same need for the rich view.
+  const isOpenSingleDate = (poll.status === 'open' || poll.status === 'expanded') && poll.dates.length === 1;
 
-  if (isConfirmed) {
+  // Shared renderer for the "rich" date-pinned card visual. Reused
+  // by State 2 (poll explicitly confirmed by admin) and the
+  // single-date open shortcut. Closes over `poll`, `t`, `order`,
+  // `step`, `onClick` from the enclosing `ScheduleCard` scope.
+  //
+  //   - `dateId === null/undefined` → renders just the title +
+  //     `confirmedHelper` subtitle. Edge case where State 2 was
+  //     reached without a pinned date set; pre-refactor code
+  //     handled it, so we keep parity.
+  //   - `awaitingViewer === true` → prepends a subtle amber
+  //     "מחכים להצבעה שלך" segment to the subtitle so the calm
+  //     green card still nudges a non-voter. Only true on the
+  //     single-date open path, and only when we know the viewer's
+  //     playerId (observers stay calm — no nudge for users not
+  //     linked to a player).
+  //   - `emptyFallback === true` → renders the "עדיין אין הצבעות
+  //     - לחצו כדי להצביע" body when no one has said yes yet, so
+  //     the card isn't visually empty on a freshly-opened single-
+  //     date poll and the CTA stays visible.
+  //
+  // Subtitle structure mirrors the original inline implementation:
+  // a fragment of `whiteSpace: 'nowrap'` segments separated by
+  // styled `·` dividers, so on narrow screens the line either fits
+  // intact or breaks cleanly between segments — never mid-phrase,
+  // never leaving a "·" stranded at the start of the next line.
+  const renderRichDateCard = (opts: {
+    dateId: string | null | undefined;
+    awaitingViewer: boolean;
+    emptyFallback: boolean;
+    // Title/icon vary by branch so we don't lie about pin status:
+    //   - Confirmed branch → `🎯 ערב פוקר נקבע`  (date is locked)
+    //   - Single-date open → `🗳 הצבעה פתוחה`    (still accepting
+    //     votes; the rich body just makes participation visible
+    //     earlier than waiting for a formal pin)
+    // The body, accent, pills, click target, and layout primitive
+    // are identical across branches — only the header copy/icon
+    // shifts to honor the actual poll state.
+    titleKey: TranslationKey;
+    icon: string;
+    // Auto-promote to the confirmed-style header (`🎯 ערב פוקר
+    // נקבע`) the moment the poll has gathered enough yes-votes to
+    // hit `targetPlayerCount`, even when the admin hasn't formally
+    // pinned. For a single-date open poll, "everyone said yes"
+    // captures the de-facto "we have a game" state — pinning at
+    // that point is pure ceremony, and showing "הצבעה פתוחה" on a
+    // visibly-full card under-sells the moment. We also suppress
+    // the awaiting-viewer subtitle nudge when elevated, because
+    // the game is happening regardless of whether THIS viewer
+    // weighed in.
+    //
+    // The confirmed branch passes false here — by definition it's
+    // already showing the celebratory header.
+    elevateWhenFilled: boolean;
+  }): React.ReactElement => {
     let dateLabel = '';
     let countdown: string | null = null;
     let location: string | null = null;
     let missingSeats = 0;
-    // Names of confirmed (yes-voting) players for the "מגיעים: …"
-    // line below the date/location. Resolved from playerId via the
-    // players cache so the order matches RSVP order, not name
-    // alphabetisation — first to commit shows up first.
     let comingNames: string[] = [];
 
-    if (poll.confirmedDateId) {
-      const d = poll.dates.find(x => x.id === poll.confirmedDateId);
+    if (opts.dateId) {
+      const d = poll.dates.find(x => x.id === opts.dateId);
       if (d?.proposedDate) {
         const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
         dateLabel = dt.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
@@ -912,7 +1061,7 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
         countdown = computeCountdown(d.proposedDate, d.proposedTime, t);
         location = (d.location && d.location.trim()) || (poll.defaultLocation && poll.defaultLocation.trim()) || null;
       }
-      const yesVotes = poll.votes.filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes');
+      const yesVotes = poll.votes.filter(v => v.dateId === opts.dateId && v.response === 'yes');
       missingSeats = Math.max(0, poll.targetPlayerCount - yesVotes.length);
       const playersById = new Map(getAllPlayers().map(p => [p.id, p.name]));
       comingNames = yesVotes
@@ -920,20 +1069,45 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
         .filter((name): name is string => Boolean(name));
     }
 
-    // Subtitle is a single inline line. The location gets a 📍
-    // prefix to match how location is rendered everywhere else in
-    // the app (HistoryScreen cards, schedule notification emails,
-    // newGame/settings labels). Without it, a host like "אייל"
-    // looks identical to a player name in the same row — the icon
-    // makes the meaning unambiguous at a glance.
+    // A single-date open poll that hits its target seat count is
+    // de-facto a confirmed game night — promote the header to the
+    // celebratory variant and drop the "still waiting on you" nudge,
+    // because nobody is actually waiting at that point.
     //
-    // Each segment is `whiteSpace: 'nowrap'` so on narrow screens
-    // the line either fits intact or breaks cleanly between
-    // segments — never mid-phrase, never leaving a "·" stranded at
-    // the start of the next line.
+    // We trust `missingSeats === 0` as the authoritative "filled"
+    // signal (it's computed from the raw yesVotes.length vs target).
+    // Deliberately NOT gating on `comingNames.length >= target` —
+    // `comingNames` is filtered to known players via the players
+    // cache, and during a stale-cache window a yes-voter's player
+    // record may briefly be missing, dropping the visible name
+    // count below target while the poll IS actually filled. In
+    // that scenario we'd rather celebrate honestly (and show fewer
+    // names) than show a contradictory "still open" header on a
+    // green-accented card.
+    //
+    // The `comingNames.length > 0` guard prevents elevation of a
+    // theoretical 0-target poll (UI prevents target < 4; this is
+    // pure defense to keep the helper composable).
+    const filled = opts.elevateWhenFilled
+      && missingSeats === 0
+      && comingNames.length > 0;
+    const effectiveTitleKey: TranslationKey = filled
+      ? 'home.schedule.confirmedTitle'
+      : opts.titleKey;
+    const effectiveIcon = filled ? '🎯' : opts.icon;
+    const effectiveAwaiting = filled ? false : opts.awaitingViewer;
+
     const subtitle = dateLabel ? (
       <>
-        <span style={{ whiteSpace: 'nowrap' }}>{dateLabel}</span>
+        {effectiveAwaiting && (
+          <span style={{ whiteSpace: 'nowrap', color: 'rgba(245, 158, 11, 0.95)', fontWeight: 600 }}>
+            {t('home.schedule.singleDateAwaitingYou')}
+          </span>
+        )}
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {effectiveAwaiting && <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>}
+          {dateLabel}
+        </span>
         {location && (
           <span style={{ whiteSpace: 'nowrap' }}>
             <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
@@ -974,6 +1148,13 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
     // · אורן · חרדון +2 נוספים") feels worse than either presenting
     // everyone or no one. For typical 6-10 player groups this wraps
     // to 1-2 lines naturally on mobile, which is acceptable.
+    //
+    // When `emptyFallback` is true and nobody has voted yes yet,
+    // we substitute a "no votes yet - tap to vote" line so the
+    // card stays visually full and the CTA is explicit. Without
+    // the fallback (confirmed branch), the body simply collapses
+    // to null — preserving pre-refactor behavior for the edge
+    // case where State 2 has zero yes-voters.
     let comingBody: React.ReactNode = null;
     if (comingNames.length > 0) {
       comingBody = (
@@ -991,14 +1172,29 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
           {comingNames.join(' · ')}
         </div>
       );
+    } else if (opts.emptyFallback) {
+      comingBody = (
+        <div style={{
+          fontSize: '0.7rem',
+          color: 'var(--text-muted)',
+          paddingTop: '0.4rem',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          lineHeight: 1.5,
+          wordBreak: 'break-word',
+          fontStyle: 'italic',
+          opacity: 0.85,
+        }}>
+          {t('home.schedule.singleDateNoCommitments')}
+        </div>
+      );
     }
 
     return (
       <HomeCard
         order={order}
         step={step}
-        icon="🎯"
-        title={t('home.schedule.confirmedTitle')}
+        icon={effectiveIcon}
+        title={t(effectiveTitleKey)}
         subtitle={subtitle}
         accessory={accessory}
         accent={accent}
@@ -1006,6 +1202,35 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }:
         onClick={onClick}
       />
     );
+  };
+
+  if (isConfirmed) {
+    return renderRichDateCard({
+      dateId: poll.confirmedDateId,
+      awaitingViewer: false,
+      emptyFallback: false,
+      titleKey: 'home.schedule.confirmedTitle',
+      icon: '🎯',
+      elevateWhenFilled: false,
+    });
+  }
+
+  if (isOpenSingleDate) {
+    // We nudge the viewer only when (1) they're linked to a player
+    // — observers without `myPlayerId` aren't expected to vote and
+    // a nudge would be misleading — and (2) they haven't yet
+    // recorded any response on the only proposed date. Once they
+    // vote (yes/no/maybe), the calm green State-2 visual is the
+    // right read and we drop the prefix.
+    const hasMyVoteOnSingle = myPlayerId !== null && poll.votes.some(v => v.playerId === myPlayerId);
+    return renderRichDateCard({
+      dateId: poll.dates[0].id,
+      awaitingViewer: myPlayerId !== null && !hasMyVoteOnSingle,
+      emptyFallback: true,
+      titleKey: 'home.schedule.openTitle',
+      icon: '🗳',
+      elevateWhenFilled: true,
+    });
   }
 
   // ── Open / expanded poll ──

@@ -28,6 +28,7 @@ const navImports = {
   StatisticsScreen: () => import('./screens/StatisticsScreen'),
   GraphsScreen: () => import('./screens/GraphsScreen'),
   SettingsScreen: () => import('./screens/SettingsScreen'),
+  ScheduleTab: () => import('./components/ScheduleTab'),
 };
 
 const NewGameScreen = lazy(navImports.NewGameScreen);
@@ -35,6 +36,7 @@ const HistoryScreen = lazy(navImports.HistoryScreen);
 const StatisticsScreen = lazy(navImports.StatisticsScreen);
 const GraphsScreen = lazy(navImports.GraphsScreen);
 const SettingsScreen = lazy(navImports.SettingsScreen);
+const ScheduleTab = lazy(navImports.ScheduleTab);
 
 const LiveGameScreen = lazy(() => import('./screens/LiveGameScreen'));
 const ChipEntryScreen = lazy(() => import('./screens/ChipEntryScreen'));
@@ -48,9 +50,9 @@ const TriviaGameScreen = lazy(() => import('./screens/TriviaGameScreen'));
 const TriviaLandingScreen = lazy(() => import('./screens/TriviaLandingScreen'));
 
 // Short-form deep link for schedule polls. The full URL is
-// `/settings?tab=schedule&poll=<id>` which is correct but reads as a
-// noisy link in WhatsApp captions where the link is always rendered
-// as plain text.
+// `/schedule?poll=<id>` which is correct but reads as a noisy link
+// in WhatsApp captions where the link is always rendered as plain
+// text.
 //
 // As of migration 040 the path param can be EITHER a 36-char poll
 // UUID (the legacy form, still emitted by older shares) or a 6-char
@@ -95,7 +97,7 @@ function PollDeepLinkRedirect() {
   }, [pollId]);
 
   if (!pollId || resolveFailed) {
-    return <Navigate to="/settings?tab=schedule" replace />;
+    return <Navigate to="/schedule" replace />;
   }
   if (!resolvedId) {
     // Slug-resolution in flight — render nothing rather than a flash
@@ -104,7 +106,7 @@ function PollDeepLinkRedirect() {
     return null;
   }
   return <Navigate
-    to={`/settings?tab=schedule&poll=${encodeURIComponent(resolvedId)}`}
+    to={`/schedule?poll=${encodeURIComponent(resolvedId)}`}
     replace
   />;
 }
@@ -1513,6 +1515,15 @@ function SupabaseApp() {
                 <Route path="/game/:gameId" element={<GameSummaryScreen />} />
                 <Route path="/statistics" element={<StatisticsScreen />} />
                 <Route path="/settings" element={<SettingsScreen />} />
+                {/* Schedule / polls — top-level page (was previously
+                    mounted as a tab inside Settings). Promoted to its
+                    own route in v5.60 because voting on the next game
+                    is a recurring task, not a setting, and Home is now
+                    the primary launcher. Old `/settings?tab=schedule`
+                    URLs (push notifications, emails, OAuth redirects)
+                    are transparently rerouted by SettingsScreen so no
+                    deep-link breaks. */}
+                <Route path="/schedule" element={<ScheduleTab />} />
                 {/* Short-form schedule-poll deep link — see PollDeepLinkRedirect.
                     Used in WhatsApp share captions to keep the URL clean. */}
                 <Route path="/p/:pollId" element={<PollDeepLinkRedirect />} />

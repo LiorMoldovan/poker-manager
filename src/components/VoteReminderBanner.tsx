@@ -13,9 +13,10 @@
 //   * Single line of title + body, with a primary "Vote now" pill on the end
 //     and a small × dismiss in the corner.
 //   * On mobile the title and body wrap onto separate lines automatically.
-//   * Tapping the body or the CTA navigates to the schedule tab in Settings
-//     with the relevant pollId in the query string (the same deep-link the
-//     push notifications use).
+//   * Tapping the body or the CTA navigates to `/schedule?pollId=<id>`
+//     (the same deep-link the push notifications use). Schedule lives at
+//     its own top-level route as of v5.60 — old `/settings?tab=schedule`
+//     URLs are transparently redirected by SettingsScreen.
 
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../i18n';
@@ -163,7 +164,7 @@ export function VoteReminderBanner() {
   const body = bodyFor(pending, t);
 
   const handleVote = () => {
-    navigate(`/settings?tab=schedule&pollId=${encodeURIComponent(pending.poll.id)}`);
+    navigate(`/schedule?pollId=${encodeURIComponent(pending.poll.id)}`);
   };
 
   const handleDismiss = (e: React.MouseEvent) => {

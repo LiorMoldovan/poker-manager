@@ -209,7 +209,11 @@ const computePreviousScheduledTrigger = (
 // If today matches the weekday but the time has already passed, this
 // rolls forward to the same weekday next week (correct — the auto-create
 // effect already fired for today's anchor).
-const computeNextScheduledTrigger = (
+//
+// Exported so the home dashboard's ScheduleCard empty-state can reuse
+// the exact same anchor computation. Single source of truth = home card
+// and Schedule page always agree on what day/time the next poll opens.
+export const computeNextScheduledTrigger = (
   day: number, time: string, now: Date
 ): number => {
   const [hStr = '18', mStr = '00'] = (time || '18:00').split(':');
@@ -322,12 +326,12 @@ export default function ScheduleTab() {
   const location = useLocation();
 
   // Deep-link target: when a recipient taps the share-card URL
-  // (`/settings?tab=schedule&poll=<id>`), the SettingsScreen handles the
-  // tab switch (`?tab=schedule`) and we read `?poll=<id>` here to
-  // scroll the matching PollCard into view and pulse a highlight ring.
-  // After handling, we strip the `poll` param via `navigate(..., {
-  // replace: true })` so a refresh doesn't re-trigger the highlight
-  // and the back button stays clean.
+  // (`/schedule?poll=<id>`, or the legacy `/settings?tab=schedule&poll=<id>`
+  // which SettingsScreen transparently redirects), we read `?poll=<id>`
+  // here to scroll the matching PollCard into view and pulse a highlight
+  // ring. After handling, we strip the `poll` param via
+  // `navigate(..., { replace: true })` so a refresh doesn't re-trigger
+  // the highlight and the back button stays clean.
   const [highlightedPollId, setHighlightedPollId] = useState<string | null>(null);
 
   // Admin gate: group admin OR group owner OR platform super-admin.
@@ -428,8 +432,11 @@ export default function ScheduleTab() {
         setHighlightedPollId(targetPollId);
       }
       // Strip `poll` from the URL after handling so refresh / back
-      // doesn't re-trigger. Preserve `tab=schedule` (and any other
-      // params) by mutating the same URLSearchParams.
+      // doesn't re-trigger. Preserve any other params by mutating the
+      // same URLSearchParams and reusing `location.pathname` so the
+      // rewrite works under both `/schedule` and the legacy
+      // `/settings?tab=schedule` path (the latter rerouted by
+      // SettingsScreen before this effect ever fires here).
       params.delete('poll');
       navigate(
         { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
@@ -447,12 +454,16 @@ export default function ScheduleTab() {
     return () => clearTimeout(timer);
   }, [highlightedPollId]);
 
-  // Deep-link handler: `?action=create-poll` from the home dashboard's
-  // empty schedule card opens the create-poll modal directly, saving
-  // admins the extra "Settings → Schedule → +" tap. The param is
-  // stripped after handling so a refresh or back-navigation doesn't
-  // re-open the modal. Members who somehow land here see the param
-  // cleared without anything popping up.
+  // Deep-link handler: `?action=create-poll` opens the create-poll
+  // modal directly, saving admins the extra "Home → Schedule → +"
+  // tap. NOTE: as of v5.60 the home dashboard does NOT use this
+  // shortcut — `goSchedule()` always lands on `/schedule` without
+  // the action param so members and admins see the same Schedule
+  // page first. The handler stays in place for any future surface
+  // that wants the shortcut. The param is stripped after handling
+  // so a refresh or back-navigation doesn't re-open the modal.
+  // Members who somehow land here see the param cleared without
+  // anything popping up.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('action') !== 'create-poll') return;

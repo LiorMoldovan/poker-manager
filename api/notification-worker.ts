@@ -144,7 +144,10 @@ function formatHebrewDateTimeVerbose(dateIso: string, timeStr: string | null): s
 }
 
 function deepLinkUrl(pollId: string): string {
-  return `/settings?tab=schedule&pollId=${encodeURIComponent(pollId)}`;
+  // Top-level `/schedule` route as of v5.60. Old `/settings?tab=schedule`
+  // URLs are transparently redirected by SettingsScreen on the client,
+  // so push notifications already in users' OS queues continue to work.
+  return `/schedule?pollId=${encodeURIComponent(pollId)}`;
 }
 
 // Absolute URL for email bodies (push uses the relative path above).

@@ -239,11 +239,13 @@ export function useSupabaseAuth() {
     // Use the FULL current URL as the redirect target (not just origin)
     // so query params survive the OAuth round-trip. This is what makes
     // share-card deep links land on the right poll: a recipient who
-    // taps `…/settings?tab=schedule&poll=abc` and signs in with Google
-    // returns to that same URL after the OAuth dance, and the in-app
-    // routers + ScheduleTab pick up the tab + poll params naturally.
-    // For users signing in from the home page this is identical to the
-    // old behavior (origin === href when there are no params).
+    // taps `…/schedule?poll=abc` (or the legacy `…/settings?tab=schedule
+    // &poll=abc` URL which SettingsScreen transparently redirects) and
+    // signs in with Google returns to that same URL after the OAuth
+    // dance, and the in-app routers + ScheduleTab pick up the poll param
+    // naturally. For users signing in from the home page this is
+    // identical to the old behavior (origin === href when there are no
+    // params).
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

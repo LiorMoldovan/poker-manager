@@ -1450,9 +1450,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Deep-link highlight: when the user lands here via a share-card URL
- * (`/settings?tab=schedule&poll=<id>`), pulse a soft cyan ring around
- * the targeted poll card for ~2s so the eye lands on the right card
- * after auto-scroll. The wrapper itself has no padding/margin (it's
+ * (`/schedule?poll=<id>`, or the legacy `/settings?tab=schedule&poll=<id>`
+ * which SettingsScreen transparently redirects), pulse a soft cyan ring
+ * around the targeted poll card for ~2s so the eye lands on the right
+ * card after auto-scroll. The wrapper itself has no padding/margin (it's
  * a transparent `<div>`) so the ring traces the inner .poll-card. */
 .poll-card-deeplink-highlight > .poll-card {
   animation: pollDeepLinkPulse 2s var(--poll-ease-out) 1;

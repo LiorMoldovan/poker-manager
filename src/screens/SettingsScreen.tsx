@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
-import { usePendingVote } from '../hooks/usePendingVote';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits, PhotoChipCountResult } from '../types';
 import { cleanNumber } from '../utils/calculations';
@@ -80,7 +79,6 @@ import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import TriviaReportsTab from '../components/TriviaReportsTab';
 import GroupManagementTab from '../components/GroupManagementTab';
-import ScheduleTab from '../components/ScheduleTab';
 import { NumericInput } from '../components/NumericInput';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -243,9 +241,6 @@ const SettingsScreen = () => {
   const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
   const [trainingActionCount, setTrainingActionCount] = useState(0);
   const [triviaPendingCount, setTriviaPendingCount] = useState(0);
-  // Pending-vote state — drives the small dot on the Schedule tab nav button.
-  // Hook handles realtime + minute-tick updates internally.
-  const pendingVote = usePendingVote();
   const [deviceLabels] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
@@ -362,11 +357,15 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'triviaReports' | 'superadmin' | 'push' | 'report';
-  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'triviaReports', 'superadmin', 'push', 'report'];
+  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'triviaReports' | 'superadmin' | 'push' | 'report';
+  const VALID_TAB_IDS: readonly TabId[] = ['group', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'triviaReports', 'superadmin', 'push', 'report'];
   const location = useLocation();
   const getDefaultTab = (): TabId => {
-    // Honor ?tab=<id> URL param (used by deep links from push notifications)
+    // Honor ?tab=<id> URL param (used by deep links from push notifications).
+    // Note: `?tab=schedule` is intentionally NOT honored here — schedule was
+    // promoted to its own `/schedule` top-level route, and the URL-sync
+    // effect below transparently redirects legacy `?tab=schedule` deep
+    // links before they affect activeTab.
     const params = new URLSearchParams(location.search);
     const t = params.get('tab');
     if (t && (VALID_TAB_IDS as readonly string[]).includes(t)) return t as TabId;
@@ -378,6 +377,23 @@ const SettingsScreen = () => {
   // Re-sync if URL changes while screen mounted (back/forward / re-deeplink)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+
+    // Backward-compat: old push notifications, broadcast emails, and the
+    // post-Google-OAuth redirect chain still ship `/settings?tab=schedule`
+    // URLs. The Schedule tab was promoted to its own `/schedule` route in
+    // v5.60 (home is now the primary launcher; schedule is a recurring
+    // task, not a setting). Reroute legacy URLs transparently, preserving
+    // every other query param (`poll`, `pollId`, `action`) so deep-link
+    // behaviour inside ScheduleTab is identical to a direct `/schedule?...`
+    // hit. `replace: true` keeps the back button clean — a tap from an
+    // email lands directly on /schedule with no /settings intermediate.
+    if (params.get('tab') === 'schedule') {
+      params.delete('tab');
+      const rest = params.toString();
+      navigate(`/schedule${rest ? `?${rest}` : ''}`, { replace: true });
+      return;
+    }
+
     const t = params.get('tab');
     if (t && (VALID_TAB_IDS as readonly string[]).includes(t) && t !== activeTab) {
       setActiveTab(t as TabId);
@@ -1085,7 +1101,10 @@ const SettingsScreen = () => {
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'report', label: t('settings.tabReport'), icon: '📩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
-    { id: 'schedule', label: t('settings.tabSchedule'), icon: '📅', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
+    // Schedule moved out of Settings into its own top-level `/schedule`
+    // route (v5.60). The Home dashboard is now the primary launcher for
+    // poll actions; old `/settings?tab=schedule` deep links continue to
+    // work via the redirect in the URL-sync useEffect above.
   ];
   
   const tabs = allTabs.filter(tab => {
@@ -1264,13 +1283,11 @@ const SettingsScreen = () => {
         }}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
-            // Show a small alert dot on the Schedule tab when the current
-            // user has a pending vote they haven't cast yet.
-            const showScheduleDot = tab.id === 'schedule' && !!pendingVote && !isActive;
-            const scheduleDotColor =
-              pendingVote?.urgency === 'critical' ? '#ef4444' :
-              pendingVote?.urgency === 'time'     ? '#3b82f6' :
-              pendingVote?.urgency === 'spots'    ? '#eab308' : '#10b981';
+            // Note: the "pending vote" alert dot that used to sit on the
+            // Schedule tab here was removed in v5.60 — Schedule is no
+            // longer a Settings tab, and the global VoteReminderBanner
+            // (rendered above all routes in App.tsx) already nudges
+            // members + admins about pending votes far more visibly.
             return (
               <button
                 key={tab.id}
@@ -1312,21 +1329,6 @@ const SettingsScreen = () => {
                   }}>
                     {triviaPendingCount}
                   </span>
-                )}
-                {showScheduleDot && (
-                  <span
-                    title={t('voteReminder.tabBadgeTitle')}
-                    aria-label={t('voteReminder.tabBadgeTitle')}
-                    style={{
-                      marginInlineStart: '0.35rem',
-                      display: 'inline-block',
-                      width: 8, height: 8,
-                      borderRadius: '50%',
-                      background: scheduleDotColor,
-                      boxShadow: `0 0 0 2px rgba(0,0,0,0.0), 0 0 6px ${scheduleDotColor}`,
-                      verticalAlign: 'middle',
-                    }}
-                  />
                 )}
               </button>
             );
@@ -1425,10 +1427,6 @@ const SettingsScreen = () => {
       )}
 
       {/* Schedule Tab (Game Polls) */}
-      {activeTab === 'schedule' && (
-        <ScheduleTab />
-      )}
-
       {/* Game Settings Tab */}
       {activeTab === 'game' && (
         <div className="card">

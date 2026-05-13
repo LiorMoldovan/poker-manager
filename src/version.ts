@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.59.2';
+export const APP_VERSION = '5.60.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.0',
+    date: '2026-05-13',
+    changes: [
+      '🗳 Schedule moved to its own home, not buried in Settings',
+      '🏠 Single-date polls show rich preview on home',
+      '🎯 Card auto-celebrates when all seats fill',
+      '🧭 Smart empty-state shows next auto-poll date',
+      '✏️ Members get amber nudge until they vote',
+      '🔗 All vote deep-links updated — emails, push, OAuth',
+    ],
+  },
   {
     version: '5.59.2',
     date: '2026-05-13',
