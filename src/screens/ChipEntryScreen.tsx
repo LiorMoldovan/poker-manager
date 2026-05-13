@@ -57,21 +57,30 @@ interface NumpadModalProps {
   nextChipColor?: string;
   nextChipDisplayColor?: string;
   isLastChip: boolean;
+  // Optional escape-hatch to the photo chip-counting flow. When
+  // both are supplied, a 📷 icon button is rendered in the green
+  // player-name header bar. Tapping it should close this modal
+  // and open the photo capture modal in the parent — the manual
+  // typing flow stays byte-identical when the button isn't tapped.
+  showPhotoButton?: boolean;
+  onPhotoRequest?: () => void;
 }
 
-const NumpadModal = ({ 
-  isOpen, 
+const NumpadModal = ({
+  isOpen,
   playerName,
-  chipColor, 
-  chipDisplayColor, 
-  currentValue, 
-  onConfirm, 
+  chipColor,
+  chipDisplayColor,
+  currentValue,
+  onConfirm,
   onClose,
   chipIndex,
   totalChips,
   nextChipColor,
   nextChipDisplayColor,
-  isLastChip
+  isLastChip,
+  showPhotoButton = false,
+  onPhotoRequest,
 }: NumpadModalProps) => {
   const { t } = useTranslation();
   const [value, setValue] = useState(currentValue.toString());
@@ -102,21 +111,59 @@ const NumpadModal = ({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
-        {/* Player name header */}
+        {/* Player name header.
+            Flex layout with a symmetrical spacer keeps the player
+            name visually centered whether or not the optional 📷
+            photo-escape button is rendered. The 📷 button is the
+            ONLY way to reach the photo flow from inside the
+            numpad — the manual flow is otherwise unchanged. */}
         <div style={{
           background: 'var(--primary)',
           margin: '-1.5rem -1.5rem 1rem -1.5rem',
-          padding: '0.75rem 1.5rem',
+          padding: '0.75rem 1rem',
           borderRadius: '16px 16px 0 0',
-          textAlign: 'center'
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
         }}>
-          <span style={{ 
-            color: 'white', 
-            fontWeight: '700', 
-            fontSize: '1.1rem'
+          {showPhotoButton && onPhotoRequest ? (
+            <button
+              type="button"
+              onClick={onPhotoRequest}
+              title={t('chips.photo.button')}
+              aria-label={t('chips.photo.button')}
+              style={{
+                background: 'rgba(255,255,255,0.18)',
+                border: 'none',
+                color: 'white',
+                fontSize: '1rem',
+                cursor: 'pointer',
+                padding: '0.25rem 0.55rem',
+                borderRadius: '8px',
+                lineHeight: 1,
+                fontFamily: 'inherit',
+                minWidth: '2rem',
+              }}
+            >
+              📷
+            </button>
+          ) : (
+            <span style={{ minWidth: '2rem', display: 'inline-block' }} />
+          )}
+          <span style={{
+            color: 'white',
+            fontWeight: '700',
+            fontSize: '1.1rem',
+            flex: 1,
+            textAlign: 'center',
           }}>
             {playerName}
           </span>
+          {/* Right-side spacer mirrors the left-side button width so
+              the player name stays optically centered regardless of
+              whether the photo button is rendered. */}
+          <span style={{ minWidth: '2rem', display: 'inline-block' }} />
         </div>
         
         <div className="modal-header" style={{ marginBottom: '0.5rem' }}>
@@ -1218,13 +1265,19 @@ const ChipEntryScreen = () => {
                     </span>
                   )}
                 </div>
+                {/* DOM order is [plus, input, minus] so that under
+                    the page's RTL direction (Hebrew), the flex row
+                    renders visually as [− | count | +] — minus on
+                    the LEFT, plus on the RIGHT. The container has
+                    no explicit direction override, so this DOM
+                    order is the lever that controls visual order. */}
                 <div className="chip-entry-controls">
                   {isAdmin && (
-                    <button 
-                      className="chip-btn chip-btn-minus"
-                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) - 1)}
+                    <button
+                      className="chip-btn chip-btn-plus"
+                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) + 1)}
                     >
-                      −
+                      +
                     </button>
                   )}
                   <input
@@ -1242,11 +1295,11 @@ const ChipEntryScreen = () => {
                     min="0"
                   />
                   {isAdmin && (
-                    <button 
-                      className="chip-btn chip-btn-plus"
-                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) + 1)}
+                    <button
+                      className="chip-btn chip-btn-minus"
+                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) - 1)}
                     >
-                      +
+                      −
                     </button>
                   )}
                 </div>
@@ -1383,7 +1436,15 @@ const ChipEntryScreen = () => {
         </button>
       </div>
 
-      {/* Numpad Modal */}
+      {/* Numpad Modal.
+          The optional 📷 photo button in the numpad header is the
+          ONLY discovery surface for the photo flow on this screen
+          right now (the standalone overview photo button is
+          unreachable when admins auto-jump straight from player
+          select into the numpad). Same gating as the overview-
+          screen button: only render when the group has a working
+          AI path AND there is no existing photo result for this
+          player yet (re-photo flow goes through the overview). */}
       <NumpadModal
         isOpen={numpadOpen}
         playerName={players.find(p => p.id === numpadPlayerId)?.playerName || ''}
@@ -1397,6 +1458,24 @@ const ChipEntryScreen = () => {
         nextChipColor={nextChip?.color}
         nextChipDisplayColor={nextChip?.displayColor}
         isLastChip={numpadChipIndex >= chipValues.length - 1}
+        showPhotoButton={photoAvailable && !!numpadPlayerId && !photoResults[numpadPlayerId]}
+        onPhotoRequest={() => {
+          // Close the numpad and open the photo modal targeting the
+          // same player. After the photo flow completes (or is
+          // cancelled), the user lands on the per-player overview
+          // screen — selectedPlayerId is still set, so the overview
+          // is already mounted underneath the numpad and just
+          // becomes visible. From there they can accept the AI
+          // result via "Done" or tap any chip row to re-enter the
+          // numpad. Per-field user edits already typed in the
+          // numpad are preserved by `applyPhotoResult` (it skips
+          // chipIds present in `userEditedFields`).
+          if (!numpadPlayerId) return;
+          const targetId = numpadPlayerId;
+          setNumpadOpen(false);
+          setPhotoTargetPlayerId(targetId);
+          setPhotoOpen(true);
+        }}
       />
 
       {/* Photo Capture Modal — additive to manual flow.

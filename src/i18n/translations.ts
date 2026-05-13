@@ -1080,7 +1080,7 @@ const he = {
   'chips.confirmCalculate': '⚠️ אשר חישוב',
   'chips.calculateResults': '🧮 חשב תוצאות',
   'chips.numpadDone': '✓ סיום שחקן',
-  'chips.numpadNext': 'הבא →',
+  'chips.numpadNext': 'הבא ←',
   'chips.color.white': 'לבן',
   'chips.color.red': 'אדום',
   'chips.color.blue': 'כחול',
