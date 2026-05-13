@@ -16,6 +16,7 @@ import { cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 
@@ -1312,6 +1313,14 @@ const GraphsScreen = () => {
               {t('graphs.generatingInsights')}
               <AIProgressBar operationKey="graph_insights" />
             </div>
+          )}
+
+          {/* Friendly empty state when AI is unavailable for the current
+              group (no per-group key + not the platform-owner group).
+              Renders BEFORE the user clicks "Create insights" so they
+              know why the auto-generate path was silently skipped. */}
+          {!insightsText && !insightsLoading && !insightsError && !getGeminiApiKey() && (
+            <AIKeyMissingNotice feature="insights" accent="#8B5CF6" style={{ marginBottom: '0.5rem' }} />
           )}
 
           {insightsError && (

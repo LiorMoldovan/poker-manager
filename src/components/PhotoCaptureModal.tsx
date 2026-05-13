@@ -44,8 +44,16 @@ const ERROR_CODE_TO_TRANSLATION: Record<PhotoChipCountErrorCode, TranslationKey>
  */
 
 const BLUR_THRESHOLD = 50; // empirical: below this, ring-counting becomes unreliable
+// v5.60.3: if the AI's own self-reported overall confidence is below
+// this threshold, we DON'T auto-apply the result. Instead we surface
+// a review screen showing the proposed counts and let the user
+// choose between "apply anyway" and "retake". 50% is the threshold
+// chosen empirically — at confidence < 50 the AI is essentially
+// guessing per-stack and the per-player chip totals end up wrong
+// often enough that silent auto-apply is more cost than benefit.
+const LOW_CONFIDENCE_THRESHOLD = 50;
 
-type Phase = 'instruction' | 'preview' | 'processing' | 'error';
+type Phase = 'instruction' | 'preview' | 'processing' | 'error' | 'lowConfidence';
 
 interface PhotoCaptureModalProps {
   isOpen: boolean;
@@ -88,6 +96,12 @@ const PhotoCaptureModal = ({
   const [previewMimeType, setPreviewMimeType] = useState<string>('image/jpeg');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<string>('');
+  // v5.60.3: when AI confidence is below LOW_CONFIDENCE_THRESHOLD we
+  // hold the result here instead of applying it, and the
+  // `lowConfidence` phase renders a review screen with "apply anyway"
+  // / "retake" buttons. Cleared on every modal open (see reset effect
+  // below) and on any explicit retake/apply action.
+  const [pendingResult, setPendingResult] = useState<PhotoChipCountResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -99,6 +113,7 @@ const PhotoCaptureModal = ({
       setPreviewBase64('');
       setErrorMsg('');
       setStatusMsg('');
+      setPendingResult(null);
     } else {
       // Modal closed — abort any in-flight Gemini call.
       abortRef.current?.abort();
@@ -230,6 +245,19 @@ const PhotoCaptureModal = ({
         return;
       }
 
+      // v5.60.3: gate auto-apply on overall confidence. When the AI
+      // says "I'm not sure" (< 50%), don't silently dump probably-
+      // wrong counts into the player's chip total — surface the
+      // review phase and let the user pick "apply anyway" or
+      // "retake". The auto-apply remains the default for high-
+      // confidence runs (which is the common case), so the friction
+      // only kicks in when it should.
+      if (typeof result.overallConfidence === 'number' && result.overallConfidence < LOW_CONFIDENCE_THRESHOLD) {
+        setPendingResult(result);
+        setPhase('lowConfidence');
+        return;
+      }
+
       onResult(result, previewBase64, previewMimeType);
       onClose();
     } catch (err) {
@@ -247,6 +275,19 @@ const PhotoCaptureModal = ({
     setPreviewUrl('');
     setPreviewBase64('');
     setErrorMsg('');
+    setPendingResult(null);
+  };
+
+  // v5.60.3: explicit "apply anyway" path from the low-confidence
+  // review screen. Same end-state as the auto-apply path in
+  // handleAnalyze — fires onResult with the held-back result and
+  // closes the modal.
+  const handleApplyLowConfidence = () => {
+    if (!pendingResult) return;
+    const result = pendingResult;
+    setPendingResult(null);
+    onResult(result, previewBase64, previewMimeType);
+    onClose();
   };
 
   const overlayStyle: React.CSSProperties = {
@@ -513,6 +554,123 @@ const PhotoCaptureModal = ({
                 100% { transform: translateX(350%); }
               }
             `}</style>
+          </div>
+        )}
+
+        {phase === 'lowConfidence' && pendingResult && (
+          <div>
+            {/* v5.60.3 review screen: side-by-side photo + AI's
+                proposed per-color counts so the user can sanity-
+                check before deciding. Confidence is shown
+                prominently in amber/red so the "this might be
+                wrong" framing is unmissable. */}
+            {previewUrl && (
+              <img
+                src={previewUrl}
+                alt="chip preview"
+                style={{
+                  width: '100%',
+                  maxHeight: '32vh',
+                  objectFit: 'contain',
+                  borderRadius: '10px',
+                  background: '#000',
+                  marginBottom: '0.75rem',
+                }}
+              />
+            )}
+            <div style={{
+              padding: '0.75rem 0.85rem',
+              background: 'rgba(245, 158, 11, 0.10)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: '10px',
+              marginBottom: '0.75rem',
+              fontSize: '0.85rem',
+              color: '#fbbf24',
+              lineHeight: 1.5,
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.3rem' }}>
+                {t('chips.photo.lowConfidence.title', { confidence: pendingResult.overallConfidence })}
+              </div>
+              <div style={{ fontSize: '0.78rem', opacity: 0.9 }}>
+                {t('chips.photo.lowConfidence.subtitle')}
+              </div>
+            </div>
+
+            {/* Aggregate the per-stack counts by chipId so the
+                preview matches the per-color shape the user
+                expects (matches the test-card display fix). */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              {(() => {
+                const summed = new Map<string, number>();
+                for (const stack of pendingResult.stacks) {
+                  summed.set(stack.chipId, (summed.get(stack.chipId) ?? 0) + stack.count);
+                }
+                return [...summed.entries()].map(([chipId, count]) => {
+                  const chip = chipValues.find(c => c.id === chipId);
+                  if (!chip) return null;
+                  return (
+                    <div
+                      key={chipId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.4rem 0.6rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '8px',
+                        marginBottom: '0.25rem',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <div style={{
+                        width: '1.2rem',
+                        height: '1.2rem',
+                        borderRadius: '50%',
+                        backgroundColor: chip.displayColor,
+                        border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
+                        flexShrink: 0,
+                      }} />
+                      <span style={{ flex: 1, fontWeight: 600 }}>{chip.color}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>×{chip.value}</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem', minWidth: '2.5rem', textAlign: 'center' }}>
+                        {count}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '0.5rem 0.6rem 0.2rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                borderTop: '1px solid var(--border)',
+                marginTop: '0.35rem',
+              }}>
+                <span>{t('chips.photo.lowConfidence.totalEstimate')}</span>
+                <span>{pendingResult.totalValue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleRetake}
+                style={{ flex: 1 }}
+              >
+                {t('chips.photo.lowConfidence.retake')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleApplyLowConfidence}
+                style={{ flex: 1 }}
+              >
+                {t('chips.photo.lowConfidence.applyAnyway')}
+              </button>
+            </div>
           </div>
         )}
 

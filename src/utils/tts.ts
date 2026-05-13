@@ -1,5 +1,6 @@
 import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage } from './apiProxy';
 import { getSettings } from '../database/storage';
+import { isElevenLabsEnabledForCurrentGroup } from './aiEligibility';
 
 // Gender-aware Hebrew number words for TTS
 // feminine=true for feminine nouns (קניות, פעמים, דקות)
@@ -412,9 +413,16 @@ const ELEVENLABS_VOICES = [
   'pNInz6obpgDQGcFmaJgB',  // Adam
 ];
 const ELEVENLABS_TIMEOUT_MS = 10000;
+// See `getGeminiApiKey` in geminiAI.ts for the full rationale — same shape:
+// returns the per-group key when set, the `'server-managed'` sentinel only
+// when the current group is the platform-owner group (so the server may
+// fall back to the env-var key), or `null` for every other group without
+// its own key (so UI surfaces hide TTS affordances cleanly instead of
+// quietly draining the platform owner's ElevenLabs quota).
 export const getElevenLabsApiKey = (): string | null => {
   const key = getSettings()?.elevenlabsApiKey;
-  return key || 'server-managed';
+  if (key && key.trim()) return key;
+  return isElevenLabsEnabledForCurrentGroup() ? 'server-managed' : null;
 };
 
 export async function getElevenLabsUsageLive(apiKey: string): Promise<{ used: number; limit: number; remaining: number; resetDate: string } | null> {

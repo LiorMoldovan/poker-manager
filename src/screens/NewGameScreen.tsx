@@ -11,6 +11,7 @@ import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { PeriodMarkers } from '../types';
 import { HomeDashboard } from '../components/HomeDashboard';
@@ -2156,6 +2157,17 @@ const NewGameScreen = () => {
       {generatingTTS && (
         <div style={{ padding: '0 0.75rem' }}>
           <AIProgressBar operationKey="tts_pool" />
+        </div>
+      )}
+      {/* No-AI-key explainer for the forecast row. Surfaces the WHY
+          before the user taps Forecast — otherwise we silently fall
+          back to a static forecast and the user wonders where the
+          AI summary, surprises, and pre-game teaser went. Owner-only
+          (member view stays clean; the forecast still works for them
+          via the static path). */}
+      {isOwner && !getGeminiApiKey() && (
+        <div style={{ padding: '0 0.75rem', marginTop: '0.4rem' }}>
+          <AIKeyMissingNotice feature="forecast" />
         </div>
       )}
       </>)}

@@ -11,8 +11,30 @@ export default async function handler(req: Request): Promise<Response> {
   if (authError) return authError;
 
   try {
-    const { voiceId, outputFormat, payload, apiKey: clientKey } = await req.json();
-    const apiKey = clientKey || process.env.ELEVENLABS_API_KEY;
+    const { voiceId, outputFormat, payload, apiKey: clientKey, groupId } = await req.json();
+
+    // See `api/gemini.ts` for the full key-resolution rationale; same gate.
+    // ElevenLabs Free tier is even tighter than Gemini (10k chars/mo) so
+    // gating fallback to the platform-owner group is doubly important.
+    let apiKey: string | undefined;
+    if (typeof clientKey === 'string' && clientKey.trim()) {
+      apiKey = clientKey.trim();
+    } else {
+      const ownerGroupId = process.env.OWNER_GROUP_ID;
+      if (ownerGroupId && groupId && groupId === ownerGroupId) {
+        apiKey = process.env.ELEVENLABS_API_KEY;
+      } else {
+        return new Response(JSON.stringify({
+          error: {
+            code: 'ttsKeyRequired',
+            message: 'This group has no ElevenLabs API key configured. The group owner must add one in Settings → Services → API Keys.',
+          },
+        }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
     if (!apiKey) {
       return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured. Set it in group settings.' } }), {
         status: 500,

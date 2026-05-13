@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-13 — Truthy sentinel return values silently bypass UI gates
+
+**Incident**: `getGeminiApiKey()` and `getElevenLabsApiKey()` returned the sentinel string `'server-managed'` whenever a group had no per-group API key set — the intent was "the server will use the env-var fallback, treat it as available". But every UI gate across the app (`if (!getGeminiApiKey())` in NewGameScreen, GameSummaryScreen, GraphsScreen, ChipEntryScreen, LiveGameScreen, TrainingScreen, backgroundAI, comicGeneration, pokerTraining, etc.) checked it as a boolean. `'server-managed'` is a non-empty truthy string → every gate returned `true` → AI features fired for every group, regardless of whether they had a key. Combined with the server-side fallback being un-gated by group, this meant every non-owner group's AI usage silently drained Lior's platform Gemini quota for who knows how long. A friend opened a brand-new group, never added a key, used AI features extensively, and Lior got billed.
+
+**Root cause**: The sentinel was added to communicate intent ("we'll let the server handle key resolution") to a hypothetical reader who would check `=== 'server-managed'` explicitly. Zero call sites did that — they all used the function as a boolean gate. So the sentinel pattern was load-bearing only in the author's head; in the actual code it just made the gate useless. Compounded by the server having a parallel un-gated fallback (`apiKey = clientKey || process.env.GEMINI_API_KEY`), creating a leak that no single layer would have produced alone.
+
+**Lesson**: If a function's return value is used as a boolean gate, the absence-of-feature case MUST be falsy (`null` / `undefined` / `false` / `''` / `0`). Sentinels exist to be checked explicitly; if no caller checks them explicitly, they're a bug magnet, not a clarity tool. When implementing a "use sentinel value to mean X" pattern, audit every call site BEFORE shipping — if any of them treat the return as boolean, the sentinel is wrong. Companion lesson: never implement the same gate at two layers (client + server) with one half "fail open" and the other half "fail closed" — they will drift, and the fail-open half will become the de facto behavior. Both layers should fail closed; the client layer is for UX (hide affordances), the server layer is for security (refuse the call). The client should never decide whether the server can use a shared resource.
+
+**Session**: 2026-05-13 (v5.60.3 — per-group AI key enforcement).
+
+---
+
 ## 2026-05-10 — `git stash --keep-index` is a footgun on Windows; commit-only-my-files instead
 
 **Incident**: A parallel agent had ~5 unrelated trivia files modified in the working tree alongside my v5.58.0 chip-permissions work. To stage only mine, I ran `git stash --keep-index` after `git add`-ing my 4 files. The expected result was "stash unstaged, leave staged ready for commit". Actual result: the next `git commit` captured `TriviaLandingScreen.tsx` + `translations.ts` + `version.ts` and *missed* `SettingsScreen.tsx` and `supabase/071-…sql` entirely — wrong file mix. Soft-reset undid the bad commit and exposed a separate divergence (other agent committed `b933097 v5.57.2` to local `main` skipping origin's `v5.57.1`). Net cost: ~30 min of git untangling and one panicked `AskQuestion` to the user.

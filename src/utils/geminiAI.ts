@@ -15,6 +15,7 @@ import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
 import { proxyGeminiGenerate, proxyGeminiGenerateWithSignal, proxyGeminiModels, pollinationsImage } from './apiProxy';
+import { isGeminiEnabledForCurrentGroup } from './aiEligibility';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 import type { DownscaledImage, RGB, HSL } from './imageUtils';
@@ -247,9 +248,22 @@ export async function runGeminiTextPrompt(
 
 export const isOnline = (): boolean => navigator.onLine;
 
+// Returns a usable signal that AI calls will work for the CURRENT group:
+//   - The group's own per-group key when set (trimmed, non-empty).
+//   - The sentinel `'server-managed'` when the current group is the
+//     platform-owner group (`VITE_OWNER_GROUP_ID`) — in that case the
+//     proxy can omit the key and the server falls back to the platform
+//     `GEMINI_API_KEY` env var.
+//   - `null` for every other group without its own key — AI affordances
+//     across the UI must hide/disable, because the server will refuse
+//     the call. (Pre-v5.60.3 this returned `'server-managed'` for ALL
+//     groups, which silently drained the platform owner's quota for any
+//     group that hadn't set its own key — the bug this comment was
+//     written to remember not to reintroduce.)
 export const getGeminiApiKey = (): string | null => {
   const key = getSettings()?.geminiApiKey;
-  return key || 'server-managed';
+  if (key && key.trim()) return key;
+  return isGeminiEnabledForCurrentGroup() ? 'server-managed' : null;
 };
 
 export interface PlayerForecastData {

@@ -33,20 +33,46 @@ Keep it to one line. Do not lecture back the contents.
 
 **Exceptions** (skip the ritual): purely conversational messages with no engineering intent ("hi", "thanks", "what's the weather"). When in doubt, do the ritual.
 
-## End ritual — MANDATORY when wrapping up
+## End ritual — only when there's something worth remembering
 
 Trigger the end ritual when **any** of these happen:
 
-- Lior says "session end", "wrap up", "we're done", "that's it for today", or similar.
+- Lior says "session end", "wrap up", "we're done", or similar.
 - You commit and/or push (the merge pipeline from `git-workflow.mdc`).
 - The user explicitly accepts a piece of work as complete and moves to a different topic.
 
-Do all that apply:
+### Default: SKIP the SESSIONS.md entry
 
-1. **Append a new entry to `SESSIONS.md`** (at the top, under the header). Use the existing format: date, asked, did, learned, next. Keep it tight — bullets, not prose. Skip if the chat was a single drive-by tweak with nothing to remember.
-2. **Refresh `CONTEXT.md` in place** if state changed materially: new version on `main`, new in-flight work, new SQL migrations pending, new themes emerged. Update the "Last refreshed" date. **Do not append — overwrite.** Stale CONTEXT is worse than missing CONTEXT.
-3. **Add to `LESSONS.md`** *only* if a real incident produced a real lesson — a bug we didn't catch, a wrong assumption we made, a wasted hour. Use the format defined in that file. **Do not invent lessons** to look productive. An empty LESSONS section after a clean session is the correct outcome.
-4. Briefly tell Lior what you logged (one line per file touched).
+Most commits don't deserve a journal entry. **Skip the `SESSIONS.md` append** unless the session produced at least one of:
+
+- A real lesson going to `LESSONS.md` (write the session entry as context for the lesson).
+- A non-trivial architectural decision (multiple paths considered, chose one for reasons future-me would want).
+- A multi-file fix where the root cause was non-obvious and future-me might re-hit the same symptom.
+- A deliberately-incomplete handoff (WIP left in working tree, blocked on external action, etc.).
+
+If you're about to write "fixed X bug" or "added Y feature, matched existing pattern" — **skip the entry**. `git log` and the changelog already have it. Don't journal for the sake of journaling.
+
+### When you DO write a SESSIONS entry
+
+Cap it at **~15 lines / 5 bullets**. One line per bullet. No multi-paragraph "Did" sections — if it needs that, it belongs in the commit message body, not here. Format: date — title / asked / did (≤3 bullets) / learned (skip if nothing new) / next (skip if nothing pending).
+
+### CONTEXT.md refresh — overwrite, don't accumulate
+
+Refresh `CONTEXT.md` **in place** when state materially changed (new version on `main`, new WIP, new pending migrations, follow-ups resolved). Hard rules:
+
+- **"Right now" section: cap at ~10 lines.** Current `main` version + uncommitted/WIP + open follow-ups only. **No stacking old versions** — when a new version ships, the previous version's blurb gets deleted, not pushed down.
+- **"Active themes" section: keep the 3–5 most recent, one line each.** Trim or merge older themes; they belong in `git log` if anyone needs to dig.
+- Update the "Last refreshed" date.
+
+If `CONTEXT.md` grows past ~80 lines, prune.
+
+### LESSONS.md — unchanged, append only when earned
+
+Append only if a real incident produced a real lesson. **Do not invent lessons** to look productive. An empty LESSONS section after a clean session is the correct outcome. Keep each lesson under ~10 lines.
+
+### Briefly tell Lior what you logged
+
+One line per file touched. If you skipped a write, say "no session entry needed" — don't pretend you wrote one.
 
 ## What does NOT belong in agent memory
 

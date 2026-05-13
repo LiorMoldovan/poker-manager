@@ -104,8 +104,8 @@ Not in `package.json`. Always bump as part of merge process. **Changelog bullets
 ### 8. Windows PowerShell
 Dev environment is Windows. No bash syntax (`&&`, heredocs, `cat`, `grep`). Use Cursor tools or PowerShell.
 
-### 9. No Automated Tests — But Self-Validation Is Mandatory
-Validate with `npx tsc --noEmit` and ReadLints on ALL modified files. For algorithm changes, use `node -e` scripts against `public/full-backup.json`. **Never claim "done" without running these checks.** The user should never have to ask "are you sure?" — if they do, you failed. Always trace the full data flow (client → API → DB → response → UI) and check all roles (member, admin, owner, super admin).
+### 9. No Automated Tests — Tiered Self-Validation
+Validation scales with change scope per `.cursor/rules/testing-guidelines.mdc`: Tier A code changes get full `npx tsc --noEmit` + ReadLints + logic trace + role check + env check; Tier B schema changes get apply + verify SELECT + RLS audit (no `tsc`); Tier C copy/docs gets ReadLints + visual scan only; Tier D trivial gets a visual check. For algorithm changes, use `node -e` scripts against `public/full-backup.json`. **Never claim "done" without running the appropriate tier.** The user should never have to ask "are you sure?" — if they do, you failed.
 
 ### 10. Roles: 2 Roles, Owner vs Admin Distinction
 Roles are `admin` and `member` (the `viewer` role was removed in migration 007). The **owner** (group creator, `groups.created_by`) has extra powers beyond a regular admin — only the owner can modify other admins, transfer ownership, regenerate invite codes, manage API keys, and access training/activity tabs. This is enforced in SQL RPCs via `groups.created_by` checks and in the UI via `isOwner` boolean.

@@ -11,8 +11,38 @@ export default async function handler(req: Request): Promise<Response> {
   if (authError) return authError;
 
   try {
-    const { version, model, payload, apiKey: clientKey } = await req.json();
-    const apiKey = clientKey || process.env.GEMINI_API_KEY;
+    const { version, model, payload, apiKey: clientKey, groupId } = await req.json();
+
+    // ── Per-group key resolution ──────────────────────────────────────
+    // Priority:
+    //   1. `apiKey` in body → the group has its own per-group key set
+    //      in Settings → Services. Use it directly. Their billing.
+    //   2. No body key, request is from the platform-owner group
+    //      (`OWNER_GROUP_ID` env var) → fall back to the platform
+    //      `GEMINI_API_KEY`. The platform owner pays for the platform.
+    //   3. No body key, request is from any OTHER group → REJECT.
+    //      Otherwise the platform owner's key silently funds every
+    //      other group's AI usage (which was the v5.60.2-and-prior
+    //      bug this gate exists to prevent).
+    let apiKey: string | undefined;
+    if (typeof clientKey === 'string' && clientKey.trim()) {
+      apiKey = clientKey.trim();
+    } else {
+      const ownerGroupId = process.env.OWNER_GROUP_ID;
+      if (ownerGroupId && groupId && groupId === ownerGroupId) {
+        apiKey = process.env.GEMINI_API_KEY;
+      } else {
+        return new Response(JSON.stringify({
+          error: {
+            code: 'aiKeyRequired',
+            message: 'This group has no Gemini API key configured. The group owner must add one in Settings → Services → API Keys.',
+          },
+        }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
     if (!apiKey) {
       return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY not configured. Set it in group settings.' } }), {
         status: 500,

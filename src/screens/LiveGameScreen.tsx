@@ -10,6 +10,7 @@ import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { useTranslation } from '../i18n';
 
 // Runtime safety net: same logic as `hasLiteralLiveCount` in geminiAI.ts.
@@ -1880,12 +1881,19 @@ const LiveGameScreen = () => {
             </div>
           )}
         </div>
-        <p className="page-subtitle" style={{ margin: 0 }}>
+        <p className="page-subtitle" style={{ margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
           {t('live.subtitle')}
           {ttsModelName && (
-            <span style={{ marginLeft: '0.5rem', fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
+            <span style={{ fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
               🤖 {ttsModelName}
             </span>
+          )}
+          {/* TTS won't play without a Gemini key (the LLM rephrases the
+              raw event into a natural Hebrew sentence before TTS). When
+              the call path is unavailable for this group, surface a tap-
+              to-fix pill instead of silent dead audio for the owner. */}
+          {!getGeminiApiKey() && (
+            <AIKeyMissingNotice feature="tts" variant="compact" />
           )}
         </p>
       </div>

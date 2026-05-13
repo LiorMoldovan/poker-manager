@@ -5,7 +5,6 @@ import {
   getGamePlayers, 
   getChipValues, 
   getSettings,
-  getAllGames,
   updateGamePlayerChips,
   updateGamePlayerResults,
   updateGameStatus,
@@ -15,9 +14,10 @@ import {
   deleteTTSPool,
   flushGameCompletion,
 } from '../database/storage';
-import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
+import { calculateChipTotal, calculateProfitLoss, cleanNumber, formatCurrency } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
+import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
 import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
@@ -64,6 +64,16 @@ interface NumpadModalProps {
   // typing flow stays byte-identical when the button isn't tapped.
   showPhotoButton?: boolean;
   onPhotoRequest?: () => void;
+  // Optional running-total reconciliation: current chip points
+  // already entered for this player (does NOT include the value
+  // being typed in the numpad — that's confirmed on advance) and
+  // the player's expected chip total (rebuys × chipsPerRebuy).
+  // When both are supplied, a thin strip is rendered below the
+  // dots showing `running / expected` with a color cue. Lets the
+  // admin notice an over/undercount mid-flow without exiting the
+  // numpad to look at the per-player overview.
+  runningChipPoints?: number;
+  expectedChipPoints?: number;
 }
 
 const NumpadModal = ({
@@ -81,6 +91,8 @@ const NumpadModal = ({
   isLastChip,
   showPhotoButton = false,
   onPhotoRequest,
+  runningChipPoints,
+  expectedChipPoints,
 }: NumpadModalProps) => {
   const { t } = useTranslation();
   const [value, setValue] = useState(currentValue.toString());
@@ -183,11 +195,13 @@ const NumpadModal = ({
         </div>
         
         {/* Progress indicator */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          gap: '0.35rem', 
-          marginBottom: '0.75rem' 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '0.35rem',
+          marginBottom: typeof runningChipPoints === 'number' && typeof expectedChipPoints === 'number' && expectedChipPoints > 0
+            ? '0.35rem'
+            : '0.75rem',
         }}>
           {Array.from({ length: totalChips }).map((_, i) => (
             <div
@@ -202,6 +216,41 @@ const NumpadModal = ({
             />
           ))}
         </div>
+
+        {/* Running-total reconciliation strip — only when parent
+            passes the props. Helps admins spot an over/undercount
+            mid-flow without exiting the numpad to check the per-
+            player overview. Updates AFTER each numpad confirm
+            advances to the next chip (the value being typed isn't
+            included in `runningChipPoints` until confirm). Color
+            cue: green on exact match, red on overcount (any
+            positive delta), muted neutral while ramping up — the
+            running total is tiny by design early in the flow, so
+            painting that red would be misleading. */}
+        {typeof runningChipPoints === 'number' && typeof expectedChipPoints === 'number' && expectedChipPoints > 0 && (() => {
+          const delta = runningChipPoints - expectedChipPoints;
+          const exactMatch = delta === 0 && runningChipPoints > 0;
+          const overCount = delta > 0;
+          const color = exactMatch
+            ? '#22c55e'
+            : overCount
+            ? '#ef4444'
+            : 'var(--text-muted)';
+          return (
+            <div style={{
+              textAlign: 'center',
+              fontSize: '0.7rem',
+              color,
+              marginBottom: '0.75rem',
+              fontFamily: 'monospace',
+              letterSpacing: '0.02em',
+            }}>
+              {runningChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()}
+              {exactMatch && ' ✓'}
+              {overCount && ` (\u200E+${delta.toLocaleString()})`}
+            </div>
+          );
+        })()}
         
         <div style={{ 
           fontSize: '2.5rem', 
@@ -302,6 +351,17 @@ const ChipEntryScreen = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
   const [showUncountedWarning, setShowUncountedWarning] = useState(false);
+  // v5.60.3: surface the chip-gap adjustment before finalizing.
+  // Until now the gap was applied silently — players could end up
+  // with a profit different from what the chip math implied, with
+  // no UI explanation. Now: if the counted total doesn't match the
+  // expected buy-in pool (within 1₪), we set this state instead of
+  // proceeding, render a warning banner explaining the gap and
+  // per-player adjustment, and require a second tap to confirm.
+  const [chipGapPreview, setChipGapPreview] = useState<{
+    gapInMoney: number;
+    gapPerPlayer: number;
+  } | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
   // Photo chip-counting state — purely additive, lives alongside the
@@ -422,12 +482,13 @@ const ChipEntryScreen = () => {
     setChipValues(chips);
     setRebuyValue(settings.rebuyValue || 30);
     setChipsPerRebuy(settings.chipsPerRebuy || 10000);
-    // Photo button availability (see comment on `photoAvailable`).
-    // Same heuristic the SettingsScreen setup wizard uses (line ~879)
-    // to decide whether the AI step is "done": per-group key set OR
-    // any past game has an AI summary (= proof of working call path,
-    // be it per-group key or Vercel env-var fallback).
-    setPhotoAvailable(!!settings.geminiApiKey || getAllGames().some(g => g.aiSummary));
+    // Photo button availability. Honest signal: the call path must work
+    // for THIS group right now. Pre-v5.60.3 we also accepted "any past
+    // game has an aiSummary" as proof of viability, but that signal is
+    // tainted because non-owner groups silently used the platform owner's
+    // key for AI before the gate landed — past summaries don't prove the
+    // group can call AI today. Use the eligibility helper instead.
+    setPhotoAvailable(isGeminiEnabledForCurrentGroup());
     // Initialize chip counts
     const initialCounts: Record<string, Record<string, number>> = {};
     gamePlayers.forEach(player => {
@@ -688,17 +749,37 @@ const ChipEntryScreen = () => {
   const handleCalculate = async () => {
     if (!gameId || isFinalizing) return;
 
+    // Stage 1: uncounted-players warning. Same as before — user
+    // must tap once to acknowledge that some players were skipped.
     if (!allPlayersCounted && !showUncountedWarning) {
       setShowUncountedWarning(true);
       return;
     }
-    setShowUncountedWarning(false);
-    setIsFinalizing(true);
-    
-    // Calculate the gap between expected and actual chips (in money terms)
+
+    // Compute the chip-gap (in money) before deciding what to do
+    // next. The gap is the difference between the counted chip
+    // value and the pool created by all rebuys; it ends up
+    // distributed evenly across players via the existing adjusted-
+    // profit logic below.
     const totalCountedMoney = players.reduce((sum, p) => sum + getPlayerMoneyValue(p.id), 0);
     const gapInMoney = totalCountedMoney - totalBuyIns; // positive = extra, negative = missing
     const gapPerPlayer = players.length > 0 ? gapInMoney / players.length : 0;
+
+    // Stage 2: chip-gap warning. If there's a meaningful gap and
+    // we haven't yet shown the gap-confirmation banner, surface
+    // it now and require one more tap. The 1₪ tolerance matches
+    // the existing `updateGameChipGap` threshold (`> 0.01`) and
+    // adds a small absolute floor so trivial fractional drift
+    // (rounding) doesn't trigger a confirmation dialog.
+    if (Math.abs(gapInMoney) >= 1 && !chipGapPreview) {
+      setChipGapPreview({ gapInMoney, gapPerPlayer });
+      return;
+    }
+
+    // All warnings acknowledged — proceed.
+    setShowUncountedWarning(false);
+    setChipGapPreview(null);
+    setIsFinalizing(true);
     
     // Save chip counts and calculate results with gap adjustment
     players.forEach(player => {
@@ -1445,13 +1526,40 @@ const ChipEntryScreen = () => {
             {t('chips.warningUncounted', { count: players.length - completedPlayers.size })}
           </div>
         )}
+        {chipGapPreview && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '8px',
+            padding: '0.6rem 0.75rem',
+            marginBottom: '0.5rem',
+            fontSize: '0.8rem',
+            color: '#fca5a5',
+            textAlign: 'center',
+            lineHeight: 1.45,
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>
+              {chipGapPreview.gapInMoney > 0
+                ? t('chips.warningGapOver', { amount: formatCurrency(Math.abs(chipGapPreview.gapInMoney)) })
+                : t('chips.warningGapShort', { amount: formatCurrency(Math.abs(chipGapPreview.gapInMoney)) })}
+            </div>
+            <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>
+              {t('chips.warningGapPerPlayer', {
+                amount: formatCurrency(Math.abs(chipGapPreview.gapPerPlayer)),
+                direction: chipGapPreview.gapPerPlayer > 0
+                  ? t('chips.warningGapDirDeducted')
+                  : t('chips.warningGapDirCredited'),
+              })}
+            </div>
+          </div>
+        )}
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
           disabled={!isAdmin || isFinalizing}
           style={{ padding: '0.6rem', opacity: isAdmin && !isFinalizing ? 1 : 0.5 }}
         >
-          {!isAdmin ? t('common.viewOnly') : isFinalizing ? '...' : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
+          {!isAdmin ? t('common.viewOnly') : isFinalizing ? '...' : (showUncountedWarning || chipGapPreview) ? t('chips.confirmCalculate') : t('chips.calculateResults')}
         </button>
       </div>
 
@@ -1478,6 +1586,13 @@ const ChipEntryScreen = () => {
         nextChipDisplayColor={nextChip?.displayColor}
         isLastChip={numpadChipIndex >= chipValues.length - 1}
         showPhotoButton={photoAvailable && !!numpadPlayerId && !photoResults[numpadPlayerId]}
+        runningChipPoints={numpadPlayerId ? getPlayerChipPoints(numpadPlayerId) : undefined}
+        expectedChipPoints={(() => {
+          if (!numpadPlayerId) return undefined;
+          const p = players.find(pl => pl.id === numpadPlayerId);
+          if (!p) return undefined;
+          return p.rebuys * chipsPerRebuy;
+        })()}
         onPhotoRequest={() => {
           // Close the numpad and open the photo modal targeting the
           // same player. After the photo flow completes (or is

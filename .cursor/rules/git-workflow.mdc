@@ -19,13 +19,11 @@ When the user says "merge" or "push" or "upload" or "push to BB", they mean the 
 
 ## Pre-Merge Validation Checklist
 
-Run ALL of these BEFORE committing. Do not skip any:
+Run the validation tier matching the change scope — see `.cursor/rules/testing-guidelines.mdc` for the tiered policy. Always also:
 
-1. `npx tsc --noEmit` — zero errors
-2. ReadLints on all modified files
-3. Review `git diff --stat` — make sure no temp files, secrets, or unintended changes are staged
-4. If new Supabase tables/RPCs/policies were added: remind user which SQL to run
-5. If feature uses Vercel Edge Functions: note it only works after deploy
+1. Review `git diff --stat` — make sure no temp files, secrets, or unintended changes are staged.
+2. If new Supabase tables/RPCs/policies were added: remind user which SQL to run.
+3. If feature uses Vercel Edge Functions: note it only works after deploy.
 
 ## Step-by-Step Merge Process
 
@@ -64,9 +62,23 @@ Version lives in `src/version.ts` (NOT `package.json`). Always bump as part of t
 5. Include the version bump in the same commit
 
 ### Commit Message Format
+
+**Default: single line, no body.**
+
 ```
 vX.Y.Z - Brief description of changes
 ```
+
+The user-facing CHANGELOG in `src/version.ts` already captures the bullets that ship to members. The commit subject is the audit trail. Don't duplicate the CHANGELOG in the commit body — it's noise that nobody reads.
+
+**Add a body only when at least one of these is true:**
+
+- The commit bundles multiple independent streams (a merge of parallel agent work). The body lists the streams so a reader can map them later.
+- An architectural decision was made that isn't captured in the code/migration itself (e.g. "chose pg_net over Supabase Database Webhooks because X").
+- A SQL migration's intent goes beyond what the migration file's header comment already says.
+- The user explicitly asks for a body.
+
+When you do write a body, pass it via HEREDOC for formatting, and keep it short — bullets, not paragraphs. If the body would be more than ~10 lines, it probably belongs in `docs/agent/SESSIONS.md` or `LESSONS.md` instead.
 
 ## Remote Repository
 

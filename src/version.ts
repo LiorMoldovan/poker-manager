@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.2';
+export const APP_VERSION = '5.60.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,35 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.5',
+    date: '2026-05-13',
+    changes: [
+      '🔢 Running chip-total now shown in numpad header',
+      '⚠️ Warning before chip-gap is silently distributed',
+      '📷 Low-confidence photo result asks before applying',
+      '🧪 Test card merges same-color stacks into one row',
+    ],
+  },
+  {
+    version: '5.60.4',
+    date: '2026-05-13',
+    changes: [
+      '💬 Friendly notice everywhere AI is off — tap to fix',
+      '🗣 Live game shows pill when voice announcements are off',
+      '🔮 Forecast row warns when only static is available',
+      '📈 Graph insights card explains missing key',
+    ],
+  },
+  {
+    version: '5.60.3',
+    date: '2026-05-13',
+    changes: [
+      '🛡 Each group must use its own Gemini / ElevenLabs key',
+      '🔒 Closed leak: new groups no longer share platform key',
+      '🚪 AI features now hide cleanly when key is missing',
+    ],
+  },
   {
     version: '5.60.2',
     date: '2026-05-13',

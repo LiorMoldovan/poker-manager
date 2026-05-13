@@ -31,6 +31,7 @@ import {
   getGroupPushSubscribers,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
 import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import {
   aggregateFeedback,
@@ -1177,7 +1178,11 @@ const SettingsScreen = () => {
         const hasPlayers = players.length > 1;
         const hasGameSettings = (settings.locations ?? []).length > 0 || settings.rebuyValue > 0 || getAllGames().length > 0;
         const hasChips = chipValues.length > 0 || getAllGames().length > 0;
-        const aiWorking = !!settings.geminiApiKey || getAllGames().some(g => g.aiSummary);
+        // Honest signal — past `aiSummary` rows are NOT proof the call
+        // path works for this group (pre-v5.60.3 the bug let non-owner
+        // groups generate AI using the platform owner's key, leaving
+        // `aiSummary` rows that don't reflect THIS group's viability).
+        const aiWorking = isGeminiEnabledForCurrentGroup();
         const hasInvited = (activityMembers.length > 1) || getAllGames().length > 0;
         const steps = [
           { done: hasPlayers, optional: false, label: t('settings.setup.stepPlayers'), desc: t('settings.setup.stepPlayersDesc'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
@@ -3315,21 +3320,21 @@ const SettingsScreen = () => {
               </p>
               {(() => {
                 // Two real prerequisites for the photo flow:
-                //   1. `aiAvailable` — the Gemini call path must work.
-                //      Treat per-group `geminiApiKey` set OR any past
-                //      game with an AI summary as proof of working
-                //      path (covers both UI-managed per-group keys
-                //      AND groups that rely on the Vercel
-                //      `GEMINI_API_KEY` env-var fallback).
+                //   1. `aiAvailable` — the Gemini call path must work
+                //      for THIS group right now. Pre-v5.60.3 we also
+                //      accepted "any past game has an aiSummary" as
+                //      proof, but non-owner groups silently used the
+                //      platform owner's key for AI — past summaries
+                //      don't prove the group can call AI today. The
+                //      eligibility helper covers both per-group key
+                //      AND owner-group env-var fallback honestly.
                 //   2. `noChips` — at least one chip value must be
                 //      defined; nothing to count without them.
                 // We surface only the more actionable reason — a
                 // missing key beats missing chips because the API
                 // Keys card is one panel up on this same tab while
                 // chips live under a separate Chips tab.
-                const aiAvailable =
-                  !!settings.geminiApiKey ||
-                  getAllGames().some(g => g.aiSummary);
+                const aiAvailable = isGeminiEnabledForCurrentGroup();
                 const noChips = chipValues.length === 0;
                 const disabled = !aiAvailable || noChips;
                 const reasonKey = !aiAvailable
@@ -3459,11 +3464,59 @@ const SettingsScreen = () => {
                       <span style={{ minWidth: '3.2rem', textAlign: 'center' }}>{t('settings.photoTest.colActual')}</span>
                       <span style={{ minWidth: '2.5rem', textAlign: 'end' }}>%</span>
                     </div>
-                    {photoTestResult.stacks.map(stack => {
-                      const chip = chipValues.find(c => c.id === stack.chipId);
+                    {/* v5.60.3: aggregate stacks by chipId for display.
+                        The v5.59 pipeline can emit multiple stacks of the
+                        same color (user split chips into separate piles,
+                        or detection over-segmented). The OLD rendering
+                        ran `.map` straight over `stacks` and keyed each
+                        row by `chipId` — duplicate React keys, AND every
+                        same-color row read the same `photoTestActualCounts[chipId]`
+                        slot, so editing one row silently overwrote the
+                        others. Now we sum AI counts per chipId, take the
+                        MIN confidence (most conservative — flags any
+                        weak stack of that color), and render ONE row per
+                        color. The user-facing experience matches the
+                        real-game flow: one input per color, total count.
+                        The per-stack provenance is still preserved in
+                        the underlying `photoTestResult.stacks` and gets
+                        submitted unchanged to the dashboard. */}
+                    {(() => {
+                      type AggStack = {
+                        chipId: string;
+                        color: string;
+                        aiCount: number;
+                        minConfidence: number;
+                        stacks: typeof photoTestResult.stacks;
+                      };
+                      const aggMap = new Map<string, AggStack>();
+                      for (const stack of photoTestResult.stacks) {
+                        const existing = aggMap.get(stack.chipId);
+                        if (existing) {
+                          existing.aiCount += stack.count;
+                          existing.minConfidence = Math.min(existing.minConfidence, stack.confidence);
+                          existing.stacks.push(stack);
+                        } else {
+                          aggMap.set(stack.chipId, {
+                            chipId: stack.chipId,
+                            color: stack.color,
+                            aiCount: stack.count,
+                            minConfidence: stack.confidence,
+                            stacks: [stack],
+                          });
+                        }
+                      }
+                      return [...aggMap.values()];
+                    })().map(agg => {
+                      const chip = chipValues.find(c => c.id === agg.chipId);
                       if (!chip) return null;
-                      const actual = photoTestActualCounts[stack.chipId] ?? stack.count;
-                      const diff = actual - stack.count;
+                      const actual = photoTestActualCounts[agg.chipId] ?? agg.aiCount;
+                      const diff = actual - agg.aiCount;
+                      // First stack of this color carries representative
+                      // provenance for the tooltip (the rest are usually
+                      // detection over-segmentation; showing all of them
+                      // turns the tooltip into noise).
+                      const stack = agg.stacks[0];
+                      const stackCount = agg.stacks.length;
                       // Border color reflects ground-truth-vs-AI diff
                       // (not just AI confidence) — so the user gets
                       // immediate feedback while editing: green when
@@ -3472,14 +3525,14 @@ const SettingsScreen = () => {
                       // confidence-based color when the user hasn't
                       // touched the input yet (diff = 0).
                       const borderColor = diff === 0
-                        ? (stack.confidence >= 80 ? 'rgba(16,185,129,0.5)'
-                            : stack.confidence >= 60 ? 'rgba(234,179,8,0.5)'
+                        ? (agg.minConfidence >= 80 ? 'rgba(16,185,129,0.5)'
+                            : agg.minConfidence >= 60 ? 'rgba(234,179,8,0.5)'
                             : 'rgba(239,68,68,0.6)')
                         : Math.abs(diff) <= 1 ? 'rgba(234,179,8,0.6)'
                         : 'rgba(239,68,68,0.7)';
                       return (
                         <div
-                          key={stack.chipId}
+                          key={agg.chipId}
                           className="settings-row"
                           style={{ borderInlineStart: `3px solid ${borderColor}` }}
                         >
@@ -3507,9 +3560,9 @@ const SettingsScreen = () => {
                               textAlign: 'center',
                               color: 'var(--text-muted)',
                             }}
-                            title={t('settings.photoTest.colAi')}
+                            title={stackCount > 1 ? `${t('settings.photoTest.colAi')} (${stackCount}×)` : t('settings.photoTest.colAi')}
                           >
-                            {stack.count}
+                            {agg.aiCount}
                           </span>
                           <input
                             type="number"
@@ -3519,7 +3572,7 @@ const SettingsScreen = () => {
                             onChange={e => {
                               const raw = parseInt(e.target.value, 10);
                               const next = Number.isFinite(raw) ? Math.max(0, raw) : 0;
-                              setPhotoTestActualCounts(prev => ({ ...prev, [stack.chipId]: next }));
+                              setPhotoTestActualCounts(prev => ({ ...prev, [agg.chipId]: next }));
                               // Any edit invalidates the "saved" state
                               // — so the button re-enables and the
                               // user can save the corrected feedback.
@@ -3553,17 +3606,18 @@ const SettingsScreen = () => {
                             title={
                               stack.provenance
                                 ? [
+                                    stackCount > 1 ? `(${stackCount} stacks — showing first)` : null,
                                     `LLM: ${stack.provenance.llmCount ?? '—'}`,
                                     `bottom-chip: ${stack.provenance.geometryBottomChip ?? '—'}`,
                                     `gradient: ${stack.provenance.geometryGradientCount ?? '—'}`,
                                     `shared-cal: ${stack.provenance.geometrySharedCal ?? '—'}`,
                                     `→ ${stack.provenance.finalCount} (${stack.provenance.finalConfidence}%)`,
                                     stack.provenance.reasoning,
-                                  ].join(' · ')
-                                : `${stack.confidence}%`
+                                  ].filter(Boolean).join(' · ')
+                                : `${agg.minConfidence}%${stackCount > 1 ? ` (min of ${stackCount})` : ''}`
                             }
                           >
-                            {stack.confidence}%
+                            {agg.minConfidence}%
                           </span>
                         </div>
                       );
@@ -4436,8 +4490,15 @@ const SettingsScreen = () => {
           // user just edits the chips the AI got wrong (saving "this
           // row was correct" is the no-op default action). v5.54.
           if (!result.error) {
+            // v5.60.3: sum across same-chipId stacks so a multi-stack
+            // detection (e.g. two separate piles of white the user
+            // photographed together) seeds the actual-count input
+            // with the COMBINED count, not just the last stack's
+            // count. Matches the aggregated display below.
             const initial: Record<string, number> = {};
-            for (const stack of result.stacks) initial[stack.chipId] = stack.count;
+            for (const stack of result.stacks) {
+              initial[stack.chipId] = (initial[stack.chipId] ?? 0) + stack.count;
+            }
             setPhotoTestActualCounts(initial);
           } else {
             setPhotoTestActualCounts({});

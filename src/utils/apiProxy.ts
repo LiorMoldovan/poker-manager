@@ -45,10 +45,11 @@ export async function proxyGeminiGenerate(
 ): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
+  const groupId = getGroupId();
   return fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ version, model, payload, ...(groupKey && { apiKey: groupKey }) }),
+    body: JSON.stringify({ version, model, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
   });
 }
 
@@ -61,10 +62,11 @@ export async function proxyGeminiGenerateWithSignal(
 ): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
+  const groupId = getGroupId();
   return fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ version, model, payload, ...(groupKey && { apiKey: groupKey }) }),
+    body: JSON.stringify({ version, model, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
     signal,
   });
 }
@@ -87,6 +89,7 @@ export async function proxyGeminiImage(
 ): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
+  const groupId = getGroupId();
   return fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
@@ -94,6 +97,7 @@ export async function proxyGeminiImage(
       version: 'v1beta',
       model,
       payload,
+      groupId,
       ...(groupKey && { apiKey: groupKey }),
     }),
     signal,
@@ -182,10 +186,11 @@ export async function pollinationsImage(
 export async function proxyGeminiModels(_apiKey: string, version = 'v1beta'): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
+  const groupId = getGroupId();
   return fetch('/api/gemini-models', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ version, ...(groupKey && { apiKey: groupKey }) }),
+    body: JSON.stringify({ version, groupId, ...(groupKey && { apiKey: groupKey }) }),
   });
 }
 
@@ -198,10 +203,11 @@ export async function proxyElevenLabsTTS(
 ): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
+  const groupId = getGroupId();
   return fetch('/api/elevenlabs-tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ voiceId, outputFormat, payload, ...(groupKey && { apiKey: groupKey }) }),
+    body: JSON.stringify({ voiceId, outputFormat, payload, groupId, ...(groupKey && { apiKey: groupKey }) }),
     signal,
   });
 }
@@ -209,10 +215,11 @@ export async function proxyElevenLabsTTS(
 export async function proxyElevenLabsUsage(_apiKey: string): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
+  const groupId = getGroupId();
   return fetch('/api/elevenlabs-usage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ ...(groupKey && { apiKey: groupKey }) }),
+    body: JSON.stringify({ groupId, ...(groupKey && { apiKey: groupKey }) }),
   });
 }
 

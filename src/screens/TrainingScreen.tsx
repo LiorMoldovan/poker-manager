@@ -8,6 +8,7 @@ import {
   getWeakCategories,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 
 const SESSION_OPTIONS = [
   { id: 3, label: '3 ידיים' },
@@ -62,15 +63,12 @@ const TrainingScreen = () => {
 
   if (!hasApiKey) {
     return (
-      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔑</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>נדרש מפתח</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
-          כדי להשתמש באימון, הגדר מפתח בהגדרות
-        </p>
-        <button className="btn btn-primary" onClick={() => navigate('/settings')}>
-          הגדרות
-        </button>
+      <div className="fade-in" style={{ padding: '2rem 1rem', maxWidth: 480, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🔑</div>
+          <h2 style={{ margin: 0 }}>אימון פוקר</h2>
+        </div>
+        <AIKeyMissingNotice feature="training" />
       </div>
     );
   }

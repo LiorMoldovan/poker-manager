@@ -13,21 +13,52 @@ The app runs on **http://localhost:3000** by default (configured in `vite.config
 
 This project has no test suite. All testing is manual by the user.
 
-## Self-Validation Is MANDATORY — Not Optional
+## Self-Validation — Tiered By Change Scope
 
-**NEVER claim something works without running these checks yourself.** The user should NEVER have to ask "are you sure?" or "did you double-check?". If the user has to ask, you failed.
+**Core principle**: never claim something works without proving it. The user should never have to ask "are you sure?". **But effort scales with change scope** — a 3-line copy tweak doesn't need the same checks as a multi-file refactor.
 
-### Before Saying "Done" on ANY Change
+Pick the tier matching the highest-risk file in the commit. Mixed-tier commits use the highest tier.
 
-1. **TypeScript**: Run `npx tsc --noEmit` — must pass with zero errors
-2. **Lints**: Use ReadLints tool on ALL modified files
-3. **Imports**: Verify all new imports exist and are correctly pathed
-4. **Logic trace**: Walk through the code mentally — trace data flow end-to-end
-5. **Role check**: Does this work for ALL relevant roles? (member, admin, owner, super admin)
-6. **Environment check**: Does this work on BOTH localhost and production? If not (e.g. Vercel Edge Functions), say so UPFRONT when presenting the work, not after the user discovers it
-7. **Unused variables**: TypeScript strict mode catches "declared but never read" — always clean up
-8. **Supabase column audit** (when touching database code): Cross-reference every column name, type, and constraint against `supabase/schema.sql`. Verify `onConflict` matches UNIQUE constraints. Verify NOT NULL columns have fallbacks. Verify delete sync for removable items.
-9. **RLS audit** (when adding tables/policies): Check ALL roles — member, admin, owner, super admin. Don't forget super admin cross-group access.
+### Tier A — Code change (`.ts`, `.tsx`, `.css`, `api/*.ts`, `src/utils/*.ts`)
+
+Full rigor. All of these:
+
+1. `npx tsc --noEmit` — zero errors.
+2. `ReadLints` on every modified code file.
+3. Imports verified (paths exist, names match).
+4. Logic trace — walk the data flow end-to-end.
+5. Role check — does this work for member, admin, owner, super admin?
+6. Environment check — does this work on BOTH localhost and production? If a Vercel Edge Function is in the path, say so UPFRONT.
+7. Unused vars cleaned up (TS strict mode catches "declared but never read").
+8. Supabase column audit when DB code is touched (column names + types + `onConflict` match `supabase/schema.sql`).
+
+### Tier B — Schema change (`supabase/0XX-*.sql`)
+
+No `tsc` (SQL doesn't need it). Instead:
+
+1. `ReadLints` on the SQL file.
+2. Apply via `apply_migration` (idempotent constructs preferred: `CREATE OR REPLACE`, `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`).
+3. Verify with a live `execute_sql` SELECT — new columns/policies/functions exist, defaults set, sample queries return what the UI expects.
+4. RLS audit — check ALL 4 roles (member, admin, owner, super admin) for the affected tables.
+5. If client code references the new schema, run Tier A on those files too.
+
+### Tier C — Copy / docs (`translations.ts`, `*.md`, `*.mdc`, `version.ts` CHANGELOG-only edits)
+
+Light-touch. `tsc` adds nothing — translations are typed `as const`, changelog is a string array, markdown isn't compiled. Just:
+
+1. `ReadLints` on the file (catches obvious syntax issues).
+2. Visual scan — Hebrew text correct? No bare `{` or `'` that would break the literal? Markdown renders sanely?
+3. If translations: confirm HE + EN both updated for any new key.
+
+Skip `tsc`. Skip logic trace. Skip role check.
+
+### Tier D — Trivial (version bump only, `.gitignore`, alphabetizing config, one-line fixes)
+
+Visual check only. No tooling.
+
+### When to escalate
+
+If a "Tier C" copy edit touches a translation key that's also referenced by code logic (e.g. a copy change that requires a new translation key, where missing the key throws at runtime) → escalate to Tier A. **When in doubt, escalate one tier up.**
 
 ### Known Localhost vs Production Gaps
 

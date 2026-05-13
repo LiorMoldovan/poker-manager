@@ -13,6 +13,7 @@ import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/c
 import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
 import AIProgressBar from '../components/AIProgressBar';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { hapticTap } from '../utils/haptics';
@@ -1963,9 +1964,7 @@ const GameSummaryScreen = () => {
               </div>
             )}
             {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && !getGeminiApiKey() && (
-              <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                {isOwner ? t('summary.aiKeyHintOwner') : t('summary.aiKeyHintMember')}
-              </div>
+              <AIKeyMissingNotice feature="summary" style={{ marginBottom: '0.5rem' }} />
             )}
             {!collapsedSections.aiSummary && (
               <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
@@ -2100,11 +2099,11 @@ const GameSummaryScreen = () => {
                   </div>
                 )}
 
-                {/* No-API-key hint (admin only) */}
+                {/* No-API-key hint (admin only) — clickable card that
+                    routes to Settings → Services. Member view skipped
+                    because comic generation is owner-only anyway. */}
                 {isOwner && !comicUrl && !getGeminiApiKey() && (
-                  <div style={{ padding: '0.75rem', background: 'rgba(168,85,247,0.08)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.5rem' }}>
-                    {t('summary.comicNoApiKey')}
-                  </div>
+                  <AIKeyMissingNotice feature="comic" accent="#A855F7" style={{ marginBottom: '0.5rem' }} />
                 )}
 
                 {/* Generating state */}

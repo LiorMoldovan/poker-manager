@@ -57,3 +57,13 @@ If the answer to "could this surprise the user or be hard to undo?" is anything 
 - "While fixing the bug I also refactored the surrounding 200 lines" → wrong. Stay scoped.
 - "I ran an UPDATE to fix the bad row directly via execute_sql" → wrong. Author a migration file (or ask for permission to do a one-off data fix).
 - "I'm 90% sure this is safe so I'll skip asking" → wrong. 90% means ASK.
+
+## Below the risk floor — decide and proceed
+
+The lists above are the floor. Above the floor (destructive SQL, git history rewrites, secrets, >50-line code replacements, tangential refactors) — always ask.
+
+**Below the floor — decide.** Don't add `AskQuestion` ceremony for low-risk choices the user has already given you context to make: UI placement, copy phrasing, naming, ordering of changes, which of two equivalent patterns to use, whether to inline or extract a helper, etc. The user has been clear that ping-pong roundtrips are expensive. When the choice is reversible and small, pick the one that seems best given known preferences and proceed. The user will course-correct cheaper than a tap-on-a-question.
+
+Anti-pattern: "Should the icon go on the left or right of the title?" — just pick. If it's wrong, the user types one sentence and you swap it. That's faster than an `AskQuestion` tap-and-wait.
+
+The rule of thumb: if reversing the decision would take less than 30 seconds, don't ask — decide. If it would take 5+ minutes (a DB migration, a multi-file refactor, a public API rename), ask.
