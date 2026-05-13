@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.1';
+export const APP_VERSION = '5.60.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.2',
+    date: '2026-05-13',
+    changes: [
+      '🎯 Photo chip-count sums multi-stacks of same color',
+      '📷 Tip fixed: one tall stack per color (was telling you to split)',
+      '✏️ Cleaner Hebrew in photo instructions',
+    ],
+  },
   {
     version: '5.60.1',
     date: '2026-05-13',

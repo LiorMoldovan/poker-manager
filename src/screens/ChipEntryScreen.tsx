@@ -576,9 +576,28 @@ const ChipEntryScreen = () => {
       return;
     }
     const editedForPlayer = userEditedFields[playerId] || new Set<string>();
+    // Sum counts across stacks that share the same chipId before
+    // writing into chipCounts. The v5.59 detection pipeline emits one
+    // stack entry per detected pile, and the chip-grid write API is
+    // keyed by chipId (overwrite semantics, not additive). Without
+    // this aggregation, a user who accidentally splits chips of one
+    // color into multiple piles (or builds the traditional poker
+    // "5-stacks") would have all but the last pile's count silently
+    // dropped — undercount with no UI signal. Happy path (one pile
+    // per color) is unaffected: each chipId appears exactly once and
+    // the sum equals the single stack's count. The userEditedFields
+    // skip is preserved per chipId so any chip the user already
+    // typed manually still wins over the AI proposal.
+    const summedByChipId = new Map<string, number>();
     for (const stack of result.stacks) {
-      if (editedForPlayer.has(stack.chipId)) continue;
-      updateChipCount(playerId, stack.chipId, stack.count, 'photo');
+      summedByChipId.set(
+        stack.chipId,
+        (summedByChipId.get(stack.chipId) ?? 0) + stack.count,
+      );
+    }
+    for (const [chipId, count] of summedByChipId) {
+      if (editedForPlayer.has(chipId)) continue;
+      updateChipCount(playerId, chipId, count, 'photo');
     }
     setPhotoResults(prev => ({ ...prev, [playerId]: result }));
     if (photoBase64 && photoMimeType) {
