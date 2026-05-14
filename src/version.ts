@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.11';
+export const APP_VERSION = '5.60.12';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.12',
+    date: '2026-05-14',
+    changes: [
+      '🔑 Photo capture now shows "set a key" hint in chip entry',
+      '🧭 Members in no-key groups see proper guidance, not stale "wait" text',
+      '✂️ Slimmer one-line localhost dev notice',
+    ],
+  },
   {
     version: '5.60.11',
     date: '2026-05-13',

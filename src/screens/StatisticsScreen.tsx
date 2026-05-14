@@ -3347,21 +3347,38 @@ const StatisticsScreen = () => {
                         through to the existing `chronicleNotCreated`
                         copy because they can't add the key themselves —
                         the owner has to do it. */}
-                    {!hasAiStories && isOwner && !hasAIKey && !chronicleProxyDown && totalPeriodGames > 0 && (
-                      <AIKeyMissingNotice feature="generic" />
-                    )}
-                    {/* Proxy unreachable in this environment (typically:
-                        localhost dev). Shown for owners after a failed
-                        chronicle attempt — explains why the AI tried but
-                        no story rendered. */}
-                    {!hasAiStories && isOwner && chronicleProxyDown && totalPeriodGames > 0 && (
-                      <AIKeyMissingNotice feature="generic" reason="proxyUnavailable" />
-                    )}
-                    {!hasAiStories && !canGenerateAI && !(isOwner && !hasAIKey) && totalPeriodGames > 0 && (
-                      <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                        {t('stats.chronicleNotCreated')}
-                      </div>
-                    )}
+                    {/* Three distinct empty-state reasons, mutually
+                        exclusive — pick the one that's actually true.
+                        Order matters: proxyDown (env infra) wins over
+                        no-key (config), wins over "just not generated
+                        yet" (waiting). */}
+                    {!hasAiStories && totalPeriodGames > 0 && (() => {
+                      // a) Localhost dev / undeployed env — owner-only
+                      //    state because only owner can trigger gen.
+                      if (isOwner && chronicleProxyDown) {
+                        return <AIKeyMissingNotice feature="generic" reason="proxyUnavailable" />;
+                      }
+                      // b) No Gemini key configured for this group.
+                      //    Both owner AND member need to know — member
+                      //    used to fall through to "not yet created"
+                      //    italic which implied "wait, it's coming"
+                      //    but in a no-key group it never will.
+                      if (!hasAIKey) {
+                        return <AIKeyMissingNotice feature="generic" />;
+                      }
+                      // c) Group has a key, owner just hasn't triggered
+                      //    chronicle generation for this period yet.
+                      //    Genuine "wait" state — keep the existing
+                      //    quiet italic line.
+                      if (!canGenerateAI) {
+                        return (
+                          <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                            {t('stats.chronicleNotCreated')}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                     {rankedByProfit.map((player, idx) => {
                       const aiStory = chronicleStories[player.playerId];
                       const profitColor = player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)';

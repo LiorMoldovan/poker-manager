@@ -23,6 +23,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
+import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 
 // Per-stack confidence → border color helper. Used by both the
 // chip-entry inputs (left-border) and the header banner. Kept as a
@@ -803,6 +804,20 @@ const ChipEntryScreen = () => {
         <h1 className="page-title">{t('chips.title')}</h1>
         <p className="page-subtitle">{t('chips.subtitle')}</p>
       </div>
+
+      {/* Photo-capture-unavailable hint. Without this, admins of groups
+          without a Gemini key never discover the photo button exists —
+          it's silently hidden by the `photoAvailable` gate further down.
+          Owner gets the actionable card (tap → Settings → Services);
+          non-owner admin gets the informational variant ("ask the
+          owner"). Members never reach this screen. Hidden once a key
+          is configured (or for the platform-owner group via env-var
+          fallback). */}
+      {isAdmin && !photoAvailable && (
+        <div style={{ marginBottom: '0.5rem' }}>
+          <AIKeyMissingNotice feature="photo" accent="#10b981" />
+        </div>
+      )}
 
       {/* Live Summary Card */}
       <div className="card" style={{ 

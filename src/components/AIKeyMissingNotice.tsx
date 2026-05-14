@@ -125,6 +125,30 @@ export default function AIKeyMissingNotice({
     );
   }
 
+  // Slim single-line card for proxyUnavailable. The body is one terse
+  // line ("works on the deployed site") — a full hero card with title +
+  // body + CTA would massively over-weight a localhost-dev-only signal
+  // that no production user will ever see. Real-group no-key keeps the
+  // full card shape below since its message has actual instructions.
+  if (reason === 'proxyUnavailable') {
+    return (
+      <div
+        style={{
+          padding: '0.4rem 0.65rem',
+          background: `${resolvedAccent}14`,
+          border: `1px solid ${resolvedAccent}33`,
+          borderRadius: '6px',
+          fontSize: '0.72rem',
+          color: 'var(--text-muted)',
+          textAlign: 'center',
+          ...style,
+        }}
+      >
+        {icon} <span style={{ fontWeight: 600, color: 'var(--text)' }}>{t(titleKey)}</span> · {t(bodyKey)}
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={showCTA ? goToServices : undefined}
