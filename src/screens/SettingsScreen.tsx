@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -72,7 +72,7 @@ import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
-import { captureChipSelfie, looksLikeInlayBugHex, recomputeDominantHexFromBase64 } from '../utils/imageUtils';
+import { captureChipSelfie } from '../utils/imageUtils';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
@@ -791,59 +791,11 @@ const SettingsScreen = () => {
     if (savedElKey) setElKey(savedElKey);
   };
 
-  // ────────────────────────────────────────────────────────────────────
-  // v5.60.13 — one-time auto-migration of v5.59.0 bad selfie hexes.
-  //
-  // v5.59.0 captured chip selfies but computed dominant_hex from the
-  // dead-center 24×24 patch, which lands on the printed value inlay
-  // for most poker chips. Result: every chip's stored hex came out
-  // muddy grey/beige instead of its real body color, breaking the
-  // stack→chip color mapping in the new pipeline. This effect runs
-  // once per session: if any chip has a stored selfie whose hex looks
-  // like the inlay-bug signature, we recompute the hex from the saved
-  // JPEG using the new ring-sampling logic and persist it. The selfie
-  // photos themselves stay untouched — only the broken hex gets fixed.
-  //
-  // Gated on canEditChips so members don't race the admin write. Uses a
-  // ref so it doesn't re-run when chipValues are updated by other
-  // effects in the same session. Errors are silent + non-blocking.
-  // ────────────────────────────────────────────────────────────────────
-  const selfieHexAutoMigratedRef = useRef(false);
-  useEffect(() => {
-    if (selfieHexAutoMigratedRef.current) return;
-    if (!canEditChips) return;
-    if (chipValues.length === 0) return;
-    const candidates = chipValues.filter(
-      cv => cv.selfieBase64 && cv.selfieDominantHex && looksLikeInlayBugHex(cv.selfieDominantHex),
-    );
-    if (candidates.length === 0) {
-      selfieHexAutoMigratedRef.current = true;
-      return;
-    }
-    selfieHexAutoMigratedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      const updates: ChipValue[] = [];
-      for (const cv of candidates) {
-        const newHex = await recomputeDominantHexFromBase64(cv.selfieBase64!, 'image/jpeg');
-        if (cancelled) return;
-        if (!newHex) continue;
-        // Only persist if the recompute actually IMPROVED the hex —
-        // a recompute that still lands in the bug-shape zone means
-        // the underlying photo has issues we can't fix from a hex
-        // tweak (chip on inlay-colored background, etc.).
-        if (looksLikeInlayBugHex(newHex)) continue;
-        updates.push({ ...cv, selfieDominantHex: newHex });
-      }
-      if (cancelled || updates.length === 0) return;
-      for (const u of updates) saveChipValue(u);
-      setChipValues(prev => prev.map(c => {
-        const fix = updates.find(u => u.id === c.id);
-        return fix ?? c;
-      }));
-    })().catch(() => { /* silent */ });
-    return () => { cancelled = true; };
-  }, [chipValues, canEditChips]);
+  // v5.60.14 — the v5.60.13 selfie-hex auto-migration effect was
+  // removed here. selfieDominantHex is no longer used by the chip-
+  // counting pipeline (stackDetection.ts now uses displayColor
+  // directly), so there's nothing to migrate. See stackDetection.ts
+  // header comment + SQL migration 078 for the full story.
 
   const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[] | BlockedTransferPair[]) => {
     const newSettings = { ...settings, [key]: value };
@@ -979,7 +931,10 @@ const SettingsScreen = () => {
       const updated: ChipValue = {
         ...chip,
         selfieBase64: result.base64,
-        selfieDominantHex: result.dominantHex,
+        // v5.60.14 — selfieDominantHex deprecated. The pipeline uses
+        // displayColor for HSL matching now (see stackDetection.ts
+        // header). Always write null going forward.
+        selfieDominantHex: null,
       };
       saveChipValue(updated);
       setChipValues(chipValues.map(c => c.id === chipId ? updated : c));
@@ -5010,34 +4965,11 @@ const SettingsScreen = () => {
             )}
 
             {globalStats && (() => {
-              // Group lifetime in months, used to derive a games-per-month
-              // cadence. We floor at 1 month so brand-new groups don't
-              // produce inflated rates (e.g. 5 games on day 2 ≠ 150/mo).
-              const groupAgeMonths = (createdAt: string): number => {
-                const ms = now.getTime() - new Date(createdAt).getTime();
-                return Math.max(1, ms / (1000 * 60 * 60 * 24 * 30.44));
-              };
-              const formatGroupAge = (createdAt: string): string => {
-                const months = groupAgeMonths(createdAt);
-                if (months < 1.5) return language === 'he' ? 'חודש' : '1mo';
-                if (months < 12) return language === 'he' ? `${Math.round(months)} ח׳` : `${Math.round(months)}mo`;
-                const years = months / 12;
-                return language === 'he'
-                  ? `${years.toFixed(years < 2 ? 1 : 0)} ש׳`
-                  : `${years.toFixed(years < 2 ? 1 : 0)}y`;
-              };
-
               const renderStatCards = (g: GlobalGroup) => {
                 const lastGameLabel = g.last_game_date
                   ? new Date(g.last_game_date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: '2-digit', month: '2-digit', year: '2-digit' })
                   : '—';
                 const lastGameColor = g.last_game_date && daysAgo(g.last_game_date)! <= 30 ? '#10B981' : '#f59e0b';
-                const months = groupAgeMonths(g.created_at);
-                const gamesPerMonth = months > 0 ? g.completed_game_count / months : 0;
-                // Top 3 visited screens — already aggregated by the RPC,
-                // we just render the slice. Falls through to nothing if
-                // the group hasn't logged any activity yet.
-                const topScreens = (g.feature_adoption ?? []).slice(0, 3);
                 return (
                   <div style={{ marginBottom: '0.5rem' }}>
                     {/* Core stats row */}
@@ -5054,40 +4986,18 @@ const SettingsScreen = () => {
                         </div>
                       ))}
                     </div>
-                    {/* Cadence row — group age, games/month rate, and
-                        sessions in the last 30 days. Single glance answer
-                        to "is this group thriving?". */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      padding: '0.35rem 0', borderBottom: '1px solid var(--border)',
-                      marginBottom: '0.35rem',
-                    }}>
-                      {[
-                        {
-                          label: language === 'he' ? 'גיל' : 'Age',
-                          value: formatGroupAge(g.created_at),
-                          color: 'var(--text-muted)',
-                        },
-                        {
-                          label: language === 'he' ? 'משחקים/ח׳' : 'Games/mo',
-                          value: gamesPerMonth >= 1
-                            ? gamesPerMonth.toFixed(1)
-                            : gamesPerMonth > 0 ? gamesPerMonth.toFixed(2) : '—',
-                          color: gamesPerMonth >= 1 ? '#10B981' : gamesPerMonth > 0 ? '#f59e0b' : 'var(--text-muted)',
-                        },
-                        {
-                          label: language === 'he' ? 'סשנים 30י׳' : 'Sessions 30d',
-                          value: g.sessions_30d ?? 0,
-                          color: (g.sessions_30d ?? 0) > 20 ? '#10B981' : (g.sessions_30d ?? 0) > 0 ? '#818cf8' : 'var(--text-muted)',
-                        },
-                      ].map(s => (
-                        <div key={s.label} style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
-                          <div style={{ fontSize: '0.46rem', color: 'var(--text-muted)', marginTop: '0.05rem' }}>{s.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Engagement row */}
+                    {/* Engagement row — only the signals that mean what
+                        they say. Earlier iterations tried to surface
+                        "Sessions 30d" (= activity_log row count, every
+                        screen view), a derived games-per-month rate
+                        (divides a possibly-bogus completed_game_count
+                        by a created_at that can be reset on re-create),
+                        and a "🔥 top screens" chip strip that just
+                        reflected navigation patterns rather than feature
+                        love. All three were removed (v5.61.1 / v5.61.3)
+                        because they read as data-rich but were not
+                        actionable. The chips below ARE actionable:
+                        active/trainers this week, lifetime trainers. */}
                     <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.6rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                       {g.active_users_7d > 0 && (
                         <span>📊 <span style={{ color: '#10B981', fontWeight: 600 }}>{g.active_users_7d}</span> {language === 'he' ? 'פעילים השבוע' : 'active this week'}</span>
@@ -5099,79 +5009,186 @@ const SettingsScreen = () => {
                         <span>🏆 <span style={{ color: '#818cf8', fontWeight: 600 }}>{g.training_players_total}</span> {language === 'he' ? 'מתאמנים בסה״כ' : 'lifetime trainers'}</span>
                       )}
                     </div>
-                    {/* Feature adoption — surfaces what users actually
-                        do inside the app (which screens they visit).
-                        Already computed by the RPC; previously fetched
-                        but not rendered. */}
-                    {topScreens.length > 0 && (
-                      <div style={{ marginTop: '0.4rem' }}>
-                        <div style={{
-                          fontSize: '0.5rem', fontWeight: 700, color: 'var(--text-muted)',
-                          textTransform: 'uppercase', letterSpacing: '0.05em',
-                          marginBottom: '0.25rem',
-                        }}>
-                          {language === 'he' ? '🔥 מסכים פופולריים' : '🔥 Top screens'}
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                          {topScreens.map(s => (
-                            <span
-                              key={s.screen}
-                              style={{
-                                fontSize: '0.55rem', fontWeight: 600,
-                                padding: '0.15rem 0.4rem', borderRadius: '6px',
-                                background: 'rgba(99,102,241,0.08)',
-                                border: '1px solid rgba(99,102,241,0.18)',
-                                color: 'var(--text)',
-                                display: 'inline-flex', gap: '0.25rem', alignItems: 'center',
-                              }}
-                            >
-                              <span style={{ opacity: 0.85 }}>{s.screen}</span>
-                              <span style={{
-                                fontSize: '0.5rem', fontWeight: 700,
-                                color: '#818cf8',
-                                background: 'rgba(99,102,241,0.15)',
-                                padding: '0.05rem 0.25rem', borderRadius: '4px',
-                              }}>
-                                {s.users}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               };
 
+              // Aggregations across the "Others" set. Members /
+              // Players / Games are set sizes (each row belongs to
+              // exactly one group), so summing is correct. We
+              // deliberately do NOT sum active_users_7d /
+              // training_players across groups — those are per-group
+              // distinct-user counts and a single user active in two
+              // groups would be double-counted, producing a number
+              // that's neither "sum of per-group distincts" (because
+              // it pretends to be a platform aggregate) nor "true
+              // distinct across the set" (which we don't have the data
+              // to compute client-side). Removed in v5.61.2 after live
+              // data confirmed the drift (sum=17 vs true=16).
               const othersTotalMembers = otherGroups.reduce((s, g) => s + g.member_count, 0);
               const othersTotalPlayers = otherGroups.reduce((s, g) => s + (g.player_count ?? 0), 0);
               const othersTotalCompleted = otherGroups.reduce((s, g) => s + g.completed_game_count, 0);
+              // Sort the Others list with active groups first, then by
+              // most recent activity. Cold/never-played fall to the
+              // bottom. Without this the list was implicit-creation-order
+              // and a long-dormant group could push real activity off
+              // the first screen.
+              const otherGroupsSorted = [...otherGroups].sort((a, b) => {
+                const aDate = a.last_game_date ? new Date(a.last_game_date).getTime() : 0;
+                const bDate = b.last_game_date ? new Date(b.last_game_date).getTime() : 0;
+                return bDate - aDate;
+              });
 
               return (
                 <>
                   {/* Platform Overview */}
-                  <div style={{
-                    padding: '0.65rem 0.75rem', borderRadius: '12px', marginBottom: '0.65rem',
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(16,185,129,0.06))',
-                    border: '1px solid rgba(99,102,241,0.15)',
-                  }}>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', letterSpacing: '0.02em' }}>
-                      {t('settings.superAdmin.platformTotals')}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      {[
-                        { label: language === 'he' ? 'קבוצות' : 'Groups', value: globalStats.total_groups, color: '#818cf8' },
-                        { label: language === 'he' ? 'משתמשים' : 'Users', value: globalStats.total_users, color: 'var(--text)' },
-                        { label: language === 'he' ? 'שחקנים' : 'Players', value: globalStats.total_players, color: 'var(--text)' },
-                        { label: language === 'he' ? 'משחקים' : 'Games', value: globalStats.total_games, color: '#10B981' },
-                      ].map(s => (
-                        <div key={s.label} style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
-                          <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{s.label}</div>
+                  {(() => {
+                    // Most recent activity across the whole platform —
+                    // surfaces "the last meaningful thing that happened
+                    // anywhere" without a separate audit RPC. The
+                    // active/dormant/cold pill row that used to live
+                    // here was removed in v5.61.4 because at the user's
+                    // scale (3 groups) it just restated what you can
+                    // count from the list itself a few pixels below.
+                    // Re-introduce the pills if/when the platform grows
+                    // past ~10 groups and the list starts to scroll.
+                    const allGroups = globalStats.groups;
+                    const mostRecentGroup = allGroups
+                      .filter(g => g.last_game_date)
+                      .sort((a, b) => new Date(b.last_game_date!).getTime() - new Date(a.last_game_date!).getTime())[0];
+                    const mostRecentDays = mostRecentGroup ? daysAgo(mostRecentGroup.last_game_date!) : null;
+
+                    return (
+                      <div style={{
+                        padding: '0.65rem 0.75rem', borderRadius: '12px', marginBottom: '0.65rem',
+                        background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(16,185,129,0.06))',
+                        border: '1px solid rgba(99,102,241,0.15)',
+                      }}>
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          marginBottom: '0.4rem',
+                        }}>
+                          <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>
+                            {t('settings.superAdmin.platformTotals')}
+                          </div>
+                          <button
+                            onClick={loadGlobalStats}
+                            disabled={globalLoading}
+                            aria-label={language === 'he' ? 'רענן' : 'Refresh'}
+                            style={{
+                              fontSize: '0.6rem', fontWeight: 600,
+                              padding: '0.2rem 0.5rem', borderRadius: '6px',
+                              border: '1px solid rgba(99,102,241,0.25)',
+                              background: 'rgba(99,102,241,0.08)',
+                              color: '#818cf8',
+                              cursor: globalLoading ? 'wait' : 'pointer',
+                              fontFamily: 'Outfit, sans-serif',
+                              opacity: globalLoading ? 0.5 : 1,
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            {globalLoading ? '⏳' : '🔄'} {language === 'he' ? 'רענן' : 'Refresh'}
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          {[
+                            { label: language === 'he' ? 'קבוצות' : 'Groups', value: globalStats.total_groups, color: '#818cf8' },
+                            { label: language === 'he' ? 'משתמשים' : 'Users', value: globalStats.total_users, color: 'var(--text)' },
+                            { label: language === 'he' ? 'שחקנים' : 'Players', value: globalStats.total_players, color: 'var(--text)' },
+                            { label: language === 'he' ? 'משחקים' : 'Games', value: globalStats.total_games, color: '#10B981' },
+                          ].map(s => (
+                            <div key={s.label} style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                              <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{s.label}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Engagement pulse — only the two signals
+                            that map to distinct-people counts. The
+                            previous "Sessions 30d" tile was raw
+                            activity_log row count (every screen view),
+                            which read as gibberish (e.g. 23k for one
+                            small group). Removed in v5.61.1. */}
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between',
+                          gap: '0.4rem', marginTop: '0.55rem',
+                          paddingTop: '0.45rem', borderTop: '1px solid rgba(99,102,241,0.12)',
+                          flexWrap: 'wrap',
+                        }}>
+                          {[
+                            {
+                              label: language === 'he' ? 'פעילים השבוע' : 'Active 7d',
+                              value: globalStats.total_active_users_7d,
+                              color: '#10B981', icon: '🟢',
+                            },
+                            {
+                              label: language === 'he' ? 'מתאמנים השבוע' : 'Trainers 7d',
+                              value: globalStats.total_training_players,
+                              color: '#f59e0b', icon: '🎯',
+                            },
+                          ].map(p => (
+                            <div key={p.label} style={{
+                              flex: 1, minWidth: 0, textAlign: 'center',
+                              padding: '0.3rem 0.2rem', borderRadius: '8px',
+                              background: 'rgba(255,255,255,0.04)',
+                            }}>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginBottom: '0.1rem' }}>
+                                {p.icon} {p.label}
+                              </div>
+                              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: p.color, lineHeight: 1 }}>
+                                {p.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Last-activity spotlight — answers "when was
+                            the last meaningful thing on the platform?"
+                            in one glance, useful even on small lists. */}
+                        {globalStats.orphaned_groups.length > 0 && (
+                          <div style={{
+                            display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
+                            marginTop: '0.5rem',
+                          }}>
+                            <span style={{
+                              fontSize: '0.55rem', fontWeight: 700,
+                              padding: '0.15rem 0.4rem', borderRadius: '6px',
+                              background: 'rgba(167,139,250,0.12)', color: '#a78bfa',
+                            }}>
+                              {language === 'he'
+                                ? `⚠️ ${globalStats.orphaned_groups.length} יתומות`
+                                : `⚠️ ${globalStats.orphaned_groups.length} orphaned`}
+                            </span>
+                          </div>
+                        )}
+                        {mostRecentGroup && mostRecentDays !== null && (
+                          <div style={{
+                            marginTop: '0.4rem', fontSize: '0.6rem',
+                            color: 'var(--text-muted)',
+                            display: 'flex', justifyContent: 'space-between',
+                            alignItems: 'center', gap: '0.5rem',
+                          }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {language === 'he'
+                                ? `🕒 משחק אחרון: ${mostRecentGroup.name}`
+                                : `🕒 Last game: ${mostRecentGroup.name}`}
+                            </span>
+                            <span style={{
+                              color: mostRecentDays === 0 ? '#10B981' : mostRecentDays <= 7 ? '#10B981' : mostRecentDays <= 30 ? '#f59e0b' : '#ef4444',
+                              fontWeight: 600, whiteSpace: 'nowrap',
+                            }}>
+                              {mostRecentDays === 0
+                                ? (language === 'he' ? 'היום' : 'today')
+                                : mostRecentDays === 1
+                                  ? (language === 'he' ? 'אתמול' : 'yesterday')
+                                  : language === 'he' ? `לפני ${mostRecentDays} ימים` : `${mostRecentDays}d ago`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Sub-tab toggle */}
                   <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.75rem' }}>
@@ -5239,11 +5256,14 @@ const SettingsScreen = () => {
                         </div>
                       ) : (
                         <>
-                          {/* Aggregate totals */}
+                          {/* Aggregate totals — primary row of headline
+                              numbers. Pulls double duty as a "what does
+                              the rest of the platform look like?"
+                              snapshot when scoping out new feature work. */}
                           <div style={{
                             display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem',
                             borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)',
-                            marginBottom: '0.65rem',
+                            marginBottom: '0.4rem',
                           }}>
                             {[
                               { label: language === 'he' ? 'קבוצות' : 'Groups', value: otherGroups.length, color: '#818cf8' },
@@ -5258,11 +5278,27 @@ const SettingsScreen = () => {
                             ))}
                           </div>
 
-                          {/* Group list — click to expand */}
+                          {/* Per-group engagement deliberately not
+                              aggregated here — see the comment near
+                              othersTotalMembers for why. The platform-
+                              wide distinct counts are already shown in
+                              the Platform Overview card above. */}
+
+                          {/* Group list — click to expand. Sorted by
+                              most-recent activity (see otherGroupsSorted)
+                              so the live groups land at the top. */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {otherGroups.map(g => {
+                            {otherGroupsSorted.map(g => {
                               const status = getActivityStatus(g.last_game_date);
                               const isExpanded = expandedGroupId === g.id;
+                              const lastDays = daysAgo(g.last_game_date);
+                              const lastDaysLabel = lastDays === null
+                                ? (language === 'he' ? 'אף פעם' : 'never')
+                                : lastDays === 0
+                                  ? (language === 'he' ? 'היום' : 'today')
+                                  : lastDays === 1
+                                    ? (language === 'he' ? 'אתמול' : 'yesterday')
+                                    : language === 'he' ? `${lastDays}י׳` : `${lastDays}d`;
                               return (
                                 <div key={g.id} data-group-card style={{
                                   borderRadius: '10px', overflow: 'hidden',
@@ -5274,20 +5310,61 @@ const SettingsScreen = () => {
                                     onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
                                     style={{ padding: '0.65rem 0.75rem', cursor: 'pointer' }}
                                   >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{g.name}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flex: 1 }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
                                         <span style={{
                                           fontSize: '0.55rem', fontWeight: 600, padding: '0.1rem 0.3rem',
                                           borderRadius: '6px', background: status.bg, color: status.color,
+                                          flexShrink: 0,
                                         }}>
                                           {status.label}
                                         </span>
+                                        {g.training_enabled && (
+                                          <span title={language === 'he' ? 'אימון פעיל' : 'Training enabled'} style={{
+                                            fontSize: '0.55rem', fontWeight: 600, padding: '0.1rem 0.3rem',
+                                            borderRadius: '6px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b',
+                                            flexShrink: 0,
+                                          }}>
+                                            🎯
+                                          </span>
+                                        )}
                                       </div>
-                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}>▼</span>
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>▼</span>
                                     </div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                                      {g.owner_email || t('settings.superAdmin.noOwner')} · 👥 {g.member_count} · 🃏 {g.completed_game_count}
+                                    {/* Compact metrics strip — one
+                                        scannable line that surfaces the
+                                        same things you'd expand the card
+                                        to learn. Owner on the start,
+                                        member/game counts + active-this-
+                                        week + last-game recency on the
+                                        end. All four numeric tiles map
+                                        to real distinct-people / row
+                                        counts (not raw event volume). */}
+                                    <div style={{
+                                      display: 'flex', justifyContent: 'space-between',
+                                      alignItems: 'center', gap: '0.5rem',
+                                      fontSize: '0.62rem', color: 'var(--text-muted)',
+                                      marginTop: '0.2rem',
+                                    }}>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>
+                                        {g.owner_email || t('settings.superAdmin.noOwner')}
+                                      </span>
+                                      <span style={{
+                                        display: 'flex', gap: '0.4rem', flexShrink: 0,
+                                        fontSize: '0.6rem',
+                                      }}>
+                                        <span title={language === 'he' ? 'חברים' : 'Members'}>👥 {g.member_count}</span>
+                                        <span title={language === 'he' ? 'משחקים' : 'Games'} style={{ color: g.completed_game_count > 0 ? '#10B981' : 'var(--text-muted)' }}>🃏 {g.completed_game_count}</span>
+                                        {g.active_users_7d > 0 && (
+                                          <span title={language === 'he' ? 'פעילים השבוע' : 'Active this week'} style={{ color: '#10B981' }}>
+                                            🟢 {g.active_users_7d}
+                                          </span>
+                                        )}
+                                        <span title={language === 'he' ? 'משחק אחרון' : 'Last game'} style={{ color: status.color }}>
+                                          🕒 {lastDaysLabel}
+                                        </span>
+                                      </span>
                                     </div>
                                   </div>
 

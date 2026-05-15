@@ -129,7 +129,6 @@ import {
   hexToRgb,
   whiteBalanceFromStripes,
   applyWhiteBalance,
-  looksLikeInlayBugHex,
 } from './imageUtils';
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -380,28 +379,37 @@ export async function detectStackRegions(
     const bodyHsl = rgbToHsl(bodyRgb);
     const dominantHex = rgbToHexLocal(bodyRgb);
 
-    // Find nearest chip in palette.
+    // Find nearest chip in palette via HSL distance against displayColor.
     //
-    // v5.60.13 — defensive fallback for the inlay-bug class of bad
-    // selfie hexes (see imageUtils.looksLikeInlayBugHex). v5.59.0
-    // sampled the dead-center 24×24 patch which landed on the printed
-    // value inlay for most poker chips, producing washed-out grey
-    // hexes for every color. With every reference hex looking like
-    // mid-grey, hslDistance becomes meaningless and stack→chip mapping
-    // is effectively random — which is exactly what made the feature
-    // appear broken. Even after auto-recompute (SettingsScreen mount
-    // path), there could be edge cases where the recompute also
-    // produces a bug-shaped hex (e.g. a chip photographed against an
-    // inlay-colored background). In that case we silently use the
-    // nominal displayColor and at least preserve the v5.49 behavior
-    // of "swatch hex matching" rather than randomized mapping.
+    // v5.60.14 — abandoned `selfieDominantHex` as a calibration source.
+    // History:
+    //   * v5.59.0 added per-chip selfies and computed `selfieDominantHex`
+    //     from the dead-center 24×24 patch of each selfie. Most poker
+    //     chips have a printed value inlay/sticker dead-center, so the
+    //     hex always came out as muddy mid-grey (red→#b59e94, blue→
+    //     #7b86a3, etc.) — making downstream HSL matching effectively
+    //     random and the feature appear totally broken to the user.
+    //   * v5.60.13 tried to recover by auto-recomputing the hex via
+    //     ring sampling at 30/45/60/75% of canvas radius. But selfies
+    //     where the chip doesn't fill the frame (chip on green felt
+    //     with mat showing in the corners) had the outer rings (60-75%)
+    //     sample the green BACKGROUND instead of the chip — so even
+    //     the recompute produced wrong hexes (white chip → #0c805c
+    //     dark-green, black chip → #338665 green).
+    //   * Conclusion: extracting reliable chip body color from arbitrary
+    //     phone selfies is fundamentally fragile (depends on chip size
+    //     in frame, presence of inlay, background color — none of which
+    //     we can reliably detect client-side without real CV).
+    //
+    // The user-configured `displayColor` is well-saturated, hue-correct,
+    // and 100% reliable. It's the right thing to match against. The
+    // selfie JPEG is still valuable as a few-shot reference image for
+    // the LLM call (`runSingleStackShot` in geminiAI.ts) — we just
+    // stopped pretending the per-chip dominant hex extraction worked.
     let bestId: string | null = null;
     let bestDist = Infinity;
     for (const chip of chipPalette) {
-      const selfieHex = chip.selfieDominantHex;
-      const useSelfie = !!selfieHex && !looksLikeInlayBugHex(selfieHex);
-      const refHex = useSelfie ? selfieHex! : chip.displayColor;
-      const refRgb = hexToRgb(refHex);
+      const refRgb = hexToRgb(chip.displayColor);
       if (!refRgb) continue;
       const refHsl = rgbToHsl(refRgb);
       const d = hslDistance(bodyHsl, refHsl);

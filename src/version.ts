@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.13';
+export const APP_VERSION = '5.60.14';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.14',
+    date: '2026-05-15',
+    changes: [
+      '🎯 Chip counting now matches via your configured swatch color',
+      '🧹 Retired the unreliable selfie color extraction',
+      '📷 Selfies still used as the LLM reference image (their real value)',
+      '🛟 Robust mapping regardless of photo lighting / framing',
+    ],
+  },
   {
     version: '5.60.13',
     date: '2026-05-15',
