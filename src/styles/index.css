@@ -22,14 +22,21 @@
 }
 
 html, body {
-  /* iOS Safari backstop. `.main-content` already has overflow-x: hidden
-     but iOS occasionally lets the viewport scroll sideways when a
-     descendant overflows by a few px (shadow, outline, rendering
-     rounding). Pinning it at html+body level prevents any chance of
-     accidental horizontal page scroll on iPhone. Internal scrollable
-     containers (e.g. the stats-table card with its own
-     overflowX: auto) are unaffected. */
-  overflow-x: hidden;
+  /* iOS Safari backstop against accidental horizontal page scroll
+     when a descendant overflows by a few px (shadow, outline,
+     rendering rounding). MUST be `clip`, not `hidden`:
+       - `overflow: hidden` (any axis) on <html> establishes a scroll
+         container and moves the scroll context off the viewport.
+         Combined with body { min-height: 100vh } this silently
+         BREAKS vertical touch scrolling on iOS Safari (v5.62.6
+         regression — entire app un-scrollable on iPhone).
+       - `overflow: clip` has the same visual no-overflow effect but
+         does NOT establish a scroll container, so iOS keeps
+         scrolling on the viewport normally. Supported in Safari 16+
+         (2022), Chrome 90+, Firefox 81+ — universal in 2026.
+     Internal scrollable containers (e.g. stats-table card with its
+     own overflowX: auto) are unaffected. */
+  overflow-x: clip;
 }
 
 body {
