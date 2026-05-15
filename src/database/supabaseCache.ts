@@ -454,42 +454,43 @@ async function pushToSupabase(key: string) {
     case STORAGE_KEYS.GAMES: {
       // Upsert-only sync, scoped to games the user has actually touched.
       //
-      // Previously this path was `LOCAL is the source of truth`: we'd upsert
-      // the local list AND delete every server row whose id wasn't in local
-      // (cascade-deleting game_players / shared_expenses / forecasts /
-      // paid_settlements / period_markers / comics / tts_pools). For child
-      // tables we'd `DELETE FROM forecasts WHERE game_id IN (allGameIds)`
-      // then bulk-insert from local. Both patterns assume local is complete
-      // and authoritative. Neither holds in a multi-device app:
-      //   - `fetchByGameIds` doesn't paginate, so a single >1000-row
-      //     response gets silently truncated (PostgREST default cap),
-      //   - per-batch `select(*).in(column, batch)` errors return [] (a
-      //     warning, not a failure), so a transient RLS / network blip
-      //     produces a partial cache,
-      //   - other devices can be mid-init, on stale bundles, in offline
-      //     queues, or replaying a pagehide flush from a previous session.
-      // Any of those produced "I have fewer rows than the server, therefore
-      // delete the rest" — corrupting completed games for everyone.
+      // History of this path's bugs:
+      //   - Pre-v5.34: "LOCAL is the source of truth" — upserted local list
+      //     AND deleted every server row not in local. Stale tabs with
+      //     partial caches wiped completed games for everyone. Killed by
+      //     migration 043 / v5.34.2 + the "no delete in flush" rewrite.
+      //   - v5.34..v5.60: upsert-only but BLANKET — we'd push every game in
+      //     local memory regardless of whether the user had touched it. The
+      //     `gameLocalWriteAt` marker scoped child-table reconciliation but
+      //     not the games row itself. A stale tab whose cache still had
+      //     status='live' for a game that had been completed elsewhere
+      //     would, on any unrelated games sync (creating another game,
+      //     editing forecasts, the realtime debounce coalescing several
+      //     writes), upsert the WHOLE games array — flipping the status of
+      //     the now-completed game from 'completed' BACK to 'live' on the
+      //     server. With status='live' the BEFORE-DELETE row guard
+      //     (migration 050) read the now-stale parent status and let
+      //     subsequent single-row deletes through. Net effect: completed-
+      //     game roster wiped, same shape as the pre-v5.34 bug, even
+      //     though both DB guards (043/050/051) were doing their job.
       //
-      // The contract now is: this flush only persists what's been written
-      // locally (upsert). Real deletes happen on the user-action paths
-      // (`deleteGame` / `removeSharedExpense`) via direct `supabase.delete`
-      // calls — see storage.ts. Child tables are reconciled per-touched-
-      // game so re-saving Game A never wipes Game B's forecasts.
+      // v5.61 fix (this commit): upsert ONLY games whose
+      // `gameLocalWriteAt` marker is set. A purely-passive stale tab —
+      // no local writes, just rendering — pushes nothing and can no
+      // longer revive a stale status. Every legit write path
+      // (createGame, updateGameStatus, updateGame, updateGameChipGap,
+      // addSharedExpense, removeSharedExpense, updateSharedExpense,
+      // saveForecastAccuracy, saveForecastComment, saveGameAiSummary,
+      // saveGameComic, clearGameComic, linkForecastToGame) already calls
+      // markGameLocallyWritten, so legitimate flows are unaffected.
+      // Migration 077 adds the DB-level belt-and-suspenders.
       const games = (state.data.get(key) as Game[]) || [];
-      const rows = games.map(g => gameToRow(g, gid));
 
-      // Capture which games were actually mutated locally BEFORE the
-      // upsert clears their markers. This is the scope for child-table
-      // reconciliation below: we only touch a game's children if the
-      // user (on this device) genuinely wrote to that game during the
-      // current debounce window. A stale tab merely re-upserting an
-      // unchanged games array (e.g. echoed from a realtime refresh)
-      // will not have any markers, so it stays a pure no-op for child
-      // tables.
       const locallyTouchedGameIds = new Set(
         games.map(g => g.id).filter(id => gameLocalWriteAt.has(id)),
       );
+      const touchedGames = games.filter(g => locallyTouchedGameIds.has(g.id));
+      const rows = touchedGames.map(g => gameToRow(g, gid));
 
       if (rows.length > 0) {
         const { error } = await supabase.from('games').upsert(rows, { onConflict: 'id' });
@@ -508,13 +509,13 @@ async function pushToSupabase(key: string) {
         }
         // Successful upsert — clear local-write markers for synced rows
         // so subsequent realtime echoes can authoritatively refresh them.
-        for (const g of games) clearLocalWriteMarker(g.id);
+        for (const g of touchedGames) clearLocalWriteMarker(g.id);
       }
 
       // Child-table reconciliation runs ONLY on games whose marker was
       // present when this flush started. For everything else we trust
       // the server (any realtime refresh will pick up the latest).
-      const touchedGameIds = games.map(g => g.id).filter(id => locallyTouchedGameIds.has(id));
+      const touchedGameIds = touchedGames.map(g => g.id);
       const expRowsByGame = new Map<string, Record<string, unknown>[]>();
       const expIdsByGame = new Map<string, Set<string>>();
       const fcRowsByGame = new Map<string, Record<string, unknown>[]>();

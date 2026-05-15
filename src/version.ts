@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.14';
+export const APP_VERSION = '5.61.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.61.0',
+    date: '2026-05-15',
+    changes: [
+      '🛡 Fixed weekend roster wipes (recurring 3 weekends in a row)',
+      '🔒 DB now blocks reverting completed games to live',
+      '⚡ Live Game opens instantly (TTS prepares in background)',
+      '🎙️ Subtle "preparing voices" badge on Live Game header',
+    ],
+  },
   {
     version: '5.60.14',
     date: '2026-05-15',

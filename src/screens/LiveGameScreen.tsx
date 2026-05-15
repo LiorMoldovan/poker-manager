@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory, Player } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, addPlayerToGame, getAllPlayers, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
@@ -65,6 +65,7 @@ function hasLiteralLiveCountAtRuntime(text: string): boolean {
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { role, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
@@ -94,11 +95,21 @@ const LiveGameScreen = () => {
   // Track "last man standing" so it's only announced once per game
   const lastManAnnouncedRef = useRef(false);
 
-  // AI TTS pool (loaded from cache on mount)
+  // AI TTS pool (loaded from cache on mount, or arrives via 'tts-pool-ready'
+  // event when NewGameScreen kicked off generation as fire-and-forget so
+  // the user could enter the live screen instantly).
   const ttsPoolRef = useRef<LiveGameTTSPool | null>(null);
   const isSpeakingRef = useRef(false);
   const lastTTSActivityRef = useRef(Date.now());
   const [ttsModelName, setTtsModelName] = useState<string>('');
+  // True only between NewGameScreen kickoff and pool arrival. Initialized
+  // from navigation state so a hard refresh / direct URL hit defaults to
+  // false (in which case either the pool is already cached, or generation
+  // failed silently — either way no spinner needed).
+  const [ttsLoading, setTtsLoading] = useState<boolean>(() => {
+    const navState = location.state as { ttsLoading?: boolean } | null;
+    return !!navState?.ttsLoading;
+  });
   const ttsQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const [showAllActions, setShowAllActions] = useState(false);
@@ -107,17 +118,45 @@ const LiveGameScreen = () => {
     warmupAudioContext();
   }, []);
 
-  // Load AI TTS pool on mount
+  // Load AI TTS pool on mount, and listen for late-arriving pools that
+  // NewGameScreen kicked off as fire-and-forget. Two paths:
+  //   1. Pool already in cache (back-navigation, refresh after generation
+  //      completed, member viewing an admin's game) → load synchronously,
+  //      drop the spinner if it was set from nav state.
+  //   2. Pool not yet in cache + we're expecting it (`ttsLoading` true) →
+  //      keep the spinner, listen for 'tts-pool-ready' for THIS gameId,
+  //      reload the pool when it fires.
+  // The event is gameId-scoped so unrelated screens / future generations
+  // don't trigger spurious reloads here.
   useEffect(() => {
-    if (gameId) {
+    if (!gameId) return;
+
+    const tryLoad = (): boolean => {
       const pool = loadTTSPool<LiveGameTTSPool>(gameId);
       if (pool) {
         ttsPoolRef.current = pool;
+        const model = loadTTSPoolModel(gameId);
+        if (model) setTtsModelName(model);
         console.log('🎙️ AI TTS pool loaded for game', gameId);
+        return true;
       }
-      const model = loadTTSPoolModel(gameId);
-      if (model) setTtsModelName(model);
+      return false;
+    };
+
+    if (tryLoad()) {
+      setTtsLoading(false);
+      return;
     }
+
+    const onPoolReady = (e: Event) => {
+      const evt = e as CustomEvent<{ gameId?: string }>;
+      if (evt.detail?.gameId !== gameId) return;
+      tryLoad();
+      setTtsLoading(false);
+    };
+
+    window.addEventListener('tts-pool-ready', onPoolReady as EventListener);
+    return () => window.removeEventListener('tts-pool-ready', onPoolReady as EventListener);
   }, [gameId]);
 
   // Format buyin count with proper half support: 2.5 → "שתיים וחצי", 3 → "שלוש"
@@ -1883,11 +1922,40 @@ const LiveGameScreen = () => {
         </div>
         <p className="page-subtitle" style={{ margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
           {t('live.subtitle')}
-          {ttsModelName && (
+          {ttsModelName ? (
             <span style={{ fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
               🤖 {ttsModelName}
             </span>
-          )}
+          ) : ttsLoading ? (
+            <span
+              style={{
+                fontSize: '0.6rem',
+                background: 'rgba(245, 158, 11, 0.15)',
+                color: '#fbbf24',
+                padding: '0.1rem 0.4rem',
+                borderRadius: '4px',
+                fontWeight: 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+              }}
+              aria-live="polite"
+              title={t('live.preparingVoicesTooltip')}
+            >
+              <span
+                style={{
+                  width: '0.55rem',
+                  height: '0.55rem',
+                  border: '1.5px solid rgba(251, 191, 36, 0.35)',
+                  borderTopColor: '#fbbf24',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  animation: 'spin 0.9s linear infinite',
+                }}
+              />
+              {t('live.preparingVoices')}
+            </span>
+          ) : null}
           {/* TTS won't play without a Gemini key (the LLM rephrases the
               raw event into a natural Hebrew sentence before TTS). When
               the call path is unavailable for this group, surface a tap-

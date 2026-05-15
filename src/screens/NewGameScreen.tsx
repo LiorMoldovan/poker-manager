@@ -498,8 +498,6 @@ const NewGameScreen = () => {
     }
   };
   
-  const [generatingTTS, setGeneratingTTS] = useState(false);
-
   const startGameWithForecast = async (forecasts?: GameForecast[]) => {
     hapticSuccess();
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
@@ -549,27 +547,41 @@ const NewGameScreen = () => {
 
     flushGameCreation().catch(err => console.warn('Game creation flush failed:', err));
 
+    // TTS pool generation is now FIRE-AND-FORGET. Previously we awaited
+    // it here (blocking the Start button with a "preparing the evening"
+    // spinner for 20-30s). The pool is purely additive flavor — every
+    // consumer in LiveGameScreen (`pickFromPool`, `pickFromPlayerAnticipated`
+    // etc.) returns null when the pool isn't loaded and the hardcoded
+    // Hebrew lines take over. So we can navigate instantly and let the
+    // pool arrive in the background; LiveGameScreen listens for the
+    // `tts-pool-ready` event below and swaps the spinner badge for the
+    // model name once it lands. The promise survives this component's
+    // unmount because it's plain async work — no setState, no React refs.
     const apiKey = getGeminiApiKey();
-    if (apiKey && isOwner) {
-      setGeneratingTTS(true);
-      try {
-        const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
-        const playerIdArr = Array.from(selectedIds);
-        const playerNameArr = playerIdArr.map(id => players.find(p => p.id === id)?.name || '');
-        const pool = await withAITiming('tts_pool', () => generateLiveGameTTSPool(game.id, playerIdArr, playerNameArr, stats2026, location || undefined));
-        if (pool) {
-          const ttsModel = getModelDisplayName(getLastUsedModel());
-          saveTTSPool(game.id, pool, ttsModel);
-          console.log('🎙️ TTS pool saved for game', game.id, `(model: ${ttsModel})`);
-        }
-      } catch (err) {
-        console.warn('TTS pool generation failed (non-blocking):', err);
-      } finally {
-        setGeneratingTTS(false);
-      }
+    const willGenerateTTS = !!apiKey && isOwner;
+    if (willGenerateTTS) {
+      const gameId = game.id;
+      const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
+      const playerIdArr = Array.from(selectedIds);
+      const playerNameArr = playerIdArr.map(id => players.find(p => p.id === id)?.name || '');
+      const ttsLocation = location || undefined;
+      void withAITiming('tts_pool', () => generateLiveGameTTSPool(gameId, playerIdArr, playerNameArr, stats2026, ttsLocation))
+        .then((pool) => {
+          if (pool) {
+            const ttsModel = getModelDisplayName(getLastUsedModel());
+            saveTTSPool(gameId, pool, ttsModel);
+            console.log('🎙️ TTS pool saved for game', gameId, `(model: ${ttsModel})`);
+          }
+        })
+        .catch((err) => {
+          console.warn('TTS pool generation failed (non-blocking):', err);
+        })
+        .finally(() => {
+          window.dispatchEvent(new CustomEvent('tts-pool-ready', { detail: { gameId } }));
+        });
     }
-    
-    navigate(`/live-game/${game.id}`);
+
+    navigate(`/live-game/${game.id}`, { state: { ttsLoading: willGenerateTTS } });
   };
   
   // Handle mismatch: Generate new forecast
@@ -2165,17 +2177,12 @@ const NewGameScreen = () => {
         <button 
           className="btn btn-primary"
           onClick={handleStartGame}
-          disabled={selectedIds.size < 2 || generatingTTS}
+          disabled={selectedIds.size < 2}
           style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
         >
-          {generatingTTS ? t('newGame.preparingEvening') : t('newGame.startGame', { count: selectedIds.size })}
+          {t('newGame.startGame', { count: selectedIds.size })}
         </button>
       </div>
-      {generatingTTS && (
-        <div style={{ padding: '0 0.75rem' }}>
-          <AIProgressBar operationKey="tts_pool" />
-        </div>
-      )}
       {/* No-AI-key explainer for the forecast row. Surfaces the WHY
           before the user taps Forecast — otherwise we silently fall
           back to a static forecast and the user wonders where the

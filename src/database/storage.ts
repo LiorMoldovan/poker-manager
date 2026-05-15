@@ -232,11 +232,38 @@ export const createGame = (playerIds: string[], location?: string, forecasts?: {
 export const updateGameStatus = (gameId: string, status: Game['status']): void => {
   const games = getAllGames();
   const gameIndex = games.findIndex(g => g.id === gameId);
-  if (gameIndex !== -1) {
-    games[gameIndex].status = status;
-    markGameLocallyWritten(gameId);
+  if (gameIndex === -1) return;
+
+  const previousStatus = games[gameIndex].status;
+  const isCompletedDowngrade = previousStatus === 'completed' && status !== 'completed';
+
+  games[gameIndex].status = status;
+
+  if (isCompletedDowngrade) {
+    // Migration 077 (v5.61.0) added a DB-level guard that REJECTS any
+    // direct UPDATE downgrading games.status from "completed". The
+    // guard exists because stale-tab blanket upserts had been
+    // recurringly reverting completed→live, which then unblocked the
+    // BEFORE-DELETE guard on game_players and wiped the roster (see
+    // migration 077 comments). The ONE legitimate completed→chip_entry
+    // transition is the "Reopen Chip Entry" admin button — route it
+    // through the sanctioned RPC, which sets a transaction-local
+    // flag the trigger honors.
+    //
+    // We deliberately DO NOT call markGameLocallyWritten() here so the
+    // normal debounced GAMES upsert won't race the RPC and hit the
+    // trigger. The local cache is updated immediately so the UI
+    // navigates to the right screen; the RPC handles the server side
+    // and the realtime echo will sync everything back.
     setItem(STORAGE_KEYS.GAMES, games);
+    supabase.rpc('reopen_completed_game', { p_game_id: gameId }).then(({ error }) => {
+      if (error) console.warn('reopen_completed_game RPC failed:', error.message);
+    });
+    return;
   }
+
+  markGameLocallyWritten(gameId);
+  setItem(STORAGE_KEYS.GAMES, games);
 };
 
 export async function flushGameCompletion(): Promise<void> {

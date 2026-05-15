@@ -930,7 +930,6 @@ const he = {
   'newGame.addPlayer': '+ הוסף שחקן',
   'newGame.forecast': '🔮 תחזית',
   'newGame.startGame': '🔮 התחל משחק ({count})',
-  'newGame.preparingEvening': '🎙️ מכין את הערב...',
   'newGame.addPlayerTitle': 'הוסף שחקן חדש',
   'newGame.playerName': 'שם שחקן',
   'newGame.enterName': 'הזן שם',
@@ -1021,6 +1020,8 @@ const he = {
   // ── Live Game ──
   'live.title': 'משחק חי',
   'live.subtitle': 'עקוב אחרי קניות במהלך המשחק',
+  'live.preparingVoices': '🎙️ מכין קולות',
+  'live.preparingVoicesTooltip': 'ההכרזות הקוליות המותאמות אישית מוכנות תוך כמה שניות. בינתיים אפשר להתחיל לשחק - הכרזות גנריות פעילות מיד.',
   'live.totalPot': 'סה"כ קופה',
   'live.totalBuyins': 'סה"כ קניות',
   'live.playersSection': 'שחקנים',
@@ -3486,7 +3487,6 @@ const en: Record<keyof typeof he, string> = {
   'newGame.addPlayer': '+ Add Player',
   'newGame.forecast': '🔮 Forecast',
   'newGame.startGame': '🔮 Start Game ({count})',
-  'newGame.preparingEvening': '🎙️ Preparing the evening...',
   'newGame.addPlayerTitle': 'Add New Player',
   'newGame.playerName': 'Player Name',
   'newGame.enterName': 'Enter name',
@@ -3577,6 +3577,8 @@ const en: Record<keyof typeof he, string> = {
   // ── Live Game ──
   'live.title': 'Live Game',
   'live.subtitle': 'Track buyins during the game',
+  'live.preparingVoices': '🎙️ Preparing voices',
+  'live.preparingVoicesTooltip': 'Personalized voice announcements are being prepared and will be ready in a few seconds. You can start playing now — generic announcements are active immediately.',
   'live.totalPot': 'Total Pot',
   'live.totalBuyins': 'Total Buyins',
   'live.playersSection': 'Players',
