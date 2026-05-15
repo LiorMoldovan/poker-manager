@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.0.0';
+export const APP_VERSION = '6.1.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.1.0',
+    date: '2026-05-15',
+    changes: [
+      '🎚 Mixed-mode toggle on chip-entry screen',
+      '🧹 Clean single-mode tiles when mixed mode is off',
+      '🏷 Page subtitle shows current counting method',
+      '💬 Hint names the active method explicitly',
+      '🔁 Reusable ToggleSwitch shared across screens',
+    ],
+  },
   {
     version: '6.0.0',
     date: '2026-05-15',

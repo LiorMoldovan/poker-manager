@@ -1083,7 +1083,6 @@ const he = {
   'chips.chipsSuffix': ' צ\'יפים',
   'chips.buyinSingle': ' קנייה',
   'chips.buyinPlural': ' קניות',
-  'chips.chipsExpected': ' צ\'יפים צפויים',
   'chips.done': '✓ סיום',
   'chips.allCounted': 'כל השחקנים נספרו!',
   'chips.clickCalculate': 'לחץ חשב תוצאות למטה לסיום',
@@ -1108,10 +1107,15 @@ const he = {
   // ── Quick-total chip entry mode (migration 080) ──
   'chips.entryMode.color': 'לפי צבע',
   'chips.entryMode.total': 'סה"כ צ\'יפים',
+  'chips.entryMode.mixed': 'מעורב',
+  'chips.subtitle.method': 'שיטת ספירה: {mode}',
   'chips.entryMode.totalNumpadTitle': 'סה"כ צ\'יפים',
-  'chips.entryMode.moneyEquivalent': '≈ {amount}',
   'chips.entryMode.switchLink': 'החלף למצב {mode}',
-  'chips.entryMode.switchConfirm': 'פעולה זו תאפס את הספירה הנוכחית של {player}. להמשיך?',
+  'chips.entryMode.switchConfirmTitle': 'החלף שיטת ספירה?',
+  'chips.entryMode.switchConfirm': 'פעולה זו תאפס את הספירה הנוכחית של {player}.',
+  'chips.mixedMode.toggle': 'מצב מעורב',
+  'chips.mixedMode.toggleHint': 'אפשר לבחור שיטת ספירה שונה לכל שחקן',
+  'chips.mixedMode.allPlayersHint': 'כל השחקנים — {mode}',
 
   // ── Photo chip counting (per-player flow + Settings test card) ──
   'chips.photo.button': '📷 צלם קופה',
@@ -3608,7 +3612,6 @@ const en: Record<keyof typeof he, string> = {
   'chips.chipsSuffix': ' chips',
   'chips.buyinSingle': ' buy-in',
   'chips.buyinPlural': ' buy-ins',
-  'chips.chipsExpected': ' chips expected',
   'chips.done': '✓ Done',
   'chips.allCounted': 'All Players Counted!',
   'chips.clickCalculate': 'Click Calculate Results below to finish',
@@ -3703,10 +3706,15 @@ const en: Record<keyof typeof he, string> = {
   // ── Quick-total chip entry mode (migration 080) ──
   'chips.entryMode.color': 'By color',
   'chips.entryMode.total': 'Total chips',
+  'chips.entryMode.mixed': 'Mixed',
+  'chips.subtitle.method': 'Counting method: {mode}',
   'chips.entryMode.totalNumpadTitle': 'Total chips',
-  'chips.entryMode.moneyEquivalent': '≈ {amount}',
   'chips.entryMode.switchLink': 'Switch to {mode}',
-  'chips.entryMode.switchConfirm': 'This will clear the current count for {player}. Continue?',
+  'chips.entryMode.switchConfirmTitle': 'Switch counting mode?',
+  'chips.entryMode.switchConfirm': 'This will clear the current count for {player}.',
+  'chips.mixedMode.toggle': 'Mixed mode',
+  'chips.mixedMode.toggleHint': 'Choose a different counting method per player',
+  'chips.mixedMode.allPlayersHint': 'All players — {mode}',
 
   // ── Game Summary ──
   'summary.loading': 'Loading summary...',
