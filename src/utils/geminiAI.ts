@@ -4176,6 +4176,17 @@ async function runWholePhotoShot(args: {
 
   parts.push({ inline_data: { mime_type: imageMimeType, data: imageBase64 } });
 
+  // v5.62.3 — prompt simplified. The prior version used `<integer>` as a
+  // literal placeholder inside the schema example, which some free-tier
+  // Gemini variants treated as a string and echoed back unchanged. The
+  // new version describes the schema with a worked example (real digits),
+  // matches the responseSchema field types, and leaves no syntactic
+  // ambiguity.
+  const exampleCounts = chips.map((c, i) => {
+    const sampleN = i === 0 ? 5 : i === 1 ? 3 : 0;
+    return `    { "color": ${JSON.stringify(c.color)}, "count": ${sampleN} }`;
+  }).join(',\n');
+
   parts.push({
     text: `
 
@@ -4188,17 +4199,18 @@ Counting strategy:
 - The TOPMOST chip's edge ring is partially hidden by its own top face — its face IS a chip, COUNT IT.
 - The BOTTOMMOST chip's ring may merge into the surface shadow — if you can see its top rim, COUNT IT.
 - When between two possible counts ("9 or 10 rings"), prefer the HIGHER count. Vision models systematically undercount; erring high cancels the bias.
-- If a color does not appear in the target photo, return 0 for that color.
+- If a color does not appear in the target photo, return 0 for that color — DO NOT omit it from the output.
 - Do NOT invent chips that aren't there.
+- You MUST include an entry for EVERY color listed above, even if the count is 0.
 
-Return ONLY a JSON object with this exact schema (one entry per color, in the same order):
+Output format — return ONLY a raw JSON object, no markdown fences, no prose before or after:
 {
   "counts": [
-${chips.map(c => `    { "color": ${JSON.stringify(c.color)}, "count": <integer> }`).join(',\n')}
+${exampleCounts}
   ]
 }
 
-The "color" values MUST match the user's exact color names: ${colorsList}. Case differences are tolerated (we lowercase before matching).`,
+Replace the example numbers above with your real counts. The "color" values MUST match the user's exact color names: ${colorsList}. Case differences are tolerated. Output ONLY the JSON object — nothing else.`,
   });
 
   const payload = {
@@ -4249,67 +4261,172 @@ The "color" values MUST match the user's exact color names: ${colorsList}. Case 
     return { countsByColor: null, errorMsg, errorCode: 'httpError' };
   }
 
-  let raw = '{}';
-  let parsed: { counts?: Array<{ color?: string; count?: number }> };
+  let raw = '';
   try {
     const data = await response.json();
-    raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-
-    // Tolerant JSON extraction. Free-tier Gemini models frequently
-    // ignore `responseMimeType: 'application/json'` + responseSchema
-    // and wrap the JSON in markdown fences (```json\n{...}\n```), or
-    // prepend a one-line acknowledgement ("Sure, here you go:")
-    // before the JSON. We try, in order:
-    //   1. Strip ```json ... ``` or ``` ... ``` fences if present
-    //   2. Parse straight
-    //   3. If that still fails, extract the first balanced {...}
-    //      block from the cleaned text and parse THAT
-    // Step 3 is the same defensive technique the trivia/forecast/
-    // summary parsers in this file use — extracted into one place
-    // here so future call sites can copy the pattern. Step 1+2
-    // catches ~95% of well-behaved responses; step 3 catches the
-    // long tail (Bard-era preview models that occasionally narrate
-    // before complying).
-    let jsonText = raw;
-    if (jsonText.includes('```json')) {
-      jsonText = jsonText.split('```json')[1].split('```')[0];
-    } else if (jsonText.includes('```')) {
-      jsonText = jsonText.split('```')[1].split('```')[0];
-    }
-    jsonText = jsonText.trim();
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch {
-      const firstBrace = jsonText.indexOf('{');
-      const lastBrace = jsonText.lastIndexOf('}');
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        parsed = JSON.parse(jsonText.slice(firstBrace, lastBrace + 1));
-      } else {
-        throw new Error('No JSON object found in response');
-      }
-    }
+    raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[runWholePhotoShot] ${model} parse failed:`, msg, 'raw:', raw.slice(0, 300));
-    return { countsByColor: null, errorMsg: `Parse failed: ${msg}`, errorCode: 'parseFailed' };
+    console.warn(`[runWholePhotoShot] ${model} response.json() failed:`, msg);
+    return {
+      countsByColor: null,
+      errorMsg: `Bad response from AI proxy: ${msg}`,
+      errorCode: 'parseFailed',
+    };
   }
 
-  if (!parsed.counts || !Array.isArray(parsed.counts)) {
-    console.warn(`[runWholePhotoShot] ${model} unexpected shape:`, raw.slice(0, 300));
-    return { countsByColor: null, errorMsg: 'Missing counts array', errorCode: 'unexpectedShape' };
+  // Expose raw response for live debugging — `window.__lastChipRaw` is
+  // readable from any DevTools console / mobile remote inspector. Cheap
+  // and removes the "what did the AI actually return?" question when
+  // diagnosing parse failures in production.
+  try {
+    (window as unknown as { __lastChipRaw?: { model: string; raw: string; at: string } }).__lastChipRaw = {
+      model, raw, at: new Date().toISOString(),
+    };
+  } catch { /* SSR / restricted contexts */ }
+
+  const validColors = chips.map(c => c.color.trim().toLowerCase());
+  const counts = extractChipCounts(raw, validColors);
+
+  if (counts && counts.size > 0) {
+    return { countsByColor: counts, errorMsg: '', errorCode: 'httpError' };
   }
 
-  const map = new Map<string, number>();
-  for (const item of parsed.counts) {
-    if (!item.color || typeof item.color !== 'string') continue;
-    const n = Number(item.count);
+  // All recovery strategies failed. Surface the first 250 chars of the
+  // raw response in the error message so the user can screenshot and
+  // share what Gemini actually returned. This is the single most
+  // important piece of debugging info we can hand them — without it
+  // every "parse failed" is unactionable.
+  const excerpt = raw.length === 0
+    ? '(empty response)'
+    : raw.length > 250
+      ? raw.slice(0, 250) + '…'
+      : raw;
+  console.warn(`[runWholePhotoShot] ${model} no salvageable counts. raw:`, raw.slice(0, 1000));
+  return {
+    countsByColor: null,
+    errorMsg: `[${model}] ${excerpt}`,
+    errorCode: 'parseFailed',
+  };
+}
+
+/** Multi-strategy salvager for Gemini's chip-count response.
+ *
+ *  Returns the largest map of color→count we can recover, or null if
+ *  literally nothing usable is in the text. Designed so the photo flow
+ *  succeeds even when Gemini ignores `responseSchema` and emits prose,
+ *  markdown-fenced JSON, broken JSON, or plain-text lists.
+ *
+ *  Strategies run in order of strictness:
+ *    1. JSON.parse on the raw text
+ *    2. JSON.parse on text stripped of ```...``` fences
+ *    3. JSON.parse on the first balanced {...} block
+ *    4. Regex scan for `"color": "X", "count": N` pairs (handles
+ *       truncated/malformed JSON where step 1-3 throw)
+ *    5. Plain-text scan for `colorName: N` / `colorName = N` /
+ *       `colorName - N` / `- colorName N` lines, restricted to the
+ *       valid color list (so we don't pick up unrelated digits).
+ *
+ *  The first strategy that yields at least ONE recognized color wins. */
+function extractChipCounts(raw: string, validColors: string[]): Map<string, number> | null {
+  if (!raw || raw.trim().length === 0) return null;
+
+  const validSet = new Set(validColors);
+
+  const tryParseObject = (text: string): Map<string, number> | null => {
+    let obj: unknown;
+    try {
+      obj = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    if (!obj || typeof obj !== 'object') return null;
+    const counts = (obj as { counts?: unknown }).counts;
+    if (!Array.isArray(counts)) return null;
+    const m = new Map<string, number>();
+    for (const item of counts) {
+      if (!item || typeof item !== 'object') continue;
+      const colorRaw = (item as { color?: unknown }).color;
+      const countRaw = (item as { count?: unknown }).count;
+      if (typeof colorRaw !== 'string') continue;
+      const color = colorRaw.trim().toLowerCase();
+      const n = Number(countRaw);
+      if (!Number.isFinite(n) || n < 0) continue;
+      m.set(color, Math.floor(n));
+    }
+    return m.size > 0 ? m : null;
+  };
+
+  // Strategy 1: raw
+  let result = tryParseObject(raw);
+  if (result) return result;
+
+  // Strategy 2: strip markdown fences (```json … ``` or ``` … ```)
+  if (raw.includes('```')) {
+    const fenceMatch = raw.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
+    if (fenceMatch && fenceMatch[1]) {
+      result = tryParseObject(fenceMatch[1].trim());
+      if (result) return result;
+    }
+  }
+
+  // Strategy 3: first balanced {...} block
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    result = tryParseObject(raw.slice(firstBrace, lastBrace + 1));
+    if (result) return result;
+  }
+
+  // Strategy 4: regex-extract "color": "X", "count": N pairs even from
+  // broken/truncated JSON. Order of color/count keys doesn't matter —
+  // we run a single forward sweep so each pair is matched once.
+  const pairRe = /"color"\s*:\s*"([^"]+)"\s*,?\s*"count"\s*:\s*(-?\d+)/gi;
+  const salvaged = new Map<string, number>();
+  let pm: RegExpExecArray | null;
+  while ((pm = pairRe.exec(raw)) !== null) {
+    const color = pm[1].trim().toLowerCase();
+    const n = parseInt(pm[2], 10);
+    if (color && Number.isFinite(n) && n >= 0) {
+      salvaged.set(color, n);
+    }
+  }
+  // Also handle the reverse key order (count before color)
+  const pairReReverse = /"count"\s*:\s*(-?\d+)\s*,?\s*"color"\s*:\s*"([^"]+)"/gi;
+  while ((pm = pairReReverse.exec(raw)) !== null) {
+    const color = pm[2].trim().toLowerCase();
+    const n = parseInt(pm[1], 10);
+    if (color && Number.isFinite(n) && n >= 0 && !salvaged.has(color)) {
+      salvaged.set(color, n);
+    }
+  }
+  if (salvaged.size > 0) return salvaged;
+
+  // Strategy 5: plain-text scan. Lines like "white: 5", "red = 3",
+  // "* black - 0", "Blue 7 chips". We only accept matches where the
+  // color is in `validColors` so unrelated digits in prose don't
+  // pollute the result. Number must immediately follow the color
+  // separator (skipping at most a colon/equals/dash and whitespace).
+  const textPairs = new Map<string, number>();
+  // First normalize: split on lines, also on commas/semicolons so
+  // single-line lists still hit.
+  const tokens = raw.split(/[\n,;]+/);
+  for (const token of tokens) {
+    // Try patterns: "color: N", "color = N", "color - N", "color is N",
+    // "color N" (last is greedy — only accept if exactly one number)
+    const m = token.match(/(?:^|[^a-zA-Z])([a-zA-Z]+(?:[\s-][a-zA-Z]+)?)\s*(?::|=|-|is|equals)?\s*(\d+)/i);
+    if (!m) continue;
+    const color = m[1].trim().toLowerCase();
+    if (!validSet.has(color)) continue;
+    const n = parseInt(m[2], 10);
     if (!Number.isFinite(n) || n < 0) continue;
-    // Key by lowercase color name for case-insensitive lookup. If the LLM
-    // ever capitalizes inconsistently, the dispatcher still matches.
-    map.set(item.color.trim().toLowerCase(), Math.floor(n));
+    if (!textPairs.has(color)) {
+      textPairs.set(color, n);
+    }
   }
+  if (textPairs.size > 0) return textPairs;
 
-  return { countsByColor: map, errorMsg: '', errorCode: 'httpError' };
+  return null;
 }
 
 /** Whole-photo call with the standard CHIP_COUNT_MODELS fallback chain.

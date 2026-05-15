@@ -232,16 +232,26 @@ const PhotoCaptureModal = ({
 
       if (result.error) {
         setPhase('error');
-        // Prefer the localized message keyed off `errorCode` if the
-        // function set one — falls back to the raw English `error`
-        // string for legacy/unknown cases. The raw string also stays
-        // useful in the console (`countChipsFromPhoto` logs it on
-        // parse failures) for debugging without round-tripping
-        // through the user.
+        // Build the displayed error message.
+        //   * Localized headline (one of `chips.photo.error.code.*`) goes
+        //     first so the user sees the human-readable summary.
+        //   * For `parseFailed` / `unexpectedShape` / `httpError` we
+        //     APPEND the raw `result.error` payload — these are the cases
+        //     where the headline alone is unactionable; the appended
+        //     bracketed `[model] excerpt` from runWholePhotoShot tells
+        //     the user (and us, via screenshot) exactly what the AI
+        //     returned. v5.62.3.
         const localized = result.errorCode
           ? t(ERROR_CODE_TO_TRANSLATION[result.errorCode])
           : '';
-        setErrorMsg(localized || result.error);
+        const wantsDiagnostic =
+          result.errorCode === 'parseFailed' ||
+          result.errorCode === 'unexpectedShape' ||
+          result.errorCode === 'httpError';
+        const detail = wantsDiagnostic && result.error && !result.error.startsWith('Cancelled')
+          ? `\n\n${result.error}`
+          : '';
+        setErrorMsg((localized || result.error) + detail);
         return;
       }
 
@@ -674,7 +684,16 @@ const PhotoCaptureModal = ({
           </div>
         )}
 
-        {phase === 'error' && (
+        {phase === 'error' && (() => {
+          // v5.62.3 — split errorMsg on '\n\n' to separate the localized
+          // headline from the raw diagnostic payload. The payload is
+          // rendered in a small monospaced block with horizontal-scroll
+          // overflow so long lines (Gemini response excerpts) don't
+          // blow up the modal width on mobile.
+          const splitAt = errorMsg.indexOf('\n\n');
+          const headline = splitAt >= 0 ? errorMsg.slice(0, splitAt) : errorMsg;
+          const payload = splitAt >= 0 ? errorMsg.slice(splitAt + 2).trim() : '';
+          return (
           <div>
             <div style={{
               padding: '0.85rem',
@@ -688,7 +707,27 @@ const PhotoCaptureModal = ({
               <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>
                 {t('chips.photo.error.title')}
               </div>
-              <div>{errorMsg}</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{headline}</div>
+              {payload && (
+                <div style={{
+                  marginTop: '0.6rem',
+                  padding: '0.5rem 0.65rem',
+                  background: 'rgba(0,0,0,0.35)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  borderRadius: '6px',
+                  fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+                  fontSize: '0.72rem',
+                  color: '#fecaca',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: '180px',
+                  overflowY: 'auto',
+                  direction: 'ltr',
+                  textAlign: 'left',
+                }}>
+                  {payload}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
@@ -709,7 +748,8 @@ const PhotoCaptureModal = ({
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
