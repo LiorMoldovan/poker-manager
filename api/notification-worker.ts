@@ -579,6 +579,14 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
           recipientPlayerNames = recipientPlayerNames.filter(n => n !== actorName);
         }
       }
+      // vote_change is push-only by design: it fires on every RSVP cast
+      // or edit, and emailing each one would flood the EmailJS quota and
+      // the recipient's inbox (multiple emails per poll, sometimes per
+      // minute). Mirrors the EMAIL_ALLOWLIST exclusion in the client-
+      // side dispatcher (src/utils/scheduleNotifications.ts). Without
+      // this forcing, the generic path below would email whenever the
+      // group has scheduleEmailsEnabled=true.
+      pushOnly = true;
     }
 
     if (!message) return null;

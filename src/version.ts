@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.61.0';
+export const APP_VERSION = '5.61.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.61.1',
+    date: '2026-05-15',
+    changes: [
+      '🔇 Vote changes no longer trigger emails (push only)',
+      '🩹 Server-side emails now counted in EmailJS usage card',
+      '🎯 Resynced usage card to EmailJS dashboard',
+    ],
+  },
   {
     version: '5.61.0',
     date: '2026-05-15',

@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-05-15 — vote_change push-only + email-log service-role fix (v5.61.1)
+
+**Asked**: "Eyal opened new poll and i get emails for each and every vote change, my instructions were to get only notification for new vote or vote edit not email, why it doesnt work as i asked" — followed by a screenshot showing EmailJS dashboard at 195/200 and the in-app Usage card at 122/200, "misalignment, our records don't count all mails".
+
+**Did**:
+- Two compounding bugs surfaced. **(A) vote_change emails**: client-side `EMAIL_ALLOWLIST` correctly excluded `vote_change` but the v5.49.0 server-side worker (`api/notification-worker.ts`) never got the equivalent. Browser worker can't claim `vote_change` (its switch only handles 5 lifecycle kinds), so Edge Function worker exclusively handles it, and was emailing on every cast/edit. Fixed `planForJob`'s `vote_change` branch to set `pushOnly = true`. **(B) Worker-dispatched emails missing from `email_usage_log`**: `log_email_send` (mig 052) had `if auth.uid() is null then raise 42501` as defense-in-depth. Browser worker forwards user JWT (auth.uid resolves, log row inserted). Edge worker forwards `Bearer SUPABASE_SERVICE_ROLE_KEY` (no user JWT, auth.uid NULL, raise) — `send-email.ts`'s try/catch swallowed it silently, so email went out, log row didn't. Migration 079 drops the guard; function stays SECURITY DEFINER + grant-restricted to authenticated + service_role. Re-baselined `system_config.emailjs_baseline` to `{used:195, taken_at:now, cycle_start:2026-04-19}` so the Usage card immediately reads truth.
+- Validated: tsc clean on my files (pre-existing TS6133 in unrelated `geminiAI.ts` WIP from another agent), ReadLints clean. Migration 079 applied + verified live via `pg_get_functiondef`. Baseline UPDATE returned the new value. Staged only my three files (api/notification-worker.ts, src/version.ts, supabase/079); left other agents' WIP untouched.
+
+**Learned**: A SECURITY DEFINER RPC callable from both user-JWT and service-role contexts must NOT use `auth.uid() IS NULL` as a sentinel check — it asymmetrically rejects service-role callers. The right pattern is to gate on the API layer (worker secret check at `/api/_auth.ts`) and let the RPC accept any well-authenticated caller. Promoted to LESSONS.md. Diagnostic shape worth remembering: when an in-app metric drifts from an external counter (EmailJS dashboard here), and the drift correlates with the introduction of a server-side dispatcher, look for asymmetric auth checks in the audit-log RPC. The bug-class is structural — emails went out, EmailJS counted them, our log didn't get the row, our card under-counted by 30%.
+
+**Next**: Lior monitors EmailJS quota through May 19 reset. Vote_change patch + logging fix BOTH only take effect after Vercel rebuilds from this commit — live volume should drop sharply (no more emails on every vote) AND remaining legitimate worker-dispatched sends will now be logged.
+
+---
+
 ## 2026-05-15 — Merged parallel-agent v5.61.0 (weekend roster-wipe fix + TTS fire-and-forget)
 
 **Asked**: "please merge changes from all agents" — explicit request to bundle the parallel agent's pending work that had been sitting in working tree across the v5.60.13 / v5.60.14 chip-counting sessions.
