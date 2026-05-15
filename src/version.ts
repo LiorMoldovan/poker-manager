@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.62.8';
+export const APP_VERSION = '6.0.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.0.0',
+    date: '2026-05-15',
+    changes: [
+      '🎯 Equal-width player tiles in chip counting',
+      '🛡 Confirm before chip-mode switch wipes data',
+      '📱 Default chip mode visually primary on tile',
+      '📝 Clearer player-selector hint copy',
+      '🔧 TTS badge auto-clears if voices hang',
+    ],
+  },
   {
     version: '5.62.8',
     date: '2026-05-15',

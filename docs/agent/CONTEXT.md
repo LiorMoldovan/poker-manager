@@ -1,28 +1,32 @@
 # CONTEXT
 
 > 30-second orientation. Refresh in place. Bullets only, no paragraphs.
-> Last refreshed: 2026-05-15 (later)
+> Last refreshed: 2026-05-15 (post v5.62.7 push)
 
 ## Now
 
-- **`origin/main`**: v5.62.4 — chip-count telemetry: every photo attempt now logs a row to `public.chip_count_debug` (raw response, salvage strategy, http status, image bytes, chip colors, duration). Agent reads via Supabase MCP → no more "the user can't tell us what Gemini returned" blindness. Built on top of v5.62.3's 5-strategy salvager.
-- **Working tree**: NOT clean — another agent is mid-flight on "chip-entry total mode" (new file `supabase/080-chip-entry-total-mode.sql`, edits across `ChipEntryScreen`, `HomeDashboard`, `Statistics`, `Game(Summary|Details)`, `storage`, `supabaseCache`, `translations`, `sharing`, `index.css`). Don't stage those — not mine.
-- **Recently-applied SQL**: 070–078, **081** (chip_count_debug) — don't re-apply. `080-*` exists locally, NOT applied.
+- **`origin/main`**: v5.62.7 — hotfix: iOS Safari vertical touch scroll was dead since v5.62.6 because of `overflow-x: hidden` on `html, body`. Switched to `overflow-x: clip`. Confirmed working on Lior's iPhone. See new LESSON entry — any `html`/`body`/`*`/`#root` CSS rule needs real-device iPhone test before merge.
+- v5.62.6 — merged the other agent's quick-total chip entry mode (migration 080) on top of v5.62.5's thinking-budget fix. Cumulative chip-count stack: 5-strategy salvager (v5.62.3) + telemetry table (v5.62.4) + thinkingBudget=0 + maxOutputTokens=2048 (v5.62.5) + per-player color/total mode (v5.62.6).
+- **Working tree**: clean except agent-memory edits (this file + SESSIONS.md, both safe to leave uncommitted).
+- **Recently-applied SQL**: 070–078, **080** (game_players.entry_mode + total_chip_count + settings.chip_entry_default_mode), **081** (chip_count_debug). All applied via MCP. Don't re-apply.
+- **Pending validation: Lior's photo test BLOCKED on Gemini free-tier quota.** Live error in `chip_count_debug` confirmed `RESOURCE_EXHAUSTED` / `quotaValue: 20` / `GenerateRequestsPerDayPerProjectPerModel-FreeTier`. v5.62.5's truncation fix was never actually exercised because the API rejected every request with 429 before it ran. Quota resets at midnight Pacific = ~10:00 Sat Israel time.
 
 ## Open follow-ups
 
-- **Waiting on Lior's v5.62.4 test**: he agreed to "try it again" if I could track results myself. v5.62.4 logs every photo attempt to `chip_count_debug` with raw response + salvage_strategy. Agent's diagnosis query after his test:
+- **After Lior's quota resets** (~10:00 Sat Israel): single fresh photo test to verify v5.62.5's truncation fix actually works. Agent's diagnosis query (already in scripts memory):
   ```sql
-  SELECT created_at, model, attempt_index, context, outcome, salvage_strategy,
-         http_status, image_byte_count, duration_ms,
-         left(error_message, 120) AS err,
+  SELECT created_at, app_version, model, attempt_index, context, outcome,
+         salvage_strategy, http_status, image_byte_count, duration_ms,
+         left(error_message, 200) AS err,
          left(raw_response_excerpt, 400) AS raw,
          final_counts
   FROM public.chip_count_debug
   ORDER BY created_at DESC LIMIT 20;
   ```
-  Context is auto-detected: `expectedTotalValue > 0` → 'live-game', else → 'settings-test'.
+  Context auto-detection (v5.62.6+): `expectedTotalValue > 0` → 'live-game', else → 'settings-test'.
+  Success criterion: `outcome='success'`, `salvage_strategy=1`, no truncation in raw.
 - **`window.__lastChipRaw`** is set on every photo attempt (model, raw, at) for any reachable DevTools session.
+- **Free-tier quota ceiling**: 20 RPD per model. Shared across ALL Gemini features (forecast, summary, chronicles, graph insights, trivia, photo count). Realistic photo budget on a game night with everything firing: 5–10 photos. To lift: link a billing account → Tier 1.
 - v5.61.0 roster-wipe fix needs a real weekend game with multiple devices to validate.
 - v5.60.14 `displayColor`-matching chip-counting fix awaits Lior's re-test.
 - Lior's Black chip selfie photographed as grey/silver (under-exposed). He should retake.

@@ -300,7 +300,6 @@ interface TotalNumpadModalProps {
   playerName: string;
   currentValue: number;
   valuePerChip: number;       // for the live ≈ {money} hint
-  chipsPerRebuy: number;      // for the "1 בייאין = X צ'יפים" reference
   formatMoney: (n: number) => string;
   onConfirm: (value: number) => void;
   onClose: () => void;
@@ -311,7 +310,6 @@ const TotalNumpadModal = ({
   playerName,
   currentValue,
   valuePerChip,
-  chipsPerRebuy,
   formatMoney,
   onConfirm,
   onClose,
@@ -374,23 +372,18 @@ const TotalNumpadModal = ({
           {numericValue.toLocaleString('he-IL')}
         </div>
 
-        {/* Live money equivalent + reference hint. Both muted so the
-            big number stays the focus. The reference line lets the
-            admin sanity-check ("8,000 chips = ~24₪, that's about a
-            buy-in worth, sounds right"). */}
+        {/* Live money equivalent — the only reference the admin
+            actually needs while typing ("8,000 chips ≈ 24 ₪, sounds
+            like roughly a buyin"). The chips-per-buyin constant is
+            already shown in the selected-player header above the
+            modal, so we don't duplicate it here. */}
         <div style={{
           textAlign: 'center',
           marginBottom: '1rem',
           fontSize: '0.85rem',
           color: 'var(--text-muted)',
-          lineHeight: 1.5,
         }}>
-          <div>
-            {t('chips.entryMode.moneyEquivalent').replace('{amount}', formatMoney(moneyEquivalent))}
-          </div>
-          <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>
-            {t('chips.entryMode.buyinHint').replace('{chips}', chipsPerRebuy.toLocaleString('he-IL'))}
-          </div>
+          {t('chips.entryMode.moneyEquivalent').replace('{amount}', formatMoney(moneyEquivalent))}
         </div>
 
         <div style={{
@@ -702,10 +695,28 @@ const ChipEntryScreen = () => {
   // modal next time. Switching modes for a player wipes the
   // abandoned mode's data — see updateGamePlayerEntryMode in
   // storage.ts for the atomic behavior.
+  //
+  // Centralized data-loss guard: any caller switching a player to a
+  // different entry mode while the current mode already has data
+  // gets one confirm dialog. This is the single chokepoint — tile
+  // taps and inline "switch mode" links all flow through here, so
+  // the inline call sites no longer need their own confirm.
   const selectPlayerWithMode = (playerId: string, mode: 'color' | 'total') => {
     if (!isAdmin) return;
-    setSelectedPlayerId(playerId);
     const current = players.find(p => p.id === playerId);
+    if (current && current.entryMode !== mode) {
+      const hasColorData = Object.values(chipCounts[playerId] || {}).some(v => v > 0);
+      const hasTotalData = (current.totalChipCount ?? 0) > 0;
+      const wouldLoseData =
+        (current.entryMode === 'color' && hasColorData) ||
+        (current.entryMode === 'total' && hasTotalData);
+      if (wouldLoseData && !window.confirm(
+        t('chips.entryMode.switchConfirm').replace('{player}', current.playerName),
+      )) {
+        return;
+      }
+    }
+    setSelectedPlayerId(playerId);
     if (mode === 'color') {
       if (chipValues.length === 0) return;  // no chips configured — nothing to count by color
       if (current?.entryMode !== 'color') {
@@ -1017,7 +1028,6 @@ const ChipEntryScreen = () => {
     <div className="fade-in" style={{ paddingBottom: '115px' }}>
       <div className="page-header">
         <h1 className="page-title">{t('chips.title')}</h1>
-        <p className="page-subtitle">{t('chips.subtitle')}</p>
       </div>
 
       {/* Photo-capture-unavailable hint. Without this, admins of groups
@@ -1034,78 +1044,12 @@ const ChipEntryScreen = () => {
         </div>
       )}
 
-      {/* Live Summary Card */}
-      <div className="card" style={{ 
-        padding: '1rem',
-        background: 'var(--surface)'
-      }}>
-        {/* Main comparison */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '0.75rem'
-        }}>
-          {/* Expected */}
-          <div style={{ textAlign: 'start' }}>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>
-              {t('chips.expected')}
-            </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text)' }}>
-              {expectedChipPoints.toLocaleString()}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {cleanNumber(totalBuyIns)}
-            </div>
-          </div>
-          
-          {/* Arrow/Status */}
-          <div style={{ 
-            fontSize: '1.5rem',
-            color: getProgressColor(progressPercentage)
-          }}>
-            {isBalanced && totalChipPoints > 0 ? '✓' : '→'}
-          </div>
-          
-          {/* Counted */}
-          <div style={{ textAlign: 'end' }}>
-            <div style={{ fontSize: '0.7rem', color: getProgressColor(progressPercentage), fontWeight: '600', textTransform: 'uppercase' }}>
-              {t('chips.counted')}
-            </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: getProgressColor(progressPercentage) }}>
-              {totalChipPoints.toLocaleString()}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {cleanNumber(totalChipPoints * valuePerChip)}
-            </div>
-          </div>
-        </div>
-        
-        {/* Difference text */}
-        <div style={{ 
-          textAlign: 'center',
-          padding: '0.5rem',
-          borderRadius: '8px',
-          background: `${getProgressColor(progressPercentage)}15`,
-          border: `1px solid ${getProgressColor(progressPercentage)}40`
-        }}>
-          {totalChipPoints === 0 ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {t('chips.startCounting')}
-            </span>
-          ) : isBalanced ? (
-            <span style={{ color: getProgressColor(progressPercentage), fontWeight: '700', fontSize: '0.9rem' }}>
-              {t('chips.balanced')}
-            </span>
-          ) : (
-            <span style={{ color: getProgressColor(progressPercentage), fontWeight: '600', fontSize: '0.85rem' }}>
-              {totalChipPoints > expectedChipPoints 
-                ? t('chips.over', { amount: `\u200E+${(totalChipPoints - expectedChipPoints).toLocaleString()}` }) 
-                : t('chips.remaining', { amount: (expectedChipPoints - totalChipPoints).toLocaleString() })}
-            </span>
-          )}
-        </div>
-      </div>
+      {/* Live progress lives ONLY in the sticky bottom bar now.
+          A previous version of this screen rendered a duplicate
+          "Live Summary" card here (Expected / Counted / delta) but
+          it was the same numbers shown 100px below in the always-
+          visible sticky bottom bar. Removed in v5.61.x to recover
+          ~110px of vertical real-estate at the top of the screen. */}
 
       {/* Player Selector — two-zone tile (migration 080).
           Big top zone = the group's default chip-entry mode (set in
@@ -1118,10 +1062,31 @@ const ChipEntryScreen = () => {
           <button> when only the undo behavior matters (completed).
           Non-admin members see a static tile with no interactions. */}
       <div className="card" style={{ padding: '0.75rem' }}>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '600' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.15rem', fontWeight: '600' }}>
           {t('chips.selectPlayer', { done: `${completedPlayersCount}/${players.length}` })}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+        {/* One-line description so first-time users immediately
+            grasp the two-zone tile mechanic (default mode label on
+            top, alternative mode button on the bottom — both
+            tappable). Members and admins both see it; it's
+            educational copy, not gated. Stays muted so it doesn't
+            compete with the tiles below. */}
+        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.55rem', opacity: 0.8 }}>
+          {t('chips.selectPlayerHint')}
+        </div>
+        {/* Grid (not flex-wrap): every tile in a row gets the
+            same width regardless of name length. With flex-wrap,
+            tiles sized to their content so "Lior Moldovan"
+            stretched to ~130px while "ק" shrank to ~108px in the
+            same row — visually ragged. auto-fill keeps a
+            consistent column count even when the last row has
+            fewer tiles, so a lonely 7th tile sits at its normal
+            width instead of stretching to fill the whole row. */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+          gap: '0.5rem',
+        }}>
           {players.map(player => {
             const isCompleted = completedPlayers.has(player.id);
             const isSelected = selectedPlayerId === player.id;
@@ -1142,11 +1107,21 @@ const ChipEntryScreen = () => {
               : isSelected
                 ? 'rgba(16, 185, 129, 0.15)'
                 : 'var(--surface)';
+            // Width is driven by the parent grid (auto-fill +
+            // minmax(110px, 1fr)) so every tile in a row is the
+            // same width. The grid resolves to ~3 columns at
+            // 375-414px viewports (3-tile rows for an 8-player
+            // group → 3 rows) and ~2 columns at 320px. No
+            // minWidth/maxWidth on the tile itself — the column
+            // width already enforces consistency, and adding tile
+            // bounds would fight the grid. Tap targets clear the
+            // 44px iOS minimum because the height is driven by the
+            // top-button minHeight + the alt-button minHeight,
+            // independent of column width.
             const tileStyle: React.CSSProperties = {
               borderRadius: '12px',
               border: tileBorder,
               background: tileBg,
-              minWidth: '96px',
               transition: 'all 0.15s ease',
               overflow: 'hidden',
               display: 'flex',
@@ -1154,19 +1129,42 @@ const ChipEntryScreen = () => {
               padding: 0,
             };
 
+            // Mode labels for this tile. Using the SHORT forms
+            // ("לפי צבע" / "סך הכל") instead of the longer
+            // "ספירה לפי צבע" — the verb is implied by context
+            // (we're on the chip-counting screen) and the short
+            // forms let the tile fit in 100-112px on mobile.
+            const defaultModeLabel = defaultEntryMode === 'total'
+              ? t('chips.entryMode.total')
+              : t('chips.entryMode.color');
+
             // Top zone content — same for both completed and pending.
+            // The default-mode hint is appended ONLY for pending
+            // tiles (rendered separately inside the pending button
+            // so we can gate it without affecting completed tiles).
+            //
+            // Name span: wrap long names to 2 lines instead of
+            // stretching the tile or truncating to ellipsis. Word
+            // breaks first, char breaks only if a single word is
+            // wider than the tile (rare). Centered alignment keeps
+            // 1-line and 2-line tiles visually consistent.
             const topZone = (
               <>
                 <span style={{
                   fontWeight: 600,
-                  fontSize: '0.9rem',
+                  fontSize: '1rem',
                   color: isCompleted ? '#22c55e' : isSelected ? 'var(--primary)' : 'var(--text)',
+                  textAlign: 'center',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.2,
+                  maxWidth: '100%',
                 }}>
                   {isCompleted && '\u200E✓ '}{player.playerName}
                 </span>
                 {chips > 0 && (
                   <span style={{
-                    fontSize: '0.7rem',
+                    fontSize: '0.78rem',
                     color: profit >= 0 ? 'var(--success)' : 'var(--danger)',
                     marginTop: '0.15rem',
                   }}>
@@ -1180,7 +1178,9 @@ const ChipEntryScreen = () => {
             // bottom zone is hidden — switching modes for a completed
             // player goes through "undo → re-tap with the desired
             // zone" which is more discoverable than a hidden affordance
-            // on a "done" tile.
+            // on a "done" tile. justifyContent:center keeps the name
+            // visually centered when the row stretches the tile to
+            // match a taller pending neighbor.
             if (isCompleted) {
               return (
                 <button
@@ -1190,8 +1190,9 @@ const ChipEntryScreen = () => {
                   style={{
                     ...tileStyle,
                     cursor: isAdmin ? 'pointer' : 'default',
-                    padding: '0.55rem 0.75rem',
+                    padding: '0.7rem 0.85rem',
                     alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   {topZone}
@@ -1200,11 +1201,11 @@ const ChipEntryScreen = () => {
             }
 
             // Pending / selected variant: two separate buttons inside a
-            // div wrapper so each zone has its own tap target. Member
-            // (non-admin) sees just the top zone as a static label
-            // (the existing screen is already locked to admin for
-            // mutations; members see live state for situational
-            // awareness).
+            // div wrapper so each zone has its own tap target. Both
+            // zones now carry an explicit mode label so the action
+            // each button performs is self-evident — no implicit
+            // "the top is the default" guesswork. Member (non-admin)
+            // sees just the top zone as a static label.
             return (
               <div key={player.id} style={tileStyle}>
                 <button
@@ -1217,19 +1218,32 @@ const ChipEntryScreen = () => {
                     color: 'inherit',
                     cursor: isAdmin ? 'pointer' : 'default',
                     fontFamily: 'inherit',
-                    padding: '0.55rem 0.75rem 0.4rem',
+                    padding: '0.7rem 0.85rem 0.55rem',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     width: '100%',
+                    flex: 1,
+                    minHeight: '52px',
                   }}
-                  title={
-                    defaultEntryMode === 'color'
-                      ? t('chips.entryMode.color')
-                      : t('chips.entryMode.total')
-                  }
+                  title={defaultModeLabel}
                 >
                   {topZone}
+                  {/* Default-mode hint — primary label that reads
+                      as the recommended action. Slightly larger
+                      and full-opacity (vs the muted alternative
+                      below) gives a modest ~65/35 visual weight so
+                      the default zone is the obvious first tap. */}
+                  <span style={{
+                    fontSize: '0.78rem',
+                    color: 'var(--text-muted)',
+                    marginTop: '0.3rem',
+                    fontWeight: 500,
+                    opacity: 1,
+                  }}>
+                    {defaultModeLabel}
+                  </span>
                 </button>
                 {showSecondary && (
                   <button
@@ -1242,11 +1256,13 @@ const ChipEntryScreen = () => {
                       color: 'var(--text-muted)',
                       cursor: 'pointer',
                       fontFamily: 'inherit',
-                      padding: '0.32rem 0.5rem',
-                      fontSize: '0.7rem',
+                      padding: '0.55rem 0.5rem',
+                      fontSize: '0.72rem',
                       fontWeight: 600,
                       width: '100%',
                       textAlign: 'center',
+                      minHeight: '34px',
+                      opacity: 0.75,
                     }}
                     title={
                       otherMode === 'total'
@@ -1255,8 +1271,8 @@ const ChipEntryScreen = () => {
                     }
                   >
                     {otherMode === 'total'
-                      ? t('chips.entryMode.tileSecondary.total')
-                      : t('chips.entryMode.tileSecondary.color')}
+                      ? t('chips.entryMode.total')
+                      : t('chips.entryMode.color')}
                   </button>
                 )}
               </div>
@@ -1287,8 +1303,38 @@ const ChipEntryScreen = () => {
               </div>
 
               <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-                {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
+                {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} · {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy)}{t('chips.chipsExpected')}
               </div>
+
+              {/* Switch-mode escape hatch (total → color). Same
+                  position / size / alignment as the color-mode
+                  escape hatch elsewhere in this screen, so users
+                  only have to learn the affordance once. The
+                  confirm dialog (when the totalChipCount would be
+                  wiped) is handled centrally by
+                  selectPlayerWithMode — no inline confirm needed
+                  here. */}
+              {isAdmin && chipValues.length > 0 && (
+                <div style={{ marginTop: '0.15rem', marginBottom: '0.5rem', textAlign: 'end' }}>
+                  <button
+                    type="button"
+                    onClick={() => selectPlayerWithMode(selectedPlayer.id, 'color')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontSize: '0.75rem',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '2px',
+                      padding: '0.2rem 0',
+                    }}
+                  >
+                    {t('chips.entryMode.switchLink').replace('{mode}', t('chips.entryMode.color'))}
+                  </button>
+                </div>
+              )}
 
               {/* Big editable total. Tapping the number re-opens the
                   TotalNumpadModal pre-filled, so admins can correct
@@ -1320,38 +1366,6 @@ const ChipEntryScreen = () => {
                   = {cleanNumber(moneyValue)}
                 </span>
               </button>
-
-              {/* Switch-mode escape hatch with confirm. The confirm is
-                  important: switching to color wipes total_chip_count
-                  (handled atomically by updateGamePlayerEntryMode) and
-                  re-opens the per-color numpad at chip 0. */}
-              {isAdmin && chipValues.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ok = window.confirm(
-                      t('chips.entryMode.switchConfirm').replace('{player}', selectedPlayer.playerName),
-                    );
-                    if (ok) selectPlayerWithMode(selectedPlayer.id, 'color');
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: '0.78rem',
-                    textDecoration: 'underline',
-                    textUnderlineOffset: '2px',
-                    padding: '0.25rem 0',
-                    width: '100%',
-                    textAlign: 'center',
-                    marginBottom: '0.75rem',
-                  }}
-                >
-                  {t('chips.entryMode.switchLink').replace('{mode}', t('chips.entryMode.color'))}
-                </button>
-              )}
 
               <div style={{
                 display: 'flex',
@@ -1420,31 +1434,30 @@ const ChipEntryScreen = () => {
           </div>
           
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
+            {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} · {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy)}{t('chips.chipsExpected')}
           </div>
 
           {/* Migration 080 — switch-mode escape hatch (color → total).
               For when admin opened color-by-color but realised this
-              player's stack is easier to total. Confirm dialog warns
-              that the in-progress per-color counts will be wiped. */}
+              player's stack is easier to total. The confirm dialog
+              (when partial per-color counts would be wiped) is
+              handled centrally by selectPlayerWithMode — no inline
+              confirm needed here. Visually identical to the
+              total-mode escape hatch above: same position (right
+              after meta line), same font-size, same alignment — so
+              users learn it once. */}
           {isAdmin && (
-            <div style={{ marginTop: '0.25rem', marginBottom: '0.5rem', textAlign: 'end' }}>
+            <div style={{ marginTop: '0.15rem', marginBottom: '0.5rem', textAlign: 'end' }}>
               <button
                 type="button"
-                onClick={() => {
-                  const hasPartial = Object.values(chipCounts[selectedPlayer.id] || {}).some(v => v > 0);
-                  const ok = !hasPartial || window.confirm(
-                    t('chips.entryMode.switchConfirm').replace('{player}', selectedPlayer.playerName),
-                  );
-                  if (ok) selectPlayerWithMode(selectedPlayer.id, 'total');
-                }}
+                onClick={() => selectPlayerWithMode(selectedPlayer.id, 'total')}
                 style={{
                   background: 'transparent',
                   border: 'none',
                   color: 'var(--text-muted)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   textDecoration: 'underline',
                   textUnderlineOffset: '2px',
                   padding: '0.2rem 0',
@@ -2072,7 +2085,6 @@ const ChipEntryScreen = () => {
         playerName={players.find(p => p.id === totalNumpadPlayerId)?.playerName || ''}
         currentValue={players.find(p => p.id === totalNumpadPlayerId)?.totalChipCount ?? 0}
         valuePerChip={valuePerChip}
-        chipsPerRebuy={chipsPerRebuy}
         formatMoney={formatCurrency}
         onConfirm={(value) => {
           if (totalNumpadPlayerId) {

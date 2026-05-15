@@ -156,7 +156,36 @@ const LiveGameScreen = () => {
     };
 
     window.addEventListener('tts-pool-ready', onPoolReady as EventListener);
-    return () => window.removeEventListener('tts-pool-ready', onPoolReady as EventListener);
+
+    // Watchdog: if the `tts-pool-ready` event never reaches us we
+    // would sit on "🎙️ מכין קולות" forever. The event can be missed
+    // in three real scenarios:
+    //   • Race: NewGameScreen's fire-and-forget fetch finishes
+    //     BEFORE this useEffect attaches the listener (cached
+    //     response, very fast network, slow mount).
+    //   • Fetch hangs: network never trips a timeout, .finally()
+    //     never fires (rare but possible on flaky connections).
+    //   • Localhost dev: the proxy 404s with HTML, the .catch()
+    //     fires and dispatches the event quickly — usually before
+    //     mount, so the listener misses it.
+    // 12s is comfortably longer than typical Gemini TTS-script
+    // generation (3-8s) so we don't yank the badge from a slow-but-
+    // honest production call. If the pool DOES land later, the
+    // existing tryLoad() path (called on every render where pool
+    // consumers fire) still picks it up — we're only resetting the
+    // badge, not abandoning the pool.
+    const watchdog = setTimeout(() => {
+      // Re-check via tryLoad in case the pool actually arrived but
+      // the event was missed; flip the model badge on if so, else
+      // just stop pretending we're still loading.
+      tryLoad();
+      setTtsLoading(false);
+    }, 12_000);
+
+    return () => {
+      window.removeEventListener('tts-pool-ready', onPoolReady as EventListener);
+      clearTimeout(watchdog);
+    };
   }, [gameId]);
 
   // Format buyin count with proper half support: 2.5 → "שתיים וחצי", 3 → "שלוש"

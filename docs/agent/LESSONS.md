@@ -85,6 +85,16 @@
 
 ---
 
+## `overflow: hidden` on `<html>` breaks iOS Safari vertical touch scroll
+
+**Gotcha**: Setting `overflow-x: hidden` (or any axis) on `<html>` moves the scroll context off the viewport onto the html element. Combined with `body { min-height: 100vh }` (universal in this app) it silently kills vertical touch scrolling on iPhone. Desktop, Android, and `tsc`/lint all pass — the diff looks like a one-line CSS tweak.
+
+**Fix**: use `overflow-x: clip` instead. Same visual no-overflow effect, but by spec does NOT establish a scroll container, so iOS keeps scrolling on the viewport. Supported Safari 16+ / Chrome 90+ / Firefox 81+ — universal in 2026. Any future `html`/`body`/`#root`/`*` rule that touches `overflow`, `position: fixed`, `touch-action`, or `overscroll-behavior` is global-blast-radius and needs a real-device iPhone pass before merge.
+
+**Burned**: v5.62.6 merged another agent's "iOS Safari backstop" CSS without real-device testing. Entire app un-scrollable on iPhone in production. Caught by Lior, fixed in v5.62.7.
+
+---
+
 ## "Deployed bundle contains the hotfix code" ≠ "hotfix actually works"
 
 **Gotcha**: Verifying a hotfix by grep'ing the deployed JS chunk for a literal string (e.g. ` ```json `) proves the code path exists in production. It does NOT prove the path is reached on a real failure, or that it covers the actual failure shape. Without an end-to-end test exercising the recovery branch against a real (or mocked) upstream response, the hotfix can be a no-op for the user and you'll think it shipped.
