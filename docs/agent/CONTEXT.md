@@ -1,18 +1,32 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-15 (post v5.60.13 chip-counting selfie color fix)
+> **Last refreshed**: 2026-05-15 (post v5.60.14 — retired selfie-hex extraction entirely)
 
 ---
 
 ## Right now
 
-- **`origin/main`**: `5.60.13` — surgical fix for a v5.59.0 regression where `captureChipSelfie` sampled the dead-center 24×24 patch of every chip selfie and computed `selfieDominantHex` from it. Most poker chips have a printed value inlay/sticker dead-center → every stored hex came out muddy grey/beige (red→#b59e94, blue→#7b86a3, green→#aaaa94, black→#989493) → `stackDetection.ts` HSL-distance mapping was effectively random → counts went into wrong color rows → feature appeared totally broken. Fix: rewrote dominant-color extraction in `imageUtils.ts` to sample 32 patches across 4 concentric rings at 30/45/60/75% radius and take per-channel median (robust against text/inlay/edge outliers). Added `recomputeDominantHexFromBase64` + `looksLikeInlayBugHex` predicate (sat<0.15 AND 0.30<lum<0.75 — the muddy grey zone no real chip body lands in). Added one-time per-session auto-migration in `SettingsScreen` that recomputes existing inlay-bug-shape hexes from saved JPEGs on chipValues load. Defensive fallback in `stackDetection.ts`: if a hex still looks bug-shaped after recompute, use `displayColor` instead of a known-bad reference. Lior + Eyal don't need to retake selfies — JPEGs are fine, only the broken hex got fixed. Lesson promoted to LESSONS.md (2026-05-15: never sample the center patch on stickered objects). The history of pre-v5.60.13 chip-counting bullets above is preserved in CHANGELOG (`src/version.ts`) for anyone reading the in-app About screen.
-- **Pending parallel-agent work in working tree** (NOT in this commit): v5.61.0 immutable-games line — `supabase/077-block-completed-status-downgrade.sql` (untracked) + ~16 modified files (`AIKeyMissingNotice`, `storage`, `supabaseCache`, several screens, `aiEligibility`, `apiProxy`, `geminiAI`, `pokerTraining`, plus their version.ts bump to 5.61.0). My v5.60.13 commit deliberately staged ONLY my 4 files (`imageUtils.ts`, `stackDetection.ts`, `SettingsScreen.tsx`, `version.ts`) so the parallel work stays in their hands to commit when ready. They'll need to bump to 5.61.0 from this new 5.60.13 base when they merge.
+- **`origin/main`**: `5.60.14` — retired the `selfieDominantHex` per-user color calibration code path entirely. v5.60.13 had tried to fix the v5.59.0 inlay-sampling bug with ring sampling + auto-migration, but Lior's actual stored selfies revealed two compounding issues that v5.60.13 didn't fully resolve:
+  1. The `looksLikeInlayBugHex` threshold (sat<0.15) was too tight — Red and Blue stored hexes had sat≈0.18 and were skipped by auto-migration.
+  2. Even when the migration ran (White, Green, Black), the new ring sampling at 60-75% radius reached OUT to the green-poker-felt background for chips that didn't fill the frame, producing wrong-color hexes (white→#0c805c dark green, black→#338665 green).
+  
+  Diagnosis: extracting reliable chip body color from arbitrary phone selfies is fundamentally fragile — depends on chip size in frame, inlay presence, background color. None of which we can reliably detect client-side without real CV (chip-boundary detection). The user-configured `display_color` (e.g. #EF4444 red, #3B82F6 blue) is well-saturated, hue-correct, and 100% reliable. Verified empirically with stress tests: HSL distance matching against `display_color` correctly identifies all 6 chips with healthy 5-15× margin under realistic lighting; only a narrow zone of very dim/desaturated blue bodies could mistake for green, narrowed further by the white-balance pass already in `stackDetection.ts`.
+  
+  Changes:
+  * `stackDetection.ts`: drop `selfieDominantHex` reads, always use `chip.displayColor` as the HSL reference. Removed the v5.60.13 `looksLikeInlayBugHex` defensive fallback (no longer needed).
+  * `imageUtils.ts`: `captureChipSelfie` no longer computes/returns `dominantHex` — just `{ base64, mimeType }`. Removed the `computeChipBodyHex` helper, `recomputeDominantHexFromBase64`, and `looksLikeInlayBugHex` from v5.60.13.
+  * `SettingsScreen.tsx`: removed the v5.60.13 auto-migration `useEffect`. `handleSelfieFile` now writes `selfieDominantHex: null`. Cleaned the `useRef` import.
+  * `supabase/078-deprecate-chip-selfie-hex.sql`: NULLs out all existing `selfie_dominant_hex` (already known-bad). Updates column comment marking it deprecated. Column itself preserved (not dropped) for forward compat.
+  
+  Selfie JPEGs themselves are STILL valuable and STILL passed to the LLM call (`runSingleStackShot` in `geminiAI.ts`) as few-shot reference images. Lior + Eyal don't lose any selfies. The DB column `chip_values.selfie_base64` is intact; only `selfie_dominant_hex` is now deprecated/null.
+  
+  Lesson promoted to LESSONS.md: "verify-against-real-data before claiming fixed" — when shipping a heuristic that depends on a numeric threshold, compute that threshold against the user's actual stored data BEFORE shipping. v5.60.13 shipped a sat<0.15 threshold without checking that Lior's stored Red/Blue hexes had sat=0.18, and the user caught the resulting fiasco minutes later.
+- **Pending parallel-agent work in working tree** (NOT in this commit): v5.61.x immutable-games line — `supabase/077-block-completed-status-downgrade.sql` (untracked) + ~16 modified files (`AIKeyMissingNotice`, `storage`, `supabaseCache`, several screens, `aiEligibility`, `apiProxy`, `geminiAI`, `pokerTraining`). My v5.60.14 commit deliberately staged ONLY my 5 files (`imageUtils.ts`, `stackDetection.ts`, `SettingsScreen.tsx`, `version.ts`, `supabase/078-...sql`) so the parallel work stays in their hands. They'll need to bump from 5.60.14 base when they merge.
 
 ## Open follow-ups
 
-- **Verify v5.60.13 fix landed for Lior**: after Vercel deploy, Lior opens Settings → Chips, the auto-migration runs silently, then re-tests photo chip counting from the test card. If still misbehaving, the failure mode will be a DIFFERENT one (inlay-bug class is patched + guarded) — investigate from there.
+- **Verify v5.60.14 fix landed for Lior**: after Vercel deploy, Lior re-tests the photo chip counting flow. The change is purely runtime-side (no UI change visible) — counts should now route to the correct chip-color rows because HSL matching uses the trustworthy `displayColor` instead of the broken stored hex. If still misbehaving, the failure mode is now in the LLM count itself or stack region detection — investigate from there.
 - **Local dev shows zero admin controls in LiveGameScreen** (Lior, from 2026-05-13). Almost certainly wrong-account-on-localhost; pending his confirmation before digging into `usePermissions()` resolution timing.
 - **"Mini table with more details" home-card memory** (Lior). Needs a screenshot to pin down which view he's remembering. Deferred.
 

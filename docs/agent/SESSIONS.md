@@ -6,6 +6,36 @@
 
 ---
 
+## 2026-05-15 — Retired selfie-hex extraction (v5.60.14)
+
+**Asked**: Lior had received my v5.60.13 ship and tested it: "so do you relate properly to the selfies i took? is it really beneficail and bring value to the chip count genration? please do deep analysis to what you did and confirm all is good, i dont want another fiasco." Followed by — when I asked which fix strategy to take — "do what you have to do for the best results, i want the smartest and best solution and not something that might work."
+
+**Did**: Did the deep analysis the user asked for, which immediately surfaced two compounding bugs in my own v5.60.13:
+1. **Threshold off**. Computed HSL of every stored hex against my `looksLikeInlayBugHex` predicate (sat<0.15 AND 0.30<lum<0.75) using a node script with the actual `rgbToHsl` formula. Result: Red stored hex (`#b59e94`) had sat=0.182, Blue stored hex (`#7b86a3`) had sat=0.179. Both ABOVE my 0.15 threshold → both NOT flagged for auto-migration → both stayed broken. v5.60.13 deploy would have left half of Lior's chip set still misclassifying.
+2. **Recompute itself unreliable**. After v5.60.13's auto-migration ran on Lior's actual stored data, a re-query showed: White → `#0c805c` (dark green, was `#a4a5a5` grey), Black → `#338665` (green, was `#989493` grey), Green → `#0c724b` (dark green). The new ring sampling at 60-75% canvas radius reached OUT to Lior's green poker felt background for chips that didn't fill the frame, producing wrong colors for chips whose body isn't actually green.
+
+Diagnosis: extracting reliable chip body color from arbitrary phone selfies is fundamentally fragile. Depends on chip size in frame (need chip-boundary detection — real CV), inlay presence (varies per chip), background color (varies per photo). v5.59.0 sampled the inlay; v5.60.13 sampled the background. There's no winning radius without actual CV.
+
+Resolution: stop pretending we can extract per-user color calibration from selfies. The user-configured `display_color` (`#EF4444` for red, `#3B82F6` for blue, etc.) is well-saturated, hue-correct, and 100% reliable. Verified empirically with two node stress tests against the actual `hslDistance` function: realistic body samples → all 6 chips identified with 5-15× margin to next-closest; even washed-out samples → 5/6 correct, only a narrow zone of dim/desaturated blue could mistake for green (further narrowed by white-balance pass already in `stackDetection.ts`). The chip selfie JPEG is STILL passed to the LLM call as a few-shot reference image — that's its real value.
+
+Changes (5 files):
+- `stackDetection.ts`: drop `selfieDominantHex` reads, drop the `looksLikeInlayBugHex` defensive fallback. Loop reads `chip.displayColor` directly. Documented the v5.59 → v5.60.13 → v5.60.14 history in the function header.
+- `imageUtils.ts`: `captureChipSelfie` returns `{ base64, mimeType }` only (was `{ base64, mimeType, dominantHex }`). Removed `computeChipBodyHex`, `recomputeDominantHexFromBase64`, `looksLikeInlayBugHex` from v5.60.13. Updated module file header.
+- `SettingsScreen.tsx`: removed the v5.60.13 auto-migration `useEffect`. `handleSelfieFile` writes `selfieDominantHex: null`. Cleaned `useRef` import.
+- `version.ts`: bumped 5.60.13 → 5.60.14 with 4-bullet changelog. Restored from working tree's parallel-agent 5.61.4 first via `git checkout --`.
+- `supabase/078-deprecate-chip-selfie-hex.sql`: NULLs out all existing `selfie_dominant_hex` (already known-bad). Updates column comment marking deprecated. Column itself preserved.
+
+Applied migration 078 via MCP — verified all 6 of Lior's chip rows now have `selfie_dominant_hex=NULL` and `has_selfie=true` (JPEGs intact). `npx tsc --noEmit` clean. ReadLints clean on touched files. Single commit (`0cfb282`), single push. Parallel-agent v5.61.x work in working tree untouched.
+
+**Learned**:
+- **Verify thresholds against the user's actual data BEFORE shipping.** v5.60.13 shipped a sat<0.15 cutoff without computing what the user's stored hexes would land on. Two lines of node would have shown sat=0.18 for Red and Blue; instead the user caught the resulting fiasco minutes after deploy. This is now a generalizable rule for any heuristic that depends on a numeric threshold and operates on user-stored data: write the validation script, run it against the actual values, only ship if it confirms the threshold catches what you think it catches. Promoted to LESSONS.md.
+- **Sometimes the "smartest" fix is to delete code, not add code.** I'd built `computeChipBodyHex` (ring sampling), `recomputeDominantHexFromBase64` (auto-migration), `looksLikeInlayBugHex` (defensive predicate), and a SettingsScreen `useEffect`. ~150 lines of defensive scaffolding to make per-user color calibration "robust." Deleting all of it and using the user-configured `display_color` instead solved the actual user problem with a 1-line read change. The selfie's value lives elsewhere (LLM few-shot reference) — once I named that explicitly, the calibration code became obviously dead weight. Shipping less code is sometimes the smarter solution.
+- **Two compounding bugs hide each other.** v5.60.13's threshold bug AND its recompute bug produced overlapping symptoms ("colors are wrong"). Even if I'd fixed only the threshold, the recompute would still have produced wrong values for the freshly-flagged chips. The user would have re-tested and reported "still wrong." Diagnosing both at once required actually inspecting the post-migration DB state, not just the code.
+
+**Next**: Lior re-tests v5.60.14 on the deployed Vercel build. The change is purely runtime-side (no UI change). Counts should now route to the correct chip-color rows because HSL matching uses `displayColor`. If still misbehaving, the failure mode is now in the LLM count itself or stack region detection — different problem class, investigate from there.
+
+---
+
 ## 2026-05-15 — Chip-counting selfie color regression fix (v5.60.13)
 
 **Asked**: Lior tried the v5.59 photo chip-counting feature in real testing 4 days after ship: "i tried the new feature of chip count with picture, after your recent changes it was not even close, it didnt catch anyhitng, we were much better than this and now it became really useless after your changes."

@@ -25,6 +25,18 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-15 — Verify thresholds against real user data before shipping (the v5.60.13 fiasco)
+
+**Incident**: I shipped v5.60.13 to fix the v5.59 chip-counting selfie color bug. The fix included a `looksLikeInlayBugHex(hex) := sat<0.15 && 0.30<lum<0.75` predicate that decided which stored hexes to auto-migrate. Lior tested the deploy and reported "still bad — do deep analysis." On inspection, I computed HSL for his actual stored hexes and found Red (`#b59e94`) had sat=0.182 and Blue (`#7b86a3`) had sat=0.179 — both **just above** my 0.15 threshold, so the auto-migration skipped them and they stayed broken. The fix shipped sat<0.15 without ever computing what value Lior's real chips would land on. Two of six chips silently bypassed.
+
+**Root cause**: I picked the threshold from "what looks like grey to me" intuition + a couple of synthetic example hexes I made up while writing the code (`#a4a5a5`, `#989493` — both very low saturation). I did not query the user's actual stored values (they were one MCP `execute_sql` call away — the data I needed was right there in `chip_values.selfie_dominant_hex`). The threshold "felt safe" because it cleanly excluded my mental model of "real chip body" (high saturation). It missed real-world contaminated hexes that landed in a narrow band 0.15-0.20 because I never sampled the actual contaminated distribution. Compounded in the same fix by a second bug: the new ring sampling I'd added reached out to 60-75% canvas radius, which hit the green-mat background for chips whose photos didn't fill the frame — producing wrong-color recomputes for the chips that DID get migrated. Either bug alone would have made the fix half-work; both at once made it worse than no fix.
+
+**Lesson**: When a fix introduces a numeric threshold that gates behavior on real user data, the validation step BEFORE shipping is "compute the gating expression against the actual stored values for at least one real user and confirm it does what I think." For Supabase-backed code this is one `execute_sql` call. The cost is seconds; the cost of skipping it is the user catching it minutes after deploy and trust eroding. Generalizes: any heuristic that depends on a magic number — confidence cutoff, retry budget, distance threshold, time window — gets validated against real production data before merge. "I made up some test inputs in my head" is not validation. Companion lesson: when a fix involves multiple new pieces (a new sampling method + a new threshold + a new auto-migration + a new defensive fallback), each piece needs its own validation — not "they all look right together." Mine looked right together AND were both broken in different ways.
+
+**Session**: 2026-05-15 (v5.60.14 — retired selfie-hex extraction).
+
+---
+
 ## 2026-05-15 — Center-patch sampling on stickered objects: don't sample where the sticker is
 
 **Incident**: v5.59.0 shipped chip-counting selfies. `captureChipSelfie` averaged the dead-center 24×24 pixels of each selfie to compute `selfieDominantHex`. After ~4 days in production, Lior reported the new pipeline was "not even close, didn't catch anything." DB inspection showed every chip's stored hex was muddy grey/beige (red→#b59e94, blue→#7b86a3, green→#aaaa94, black→#989493). Root cause: most poker chips have a printed value inlay/sticker dead-center. The center patch sampled the inlay, not the colored body. Downstream, `stackDetection.ts` mapped detected stack regions to chips by HSL distance against these hexes — with every reference looking like the same shade of grey, the mapping was effectively random. Counts went into wrong color rows; feature appeared totally broken.
