@@ -6,6 +6,35 @@
 
 ---
 
+## 2026-05-15 — Merged parallel-agent v5.61.0 (weekend roster-wipe fix + TTS fire-and-forget)
+
+**Asked**: "please merge changes from all agents" — explicit request to bundle the parallel agent's pending work that had been sitting in working tree across the v5.60.13 / v5.60.14 chip-counting sessions.
+
+**Did**: Surveyed working tree. After resetting line-ending-only no-diff files, found 5 substantive modified files + 1 untracked SQL migration:
+- `supabase/077-block-completed-status-downgrade.sql` — DB-level guard
+- `src/database/supabaseCache.ts` (+67 −66) — scope GAMES upsert to touched-only
+- `src/database/storage.ts` (+33 −2) — `updateGameStatus` routes downgrades through RPC
+- `src/screens/NewGameScreen.tsx` (+38 −25) — TTS pool fire-and-forget
+- `src/screens/LiveGameScreen.tsx` (+74 −10) — `tts-pool-ready` listener + amber pill
+- `src/i18n/translations.ts` (+4 −2) — pill copy
+
+Read each diff in full to understand intent. Two distinct features:
+
+**(1) Weekend roster-wipe permanent fix**: Lior reported for the THIRD weekend in a row (May 3, May 8, May 14) that a just-completed game showed "0 שחקנים" on History despite backups taken hours later still having the full roster. Root cause: TS GAMES sync was a BLANKET upsert pushing every game in local memory regardless of whether the user had touched it. A stale tab whose cache had `status='live'` for a game completed elsewhere would push the stale row back, flipping `'completed' → 'live'`. With status='live' the BEFORE-DELETE guard from migration 050 read the now-stale parent status and let single-row deletes through. Iterating wiped the roster. Two-layer fix: (a) `supabaseCache.ts` scopes the GAMES upsert to ONLY games whose `gameLocalWriteAt` marker is set (passive stale tabs push nothing); (b) migration 077 adds a BEFORE-UPDATE-OF-status trigger that rejects `completed → *` transitions unless one of two transaction-local escape flags is set (`app.cascade_group_delete` for delete_group RPC, `app.allow_completed_reopen` for the new admin-gated `reopen_completed_game` SECURITY DEFINER RPC). The "Reopen Chip Entry" admin button is now the ONLY legitimate path to downgrade; `storage.ts` `updateGameStatus` detects `completed → *` and routes through the RPC, deliberately skipping `markGameLocallyWritten` so the debounced upsert can't race the RPC and trip the trigger.
+
+**(2) TTS pool fire-and-forget**: Previously `startGameWithForecast` awaited `generateLiveGameTTSPool` and showed a Start-button spinner blocking navigation for 20-30s. Pool is purely additive flavor (consumers fall back to hardcoded Hebrew lines when absent). Now: navigation happens instantly; TTS generation runs as `void promise.then(...)`, dispatches a `tts-pool-ready` CustomEvent (gameId-scoped) on completion. `LiveGameScreen` initializes `ttsLoading` from nav state, listens for the event, swaps the new amber "🎙️ מכין קולות" pill for the model badge once the pool arrives. The promise survives the `NewGameScreen` unmount (plain async work, no setState/refs).
+
+Verified migration 077 was already applied to live DB (`block_completed_status_downgrade` + `reopen_completed_game` functions exist, `guard_completed_status_downgrade` trigger present) — parallel agent had applied it before commit. My merge added the file for audit-trail consistency. `npx tsc --noEmit` clean. ReadLints clean on all touched files. Bumped 5.60.14 → 5.61.0 with 4-bullet changelog. Cleaned up my `.agent-tmp-selfies/` and `.agent-decode-selfies.cjs` from the previous selfie-inspection session before committing. Single commit `d168aab`, single push.
+
+**Learned**:
+- **A blanket upsert is a stale-state weapon, not a sync mechanism.** The "always push everything in local memory to be safe" instinct was the bug. Sync should always be scoped to "what the user actually touched on this device this debounce window" — anything broader is a stale-tab footgun. Generalizes to any list that can be partially stale: contacts, settings, child collections. The fix shape (`gameLocalWriteAt` marker → filter touched-only at flush time) is now the canonical pattern in this codebase.
+- **Defense-in-depth at the boundary you control.** The DB trigger doesn't trust the client to be well-behaved — even if a future agent reintroduces a blanket upsert, or a cached bundle from before the fix is still in the wild, or someone runs a manual SQL session, the `completed → live` transition is rejected outright. The TS fix prevents the bug; the DB trigger ensures it can't recur for any future class of TS bug we haven't thought of yet. Right pattern for irreversible state transitions.
+- **Resetting `git checkout --` only works on tracked files.** When I reset `version.ts` earlier in v5.60.14 to undo the parallel agent's bump, I lost the parallel agent's CHANGELOG entries that lived only in the working-tree version. Reconstructed them from the commit's diff content + this session's analysis. Lesson: when reverting unsynced parallel work, capture the CHANGELOG bullets BEFORE the revert (or stash them) so they survive into the eventual merge.
+
+**Next**: Lior tests v5.61.0 on Vercel. The real validation for the roster-wipe fix is the next weekend game with multiple devices in play — that's the path the bug took the last 3 times. Until then we're trusting the analysis.
+
+---
+
 ## 2026-05-15 — Retired selfie-hex extraction (v5.60.14)
 
 **Asked**: Lior had received my v5.60.13 ship and tested it: "so do you relate properly to the selfies i took? is it really beneficail and bring value to the chip count genration? please do deep analysis to what you did and confirm all is good, i dont want another fiasco." Followed by — when I asked which fix strategy to take — "do what you have to do for the best results, i want the smartest and best solution and not something that might work."

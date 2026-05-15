@@ -1,13 +1,16 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-15 (post v5.60.14 — retired selfie-hex extraction entirely)
+> **Last refreshed**: 2026-05-15 (post v5.61.0 — merged parallel-agent roster-wipe + TTS fire-and-forget)
 
 ---
 
 ## Right now
 
-- **`origin/main`**: `5.60.14` — retired the `selfieDominantHex` per-user color calibration code path entirely. v5.60.13 had tried to fix the v5.59.0 inlay-sampling bug with ring sampling + auto-migration, but Lior's actual stored selfies revealed two compounding issues that v5.60.13 didn't fully resolve:
+- **`origin/main`**: `5.61.0` — merged parallel agent's pending v5.61.0 work that had been sitting uncommitted in working tree. Two distinct fixes in one release:
+  1. **Weekend roster wipe permanent fix.** Lior reported the THIRD weekend in a row that a just-completed game showed "0 שחקנים • 0 קניות" on History. Backups taken hours after completion still had the full roster — wipe was post-completion, post-backup, only against game_players. Migrations 043 + 050 + 051 (the existing completed-game guards) were verified-correct, yet the roster vanished. Root cause: the TS GAMES sync was a BLANKET upsert pushing every game in local memory, not just touched ones. A stale tab whose cache had `status='live'` for a game completed elsewhere would push the stale row back, flipping `'completed' → 'live'`, which made the BEFORE-DELETE guard read the now-stale parent status and let the roster be wiped one row at a time. Fix in two layers: (a) `supabaseCache.ts` GAMES upsert now scopes to ONLY games whose `gameLocalWriteAt` marker is set (passive stale tabs push nothing); (b) `supabase/077-block-completed-status-downgrade.sql` adds a BEFORE-UPDATE-OF-status trigger that rejects any `completed → *` transition unless `app.cascade_group_delete` (delete_group RPC) or `app.allow_completed_reopen` (the new `reopen_completed_game` SECURITY DEFINER RPC) flag is set. The "Reopen Chip Entry" admin button now routes through the RPC instead of a direct UPDATE — `storage.ts` `updateGameStatus` detects the downgrade and dispatches the RPC, deliberately skipping `markGameLocallyWritten` so the debounced upsert won't race the RPC. Both function + trigger were already applied to live DB by the parallel agent before commit; my merge added the file for audit-trail consistency.
+  2. **TTS pool fire-and-forget.** Previously `startGameWithForecast` awaited `generateLiveGameTTSPool` and showed a "🎙️ מכין את הערב..." spinner blocking the Start button for 20-30s. Pool is purely additive flavor (consumers fall back to hardcoded Hebrew lines when absent), so blocking was unnecessary. Now: navigation happens instantly; TTS generation runs as `void promise.then(...)`, dispatches a gameId-scoped `tts-pool-ready` CustomEvent on completion. `LiveGameScreen.tsx` initializes `ttsLoading` from nav state, listens for the event, swaps the new amber "🎙️ מכין קולות" pill for the model badge once the pool arrives. Translations cleaned up.
+- **v5.60.14 (the previous main entry)** retired the `selfieDominantHex` per-user color calibration code path entirely. v5.60.13 had tried to fix the v5.59.0 inlay-sampling bug with ring sampling + auto-migration, but Lior's actual stored selfies revealed two compounding issues that v5.60.13 didn't fully resolve:
   1. The `looksLikeInlayBugHex` threshold (sat<0.15) was too tight — Red and Blue stored hexes had sat≈0.18 and were skipped by auto-migration.
   2. Even when the migration ran (White, Green, Black), the new ring sampling at 60-75% radius reached OUT to the green-poker-felt background for chips that didn't fill the frame, producing wrong-color hexes (white→#0c805c dark green, black→#338665 green).
   
@@ -22,11 +25,13 @@
   Selfie JPEGs themselves are STILL valuable and STILL passed to the LLM call (`runSingleStackShot` in `geminiAI.ts`) as few-shot reference images. Lior + Eyal don't lose any selfies. The DB column `chip_values.selfie_base64` is intact; only `selfie_dominant_hex` is now deprecated/null.
   
   Lesson promoted to LESSONS.md: "verify-against-real-data before claiming fixed" — when shipping a heuristic that depends on a numeric threshold, compute that threshold against the user's actual stored data BEFORE shipping. v5.60.13 shipped a sat<0.15 threshold without checking that Lior's stored Red/Blue hexes had sat=0.18, and the user caught the resulting fiasco minutes later.
-- **Pending parallel-agent work in working tree** (NOT in this commit): v5.61.x immutable-games line — `supabase/077-block-completed-status-downgrade.sql` (untracked) + ~16 modified files (`AIKeyMissingNotice`, `storage`, `supabaseCache`, several screens, `aiEligibility`, `apiProxy`, `geminiAI`, `pokerTraining`). My v5.60.14 commit deliberately staged ONLY my 5 files (`imageUtils.ts`, `stackDetection.ts`, `SettingsScreen.tsx`, `version.ts`, `supabase/078-...sql`) so the parallel work stays in their hands. They'll need to bump from 5.60.14 base when they merge.
+- **Working tree clean** as of v5.61.0 merge. All parallel-agent work is now on `origin/main`.
 
 ## Open follow-ups
 
-- **Verify v5.60.14 fix landed for Lior**: after Vercel deploy, Lior re-tests the photo chip counting flow. The change is purely runtime-side (no UI change visible) — counts should now route to the correct chip-color rows because HSL matching uses the trustworthy `displayColor` instead of the broken stored hex. If still misbehaving, the failure mode is now in the LLM count itself or stack region detection — investigate from there.
+- **Verify v5.61.0 lands cleanly on next weekend's game**: the roster-wipe fix is the real test. Two layers of defense (TS scoped upsert + DB trigger) should prevent recurrence, but only a real game with multiple devices in play exercises the stale-tab path that triggered it the last 3 weekends.
+- **Verify v5.60.14 chip-counting fix for Lior**: the displayColor-matching change is purely runtime-side. Counts should now route to the correct chip-color rows. If still misbehaving, failure mode is now in the LLM count itself or stack region detection.
+- **One selfie worth retaking**: Lior's Black chip selfie photographed as grey/silver (under-exposed). Suggested he retake it with better lighting; other 5 selfies are fine to keep as LLM few-shot references.
 - **Local dev shows zero admin controls in LiveGameScreen** (Lior, from 2026-05-13). Almost certainly wrong-account-on-localhost; pending his confirmation before digging into `usePermissions()` resolution timing.
 - **"Mini table with more details" home-card memory** (Lior). Needs a screenshot to pin down which view he's remembering. Deferred.
 
