@@ -283,9 +283,19 @@ const SettingsScreen = () => {
   };
 
   // Permission checks
-  const canEditSettings = hasPermission('settings:edit');
-  const canEditChips = hasPermission('chips:edit');
-  const canEditPlayers = hasPermission('player:edit');
+  // Observer mode (super admin viewing a group they're not a member
+  // of) has admin-equivalent READ permissions but must NOT write —
+  // any save would clobber the observed group's real data via the
+  // super_admins_full_access RLS policy. See migration 082 header
+  // for the full silent-data-destruction story this guards against.
+  // We AND `!isObserver` into every "can edit" flag so the same set
+  // of inputs that already grey out for non-admin members also grey
+  // out for super-admin observers — single mechanism, single signal
+  // (the disabled state) plus a top banner explaining why.
+  const isObserver = multiGroup?.isObservingNonMember ?? false;
+  const canEditSettings = hasPermission('settings:edit') && !isObserver;
+  const canEditChips = hasPermission('chips:edit') && !isObserver;
+  const canEditPlayers = hasPermission('player:edit') && !isObserver;
   const canDeletePlayers = hasPermission('player:delete');
   const canAddPlayers = hasPermission('player:add');
 
@@ -993,6 +1003,33 @@ const SettingsScreen = () => {
         </button>
       </div>
 
+      {/* Observer-mode banner. Surfaces the read-only constraint
+          that's otherwise only signalled by greyed-out inputs.
+          Without this the super admin could touch fields, see no
+          ✓-saved confirmation (because the cache write guard in
+          supabaseCache bails out for SETTINGS in observer mode),
+          and reasonably wonder if the app is broken. The banner
+          turns "nothing is saving" from a bug into a deliberate UX
+          choice they can read. See migration 082 header for the
+          underlying data-safety story. */}
+      {isObserver && (
+        <div style={{
+          background: 'rgba(234, 179, 8, 0.12)',
+          border: '1px solid rgba(234, 179, 8, 0.35)',
+          borderRadius: '8px',
+          padding: '0.6rem 0.85rem',
+          marginBottom: '0.75rem',
+          fontSize: '0.8rem',
+          color: '#EAB308',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}>
+          <span aria-hidden="true">👁</span>
+          <span>{t('settings.observerReadonly')}</span>
+        </div>
+      )}
+
       {/* Poker Training - Super Admin Only (hidden banner, navigable via Training tab) */}
       {isSuperAdmin && false && (
         <button
@@ -1686,7 +1723,7 @@ const SettingsScreen = () => {
                   {chipSelfieError}
                 </div>
               )}
-              {chipValues.map((chip, idx) => {
+              {[...chipValues].sort((a, b) => a.value - b.value).map((chip, idx) => {
                 const hasSelfie = !!chip.selfieBase64;
                 const busy = chipSelfieBusyId === chip.id;
                 return (

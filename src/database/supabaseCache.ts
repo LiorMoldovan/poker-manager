@@ -703,6 +703,22 @@ async function pushToSupabase(key: string) {
       break;
     }
     case STORAGE_KEYS.SETTINGS: {
+      // Defence in depth against the v6.1.0 silent-wipe regression
+      // (see migration 082 header for the full story). When a super
+      // admin observes a group via GroupSwitcher their cache holds
+      // that group's settings, but the RLS policy
+      // `super_admins_full_access` lets them upsert the row anyway —
+      // any drive-by interaction with the Settings tab would
+      // overwrite the observed group's real values. Migration 082
+      // fixed the LOAD path so observers see real values; this
+      // guard belt-and-braces the WRITE path so even a UI bug that
+      // somehow re-introduces a stale settings cache can't bleed
+      // back to Supabase. Settings save is intentionally not
+      // available in observer mode (read-only by design).
+      if (isObserverMode()) {
+        console.warn('[cache] settings push skipped — observer mode is read-only for settings');
+        break;
+      }
       const settings = state.data.get(key) as Settings;
       if (settings) {
         const { error } = await supabase.from('settings').upsert(settingsToRow(settings, gid), { onConflict: 'group_id' });

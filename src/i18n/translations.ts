@@ -1669,6 +1669,7 @@ const he = {
   // ── Settings ──
   'settings.title': 'הגדרות',
   'settings.saved': '✓ הגדרות נשמרו',
+  'settings.observerReadonly': 'מצב צפייה כסופר אדמין — שינויים לא יישמרו לקבוצה זו',
   'settings.tabGroup': '🏠 קבוצה',
   'settings.tabSchedule': '📅 המשחק הבא',
   'settings.tabPlayers': '👥 שחקנים',
@@ -4181,6 +4182,7 @@ const en: Record<keyof typeof he, string> = {
   // ── Settings ──
   'settings.title': 'Settings',
   'settings.saved': '✓ Settings saved',
+  'settings.observerReadonly': 'Super admin observer mode — changes will not save to this group',
   'settings.tabGroup': '🏠 Group',
   'settings.tabSchedule': '📅 Next Game',
   'settings.tabPlayers': '👥 Players',
