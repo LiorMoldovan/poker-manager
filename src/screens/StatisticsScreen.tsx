@@ -2773,11 +2773,20 @@ const StatisticsScreen = () => {
                       <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
                     </select>
                   </div>
-                  <div style={{ overflowX: 'auto' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{getTimeframeLabel()}</div>
+                  {/* Horizontal-scroll fallback is scoped to just the
+                      <table>, not the whole card. Wrapping title +
+                      footer + table together caused a phantom
+                      horizontal scrollbar on mobile from sub-pixel
+                      rounding even when everything fit. With the
+                      wrapper around only the table, the card's title
+                      and footer note flow naturally; the table still
+                      scrolls within its own little box if a future
+                      long player name pushes it wider than the viewport. */}
+                  <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -2844,6 +2853,7 @@ const StatisticsScreen = () => {
                       })}
                     </tbody>
                   </table>
+                  </div>
                   <div style={{
                     fontSize: '0.6rem',
                     color: 'var(--text-muted)',
@@ -2855,7 +2865,6 @@ const StatisticsScreen = () => {
                     lineHeight: 1.5,
                   }}>
                     {t('stats.podiumRatesNote')}
-                  </div>
                   </div>
                 </div>
               )}
