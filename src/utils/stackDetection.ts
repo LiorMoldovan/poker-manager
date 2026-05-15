@@ -129,6 +129,7 @@ import {
   hexToRgb,
   whiteBalanceFromStripes,
   applyWhiteBalance,
+  looksLikeInlayBugHex,
 } from './imageUtils';
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -380,10 +381,26 @@ export async function detectStackRegions(
     const dominantHex = rgbToHexLocal(bodyRgb);
 
     // Find nearest chip in palette.
+    //
+    // v5.60.13 — defensive fallback for the inlay-bug class of bad
+    // selfie hexes (see imageUtils.looksLikeInlayBugHex). v5.59.0
+    // sampled the dead-center 24×24 patch which landed on the printed
+    // value inlay for most poker chips, producing washed-out grey
+    // hexes for every color. With every reference hex looking like
+    // mid-grey, hslDistance becomes meaningless and stack→chip mapping
+    // is effectively random — which is exactly what made the feature
+    // appear broken. Even after auto-recompute (SettingsScreen mount
+    // path), there could be edge cases where the recompute also
+    // produces a bug-shaped hex (e.g. a chip photographed against an
+    // inlay-colored background). In that case we silently use the
+    // nominal displayColor and at least preserve the v5.49 behavior
+    // of "swatch hex matching" rather than randomized mapping.
     let bestId: string | null = null;
     let bestDist = Infinity;
     for (const chip of chipPalette) {
-      const refHex = chip.selfieDominantHex || chip.displayColor;
+      const selfieHex = chip.selfieDominantHex;
+      const useSelfie = !!selfieHex && !looksLikeInlayBugHex(selfieHex);
+      const refHex = useSelfie ? selfieHex! : chip.displayColor;
       const refRgb = hexToRgb(refHex);
       if (!refRgb) continue;
       const refHsl = rgbToHsl(refRgb);

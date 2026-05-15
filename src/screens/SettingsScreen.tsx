@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -72,7 +72,7 @@ import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
-import { captureChipSelfie } from '../utils/imageUtils';
+import { captureChipSelfie, looksLikeInlayBugHex, recomputeDominantHexFromBase64 } from '../utils/imageUtils';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
@@ -287,6 +287,11 @@ const SettingsScreen = () => {
     completed_game_count: number;
     last_game_date: string | null;
     active_users_7d: number;
+    // Activity-log session count over the last 30 days. Populated by
+    // get_global_stats but the field had been missing from the TS shape
+    // for a while — exposing it here so the dashboard can show cadence
+    // without a new RPC round-trip.
+    sessions_30d: number;
     training_players: number;
     training_players_total: number;
     feature_adoption: { screen: string; users: number }[];
@@ -785,6 +790,60 @@ const SettingsScreen = () => {
     const savedElKey = getElevenLabsApiKey();
     if (savedElKey) setElKey(savedElKey);
   };
+
+  // ────────────────────────────────────────────────────────────────────
+  // v5.60.13 — one-time auto-migration of v5.59.0 bad selfie hexes.
+  //
+  // v5.59.0 captured chip selfies but computed dominant_hex from the
+  // dead-center 24×24 patch, which lands on the printed value inlay
+  // for most poker chips. Result: every chip's stored hex came out
+  // muddy grey/beige instead of its real body color, breaking the
+  // stack→chip color mapping in the new pipeline. This effect runs
+  // once per session: if any chip has a stored selfie whose hex looks
+  // like the inlay-bug signature, we recompute the hex from the saved
+  // JPEG using the new ring-sampling logic and persist it. The selfie
+  // photos themselves stay untouched — only the broken hex gets fixed.
+  //
+  // Gated on canEditChips so members don't race the admin write. Uses a
+  // ref so it doesn't re-run when chipValues are updated by other
+  // effects in the same session. Errors are silent + non-blocking.
+  // ────────────────────────────────────────────────────────────────────
+  const selfieHexAutoMigratedRef = useRef(false);
+  useEffect(() => {
+    if (selfieHexAutoMigratedRef.current) return;
+    if (!canEditChips) return;
+    if (chipValues.length === 0) return;
+    const candidates = chipValues.filter(
+      cv => cv.selfieBase64 && cv.selfieDominantHex && looksLikeInlayBugHex(cv.selfieDominantHex),
+    );
+    if (candidates.length === 0) {
+      selfieHexAutoMigratedRef.current = true;
+      return;
+    }
+    selfieHexAutoMigratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const updates: ChipValue[] = [];
+      for (const cv of candidates) {
+        const newHex = await recomputeDominantHexFromBase64(cv.selfieBase64!, 'image/jpeg');
+        if (cancelled) return;
+        if (!newHex) continue;
+        // Only persist if the recompute actually IMPROVED the hex —
+        // a recompute that still lands in the bug-shape zone means
+        // the underlying photo has issues we can't fix from a hex
+        // tweak (chip on inlay-colored background, etc.).
+        if (looksLikeInlayBugHex(newHex)) continue;
+        updates.push({ ...cv, selfieDominantHex: newHex });
+      }
+      if (cancelled || updates.length === 0) return;
+      for (const u of updates) saveChipValue(u);
+      setChipValues(prev => prev.map(c => {
+        const fix = updates.find(u => u.id === c.id);
+        return fix ?? c;
+      }));
+    })().catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, [chipValues, canEditChips]);
 
   const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[] | BlockedTransferPair[]) => {
     const newSettings = { ...settings, [key]: value };
@@ -4951,11 +5010,34 @@ const SettingsScreen = () => {
             )}
 
             {globalStats && (() => {
+              // Group lifetime in months, used to derive a games-per-month
+              // cadence. We floor at 1 month so brand-new groups don't
+              // produce inflated rates (e.g. 5 games on day 2 ≠ 150/mo).
+              const groupAgeMonths = (createdAt: string): number => {
+                const ms = now.getTime() - new Date(createdAt).getTime();
+                return Math.max(1, ms / (1000 * 60 * 60 * 24 * 30.44));
+              };
+              const formatGroupAge = (createdAt: string): string => {
+                const months = groupAgeMonths(createdAt);
+                if (months < 1.5) return language === 'he' ? 'חודש' : '1mo';
+                if (months < 12) return language === 'he' ? `${Math.round(months)} ח׳` : `${Math.round(months)}mo`;
+                const years = months / 12;
+                return language === 'he'
+                  ? `${years.toFixed(years < 2 ? 1 : 0)} ש׳`
+                  : `${years.toFixed(years < 2 ? 1 : 0)}y`;
+              };
+
               const renderStatCards = (g: GlobalGroup) => {
                 const lastGameLabel = g.last_game_date
                   ? new Date(g.last_game_date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: '2-digit', month: '2-digit', year: '2-digit' })
                   : '—';
                 const lastGameColor = g.last_game_date && daysAgo(g.last_game_date)! <= 30 ? '#10B981' : '#f59e0b';
+                const months = groupAgeMonths(g.created_at);
+                const gamesPerMonth = months > 0 ? g.completed_game_count / months : 0;
+                // Top 3 visited screens — already aggregated by the RPC,
+                // we just render the slice. Falls through to nothing if
+                // the group hasn't logged any activity yet.
+                const topScreens = (g.feature_adoption ?? []).slice(0, 3);
                 return (
                   <div style={{ marginBottom: '0.5rem' }}>
                     {/* Core stats row */}
@@ -4972,6 +5054,39 @@ const SettingsScreen = () => {
                         </div>
                       ))}
                     </div>
+                    {/* Cadence row — group age, games/month rate, and
+                        sessions in the last 30 days. Single glance answer
+                        to "is this group thriving?". */}
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      padding: '0.35rem 0', borderBottom: '1px solid var(--border)',
+                      marginBottom: '0.35rem',
+                    }}>
+                      {[
+                        {
+                          label: language === 'he' ? 'גיל' : 'Age',
+                          value: formatGroupAge(g.created_at),
+                          color: 'var(--text-muted)',
+                        },
+                        {
+                          label: language === 'he' ? 'משחקים/ח׳' : 'Games/mo',
+                          value: gamesPerMonth >= 1
+                            ? gamesPerMonth.toFixed(1)
+                            : gamesPerMonth > 0 ? gamesPerMonth.toFixed(2) : '—',
+                          color: gamesPerMonth >= 1 ? '#10B981' : gamesPerMonth > 0 ? '#f59e0b' : 'var(--text-muted)',
+                        },
+                        {
+                          label: language === 'he' ? 'סשנים 30י׳' : 'Sessions 30d',
+                          value: g.sessions_30d ?? 0,
+                          color: (g.sessions_30d ?? 0) > 20 ? '#10B981' : (g.sessions_30d ?? 0) > 0 ? '#818cf8' : 'var(--text-muted)',
+                        },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                          <div style={{ fontSize: '0.46rem', color: 'var(--text-muted)', marginTop: '0.05rem' }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
                     {/* Engagement row */}
                     <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.6rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                       {g.active_users_7d > 0 && (
@@ -4980,7 +5095,50 @@ const SettingsScreen = () => {
                       {g.training_players > 0 && (
                         <span>🎯 <span style={{ color: '#f59e0b', fontWeight: 600 }}>{g.training_players}</span> {language === 'he' ? 'מתאמנים השבוע' : 'trainers this week'}</span>
                       )}
+                      {(g.training_players_total ?? 0) > 0 && (
+                        <span>🏆 <span style={{ color: '#818cf8', fontWeight: 600 }}>{g.training_players_total}</span> {language === 'he' ? 'מתאמנים בסה״כ' : 'lifetime trainers'}</span>
+                      )}
                     </div>
+                    {/* Feature adoption — surfaces what users actually
+                        do inside the app (which screens they visit).
+                        Already computed by the RPC; previously fetched
+                        but not rendered. */}
+                    {topScreens.length > 0 && (
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <div style={{
+                          fontSize: '0.5rem', fontWeight: 700, color: 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '0.05em',
+                          marginBottom: '0.25rem',
+                        }}>
+                          {language === 'he' ? '🔥 מסכים פופולריים' : '🔥 Top screens'}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          {topScreens.map(s => (
+                            <span
+                              key={s.screen}
+                              style={{
+                                fontSize: '0.55rem', fontWeight: 600,
+                                padding: '0.15rem 0.4rem', borderRadius: '6px',
+                                background: 'rgba(99,102,241,0.08)',
+                                border: '1px solid rgba(99,102,241,0.18)',
+                                color: 'var(--text)',
+                                display: 'inline-flex', gap: '0.25rem', alignItems: 'center',
+                              }}
+                            >
+                              <span style={{ opacity: 0.85 }}>{s.screen}</span>
+                              <span style={{
+                                fontSize: '0.5rem', fontWeight: 700,
+                                color: '#818cf8',
+                                background: 'rgba(99,102,241,0.15)',
+                                padding: '0.05rem 0.25rem', borderRadius: '4px',
+                              }}>
+                                {s.users}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               };

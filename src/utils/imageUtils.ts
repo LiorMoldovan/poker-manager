@@ -713,6 +713,77 @@ export function rgbToHex({ r, g, b }: RGB): string {
  * Throws on bad input (non-image file, decode failure) so the
  * caller can surface a toast.
  */
+/**
+ * Compute a chip's dominant body color from a 256×256 canvas.
+ *
+ * v5.60.13 — replaces the v5.59.0 "sample dead-center 24×24 patch" approach
+ * which produced grey/beige hex values for every chip, because most poker
+ * chips have a printed value inlay/sticker dead-center. The center patch
+ * was sampling the inlay text, not the colored chip body.
+ *
+ * New approach: sample 32 small patches across 4 concentric rings at
+ * radii 30%, 45%, 60%, 75% of the canvas half-edge (well outside the
+ * inlay, well inside the bezel/edge), then take the per-channel MEDIAN
+ * across all samples. The median is robust: even if up to ~50% of samples
+ * land on text/inlay/background/edges, the median lands on the dominant
+ * chip body color.
+ *
+ * Works for all chip colors including white and black (the body being
+ * "near-white" or "near-black" doesn't break the algorithm — the median
+ * just lands near 240 or near 30 respectively, instead of mid-grey ~150
+ * which is the inlay-contamination signature).
+ */
+function computeChipBodyHex(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+): string {
+  const cx = size / 2;
+  const cy = size / 2;
+  const maxRadius = size / 2;
+
+  // 4 rings × 8 angles = 32 sample patches covering the chip body.
+  const radii = [maxRadius * 0.30, maxRadius * 0.45, maxRadius * 0.60, maxRadius * 0.75];
+  const angles = 8;
+  const patch = 8;
+  const half = patch / 2;
+
+  const rs: number[] = [];
+  const gs: number[] = [];
+  const bs: number[] = [];
+  for (const radius of radii) {
+    for (let i = 0; i < angles; i++) {
+      const angle = (i / angles) * 2 * Math.PI;
+      const px = Math.round(cx + Math.cos(angle) * radius - half);
+      const py = Math.round(cy + Math.sin(angle) * radius - half);
+      const x = Math.max(0, Math.min(size - patch, px));
+      const y = Math.max(0, Math.min(size - patch, py));
+      const { data } = ctx.getImageData(x, y, patch, patch);
+      let rSum = 0, gSum = 0, bSum = 0;
+      const n = patch * patch;
+      for (let k = 0; k < data.length; k += 4) {
+        rSum += data[k];
+        gSum += data[k + 1];
+        bSum += data[k + 2];
+      }
+      rs.push(rSum / n);
+      gs.push(gSum / n);
+      bs.push(bSum / n);
+    }
+  }
+
+  const median = (vals: number[]): number => {
+    const s = [...vals].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+
+  return rgbToHex({
+    r: median(rs),
+    g: median(gs),
+    b: median(bs),
+  });
+}
+
 export async function captureChipSelfie(
   file: File,
 ): Promise<{ base64: string; mimeType: string; dominantHex: string }> {
@@ -737,24 +808,65 @@ export async function captureChipSelfie(
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, sx, sy, minEdge, minEdge, 0, 0, SIZE, SIZE);
 
-  // Sample dominant color from the center 24x24 patch directly off
-  // the same canvas (cheaper than re-decoding via sampleDominantColor,
-  // which would round-trip through base64).
-  const patch = 24;
-  const px = (SIZE - patch) / 2;
-  const py = (SIZE - patch) / 2;
-  const { data } = ctx.getImageData(px, py, patch, patch);
-  let rSum = 0, gSum = 0, bSum = 0;
-  const n = patch * patch;
-  for (let i = 0; i < data.length; i += 4) {
-    rSum += data[i];
-    gSum += data[i + 1];
-    bSum += data[i + 2];
-  }
-  const dominantHex = rgbToHex({ r: rSum / n, g: gSum / n, b: bSum / n });
+  const dominantHex = computeChipBodyHex(ctx, SIZE);
 
   const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
   const base64 = jpegDataUrl.split(',')[1] || '';
 
   return { base64, mimeType: 'image/jpeg', dominantHex };
+}
+
+/**
+ * Recompute the dominant body hex from an already-stored chip selfie JPEG
+ * using the v5.60.13 ring-sampling logic. Used by the one-time auto-migration
+ * in SettingsScreen so users with v5.59.0-captured selfies (which had bad
+ * dominant hexes from center-patch sampling on the printed inlay) get
+ * correct hex values without having to retake the photos.
+ *
+ * Returns null if the input isn't a valid base64 JPEG.
+ */
+export async function recomputeDominantHexFromBase64(
+  base64: string,
+  mimeType: string = 'image/jpeg',
+): Promise<string | null> {
+  try {
+    if (!base64) return null;
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    const img = await loadImage(dataUrl);
+    const SIZE = Math.min(img.width, img.height);
+    if (SIZE < 32) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    // Same center-crop the original capture used, so we sample the same area.
+    const cropX = Math.floor((img.width - SIZE) / 2);
+    const cropY = Math.floor((img.height - SIZE) / 2);
+    ctx.drawImage(img, cropX, cropY, SIZE, SIZE, 0, 0, SIZE, SIZE);
+    return computeChipBodyHex(ctx, SIZE);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Heuristic: does this hex look like the v5.59.0 inlay-contamination bug?
+ *
+ * Real chip body colors land in one of:
+ *   - high saturation (red/green/blue/yellow): sat > 0.15
+ *   - near-white (white chip): luminance > 0.85
+ *   - near-black (black chip): luminance < 0.15
+ *
+ * The bug signature is: low saturation (sat < 0.15) AND mid luminance
+ * (0.30 < lum < 0.75). That's the "muddy grey/beige" zone that a center-
+ * patch sample of an inlay-on-color chip produces — and no real chip body
+ * lands there. When this returns true, callers should ignore the hex and
+ * fall back to displayColor (or trigger a recompute).
+ */
+export function looksLikeInlayBugHex(hex: string): boolean {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return false;
+  const hsl = rgbToHsl(rgb);
+  return hsl.s < 0.15 && hsl.l > 0.30 && hsl.l < 0.75;
 }

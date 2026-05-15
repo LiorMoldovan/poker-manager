@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.60.12';
+export const APP_VERSION = '5.60.13';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.60.13',
+    date: '2026-05-15',
+    changes: [
+      '🐛 Photo chip-counting: fixed grey/beige selfie hex bug',
+      '🎨 Selfie color now sampled from chip body, not center inlay',
+      '🔄 Auto-recompute existing selfie hexes (no need to retake)',
+      '🛡 Defensive fallback to swatch color if selfie hex is bad',
+    ],
+  },
   {
     version: '5.60.12',
     date: '2026-05-14',
