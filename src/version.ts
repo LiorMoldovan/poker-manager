@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.62.1';
+export const APP_VERSION = '5.62.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.62.2',
+    date: '2026-05-15',
+    changes: [
+      '🧹 Retired chip-count feedback dashboard (no longer wired to tuning)',
+      '🧹 Removed misleading "submit feedback" button on photo test card',
+      '🧹 Silent live-game feedback writes also gone (data had no consumer)',
+    ],
+  },
   {
     version: '5.62.1',
     date: '2026-05-15',

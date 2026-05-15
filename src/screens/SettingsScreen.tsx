@@ -32,29 +32,14 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
-import { submitChipCountFeedback } from '../utils/chipCountFeedback';
-import {
-  aggregateFeedback,
-  trendVerdict,
-  type FeedbackStats,
-  type RawFeedbackRow,
-} from '../utils/chipFeedbackStats';
-// v5.62 — chip-count tuner removed (the wins came from the architectural
-// switch to whole-photo, not from LLM-driven prompt tuning). Feedback
-// dashboard below stays for accuracy visibility.
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  BarChart,
-  Bar,
-  Cell,
-} from 'recharts';
+// v5.62.2 — chip-count feedback loop fully retired. The
+// `chip_count_feedback` table + `chip-count-feedback-photos` bucket
+// stay in Supabase as harmless legacy; the dashboard card, the
+// "submit feedback" UI on the test card, and the silent live-game
+// submission were all removed in one pass because the v5.62.0
+// architecture rewrite made the data they fed unconsumable.
+// The Recharts imports went with the dashboard — no other usage
+// in this file.
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
@@ -159,53 +144,18 @@ const SettingsScreen = () => {
 
   // Photo chip-counting test (Services tab — owner only).
   // No game context, no settlement impact. Pure accuracy verification.
-  //
-  // The test card doubles as a fast-path FEEDBACK SUBMISSION tool
-  // (v5.54): after the AI returns its proposed counts, the user can
-  // override any wrong values with the real counts and click "save
-  // feedback" — that posts a `chip_count_feedback` row identical
-  // to the real-game flow but with `game_id` / `player_id` = NULL.
-  // This lets Lior accumulate ground-truth-labeled rows without
-  // having to commit to a real game session for each test.
-  //   * `photoTestPreviewMime` is the content-type for `photoTestPreview`
-  //     base64. Plumbed through so the opt-in photo upload path works
-  //     for test-card feedback exactly like real-game feedback does.
-  //   * `photoTestActualCounts` defaults to the AI's proposal so the
-  //     user only needs to edit the chips the AI got wrong (saving
-  //     "this row was correct" is the no-op default action).
-  //   * `photoTestFeedbackSaved` flips true once a row was successfully
-  //     POSTed; the button switches to the "saved ✓" state until the
-  //     user takes the next photo.
+  // v5.62.2: the test card used to double as a feedback-submission
+  // tool (save ground-truth counts to `chip_count_feedback`). That
+  // submission was retired alongside the dashboard since nothing
+  // reads the rows any more — see top-of-file note. The remaining
+  // state is just camera + result display.
   const [photoTestOpen, setPhotoTestOpen] = useState(false);
   const [photoTestResult, setPhotoTestResult] = useState<PhotoChipCountResult | null>(null);
   const [photoTestPreview, setPhotoTestPreview] = useState<string>('');
   const [photoTestPreviewMime, setPhotoTestPreviewMime] = useState<string>('image/jpeg');
-  const [photoTestActualCounts, setPhotoTestActualCounts] = useState<Record<string, number>>({});
-  const [photoTestFeedbackSaved, setPhotoTestFeedbackSaved] = useState(false);
-  const [photoTestFeedbackSaving, setPhotoTestFeedbackSaving] = useState(false);
 
-  // Chip-count accuracy dashboard state (Phase 1 of the in-app
-  // tuning loop — v5.55+).
-  //   * `chipFeedbackStats` is the aggregated view of
-  //     `chip_count_feedback` rows that powers the dashboard card.
-  //     `null` while loading; populated (possibly with totalSamples=0)
-  //     after the first successful load.
-  //   * Reload triggers: tab switch onto Services, isOwner becomes
-  //     true, and any successful test-card feedback save (so the
-  //     dashboard updates immediately after the user clicks
-  //     "send feedback"). Manual "refresh" button also available
-  //     in the dashboard card for sanity.
-  //   * `chipFeedbackError` is non-null only on hard load failure
-  //     (RLS, network) — empty data is NOT an error, it renders
-  //     the empty state.
-  const [chipFeedbackStats, setChipFeedbackStats] = useState<FeedbackStats | null>(null);
-  const [chipFeedbackLoading, setChipFeedbackLoading] = useState(false);
-  const [chipFeedbackError, setChipFeedbackError] = useState<string | null>(null);
-  const [chipFeedbackRefreshTick, setChipFeedbackRefreshTick] = useState(0);
-
-  // v5.62 — tuning UI state removed alongside the per-stack pipeline.
-  // The chip_count_tuning_overrides table stays in the DB but is now
-  // never read or written from the UI.
+  // v5.62.2 — chip-count accuracy dashboard state and the tuning UI
+  // were removed alongside the feedback loop. See top-of-file note.
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -496,64 +446,8 @@ const SettingsScreen = () => {
     return () => { cancelled = true; };
   }, [isSuperAdmin, activeTab]);
 
-  // Chip-count accuracy dashboard loader (Phase 1, v5.55+).
-  // Loads `chip_count_feedback` rows + the latest tuning override
-  // timestamp for the group, runs them through `aggregateFeedback`,
-  // and stuffs the result into `chipFeedbackStats`.
-  //
-  // Triggers:
-  //   * When the user switches into the Services tab (`activeTab === 'ai'`).
-  //   * When ownership flips to true (e.g. someone transferring it).
-  //   * When `chipFeedbackRefreshTick` is bumped — used by the test-card
-  //     feedback save handler and by the dashboard's manual refresh
-  //     button to force a reload without relying on Supabase
-  //     realtime (which we don't have on this table).
-  //
-  // Anti-pattern guard: only fires when the user is actually looking
-  // at the Services tab. No point hammering the DB just because the
-  // owner (or an admin co-tester) happened to be on Settings →
-  // Players.
-  //
-  // v5.58: also loads for non-owner admins now that RLS (migration
-  // 071) lets them SELECT chip_count_feedback. Auto-rollback inside
-  // is gated on `isOwner` further down — non-owners can't INSERT
-  // into chip_count_tuning_overrides anyway (RLS), and trying would
-  // produce noisy errors.
-  useEffect(() => {
-    if (activeTab !== 'ai' || (!isOwner && role !== 'admin' && !isSuperAdmin)) return;
-    const gid = getGroupId();
-    if (!gid) return;
-    let cancelled = false;
-    setChipFeedbackLoading(true);
-    setChipFeedbackError(null);
-    (async () => {
-      try {
-        // v5.62 — auto-rollback + tuning history load removed alongside
-        // the tuning UI. Just load feedback rows for the dashboard.
-        const { data: rows, error: rowsErr } = await supabase
-          .from('chip_count_feedback')
-          .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks, pipeline_meta')
-          .eq('group_id', gid)
-          .order('created_at', { ascending: false })
-          .limit(200);
-        if (cancelled) return;
-        if (rowsErr) {
-          setChipFeedbackError(rowsErr.message);
-          setChipFeedbackStats(null);
-          return;
-        }
-        const stats = aggregateFeedback((rows ?? []) as RawFeedbackRow[], null);
-        setChipFeedbackStats(stats);
-      } catch (e) {
-        if (cancelled) return;
-        setChipFeedbackError(e instanceof Error ? e.message : 'load failed');
-        setChipFeedbackStats(null);
-      } finally {
-        if (!cancelled) setChipFeedbackLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeTab, isOwner, role, isSuperAdmin, chipFeedbackRefreshTick]);
+  // v5.62.2 — chip-count accuracy dashboard loader removed alongside
+  // the feedback loop. See top-of-file note.
 
   const [pushSubscribers, setPushSubscribers] = useState<{ userId: string | null; playerName: string | null; endpoint: string }[]>([]);
 
@@ -1033,14 +927,13 @@ const SettingsScreen = () => {
     { id: 'game', label: t('settings.tabGame'), icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     // 'ai' (Services) tab is admin-accessible — admins see only the
-    // Photo Chip Counting Test Card + accuracy dashboard inside; all
-    // other cards (Game Readiness, API Keys, AI Usage, opt-in toggle)
-    // are individually gated on `isOwner`. This lets a non-owner admin
-    // co-tester (e.g. another player with a chip color the owner
-    // doesn't have on hand) help submit feedback rows and watch the
-    // dashboard fill up. The Tune / Revert buttons inside the
-    // dashboard remain owner-only (DB RLS on
-    // chip_count_tuning_overrides + UI gate).
+    // Photo Chip Counting Test Card inside; all other cards (Game
+    // Readiness, API Keys, AI Usage) are individually gated on
+    // `isOwner`. This lets a non-owner admin co-tester (e.g. another
+    // player with a chip color the owner doesn't have on hand) try
+    // the photo→count pipeline before a real game. v5.62.2 — the
+    // dashboard + tuning UI that used to live in this tab were
+    // removed; the feedback loop they fed has no consumer.
     { id: 'ai', label: t('settings.tabAI'), icon: '🤖', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'triviaReports', label: t('settings.tabTriviaReports'), icon: '🚩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
@@ -3280,25 +3173,13 @@ const SettingsScreen = () => {
               </div>
             )}
 
-            {/* v5.59 — chip-photo feedback opt-in card was REMOVED here.
-                The numeric per-stack ai-vs-real diff still gets captured
-                automatically (see `submitChipCountFeedback` in
-                chipCountFeedback.ts), which is enough for the
-                accuracy-improvement loop and the dashboard tuner.
-                The photo-upload toggle was clutter without earning
-                its keep — owners weren't using it and the per-stack
-                provenance log makes failure replay possible without
-                the original photo. The underlying `shareChipPhotos`
-                setting + Supabase Storage bucket are intentionally
-                kept; both callers pass `false` now, so no photos
-                upload, but if we ever need to re-enable photo replay
-                for a specific debugging session we can add a hidden
-                toggle without another migration. */}
-
             </>)}
             {/* Photo Chip Counting Test Card — visible to ALL admins
-                (owner included) so a co-tester can take photos and
-                contribute feedback rows. v5.58. */}
+                (owner + non-owner admins) so a co-tester can take
+                test photos. v5.58 (opened to non-owner admins).
+                v5.62.2 — removed the "submit feedback" submission;
+                the card is now read-only proof-of-life for the
+                photo→count pipeline. */}
             <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
               <h2 className="card-title" style={{ margin: '0 0 0.4rem 0' }}>
                 {t('settings.photoTest.title')}
@@ -3429,45 +3310,24 @@ const SettingsScreen = () => {
                     </div>
                   )}
 
-                  {/* Per-chip rows. v5.54: each row now has an editable
-                      "actual count" input alongside the AI's proposal,
-                      defaulting to the AI's value. The user only needs
-                      to fix the wrong rows; the unchanged rows count as
-                      "AI was right" feedback. */}
+                  {/* Per-chip rows. v5.62.2: the ground-truth input
+                      column and "save feedback" submission were
+                      removed. The test card is now a pure read-out
+                      of the AI's count + confidence per color — same
+                      data the live-game flow shows, with no extra
+                      ask of the user.
+
+                      Aggregation note (v5.60.3, still applies): the
+                      pipeline can emit multiple stacks for the same
+                      color (user split chips into separate piles, or
+                      detection over-segmented). We sum the AI counts
+                      per chipId and take the MIN confidence (most
+                      conservative — flags any weak stack of that
+                      color), so there's exactly ONE row per color
+                      and React keys are unique. Per-stack provenance
+                      is still preserved on `photoTestResult.stacks`
+                      and surfaced via the confidence-cell tooltip. */}
                   <div>
-                    {/* Header row labelling the AI / actual columns
-                        so the user knows which input to edit. */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '0.5rem',
-                      padding: '0.25rem 0.5rem 0.4rem',
-                      fontSize: '0.65rem',
-                      color: 'var(--text-muted)',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                    }}>
-                      <span style={{ flex: 1 }}>&nbsp;</span>
-                      <span style={{ minWidth: '2.5rem', textAlign: 'center' }}>{t('settings.photoTest.colAi')}</span>
-                      <span style={{ minWidth: '3.2rem', textAlign: 'center' }}>{t('settings.photoTest.colActual')}</span>
-                      <span style={{ minWidth: '2.5rem', textAlign: 'end' }}>%</span>
-                    </div>
-                    {/* v5.60.3: aggregate stacks by chipId for display.
-                        The v5.59 pipeline can emit multiple stacks of the
-                        same color (user split chips into separate piles,
-                        or detection over-segmented). The OLD rendering
-                        ran `.map` straight over `stacks` and keyed each
-                        row by `chipId` — duplicate React keys, AND every
-                        same-color row read the same `photoTestActualCounts[chipId]`
-                        slot, so editing one row silently overwrote the
-                        others. Now we sum AI counts per chipId, take the
-                        MIN confidence (most conservative — flags any
-                        weak stack of that color), and render ONE row per
-                        color. The user-facing experience matches the
-                        real-game flow: one input per color, total count.
-                        The per-stack provenance is still preserved in
-                        the underlying `photoTestResult.stacks` and gets
-                        submitted unchanged to the dashboard. */}
                     {(() => {
                       type AggStack = {
                         chipId: string;
@@ -3497,27 +3357,13 @@ const SettingsScreen = () => {
                     })().map(agg => {
                       const chip = chipValues.find(c => c.id === agg.chipId);
                       if (!chip) return null;
-                      const actual = photoTestActualCounts[agg.chipId] ?? agg.aiCount;
-                      const diff = actual - agg.aiCount;
-                      // First stack of this color carries representative
-                      // provenance for the tooltip (the rest are usually
-                      // detection over-segmentation; showing all of them
-                      // turns the tooltip into noise).
                       const stack = agg.stacks[0];
                       const stackCount = agg.stacks.length;
-                      // Border color reflects ground-truth-vs-AI diff
-                      // (not just AI confidence) — so the user gets
-                      // immediate feedback while editing: green when
-                      // they confirm AI was right, yellow on small
-                      // disagreement, red on big one. Falls back to
-                      // confidence-based color when the user hasn't
-                      // touched the input yet (diff = 0).
-                      const borderColor = diff === 0
-                        ? (agg.minConfidence >= 80 ? 'rgba(16,185,129,0.5)'
-                            : agg.minConfidence >= 60 ? 'rgba(234,179,8,0.5)'
-                            : 'rgba(239,68,68,0.6)')
-                        : Math.abs(diff) <= 1 ? 'rgba(234,179,8,0.6)'
-                        : 'rgba(239,68,68,0.7)';
+                      const borderColor = agg.minConfidence >= 80
+                        ? 'rgba(16,185,129,0.5)'
+                        : agg.minConfidence >= 60
+                          ? 'rgba(234,179,8,0.5)'
+                          : 'rgba(239,68,68,0.6)';
                       return (
                         <div
                           key={agg.chipId}
@@ -3543,44 +3389,15 @@ const SettingsScreen = () => {
                           <span
                             style={{
                               fontWeight: 700,
-                              fontSize: '0.95rem',
+                              fontSize: '1.05rem',
                               minWidth: '2.5rem',
                               textAlign: 'center',
-                              color: 'var(--text-muted)',
+                              color: 'var(--text)',
                             }}
-                            title={stackCount > 1 ? `${t('settings.photoTest.colAi')} (${stackCount}×)` : t('settings.photoTest.colAi')}
+                            title={stackCount > 1 ? `(${stackCount}×)` : undefined}
                           >
                             {agg.aiCount}
                           </span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            value={actual}
-                            onChange={e => {
-                              const raw = parseInt(e.target.value, 10);
-                              const next = Number.isFinite(raw) ? Math.max(0, raw) : 0;
-                              setPhotoTestActualCounts(prev => ({ ...prev, [agg.chipId]: next }));
-                              // Any edit invalidates the "saved" state
-                              // — so the button re-enables and the
-                              // user can save the corrected feedback.
-                              if (photoTestFeedbackSaved) setPhotoTestFeedbackSaved(false);
-                            }}
-                            style={{
-                              minWidth: '3.2rem',
-                              width: '3.2rem',
-                              textAlign: 'center',
-                              padding: '0.3rem 0.2rem',
-                              borderRadius: '6px',
-                              border: `1px solid ${diff === 0 ? 'var(--border)' : Math.abs(diff) <= 1 ? 'rgba(234,179,8,0.6)' : 'rgba(239,68,68,0.7)'}`,
-                              background: 'var(--background)',
-                              color: diff === 0 ? 'var(--text)' : Math.abs(diff) <= 1 ? '#eab308' : '#ef4444',
-                              fontWeight: 700,
-                              fontSize: '0.95rem',
-                              fontFamily: 'inherit',
-                            }}
-                            title={t('settings.photoTest.actualHint')}
-                          />
                           <span
                             style={{
                               fontSize: '0.7rem',
@@ -3596,9 +3413,6 @@ const SettingsScreen = () => {
                                 ? [
                                     stackCount > 1 ? `(${stackCount} stacks — showing first)` : null,
                                     `LLM: ${stack.provenance.llmCount ?? '—'}`,
-                                    `bottom-chip: ${stack.provenance.geometryBottomChip ?? '—'}`,
-                                    `gradient: ${stack.provenance.geometryGradientCount ?? '—'}`,
-                                    `shared-cal: ${stack.provenance.geometrySharedCal ?? '—'}`,
                                     `→ ${stack.provenance.finalCount} (${stack.provenance.finalConfidence}%)`,
                                     stack.provenance.reasoning,
                                   ].filter(Boolean).join(' · ')
@@ -3626,101 +3440,14 @@ const SettingsScreen = () => {
                     <span>{photoTestResult.totalValue.toLocaleString()}</span>
                   </div>
 
-                  {/* v5.54: Save Feedback button. POSTs the same
-                      ChipCountFeedback row the real-game flow sends,
-                      but with game_id / player_id / playerName all
-                      NULL since this is a standalone test. The
-                      `finalCounts` map carries whatever the user
-                      typed in the actual-count inputs (defaults to
-                      AI's proposal so "save without editing" is a
-                      valid "AI got everything right" signal).
-                      Honors the same opt-in photo upload toggle as
-                      the real-game flow. */}
-                  <button
-                    type="button"
-                    disabled={photoTestFeedbackSaving || photoTestFeedbackSaved}
-                    onClick={async () => {
-                      if (!photoTestResult || photoTestResult.error) return;
-                      setPhotoTestFeedbackSaving(true);
-                      const res = await submitChipCountFeedback({
-                        photoResult: photoTestResult,
-                        finalCounts: photoTestActualCounts,
-                        chipValues,
-                        // No game / player context for test-card feedback.
-                        gameId: null,
-                        playerId: null,
-                        playerName: null,
-                        photoBase64: photoTestPreview || undefined,
-                        photoMimeType: photoTestPreviewMime,
-                        shareChipPhotos: settings.shareChipPhotos === true,
-                      });
-                      setPhotoTestFeedbackSaving(false);
-                      if (res.ok) {
-                        setPhotoTestFeedbackSaved(true);
-                        // Reload the dashboard so the new sample
-                        // shows up immediately (no realtime on
-                        // chip_count_feedback — explicit poke).
-                        setChipFeedbackRefreshTick(t => t + 1);
-                      } else {
-                        // Non-blocking: log + temporary banner via
-                        // generic `setSaved`-style toast would be
-                        // overkill here. The disabled state wears
-                        // off implicitly the next time the user
-                        // edits an input or retakes the photo.
-                        console.warn('[photoTest] feedback submit failed:', res.error);
-                      }
-                    }}
-                    style={{
-                      marginTop: '0.6rem',
-                      width: '100%',
-                      background: photoTestFeedbackSaved
-                        ? 'rgba(16,185,129,0.18)'
-                        : photoTestFeedbackSaving
-                          ? 'rgba(99,102,241,0.18)'
-                          : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                      border: photoTestFeedbackSaved
-                        ? '1px solid rgba(16,185,129,0.5)'
-                        : '1px solid transparent',
-                      color: photoTestFeedbackSaved ? '#10b981' : 'white',
-                      padding: '0.55rem',
-                      borderRadius: '10px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: (photoTestFeedbackSaving || photoTestFeedbackSaved) ? 'default' : 'pointer',
-                      fontFamily: 'inherit',
-                      transition: 'background 0.15s ease, color 0.15s ease',
-                    }}
-                  >
-                    {photoTestFeedbackSaved
-                      ? t('settings.photoTest.feedbackSaved')
-                      : photoTestFeedbackSaving
-                        ? t('settings.photoTest.feedbackSaving')
-                        : t('settings.photoTest.saveFeedback')}
-                  </button>
-                  <p style={{
-                    margin: '0.35rem 0 0',
-                    fontSize: '0.7rem',
-                    color: 'var(--text-muted)',
-                    opacity: 0.85,
-                    lineHeight: 1.45,
-                    textAlign: 'center',
-                  }}>
-                    {t('settings.photoTest.feedbackHelper')}
-                  </p>
 
                   <button
                     type="button"
                     onClick={() => {
-                      // Reset everything tied to the previous photo
-                      // before re-opening the camera, so a fresh shot
-                      // doesn't inherit the prior ground-truth
-                      // overrides or the saved-confirmation state.
+                      // Reset prior photo before re-opening the camera.
                       setPhotoTestResult(null);
                       setPhotoTestPreview('');
                       setPhotoTestPreviewMime('image/jpeg');
-                      setPhotoTestActualCounts({});
-                      setPhotoTestFeedbackSaved(false);
-                      setPhotoTestFeedbackSaving(false);
                       setPhotoTestOpen(true);
                     }}
                     style={{
@@ -3759,447 +3486,14 @@ const SettingsScreen = () => {
         );
       })()}
 
-      {/* Chip-count accuracy dashboard (Phase 1 of the in-app
-          tuning loop, v5.55+). Visible to ALL admins (v5.58, owner
-          + non-owner admin co-testers) since RLS migration 071
-          opened SELECT to admins. The Tune / Revert buttons inside
-          the dashboard remain owner-only (DB RLS on
-          chip_count_tuning_overrides + UI gate). The counter
-          ("X/10 samples until tuning available") tells how many
-          more test photos are needed before the Tune button
-          unlocks. */}
-      {activeTab === 'ai' && (isOwner || role === 'admin' || isSuperAdmin) && (
-        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', gap: '0.5rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>
-              {t('settings.chipDashboard.title')}
-            </h2>
-            <button
-              type="button"
-              onClick={() => setChipFeedbackRefreshTick(t => t + 1)}
-              disabled={chipFeedbackLoading}
-              title={t('settings.chipDashboard.refresh')}
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                width: '1.8rem',
-                height: '1.8rem',
-                borderRadius: '50%',
-                fontSize: '0.85rem',
-                cursor: chipFeedbackLoading ? 'wait' : 'pointer',
-                fontFamily: 'inherit',
-                opacity: chipFeedbackLoading ? 0.5 : 1,
-              }}
-            >
-              ↻
-            </button>
-          </div>
-          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-            {t('settings.chipDashboard.helper')}
-          </p>
-
-          {/* v5.62 — auto-rollback banner removed alongside the tuning UI. */}
-
-          {chipFeedbackError && (
-            <div style={{
-              padding: '0.6rem 0.75rem',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              borderRadius: '8px',
-              fontSize: '0.78rem',
-              color: '#fca5a5',
-              marginBottom: '0.5rem',
-            }}>
-              {chipFeedbackError}
-            </div>
-          )}
-
-          {chipFeedbackLoading && !chipFeedbackStats && (
-            <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {t('common.loading')}
-            </div>
-          )}
-
-          {chipFeedbackStats && chipFeedbackStats.totalSamples === 0 && !chipFeedbackLoading && (
-            <div style={{
-              padding: '1.25rem 1rem',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: '0.85rem',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px dashed var(--border)',
-              borderRadius: '10px',
-              lineHeight: 1.5,
-            }}>
-              {t('settings.chipDashboard.empty')}
-            </div>
-          )}
-
-          {chipFeedbackStats && chipFeedbackStats.totalSamples > 0 && (() => {
-            // Local helpers scoped to the dashboard render so we
-            // don't pollute the SettingsScreen module surface.
-            const stats = chipFeedbackStats;
-            const verdict = trendVerdict(stats);
-            // Bar/dot color resolver — maps the free-form `color`
-            // string to a recognizable swatch. Falls back to a
-            // neutral gray for groups with custom colors.
-            const colorHex = (c: string): string => {
-              const k = (c || '').trim().toLowerCase();
-              if (k === 'white') return '#f3f4f6';
-              if (k === 'red')   return '#ef4444';
-              if (k === 'blue')  return '#3b82f6';
-              if (k === 'green') return '#10b981';
-              if (k === 'black') return '#1f2937';
-              if (k === 'yellow' || k === 'gold') return '#eab308';
-              return '#6b7280';
-            };
-            const formatSigned = (n: number): string =>
-              `${n > 0 ? '+' : ''}${n.toFixed(1)}`;
-
-            return (
-              <>
-                {/* KPI grid: 2x2 on phone, 4-up on wider screens. Every
-                    tile is a "label on top, value on bottom" stack so the
-                    typography reads cleanly in RTL Hebrew. */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
-                  gap: '0.5rem',
-                  marginBottom: '0.75rem',
-                }}>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    borderRadius: '8px',
-                    padding: '0.55rem 0.65rem',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {t('settings.chipDashboard.kpiSamples')}
-                    </div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', marginTop: '0.15rem' }}>
-                      {stats.totalSamples}
-                    </div>
-                  </div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    borderRadius: '8px',
-                    padding: '0.55rem 0.65rem',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {t('settings.chipDashboard.kpiPerfect')}
-                    </div>
-                    <div style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 800,
-                      marginTop: '0.15rem',
-                      color: stats.pctPerfectStacks >= 80 ? '#10b981'
-                        : stats.pctPerfectStacks >= 60 ? '#eab308'
-                        : '#ef4444',
-                    }}>
-                      {Math.round(stats.pctPerfectStacks)}%
-                    </div>
-                  </div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    borderRadius: '8px',
-                    padding: '0.55rem 0.65rem',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {t('settings.chipDashboard.kpiBias')}
-                    </div>
-                    <div style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 800,
-                      marginTop: '0.15rem',
-                      color: Math.abs(stats.avgSignedBias) < 0.5 ? '#10b981'
-                        : Math.abs(stats.avgSignedBias) < 1.5 ? '#eab308'
-                        : '#ef4444',
-                    }}>
-                      {formatSigned(stats.avgSignedBias)}
-                    </div>
-                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                      {/* Sign convention: per-stack `delta = realCount - aiCount`
-                          (see chipCountFeedback.ts), so a POSITIVE avgSignedBias
-                          means real had MORE chips than AI saw → AI undercounted.
-                          The label was inverted before v5.58.1 — kept the same
-                          numeric thresholds, only fixed the over/under direction. */}
-                      {stats.avgSignedBias > 0.3 ? t('settings.chipDashboard.biasUnder')
-                        : stats.avgSignedBias < -0.3 ? t('settings.chipDashboard.biasOver')
-                        : t('settings.chipDashboard.biasNone')}
-                    </div>
-                  </div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    borderRadius: '8px',
-                    padding: '0.55rem 0.65rem',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {t('settings.chipDashboard.kpiAvgError')}
-                    </div>
-                    <div style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 800,
-                      marginTop: '0.15rem',
-                      color: stats.avgAbsError < 1 ? '#10b981'
-                        : stats.avgAbsError < 3 ? '#eab308'
-                        : '#ef4444',
-                    }}>
-                      {stats.avgAbsError.toFixed(1)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Trend pill: only render once we have enough history
-                    to compare two consecutive RECENT_WINDOW slices. */}
-                {verdict && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.45rem 0.7rem',
-                    borderRadius: '8px',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    marginBottom: '0.75rem',
-                    background: verdict.direction === 'better' ? 'rgba(16,185,129,0.12)'
-                      : verdict.direction === 'worse' ? 'rgba(239,68,68,0.12)'
-                      : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${verdict.direction === 'better' ? 'rgba(16,185,129,0.35)'
-                      : verdict.direction === 'worse' ? 'rgba(239,68,68,0.35)'
-                      : 'var(--border)'}`,
-                    color: verdict.direction === 'better' ? '#10b981'
-                      : verdict.direction === 'worse' ? '#ef4444'
-                      : 'var(--text-muted)',
-                  }}>
-                    <span style={{ fontSize: '1rem' }}>
-                      {verdict.direction === 'better' ? '📈' : verdict.direction === 'worse' ? '📉' : '➡️'}
-                    </span>
-                    <span>
-                      {verdict.direction === 'better'
-                        ? t('settings.chipDashboard.trendBetter')
-                        : verdict.direction === 'worse'
-                          ? t('settings.chipDashboard.trendWorse')
-                          : t('settings.chipDashboard.trendFlat')}
-                      {' '}
-                      ({formatSigned(-verdict.deltaAbs)})
-                    </span>
-                  </div>
-                )}
-
-                {/* v5.59+ pipeline-aware diagnostics block. Hidden
-                    when no rows from the new pipeline have been
-                    captured yet — keeps the dashboard quiet for
-                    legacy-only data and lights up automatically as
-                    new feedback arrives. */}
-                {stats.pipelineSamples > 0 && (
-                  <div style={{
-                    marginBottom: '0.75rem',
-                    padding: '0.6rem 0.8rem',
-                    background: 'rgba(99,102,241,0.06)',
-                    border: '1px solid rgba(99,102,241,0.25)',
-                    borderRadius: '10px',
-                  }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.45rem' }}>
-                      {t('settings.chipDashboard.pipelineHealthTitle')}
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginInlineStart: '0.4rem', fontSize: '0.7rem' }}>
-                        ({stats.pipelineSamples} {t('settings.chipDashboard.pipelineSamplesSuffix')})
-                      </span>
-                    </div>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: '0.4rem 0.6rem',
-                      fontSize: '0.74rem',
-                    }}>
-                      {/* Verified-by-multiple-methods rate. Top-line
-                          KPI — when this stays consistently >70%
-                          we trust the pipeline; <40% means the
-                          methods routinely disagree and tuning
-                          should focus on whichever signal is
-                          carrying the wrong weight. */}
-                      {stats.pctVerifiedByMultipleMethods !== null && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>
-                            {t('settings.chipDashboard.verifiedByMultipleMethods')}
-                          </span>
-                          <span style={{
-                            fontWeight: 700,
-                            fontSize: '0.95rem',
-                            color: stats.pctVerifiedByMultipleMethods >= 0.7 ? '#10b981'
-                              : stats.pctVerifiedByMultipleMethods >= 0.4 ? '#eab308'
-                              : '#ef4444',
-                          }}>
-                            {Math.round(stats.pctVerifiedByMultipleMethods * 100)}%
-                          </span>
-                        </div>
-                      )}
-                      {/* Average agreement (LLM vs geometry). 0..1
-                          surfaced as a percentage. */}
-                      {stats.avgAgreementScore !== null && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>
-                            {t('settings.chipDashboard.avgAgreement')}
-                          </span>
-                          <span style={{
-                            fontWeight: 700,
-                            fontSize: '0.95rem',
-                            color: stats.avgAgreementScore >= 0.7 ? '#10b981'
-                              : stats.avgAgreementScore >= 0.4 ? '#eab308'
-                              : '#ef4444',
-                          }}>
-                            {Math.round(stats.avgAgreementScore * 100)}%
-                          </span>
-                        </div>
-                      )}
-                      {/* White-balance applied %. Low here while abs
-                          error stays high == white stripes invisible
-                          to the camera (fixable with photo protocol). */}
-                      {stats.pctWhiteBalanceApplied !== null && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>
-                            {t('settings.chipDashboard.wbApplied')}
-                          </span>
-                          <span style={{
-                            fontWeight: 700,
-                            fontSize: '0.95rem',
-                            color: stats.pctWhiteBalanceApplied >= 0.7 ? '#10b981'
-                              : stats.pctWhiteBalanceApplied >= 0.4 ? '#eab308'
-                              : '#ef4444',
-                          }}>
-                            {Math.round(stats.pctWhiteBalanceApplied * 100)}%
-                          </span>
-                        </div>
-                      )}
-                      {/* Total-value adjustment counter — shows how
-                          often the live-game safety net actually
-                          had to step in. High = AI counts are
-                          systematically off and the sanity check is
-                          masking it. */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          {t('settings.chipDashboard.totalValueAdjustments')}
-                        </span>
-                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
-                          {stats.totalValueAdjustmentsFired}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Detection-signal breakdown (which path the
-                        stack detector took on each photo). Strong
-                        skew toward `position-only` is a red flag —
-                        means the chip stripes weren't visible and
-                        we fell back to evenly-spaced placeholders. */}
-                    {Object.keys(stats.detectionSignalCounts).length > 0 && (
-                      <div style={{
-                        marginTop: '0.55rem',
-                        paddingTop: '0.5rem',
-                        borderTop: '1px solid rgba(99,102,241,0.20)',
-                        fontSize: '0.7rem',
-                        color: 'var(--text-muted)',
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.35rem 0.7rem',
-                      }}>
-                        <span style={{ fontWeight: 700 }}>
-                          {t('settings.chipDashboard.detectionSignalLabel')}:
-                        </span>
-                        {(['white-stripe', 'edge-density', 'position-only'] as const).map(sig => {
-                          const n = stats.detectionSignalCounts[sig] || 0;
-                          if (n === 0) return null;
-                          const isFallback = sig === 'position-only';
-                          return (
-                            <span key={sig} style={{ color: isFallback ? '#fca5a5' : 'var(--text)' }}>
-                              {t(`settings.chipDashboard.detectionSignal.${sig}` as const)}: {n}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Per-color absolute-error bar chart. Bars are colored
-                    by their chip color so the user can scan visually
-                    ("the red bar is the tallest = red is the worst"). */}
-                {stats.perColor.length > 0 && (
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.35rem' }}>
-                      {t('settings.chipDashboard.perColorTitle')}
-                    </div>
-                    <div style={{ width: '100%', height: 140, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '0.4rem 0.2rem' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={stats.perColor.map(c => ({
-                          color: translateChipColor(c.color, t),
-                          rawColor: c.color,
-                          avgAbsDelta: Number(c.avgAbsDelta.toFixed(2)),
-                          samples: c.samples,
-                        }))} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                          <XAxis dataKey="color" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
-                          <RechartsTooltip
-                            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.75rem' }}
-                            labelStyle={{ color: 'var(--text)' }}
-                            formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { samples?: number } }) => {
-                              const samples = item.payload?.samples ?? 0;
-                              const v = typeof value === 'number' ? value : 0;
-                              return [`${v} (${samples} ${t('settings.chipDashboard.tooltipSamples')})`, t('settings.chipDashboard.tooltipAvgError')];
-                            }}
-                          />
-                          <Bar dataKey="avgAbsDelta" radius={[4, 4, 0, 0]}>
-                            {stats.perColor.map((entry, idx) => (
-                              <Cell key={`cell-${idx}`} fill={colorHex(entry.color)} stroke={entry.color.toLowerCase() === 'white' ? '#9ca3af' : 'transparent'} strokeWidth={1} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
-                {/* Over-time trend line. X axis is sample index
-                    (chronological), Y is total absolute error per
-                    session. Lower is better; reference line at 0
-                    marks the goal. */}
-                {stats.trend.length >= 2 && (
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.35rem' }}>
-                      {t('settings.chipDashboard.trendTitle')}
-                    </div>
-                    <div style={{ width: '100%', height: 140, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '0.4rem 0.2rem' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={stats.trend} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                          <XAxis dataKey="idx" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
-                          <ReferenceLine y={0} stroke="rgba(16,185,129,0.4)" strokeDasharray="3 3" />
-                          <RechartsTooltip
-                            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.75rem' }}
-                            labelStyle={{ color: 'var(--text)' }}
-                            formatter={(value: number | undefined) => [typeof value === 'number' ? value : 0, t('settings.chipDashboard.tooltipAbsError')]}
-                            labelFormatter={(label: number) => `${t('settings.chipDashboard.tooltipSampleN')} ${label + 1}`}
-                          />
-                          <Line type="monotone" dataKey="absDelta" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
-                {/* v5.62 — tuning gate (progress bar + tune/revert buttons)
-                    removed alongside the per-stack pipeline. The dashboard
-                    above is now passive: shows accuracy/bias/error so you
-                    can spot patterns, but no auto-tune action. */}
-              </>
-            );
-          })()}
-        </div>
-      )}
+      {/* v5.62.2 — chip-count accuracy dashboard removed.
+          The card aggregated `chip_count_feedback` rows for the
+          retired tuning loop. Since v5.62.0 the tuner is gone and
+          the feedback rows have no consumer, so showing a "more
+          samples = better tuning" pitch was misleading. The table
+          + storage bucket remain in Supabase as harmless legacy;
+          if tuning ever returns, restore this card from
+          src/screens/SettingsScreen.tsx history (last v5.62.1). */}
 
       {/* Photo Test Modal — mounted at the SettingsScreen root so it
           works regardless of which tab is active (only the trigger
@@ -4211,25 +3505,6 @@ const SettingsScreen = () => {
           setPhotoTestResult(result);
           setPhotoTestPreview(previewBase64);
           setPhotoTestPreviewMime(previewMimeType);
-          // Default ground-truth counts to the AI's proposal so the
-          // user just edits the chips the AI got wrong (saving "this
-          // row was correct" is the no-op default action). v5.54.
-          if (!result.error) {
-            // v5.60.3: sum across same-chipId stacks so a multi-stack
-            // detection (e.g. two separate piles of white the user
-            // photographed together) seeds the actual-count input
-            // with the COMBINED count, not just the last stack's
-            // count. Matches the aggregated display below.
-            const initial: Record<string, number> = {};
-            for (const stack of result.stacks) {
-              initial[stack.chipId] = (initial[stack.chipId] ?? 0) + stack.count;
-            }
-            setPhotoTestActualCounts(initial);
-          } else {
-            setPhotoTestActualCounts({});
-          }
-          setPhotoTestFeedbackSaved(false);
-          setPhotoTestFeedbackSaving(false);
         }}
         chipValues={chipValues}
         title={t('settings.photoTest.title')}

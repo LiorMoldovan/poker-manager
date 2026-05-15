@@ -717,7 +717,7 @@ const he = {
   'home.trivia.tightestEver': 'המשחק הכי צמוד אי פעם: פער של {gap} בלבד בין מקום 1 ל-2 ({date})',
   'home.trivia.tightestEverTie': 'המשחק הכי צמוד אי פעם: תיקו במקום הראשון! ({date})',
   'home.trivia.biggestPotEver': 'הקופה הכי גדולה אי פעם: {amount} עברו ידיים בלילה אחד ({players} שחקנים, {date})',
-  'home.trivia.mostConsistent': 'השחקן הכי יציב בקבוצה: {name} עם הסטיה הנמוכה ביותר ברווחים ({avg} ממוצע למשחק ב-{games} משחקים)',
+  'home.trivia.mostConsistent': 'השחקן הכי יציב בקבוצה: {name} — רוב הערבים שלו במרחק ±{stdev} בלבד מהממוצע ({avg} ממוצע ב-{games} משחקים)',
   'home.trivia.bestAvgPerGame': 'הרווחי ביותר השנה: {name} בממוצע {avg} למשחק ({games} משחקים)',
   'home.trivia.bestAvgPerGameAllTime': 'הרווחי ביותר בכל הזמנים: {name} בממוצע {avg} למשחק ({games} משחקים)',
   'home.trivia.longestWinStreakEver': 'הרצף הכי ארוך בהיסטוריה: {name} עם {n} ניצחונות ברצף ({date})',
@@ -1161,11 +1161,9 @@ const he = {
   // Counts and confidence are AI estimates, not certainties; the user
   // is the final authority on what gets saved to the game.
   'chips.photo.banner.verifyHint': 'הערכת AI — בדקו לפני שמירה',
-  // v5.53 / migration 069: subtle hint that user edits to the AI's
-  // numbers feed the accuracy-feedback loop. Capture is silent in
-  // markPlayerDone — this line just makes the loop visible to the
-  // user so they understand their edits are useful.
-  'chips.photo.banner.feedbackHint': 'העריכה שלכם עוזרת לשפר את דיוק ה-AI',
+  // v5.62.2 — `chips.photo.banner.feedbackHint` removed alongside the
+  // feedback loop. The hint promised user edits would tune the AI;
+  // the tuning mechanism it referenced is gone.
   'chips.photo.banner.showOverlay': '👁 הצג סימוני זיהוי על התמונה',
   'chips.photo.banner.hideOverlay': '✕ הסתר את הסימונים',
   'chips.photo.banner.detectionSignal': 'אופן הזיהוי',
@@ -1478,6 +1476,7 @@ const he = {
   'stats.gainCol': 'רווח',
   'stats.lossCol': 'הפסד',
   'stats.sortProfit': '💰 רווח',
+  'stats.modeProfit': '💰 רווח+ממוצע',
   'stats.sortGames': '🎮 משחקים',
   'stats.sortWinRate': '📊 נצ%',
   'stats.gainLoss': '📊 רווח/הפסד',
@@ -1493,7 +1492,13 @@ const he = {
   'stats.rebuyTotal': 'סה"כ',
   'stats.rebuyMax': 'מקס',
   'stats.podiumRates': '🏆 שיעור מקומות בפודיום',
-  'stats.podiumRatesNote': 'כולל רק שחקנים שהשתתפו ב-30%+ מהמשחקים בתקופה',
+  'stats.podiumRatesNote': '% מהמשחקים בהם הגיע השחקן למקום זה · בסוגריים = מספר הפעמים בפועל',
+  'stats.podiumSort.total': '🏆 סה״כ פודיום',
+  'stats.podiumSort.first': '🥇 מקום ראשון',
+  'stats.podiumSort.second': '🥈 מקום שני',
+  'stats.podiumSort.third': '🥉 מקום שלישי',
+  'stats.podiumSort.games': '🎮 משחקים',
+  'stats.podiumTotalCol': '🏆 סה״כ',
   'stats.playerStats': '👤 סטטיסטיקת שחקנים',
   'stats.aiStories': '🤖 סיפורי AI',
   'stats.chronicle': 'הכרוניקה',
@@ -2136,86 +2141,24 @@ const he = {
   'settings.photoTest.tryAgain': 'בדיקה נוספת',
   'settings.photoTest.disabledNoKey': 'בקבוצה הזו עדיין אין מפתח Gemini — הזינו מפתח בכרטיס "מפתחות API" שלמעלה כדי להפעיל את הבדיקה.',
   'settings.photoTest.disabledNoChips': 'נדרש להגדיר ז\'יטונים לקבוצה — היכנס ללשונית "ז\'יטונים" והוסף ערכים כדי להפעיל את הבדיקה.',
-  // v5.54: in-test ground-truth feedback. Each row gets an editable
-  // "actual count" input next to the AI's proposal so the user can
-  // submit a chip_count_feedback row without committing to a real game.
-  'settings.photoTest.colAi': 'AI',
-  'settings.photoTest.colActual': 'אמיתי',
-  'settings.photoTest.actualHint': 'תקנו את הספירה אם ה-AI טעה',
-  'settings.photoTest.saveFeedback': '💾 שלחו פידבק לשיפור הדיוק',
-  'settings.photoTest.feedbackSaving': 'שומר...',
-  'settings.photoTest.feedbackSaved': '✓ הפידבק נשמר — תודה!',
-  'settings.photoTest.feedbackHelper': 'הזינו את הספירה האמיתית בעמודה "אמיתי" ושלחו — זה עוזר לנו לשפר את האלגוריתם.',
-  // v5.55: chip-count accuracy dashboard (Phase 1 of the in-app
-  // tuning loop). Owner-only, Services tab. Lives below the photo
-  // test card and shows the accumulated feedback stats.
-  'settings.chipDashboard.title': '🎯 דיוק ספירת הז\'יטונים — סטטיסטיקה',
-  'settings.chipDashboard.helper': 'כל פידבק ששלחתם מצטבר כאן. ככל שיש יותר דגימות, כך אנחנו יכולים לכוונן את ה-AI טוב יותר.',
-  'settings.chipDashboard.refresh': 'רענן נתונים',
-  'settings.chipDashboard.empty': 'עדיין אין נתונים. צלמו תמונת בדיקה למעלה ושלחו פידבק כדי להתחיל לבנות סטטיסטיקה.',
-  'settings.chipDashboard.kpiSamples': 'דגימות',
-  'settings.chipDashboard.kpiPerfect': 'ערימות מדויקות',
-  'settings.chipDashboard.kpiBias': 'הטיה ממוצעת',
-  'settings.chipDashboard.kpiAvgError': 'טעות ממוצעת',
-  'settings.chipDashboard.biasUnder': 'AI סופר פחות מדי',
-  'settings.chipDashboard.biasOver': 'AI סופר יותר מדי',
-  'settings.chipDashboard.biasNone': 'ללא הטיה',
-  'settings.chipDashboard.trendBetter': 'משתפר',
-  'settings.chipDashboard.trendWorse': 'מורע',
-  'settings.chipDashboard.trendFlat': 'ללא שינוי משמעותי',
-  'settings.chipDashboard.perColorTitle': 'טעות ממוצעת לפי צבע',
-  'settings.chipDashboard.pipelineHealthTitle': '🛠️ בריאות הפייפליין החדש',
-  'settings.chipDashboard.pipelineSamplesSuffix': 'תמונות חדשות',
-  'settings.chipDashboard.verifiedByMultipleMethods': 'אומת ע"י 2+ שיטות',
-  'settings.chipDashboard.avgAgreement': 'הסכמה ממוצעת בין שיטות',
-  'settings.chipDashboard.wbApplied': 'איזון לבן הוחל',
-  'settings.chipDashboard.totalValueAdjustments': 'תיקוני סכום צפוי',
-  'settings.chipDashboard.detectionSignalLabel': 'איתור ערימות',
-  'settings.chipDashboard.detectionSignal.white-stripe': 'פסים לבנים',
-  'settings.chipDashboard.detectionSignal.edge-density': 'קצוות',
-  'settings.chipDashboard.detectionSignal.position-only': 'מיקום בלבד (חלש)',
-  'settings.chipDashboard.trendTitle': 'מגמה לאורך זמן (טעות מוחלטת)',
-  'settings.chipDashboard.tooltipSamples': 'דגימות',
-  'settings.chipDashboard.tooltipAvgError': 'טעות ממוצעת',
-  'settings.chipDashboard.tooltipAbsError': 'טעות מוחלטת',
-  'settings.chipDashboard.tooltipSampleN': 'דגימה',
-  'settings.chipDashboard.tuneCounter': 'דגימות עד הכיוונון הבא',
-  'settings.chipDashboard.tuneLocked': 'נדרשות עוד דגימות',
-  'settings.chipDashboard.tuneRemaining': 'דגימות',
-  // v5.56: Phase 2 — tune button is now live. The "Phase 2" placeholder
-  // strings stay in the translations bundle for back-compat (older
-  // bundles in flight) but the active dashboard uses the new keys below.
-  'settings.chipDashboard.tuneReadyPhase2': '🔧 כוונן את ה-AI',
-  'settings.chipDashboard.tuneDisabledTitle': 'נדרשות עוד דגימות לפני כיוונון',
-  'settings.chipDashboard.tunePhase2Note': 'הכיוונון משתמש בדגימות שלכם כדי לעדכן את הוראות הספירה של ה-AI.',
-  'settings.chipDashboard.tuneNow': '🔧 כוונן את ה-AI עכשיו',
-  'settings.chipDashboard.tuningInFlight': 'מכוונן...',
-  'settings.chipDashboard.tuneNowTitle': 'הריצו את ה-AI על הסטטיסטיקה כדי לעדכן את הוראות הספירה',
-  'settings.chipDashboard.tuneLockedTitle': 'נדרשות לפחות 10 דגימות מאז הכיוונון האחרון',
-  'settings.chipDashboard.tuneSuccess': 'הכיוונון הוחל',
-  'settings.chipDashboard.tuneError': 'הכיוונון נכשל',
-  'settings.chipDashboard.revertToDefault': 'חזרה להוראות ברירת המחדל',
-  'settings.chipDashboard.reverting': 'משחזר...',
-  'settings.chipDashboard.revertSuccess': 'חזרה לברירת המחדל הושלמה',
-  'settings.chipDashboard.tuneHowItWorks': 'הכיוונון לא משנה את הקוד או דורש פריסה מחדש — הוא רק מחליף את הוראות הספירה ששולחים ל-AI. אם משהו השתבש, אפשר לחזור לברירת המחדל בכפתור למעלה.',
-  // v5.58: shown to non-owner admins (co-testers) instead of the
-  // tune button — they can take photos and submit feedback but only
-  // the group owner can trigger a tuning round.
-  'settings.chipDashboard.tuneOwnerOnly': '👤 רק בעל הקבוצה יכול להפעיל כיוונון או לחזור להוראות ברירת המחדל. הצילומים והמשוב שלכם נשמרים בכל מקרה ועוזרים לשפר את הדיוק.',
-  // v5.57: auto-rollback safety net banner.
-  'settings.chipDashboard.autoRollbackTitle': 'הכיוונון האחרון הורע את הדיוק — חזרנו אוטומטית לברירת המחדל',
-  'settings.chipDashboard.autoRollbackDetail': 'הטעות הממוצעת אחרי הכיוונון הייתה {post} ז\'יטונים, לעומת {baseline} לפני (אחרי {n} דגימות חדשות). כדי לנסות כיוונון אחר, צברו עוד 10 דגימות ולחצו "כוונן את ה-AI" שוב.',
-  'settings.chipDashboard.autoRollbackDismiss': 'סגור',
-
-  // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
-  // The numeric per-stack feedback is captured silently regardless;
-  // this toggle ONLY controls whether the photo we sent to the AI is
-  // also uploaded to private storage so the developer can replay
-  // specific failure cases.
-  'settings.chipFeedback.title': '🎯 שיפור דיוק ספירת הז\'יטונים',
-  'settings.chipFeedback.helper': 'בכל פעם שאתם מסיימים שחקן אחרי ספירה אוטומטית מתמונה, אנחנו שומרים את ההפרש בין הספירה של ה-AI לספירה הסופית שלכם — זה עוזר לשפר את הדיוק עם הזמן.',
-  'settings.chipFeedback.toggleLabel': 'שלחו גם את התמונה (לא חובה — עוזר לאתר טעויות ספציפיות)',
-  'settings.chipFeedback.privacyNote': 'כשהאופציה כבויה (ברירת מחדל), נשמרים רק נתונים מספריים. כשהיא דלוקה, התמונה ששלחנו ל-AI נשמרת בארכיון פרטי שרק בעל הקבוצה ומנהל-העל יכולים לראות.',
+  // v5.62.2 — chip-count feedback loop fully retired. The following
+  // key blocks were removed in this version because nothing renders
+  // them any more:
+  //   * `settings.photoTest.colAi/colActual/actualHint/saveFeedback/
+  //     feedbackSaving/feedbackSaved/feedbackHelper` (ground-truth
+  //     submission inputs on the test card)
+  //   * `settings.chipDashboard.*` (the entire dashboard card,
+  //     including tuning gate + auto-rollback banner — both already
+  //     dormant since v5.62.0)
+  //   * `settings.chipFeedback.*` (the v5.59 photo opt-in card the
+  //     UI dropped earlier — keys lingered as dead translations)
+  //   * `chips.photo.banner.feedbackHint` (the misleading "your edits
+  //     help improve AI accuracy" hint under the live-game photo
+  //     banner)
+  // The Supabase `chip_count_feedback` table + `chip-count-feedback-
+  // photos` storage bucket stay in place as harmless legacy. If a
+  // future iteration brings the feedback loop back, recreate the
+  // strings fresh — don't resurrect the v5.59-era wording.
 
   // Settings > Backup
   'settings.backup.title': '📦 גיבוי ושחזור',
@@ -3294,7 +3237,7 @@ const en: Record<keyof typeof he, string> = {
   'home.trivia.tightestEver': 'Tightest game ever: only {gap} between 1st and 2nd ({date})',
   'home.trivia.tightestEverTie': 'Tightest game ever: a tie for 1st place! ({date})',
   'home.trivia.biggestPotEver': 'Biggest pot ever: {amount} changed hands in a single night ({players} players, {date})',
-  'home.trivia.mostConsistent': 'Steadiest player in the group: {name} with the lowest profit variance ({avg}/game across {games} games)',
+  'home.trivia.mostConsistent': 'Steadiest player in the group: {name} — most nights land within ±{stdev} of his average ({avg} avg over {games} games)',
   'home.trivia.bestAvgPerGame': 'Most profitable this year: {name} averages {avg} per game ({games} games)',
   'home.trivia.bestAvgPerGameAllTime': 'Most profitable all-time: {name} averages {avg} per game ({games} games)',
   'home.trivia.longestWinStreakEver': 'Longest win streak ever: {name} with {n} wins in a row ({date})',
@@ -3730,7 +3673,6 @@ const en: Record<keyof typeof he, string> = {
   'chips.photo.banner.clearAI': '↻ Clear AI suggestions',
   'chips.photo.banner.clearAITooltip': 'Wipes the AI-proposed counts so you can finish manually. Values you already edited by hand stay untouched.',
   'chips.photo.banner.verifyHint': 'AI estimate — verify before saving',
-  'chips.photo.banner.feedbackHint': 'Your edits help improve AI accuracy',
   'chips.photo.banner.showOverlay': '👁 Show detection overlay on photo',
   'chips.photo.banner.hideOverlay': '✕ Hide overlay',
   'chips.photo.banner.detectionSignal': 'Detection method',
@@ -4035,6 +3977,7 @@ const en: Record<keyof typeof he, string> = {
   'stats.gainCol': 'Gain',
   'stats.lossCol': 'Loss',
   'stats.sortProfit': '💰 Profit',
+  'stats.modeProfit': '💰 Profit+Avg',
   'stats.sortGames': '🎮 Games',
   'stats.sortWinRate': '📊 W%',
   'stats.gainLoss': '📊 Gain/Loss',
@@ -4050,7 +3993,13 @@ const en: Record<keyof typeof he, string> = {
   'stats.rebuyTotal': 'Total',
   'stats.rebuyMax': 'Max',
   'stats.podiumRates': '🏆 Podium Rate',
-  'stats.podiumRatesNote': 'Only players in 30%+ of period games',
+  'stats.podiumRatesNote': '% of the player\u2019s games where they reached this place \u00b7 in parens = actual number of times',
+  'stats.podiumSort.total': '\ud83c\udfc6 Total podium',
+  'stats.podiumSort.first': '\ud83e\udd47 1st place',
+  'stats.podiumSort.second': '\ud83e\udd48 2nd place',
+  'stats.podiumSort.third': '\ud83e\udd49 3rd place',
+  'stats.podiumSort.games': '\ud83c\udfae Games played',
+  'stats.podiumTotalCol': '🏆 Total',
   'stats.playerStats': '👤 Player Stats',
   'stats.aiStories': '🤖 AI Stories',
   'stats.chronicle': 'The Chronicle',
@@ -4602,68 +4551,8 @@ const en: Record<keyof typeof he, string> = {
   'settings.photoTest.tryAgain': 'Test again',
   'settings.photoTest.disabledNoKey': 'This group has no active Gemini key — set a key in the "API Keys" card above to enable the test.',
   'settings.photoTest.disabledNoChips': 'Chip values must be configured for this group — open the "Chips" tab and add values to enable the test.',
-  'settings.photoTest.colAi': 'AI',
-  'settings.photoTest.colActual': 'Actual',
-  'settings.photoTest.actualHint': 'Fix the count if the AI got it wrong',
-  'settings.photoTest.saveFeedback': '💾 Send accuracy feedback',
-  'settings.photoTest.feedbackSaving': 'Saving...',
-  'settings.photoTest.feedbackSaved': '✓ Feedback saved — thanks!',
-  'settings.photoTest.feedbackHelper': 'Type the real count in the "Actual" column and submit — it helps us tune the algorithm.',
-  'settings.chipDashboard.title': '🎯 Chip Counting Accuracy — Stats',
-  'settings.chipDashboard.helper': 'Every feedback you submit accumulates here. The more samples we have, the better we can tune the AI.',
-  'settings.chipDashboard.refresh': 'Refresh data',
-  'settings.chipDashboard.empty': 'No data yet. Take a test photo above and submit feedback to start building stats.',
-  'settings.chipDashboard.kpiSamples': 'Samples',
-  'settings.chipDashboard.kpiPerfect': 'Perfect stacks',
-  'settings.chipDashboard.kpiBias': 'Avg bias',
-  'settings.chipDashboard.kpiAvgError': 'Avg error',
-  'settings.chipDashboard.biasUnder': 'AI undercounts',
-  'settings.chipDashboard.biasOver': 'AI overcounts',
-  'settings.chipDashboard.biasNone': 'No bias',
-  'settings.chipDashboard.trendBetter': 'Improving',
-  'settings.chipDashboard.trendWorse': 'Getting worse',
-  'settings.chipDashboard.trendFlat': 'No significant change',
-  'settings.chipDashboard.perColorTitle': 'Avg error by color',
-  'settings.chipDashboard.pipelineHealthTitle': '🛠️ New pipeline health',
-  'settings.chipDashboard.pipelineSamplesSuffix': 'new-pipeline photos',
-  'settings.chipDashboard.verifiedByMultipleMethods': 'Verified by 2+ methods',
-  'settings.chipDashboard.avgAgreement': 'Avg cross-method agreement',
-  'settings.chipDashboard.wbApplied': 'White-balance applied',
-  'settings.chipDashboard.totalValueAdjustments': 'Total-value adjustments',
-  'settings.chipDashboard.detectionSignalLabel': 'Stack detection',
-  'settings.chipDashboard.detectionSignal.white-stripe': 'White stripes',
-  'settings.chipDashboard.detectionSignal.edge-density': 'Edges',
-  'settings.chipDashboard.detectionSignal.position-only': 'Position-only (weak)',
-  'settings.chipDashboard.trendTitle': 'Trend over time (absolute error)',
-  'settings.chipDashboard.tooltipSamples': 'samples',
-  'settings.chipDashboard.tooltipAvgError': 'Avg error',
-  'settings.chipDashboard.tooltipAbsError': 'Abs error',
-  'settings.chipDashboard.tooltipSampleN': 'Sample',
-  'settings.chipDashboard.tuneCounter': 'Samples until next tuning',
-  'settings.chipDashboard.tuneLocked': 'Need more samples',
-  'settings.chipDashboard.tuneRemaining': 'remaining',
-  'settings.chipDashboard.tuneReadyPhase2': '🔧 Tune the AI',
-  'settings.chipDashboard.tuneDisabledTitle': 'More samples needed before tuning',
-  'settings.chipDashboard.tunePhase2Note': 'Tuning uses your samples to update the counting instructions sent to the AI.',
-  'settings.chipDashboard.tuneNow': '🔧 Tune the AI now',
-  'settings.chipDashboard.tuningInFlight': 'Tuning...',
-  'settings.chipDashboard.tuneNowTitle': 'Run the AI on the stats to update counting instructions',
-  'settings.chipDashboard.tuneLockedTitle': 'At least 10 samples needed since the last tuning',
-  'settings.chipDashboard.tuneSuccess': 'Tuning applied',
-  'settings.chipDashboard.tuneError': 'Tuning failed',
-  'settings.chipDashboard.revertToDefault': 'Revert to default counting instructions',
-  'settings.chipDashboard.reverting': 'Reverting...',
-  'settings.chipDashboard.revertSuccess': 'Reverted to default',
-  'settings.chipDashboard.tuneHowItWorks': 'Tuning does not change code or require redeploy — it only swaps the counting instructions sent to the AI. If something goes wrong, use the revert button above.',
-  'settings.chipDashboard.tuneOwnerOnly': '👤 Only the group owner can run a tuning round or revert to default. Your photos and feedback are still saved and help improve accuracy either way.',
-  'settings.chipDashboard.autoRollbackTitle': 'Last tuning made accuracy worse — auto-reverted to default',
-  'settings.chipDashboard.autoRollbackDetail': 'Average error after tuning was {post} chips vs {baseline} before (after {n} new samples). To try a different tuning, accumulate 10 more samples and click "Tune the AI" again.',
-  'settings.chipDashboard.autoRollbackDismiss': 'Dismiss',
-  // Chip-count feedback opt-in (Services tab, owner only) — migration 069.
-  'settings.chipFeedback.title': '🎯 Improve chip-counting accuracy',
-  'settings.chipFeedback.helper': 'Every time you finalize a player after an AI photo count, we save the diff between what the AI suggested and what you actually saved — this helps tune accuracy over time.',
-  'settings.chipFeedback.toggleLabel': 'Also send the photo (optional — helps debug specific failures)',
-  'settings.chipFeedback.privacyNote': 'When off (default), only numeric data is saved. When on, the photo we sent to the AI is stored in a private archive only the group owner and super admin can see.',
+  // v5.62.2 — chip-count feedback loop fully retired. See the matching
+  // note in the Hebrew block above for details on what was removed.
   'settings.players.permanentDesc': 'Main roster — permanent group members',
   'settings.players.guestDesc': 'Regular guest who comes often',
   'settings.players.occasionalDesc': 'Occasional player who joins sometimes',

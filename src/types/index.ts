@@ -278,6 +278,13 @@ export interface GamePlayer {
   chipCounts: Record<string, number>;
   finalValue: number;
   profit: number;
+  // Migration 080 — quick-total chip entry mode.
+  // 'color' (default) reads chipCounts the way it always did.
+  // 'total' reads totalChipCount and ignores chipCounts (which stays {}).
+  // Stored on game_players so reload / mid-entry refresh / reopen-after-
+  // completion all render the right modal without local state guessing.
+  entryMode: 'color' | 'total';
+  totalChipCount?: number | null;
 }
 
 export interface ChipValue {
@@ -495,112 +502,25 @@ export interface Settings {
   // unless this is on. Migration 069. Owner-only toggle in Settings
   // → Services tab.
   shareChipPhotos?: boolean;
+  // Migration 080 — group default for which chip-entry mode opens
+  // with a single tap on the BIG (player name) zone of each player
+  // tile. The OTHER mode is always one labeled tap away on the same
+  // tile, so both modes mix freely inside the same game. 'color' =
+  // today's per-color counting (default for all existing groups);
+  // 'total' = quick single-input mode (new groups that don't count
+  // by color flip this to 'total' once and never touch it again).
+  chipEntryDefaultMode?: 'color' | 'total';
 }
 
-// One stack-level entry inside `ChipCountFeedback.stacks` — captures
-// the full diff between what the AI proposed and what the user
-// actually saved for one chip color in one save event. Used by
-// `submitChipCountFeedback` to build the JSONB payload, and by any
-// downstream mining queries reading those rows back.
-export interface ChipCountFeedbackStack {
-  chipId: string;          // ChipValue.id
-  color: string;           // canonical color name (display)
-  position: number;        // 1-indexed left→right (canonical sort order)
-  value: number;           // chip denomination
-  aiCount: number;         // what the AI proposed
-  realCount: number;       // what the user actually saved
-  delta: number;           // realCount - aiCount (positive = AI undercounted)
-  wasCorrect: boolean;
-  // ── Optional v5.48–v5.58 (legacy) AI-side diagnostics ──
-  //    Copied verbatim from the PhotoChipCountStack when present.
-  //    The v5.59 pipeline doesn't populate these; new rows leave
-  //    them undefined while still writing the v5.59+ block below.
-  aiConfidence?: number;
-  aiColorMatch?: boolean;
-  aiNeedsRecount?: boolean;
-  aiTopColorHex?: string;
-  aiRawCounts?: number[];
-  // ── v5.59+ per-stack provenance ──
-  //    Lets us reconstruct, after the fact, exactly how the AI
-  //    arrived at its `aiCount` for this stack — which signal
-  //    (LLM, geometry method, or total-value reconciliation)
-  //    was the load-bearing one. When mining feedback to tune
-  //    the pipeline, we can group by which signal dominated and
-  //    see whether errors cluster on one method.
-  aiAgreementScore?: number;             // 0..1 cross-method agreement
-  aiNeedsVerify?: boolean;               // suggested manual recount
-  aiGeometricCount?: number | null;
-  aiGeometricMethod?:
-    | 'bottom-chip'
-    | 'gradient-count'
-    | 'shared-cal'
-    | 'failed'
-    | 'empty-stack-detected';
-  aiDetectedDominantHex?: string;        // post-WB stack body color
-  aiRegion?: { x: number; y: number; width: number; height: number };
-  aiProvenance?: {
-    llmCount: number | null;
-    geometryBottomChip: number | null;
-    geometryGradientCount: number | null;
-    geometrySharedCal: number | null;
-    totalValueAdjustedFrom?: number | null;
-    finalCount: number;
-    finalConfidence: number;
-    reasoning: string;
-  };
-}
-
-/** v5.59+ per-photo (NOT per-stack) diagnostic block stored in the
- *  `chip_count_feedback.pipeline_meta` JSONB column (migration 075).
- *  All fields are optional so future pipeline iterations can add
- *  signals without another DDL change. The dashboard's new
- *  pipeline-aware KPIs read these — rows where the field is
- *  undefined fall back to "unknown" and don't pollute the metrics. */
-export interface ChipCountFeedbackPipelineMeta {
-  whiteBalanceApplied?: boolean;
-  detectionSignal?: 'white-stripe' | 'edge-density' | 'position-only';
-  totalValueCheckResult?: {
-    expected: number;
-    computed: number;
-    adjustedStackId: string | null;
-    adjustmentChips: number;
-  } | null;
-}
-
-// Row inserted into `chip_count_feedback` (migration 069). One row
-// per AI-photo-driven save event (per player per game), capturing
-// everything needed for offline accuracy mining: model+shots that
-// produced the estimate, computed overall confidence, expected
-// total chip value, and per-stack ai-vs-real diffs in JSONB.
-//
-// `photoPath` is set only when `photoConsented === true` AND the
-// upload succeeded. We always insert the numeric row even if the
-// photo upload fails, so partial feedback isn't lost.
-export interface ChipCountFeedback {
-  id?: string;             // generated server-side
-  groupId: string;
-  userId?: string | null;
-  gameId?: string | null;
-  playerId?: string | null;
-  playerName?: string;
-  createdAt?: string;
-  modelUsed: string;
-  overallConfidence: number;
-  shotsUsed: number;
-  expectedTotalValue?: number;
-  rebuys?: number;
-  chipsPerRebuy?: number;
-  stacks: ChipCountFeedbackStack[];
-  totalStacks: number;
-  correctStacks: number;
-  totalChipDelta: number;   // signed
-  totalAbsDelta: number;    // unsigned
-  photoPath?: string | null;
-  photoConsented: boolean;
-  /** v5.59+ per-photo pipeline diagnostics (migration 075).
-   *  Nullable for legacy rows. */
-  pipelineMeta?: ChipCountFeedbackPipelineMeta | null;
-}
+// v5.62.2 — chip-count feedback types removed alongside the loop.
+// `ChipCountFeedbackStack`, `ChipCountFeedbackPipelineMeta`, and
+// `ChipCountFeedback` lived here to type the rows we wrote to
+// `chip_count_feedback`. The Supabase table + storage bucket
+// remain as harmless legacy; if a future pipeline brings the
+// feedback loop back, recreate these types fresh from whatever
+// shape that iteration actually needs (don't resurrect the
+// v5.59-era per-stack diagnostics — they describe a pipeline
+// that no longer exists).
 
 export interface Settlement {
   from: string;

@@ -18,7 +18,6 @@ import { calculateChipTotal, calculateProfitLoss, cleanNumber, formatCurrency } 
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
-import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
@@ -491,36 +490,14 @@ const ChipEntryScreen = () => {
 
   // Mark player as done and return to player selection.
   //
-  // Side effect: if this player had an AI photo count, capture
-  // feedback (per-stack ai vs real diff) so the developer can
-  // mine the data later and tune the pipeline. Silent — never
-  // blocks or surfaces errors to the user. Photo upload to
-  // private storage is opt-in via Settings → Services →
-  // "Help improve AI accuracy" toggle (owner only).
+  // The chip-count feedback loop was removed in v5.62.2 — feedback
+  // rows were never consumed (the tuning mechanism that read them
+  // was retired with the v5.62.0 architecture rewrite). The
+  // `chip_count_feedback` table and storage bucket remain in
+  // Supabase as harmless legacy; if we ever bring tuning back,
+  // re-add the silent submit call here.
   const markPlayerDone = (playerId: string) => {
-    const photoResult = photoResults[playerId];
-    if (photoResult && !photoResult.error) {
-      const player = players.find(p => p.id === playerId);
-      const photoImage = photoImagesForFeedback[playerId];
-      const settings = getSettings();
-      void submitChipCountFeedback({
-        photoResult,
-        finalCounts: chipCounts[playerId] || {},
-        chipValues,
-        gameId: gameId ?? null,
-        playerId,
-        playerName: player?.playerName,
-        expectedTotalValue: player ? player.rebuys * chipsPerRebuy : undefined,
-        rebuys: player?.rebuys,
-        chipsPerRebuy,
-        photoBase64: photoImage?.base64,
-        photoMimeType: photoImage?.mimeType,
-        shareChipPhotos: settings?.shareChipPhotos === true,
-      });
-    }
-
     setCompletedPlayers(prev => new Set([...prev, playerId]));
-    // Close numpad and deselect player - user chooses next
     setNumpadOpen(false);
     setSelectedPlayerId(null);
   };
@@ -1126,21 +1103,9 @@ const ChipEntryScreen = () => {
                   </span></>
                 )}
               </div>
-              {/* v5.53: tells the user that editing the AI's numbers
-                  contributes to the feedback loop. Subtle on purpose
-                  — we don't want the user to feel they're filling out
-                  a survey. The actual capture is silent in
-                  markPlayerDone (sends per-stack ai vs real diff to
-                  chip_count_feedback). Migration 069. */}
-              <div style={{
-                marginTop: '0.25rem',
-                fontSize: '0.68rem',
-                color: 'var(--text-muted)',
-                opacity: 0.7,
-                fontStyle: 'italic',
-              }}>
-                {t('chips.photo.banner.feedbackHint')}
-              </div>
+              {/* v5.62.2 — feedback-hint line removed (chip-count
+                  feedback loop was retired alongside the tuning
+                  mechanism it used to feed). */}
               {/* v5.59 — collapsible detection overlay. Only available
                   when we still have the photo in memory for this
                   player AND the result has at least one stack with
