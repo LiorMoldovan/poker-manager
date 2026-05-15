@@ -1669,7 +1669,6 @@ const he = {
   // ── Settings ──
   'settings.title': 'הגדרות',
   'settings.saved': '✓ הגדרות נשמרו',
-  'settings.observerReadonly': 'מצב צפייה כסופר אדמין — שינויים לא יישמרו לקבוצה זו',
   'observer.banner': '👁 מצב צפייה — אתה צופה ב-{group} כסופר אדמין. כל השינויים, ה-AI, ההתראות והאימיילים מנוטרלים כדי למנוע פגיעה בנתוני הקבוצה.',
   'observer.bannerShort': '👁 מצב צפייה (קריאה בלבד)',
   'observer.actionBlocked': 'הפעולה חסומה במצב צפייה',
@@ -4185,7 +4184,6 @@ const en: Record<keyof typeof he, string> = {
   // ── Settings ──
   'settings.title': 'Settings',
   'settings.saved': '✓ Settings saved',
-  'settings.observerReadonly': 'Super admin observer mode — changes will not save to this group',
   'observer.banner': '👁 Observer mode — you are viewing {group} as a super admin. All edits, AI, notifications and emails are disabled to protect this group\'s data.',
   'observer.bannerShort': '👁 Observer mode (read-only)',
   'observer.actionBlocked': 'Action blocked in observer mode',

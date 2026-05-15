@@ -1003,32 +1003,13 @@ const SettingsScreen = () => {
         </button>
       </div>
 
-      {/* Observer-mode banner. Surfaces the read-only constraint
-          that's otherwise only signalled by greyed-out inputs.
-          Without this the super admin could touch fields, see no
-          ✓-saved confirmation (because the cache write guard in
-          supabaseCache bails out for SETTINGS in observer mode),
-          and reasonably wonder if the app is broken. The banner
-          turns "nothing is saving" from a bug into a deliberate UX
-          choice they can read. See migration 082 header for the
-          underlying data-safety story. */}
-      {isObserver && (
-        <div style={{
-          background: 'rgba(234, 179, 8, 0.12)',
-          border: '1px solid rgba(234, 179, 8, 0.35)',
-          borderRadius: '8px',
-          padding: '0.6rem 0.85rem',
-          marginBottom: '0.75rem',
-          fontSize: '0.8rem',
-          color: '#EAB308',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-        }}>
-          <span aria-hidden="true">👁</span>
-          <span>{t('settings.observerReadonly')}</span>
-        </div>
-      )}
+      {/* Observer-mode banner removed in v6.2.1: the global
+          app-level banner in App.tsx (rendered above
+          GroupSwitcher) already explains read-only state on
+          every screen, so the per-Settings banner here was a
+          duplicate. The cache + AI-proxy + UI gates from v6.2.0
+          continue to enforce the actual read-only behaviour;
+          the global banner is the user-facing explanation. */}
 
       {/* Poker Training - Super Admin Only (hidden banner, navigable via Training tab) */}
       {isSuperAdmin && false && (
