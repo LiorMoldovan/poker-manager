@@ -4248,7 +4248,13 @@ Replace the example numbers above with your real counts. The "color" values MUST
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.0,
-      maxOutputTokens: 512,
+      // v5.62.5 — bumped from 512 to 2048. Two reasons:
+      //   1. Defense in depth: even if thinking somehow stays partially
+      //      enabled (different model, future regression, schema
+      //      mismatch), the actual JSON output still has room.
+      //   2. With selfies + 6 colors the JSON body is ~250 chars
+      //      (~80 tokens). 2048 is overkill for output but cheap.
+      maxOutputTokens: 2048,
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'OBJECT',
@@ -4266,6 +4272,21 @@ Replace the example numbers above with your real counts. The "color" values MUST
           },
         },
         required: ['counts'],
+      },
+      // v5.62.5 — disable thinking. Without this, Gemini 2.5 Flash
+      // consumes hundreds of tokens on internal reasoning BEFORE
+      // emitting JSON; those tokens count against `maxOutputTokens`,
+      // so the JSON gets cut off mid-string. Lior's v5.62.3 raw
+      // response was literally `{"counts": [{"color": "White", "` —
+      // a textbook truncation. Per Google's docs (Firebase AI Logic
+      // > Thinking), `thinkingBudget: 0` disables thinking on both
+      // Gemini 2.5 and Gemini 3 (the latter prefers `thinkingLevel`
+      // but supports `thinkingBudget` for backwards-compat — the
+      // important bit is "do not set BOTH or the request errors").
+      // Counting chips in a single photo doesn't benefit from chain-
+      // of-thought; the model needs to look + answer, not deliberate.
+      thinkingConfig: {
+        thinkingBudget: 0,
       },
     },
   };
