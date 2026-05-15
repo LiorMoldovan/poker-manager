@@ -25,6 +25,16 @@ Keep each lesson under ~10 lines. If it needs more, it's probably a rule, not a 
 
 ---
 
+## 2026-05-15 — Center-patch sampling on stickered objects: don't sample where the sticker is
+
+**Incident**: v5.59.0 shipped chip-counting selfies. `captureChipSelfie` averaged the dead-center 24×24 pixels of each selfie to compute `selfieDominantHex`. After ~4 days in production, Lior reported the new pipeline was "not even close, didn't catch anything." DB inspection showed every chip's stored hex was muddy grey/beige (red→#b59e94, blue→#7b86a3, green→#aaaa94, black→#989493). Root cause: most poker chips have a printed value inlay/sticker dead-center. The center patch sampled the inlay, not the colored body. Downstream, `stackDetection.ts` mapped detected stack regions to chips by HSL distance against these hexes — with every reference looking like the same shade of grey, the mapping was effectively random. Counts went into wrong color rows; feature appeared totally broken.
+
+**Root cause**: I assumed "chip selfie = clean shot of one object on plain background → center pixel = dominant color." That's true for unstickered objects. Poker chips, casino chips, coins, branded mugs, labeled bottles, button caps — most physical objects of interest in CV have **decorations, text, or stickers in the visually-prominent center** because that's where the design language of the object lives. The center-patch heuristic actively prefers the LEAST representative region. I built the prototype against my mental model of an idealized chip (uniform color disc) and shipped without testing on the real artifact (chip with printed inlay). The stored hex was never inspected via the dashboard before declaring done.
+
+**Lesson**: When extracting the dominant color of a real-world object via canvas sampling, **never sample only the center**. Default to a ring of patches at 30–75% of the radius and take the per-channel median (robust against outliers from text/inlay/edges/background). Verify by querying the DB for the actual stored values — not just by checking that "the function returned a hex." For any color-extraction code in the future: if the result looks suspiciously like a uniform mid-grey across multiple distinct-colored inputs, that's the inlay-bug signature; don't ship until you've sampled an off-center region. **Session**: 2026-05-15.
+
+---
+
 ## 2026-05-13 — Retry-with-fallback loops collapse failure modes — distinguish at the wrapper layer
 
 **Incident**: Lior on localhost saw `🤖 תובנות AI יצירת תובנות ALL_MODELS_FAILED: Status 404` rendered as a red error card in GraphsScreen. The cause: Vite dev server doesn't serve `/api/*` Vercel Edge Functions, so every fetch to `/api/gemini` returns an HTML-404 page. The `runGeminiText` retry loop's 404-handler treats 404 as "this model deprecated, try the next one" — so all 3 models retry against the same missing endpoint, all fail with HTML-404, and the loop throws `ALL_MODELS_FAILED: Status 404` with the last error string. UI catches got an unrecognized error → red banner. The loop's 404-handler was correct for one failure mode (Google deprecated this model name, model B might exist) and catastrophically wrong for another (proxy doesn't exist in this env, every model will fail identically). By the time the loop exited, the structure that distinguished the two cases was gone.

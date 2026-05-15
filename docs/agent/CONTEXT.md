@@ -1,18 +1,19 @@
 # CONTEXT — Current State
 
 > **What this is**: A 30-second orientation for the agent at the start of a chat. Refreshed in place (overwrite, not append). If something here is stale, fix it before doing other work.
-> **Last refreshed**: 2026-05-13 (post v5.60.11)
+> **Last refreshed**: 2026-05-15 (post v5.60.13 chip-counting selfie color fix)
 
 ---
 
 ## Right now
 
-- **`origin/main`**: `5.60.11` — bundled merge of v5.60.10 + v5.60.11 (both AI-error-handling polish, queued together). v5.60.10: forecast `NO_API_KEY` no longer triggers the fake 60s rate-limit countdown (a third retry loop in `generateAIForecasts` was missing the `403 aiKeyRequired` short-circuit); Insights button hidden when no key (was a silent no-op); forecast modal renders the no-key notice INSIDE the modal (was hidden behind the overlay); comic regenerate button gated by `getGeminiApiKey()`. v5.60.11: kills the raw `ALL_MODELS_FAILED: Status 404` red banner that surfaced on localhost (Vite doesn't serve `/api/*` Vercel Edge Functions, so every AI call returns HTML-404 → all 3 models retry → unhelpful error string). New `aiFetch` wrapper in `apiProxy.ts` detects HTML-404 from `/api/*`, caches a tristate availability flag, and synthesizes a clean `503 aiProxyUnavailable` JSON response that propagates as a new `AI_PROXY_UNAVAILABLE` sentinel through all 5 retry loops (geminiAI ×2, pokerTraining ×3). All 6 AI screens route the sentinel to a dedicated proxy-down state and render `AIKeyMissingNotice` with new `reason="proxyUnavailable"` (amber accent + 🛠️ icon, no CTA — adding a key won't help). `vercel dev` users unaffected: first successful response flips the cache to `available=true`.
-- **CRLF ghost files** in `git status` (TriviaReportsTab, TriviaGameScreen, supabaseCache, types/index, geminiAI, triviaGenerator, triviaReportNotifications, etc.) — `git diff --numstat` shows 0/0 line delta. Pure CRLF noise; resolves itself on next real edit.
+- **`origin/main`**: `5.60.13` — surgical fix for a v5.59.0 regression where `captureChipSelfie` sampled the dead-center 24×24 patch of every chip selfie and computed `selfieDominantHex` from it. Most poker chips have a printed value inlay/sticker dead-center → every stored hex came out muddy grey/beige (red→#b59e94, blue→#7b86a3, green→#aaaa94, black→#989493) → `stackDetection.ts` HSL-distance mapping was effectively random → counts went into wrong color rows → feature appeared totally broken. Fix: rewrote dominant-color extraction in `imageUtils.ts` to sample 32 patches across 4 concentric rings at 30/45/60/75% radius and take per-channel median (robust against text/inlay/edge outliers). Added `recomputeDominantHexFromBase64` + `looksLikeInlayBugHex` predicate (sat<0.15 AND 0.30<lum<0.75 — the muddy grey zone no real chip body lands in). Added one-time per-session auto-migration in `SettingsScreen` that recomputes existing inlay-bug-shape hexes from saved JPEGs on chipValues load. Defensive fallback in `stackDetection.ts`: if a hex still looks bug-shaped after recompute, use `displayColor` instead of a known-bad reference. Lior + Eyal don't need to retake selfies — JPEGs are fine, only the broken hex got fixed. Lesson promoted to LESSONS.md (2026-05-15: never sample the center patch on stickered objects). The history of pre-v5.60.13 chip-counting bullets above is preserved in CHANGELOG (`src/version.ts`) for anyone reading the in-app About screen.
+- **Pending parallel-agent work in working tree** (NOT in this commit): v5.61.0 immutable-games line — `supabase/077-block-completed-status-downgrade.sql` (untracked) + ~16 modified files (`AIKeyMissingNotice`, `storage`, `supabaseCache`, several screens, `aiEligibility`, `apiProxy`, `geminiAI`, `pokerTraining`, plus their version.ts bump to 5.61.0). My v5.60.13 commit deliberately staged ONLY my 4 files (`imageUtils.ts`, `stackDetection.ts`, `SettingsScreen.tsx`, `version.ts`) so the parallel work stays in their hands to commit when ready. They'll need to bump to 5.61.0 from this new 5.60.13 base when they merge.
 
 ## Open follow-ups
 
-- **Local dev shows zero admin controls in LiveGameScreen** (Lior). Almost certainly wrong-account-on-localhost; pending his confirmation before digging into `usePermissions()` resolution timing.
+- **Verify v5.60.13 fix landed for Lior**: after Vercel deploy, Lior opens Settings → Chips, the auto-migration runs silently, then re-tests photo chip counting from the test card. If still misbehaving, the failure mode will be a DIFFERENT one (inlay-bug class is patched + guarded) — investigate from there.
+- **Local dev shows zero admin controls in LiveGameScreen** (Lior, from 2026-05-13). Almost certainly wrong-account-on-localhost; pending his confirmation before digging into `usePermissions()` resolution timing.
 - **"Mini table with more details" home-card memory** (Lior). Needs a screenshot to pin down which view he's remembering. Deferred.
 
 ## Standing infrastructure (changes infrequently)
@@ -20,7 +21,7 @@
 - **Notification dispatch (v5.49.x)**: server-side via `notification_jobs` → pg_net → `/api/notification-worker` → send-push + send-email. Browser worker is redundant fallback. pg_cron `notification-jobs-sweep` retries every minute.
 - **Chip-counting permission model (v5.58.0)**: Services tab admin-accessible; Test Card + Accuracy Dashboard for all admins; Tune+Revert + auto-rollback owner-only (RLS-aligned).
 - **Vercel env vars**: `WORKER_INTERNAL_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_GROUP_ID`, per-feature keys (Gemini/ElevenLabs/EmailJS).
-- **Recently-applied SQL** (do not re-apply): `070`–`076`. See `supabase/` folder for current set. `076` rewrites `delete_group` + relaxes `block_bulk_direct_delete` + `block_completed_game_player_delete` to honor a transaction-local `app.cascade_group_delete` flag.
+- **Recently-applied SQL** (do not re-apply): `070`–`076`. See `supabase/` folder for current set. `076` rewrites `delete_group` + relaxes `block_bulk_direct_delete` + `block_completed_game_player_delete` to honor a transaction-local `app.cascade_group_delete` flag. Untracked `077-block-completed-status-downgrade.sql` belongs to the parallel agent's pending v5.61.0 work — not yet committed and not yet applied.
 
 ## Spot-check queries (when debugging)
 
