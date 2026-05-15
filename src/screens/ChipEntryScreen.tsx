@@ -9,6 +9,7 @@ import {
   updateGamePlayerResults,
   updateGameStatus,
   updateGameChipGap,
+  updateGamePlayerEntryMode,
   createGameEndBackup,
   invalidateAICaches,
   deleteTTSPool,
@@ -286,6 +287,150 @@ const NumpadModal = ({
   );
 };
 
+// ── TotalNumpadModal — quick-total chip entry (migration 080) ──
+//
+// Single-input variant of NumpadModal for groups (or admins) that
+// don't count color-by-color. Admin types ONE total chip count for
+// the player, sees a live money-equivalent below the input, taps
+// Done. No per-color iteration, no progress dots, no photo escape
+// (photo flow is per-color and irrelevant in this mode). Visual
+// frame mirrors NumpadModal so it feels native.
+interface TotalNumpadModalProps {
+  isOpen: boolean;
+  playerName: string;
+  currentValue: number;
+  valuePerChip: number;       // for the live ≈ {money} hint
+  chipsPerRebuy: number;      // for the "1 בייאין = X צ'יפים" reference
+  formatMoney: (n: number) => string;
+  onConfirm: (value: number) => void;
+  onClose: () => void;
+}
+
+const TotalNumpadModal = ({
+  isOpen,
+  playerName,
+  currentValue,
+  valuePerChip,
+  chipsPerRebuy,
+  formatMoney,
+  onConfirm,
+  onClose,
+}: TotalNumpadModalProps) => {
+  const { t } = useTranslation();
+  const [value, setValue] = useState(currentValue.toString());
+
+  useEffect(() => {
+    if (isOpen) setValue(currentValue.toString());
+  }, [isOpen, currentValue]);
+
+  if (!isOpen) return null;
+
+  const handleKey = (key: string) => {
+    if (key === 'C') setValue('0');
+    else if (key === '⌫') setValue(prev => (prev.length > 1 ? prev.slice(0, -1) : '0'));
+    else setValue(prev => (prev === '0' ? key : prev + key));
+  };
+
+  const numericValue = parseInt(value) || 0;
+  const moneyEquivalent = numericValue * valuePerChip;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
+        {/* Player name header — same green bar as NumpadModal so the
+            two flows feel like the same family of inputs. */}
+        <div style={{
+          background: 'var(--primary)',
+          margin: '-1.5rem -1.5rem 1rem -1.5rem',
+          padding: '0.75rem 1rem',
+          borderRadius: '16px 16px 0 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+        }}>
+          <span style={{ minWidth: '2rem', display: 'inline-block' }} />
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>
+            {playerName}
+          </span>
+          <span style={{ minWidth: '2rem', display: 'inline-block' }} />
+        </div>
+
+        <div className="modal-header" style={{ marginBottom: '0.5rem' }}>
+          <h3 className="modal-title">{t('chips.entryMode.totalNumpadTitle')}</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div style={{
+          fontSize: '2.5rem',
+          fontWeight: 700,
+          textAlign: 'center',
+          padding: '1rem',
+          background: 'var(--surface)',
+          borderRadius: '8px',
+          marginBottom: '0.4rem',
+          fontFamily: 'monospace',
+        }}>
+          {numericValue.toLocaleString('he-IL')}
+        </div>
+
+        {/* Live money equivalent + reference hint. Both muted so the
+            big number stays the focus. The reference line lets the
+            admin sanity-check ("8,000 chips = ~24₪, that's about a
+            buy-in worth, sounds right"). */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '1rem',
+          fontSize: '0.85rem',
+          color: 'var(--text-muted)',
+          lineHeight: 1.5,
+        }}>
+          <div>
+            {t('chips.entryMode.moneyEquivalent').replace('{amount}', formatMoney(moneyEquivalent))}
+          </div>
+          <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>
+            {t('chips.entryMode.buyinHint').replace('{chips}', chipsPerRebuy.toLocaleString('he-IL'))}
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+          direction: 'ltr',
+        }}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(key => (
+            <button
+              key={key}
+              onClick={() => handleKey(key)}
+              style={{
+                padding: '1rem',
+                fontSize: '1.5rem',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: 'none',
+                background: key === 'C' ? 'var(--danger)' : key === '⌫' ? 'var(--warning)' : 'var(--surface)',
+                color: key === 'C' || key === '⌫' ? 'white' : 'var(--text)',
+                cursor: 'pointer',
+              }}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="btn btn-primary btn-block"
+          onClick={() => onConfirm(numericValue)}
+        >
+          {t('chips.done')}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ChipEntryScreen = () => {
   const { t } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
@@ -304,7 +449,17 @@ const ChipEntryScreen = () => {
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadPlayerId, setNumpadPlayerId] = useState('');
   const [numpadChipIndex, setNumpadChipIndex] = useState(0); // Track chip by index for auto-advance
-  
+
+  // Migration 080 — quick-total numpad state. Distinct from the
+  // color numpad above so the two flows can't collide (admin can't
+  // open both at once, but state separation makes the per-modal
+  // open/close logic obvious). Default mode for the next "tap a
+  // player" comes from settings.chipEntryDefaultMode (loaded in
+  // loadData below).
+  const [totalNumpadOpen, setTotalNumpadOpen] = useState(false);
+  const [totalNumpadPlayerId, setTotalNumpadPlayerId] = useState('');
+  const [defaultEntryMode, setDefaultEntryMode] = useState<'color' | 'total'>('color');
+
   // Player selector state
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
@@ -397,10 +552,15 @@ const ChipEntryScreen = () => {
 
   useRealtimeRefresh(useCallback(() => { if (gameId) loadData(); }, [gameId]));
 
-  // Save chip counts to storage
+  // Save chip counts to storage. Migration 080: total-mode players
+  // are persisted explicitly at Done time (markPlayerDoneWithTotal)
+  // and aren't part of the per-color chipCounts map — we skip them
+  // here so the auto-save loop never overwrites their cleared
+  // chip_counts column with stale local data.
   const saveChipCounts = useCallback(() => {
     if (isLoading || Object.keys(chipCounts).length === 0) return;
     players.forEach(player => {
+      if (player.entryMode === 'total') return;
       const playerChips = chipCounts[player.id] || {};
       if (Object.values(playerChips).some(v => v > 0)) {
         updateGamePlayerChips(player.id, playerChips);
@@ -465,6 +625,8 @@ const ChipEntryScreen = () => {
     setChipValues(chips);
     setRebuyValue(settings.rebuyValue || 30);
     setChipsPerRebuy(settings.chipsPerRebuy || 10000);
+    // Migration 080 — group default for the BIG-tap mode in chip entry.
+    setDefaultEntryMode(settings.chipEntryDefaultMode === 'total' ? 'total' : 'color');
     // Photo button availability. Honest signal: the call path must work
     // for THIS group right now. Pre-v5.60.3 we also accepted "any past
     // game has an aiSummary" as proof of viability, but that signal is
@@ -502,7 +664,27 @@ const ChipEntryScreen = () => {
     setSelectedPlayerId(null);
   };
 
-  // Undo player completion
+  // Migration 080 — total-mode equivalent of markPlayerDone. We
+  // persist the total chip count atomically here (skipping the
+  // per-color auto-save loop entirely — see saveChipCounts above),
+  // so the source of truth lives in game_players.total_chip_count
+  // and survives reload / realtime refresh. Final money +
+  // adjustedProfit are RE-derived on finalize alongside chip-gap,
+  // identical to the color-mode path.
+  const markPlayerDoneWithTotal = (playerId: string, totalChips: number) => {
+    updateGamePlayerEntryMode(playerId, 'total', totalChips);
+    setPlayers(prev => prev.map(p => p.id === playerId
+      ? { ...p, entryMode: 'total', totalChipCount: totalChips, chipCounts: {} }
+      : p));
+    setCompletedPlayers(prev => new Set([...prev, playerId]));
+    setTotalNumpadOpen(false);
+    setSelectedPlayerId(null);
+  };
+
+  // Undo player completion. Works for both modes — the row's
+  // entry_mode/total_chip_count/chip_counts are preserved so a
+  // re-tap on the player tile re-opens the same modal with the
+  // existing values.
   const undoPlayerCompletion = (playerId: string) => {
     setCompletedPlayers(prev => {
       const newSet = new Set(prev);
@@ -512,12 +694,55 @@ const ChipEntryScreen = () => {
     setSelectedPlayerId(playerId);
   };
 
-  const selectPlayer = (playerId: string) => {
+  // Migration 080. `selectPlayerWithMode` replaces the old
+  // `selectPlayer` and routes the open to the right modal based on
+  // the chosen mode. The mode is persisted to game_players.entry_mode
+  // immediately (via updateGamePlayerEntryMode) so a realtime refresh
+  // / mid-flow reload / reopen-after-completion all show the right
+  // modal next time. Switching modes for a player wipes the
+  // abandoned mode's data — see updateGamePlayerEntryMode in
+  // storage.ts for the atomic behavior.
+  const selectPlayerWithMode = (playerId: string, mode: 'color' | 'total') => {
+    if (!isAdmin) return;
     setSelectedPlayerId(playerId);
-    if (isAdmin && chipValues.length > 0) {
+    const current = players.find(p => p.id === playerId);
+    if (mode === 'color') {
+      if (chipValues.length === 0) return;  // no chips configured — nothing to count by color
+      if (current?.entryMode !== 'color') {
+        updateGamePlayerEntryMode(playerId, 'color', null);
+        // Reflect the mode change in local state so getPlayerChipPoints
+        // doesn't keep reading the stale total. Reload-from-DB will
+        // arrive shortly via debounced cache flush; this just bridges
+        // the gap.
+        setPlayers(prev => prev.map(p => p.id === playerId
+          ? { ...p, entryMode: 'color', totalChipCount: null }
+          : p));
+        // Re-init the per-color chip counts to all-zeros for this player.
+        setChipCounts(prev => ({
+          ...prev,
+          [playerId]: chipValues.reduce<Record<string, number>>((acc, c) => {
+            acc[c.id] = 0;
+            return acc;
+          }, {}),
+        }));
+      }
       setNumpadPlayerId(playerId);
       setNumpadChipIndex(0);
       setNumpadOpen(true);
+    } else {
+      // Re-opening total mode for an already-total player keeps the
+      // existing total (so admin sees the prior number, can edit, or
+      // confirm). For a fresh switch into total, init to 0.
+      const initialTotal = current?.entryMode === 'total' ? (current.totalChipCount ?? 0) : 0;
+      if (current?.entryMode !== 'total') {
+        updateGamePlayerEntryMode(playerId, 'total', initialTotal);
+        setPlayers(prev => prev.map(p => p.id === playerId
+          ? { ...p, entryMode: 'total', totalChipCount: initialTotal, chipCounts: {} }
+          : p));
+        setChipCounts(prev => ({ ...prev, [playerId]: {} }));
+      }
+      setTotalNumpadPlayerId(playerId);
+      setTotalNumpadOpen(true);
     }
   };
 
@@ -653,7 +878,20 @@ const ChipEntryScreen = () => {
   };
 
   // Get total chip points for a player
+  // Migration 080 — single branch point for "how many chip points
+  // does this player hold?". For total-mode players we read the
+  // direct stored count; for color-mode (today's behavior) we sum
+  // chip_counts × chip values. Every downstream calculation
+  // (getPlayerMoneyValue, getPlayerProfit, totalChipPoints,
+  // expectedChipPoints, progressPercentage, chip-gap preview, the
+  // finalize loop) reads through this function — so the math is
+  // identical for both modes and zero-sum is preserved by the
+  // existing chip-gap distribution.
   const getPlayerChipPoints = (playerId: string): number => {
+    const player = players.find(p => p.id === playerId);
+    if (player?.entryMode === 'total') {
+      return player.totalChipCount ?? 0;
+    }
     return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
   };
 
@@ -869,7 +1107,16 @@ const ChipEntryScreen = () => {
         </div>
       </div>
 
-      {/* Player Selector */}
+      {/* Player Selector — two-zone tile (migration 080).
+          Big top zone = the group's default chip-entry mode (set in
+          Settings → Game). Small labeled bottom button = the OTHER
+          mode. Both groups get one-tap-per-player for their preferred
+          mode, with the alternative always one labeled tap away.
+
+          Zones can't be nested <button>s, so the outer wrapper is a
+          <div> when both zones are interactive (pending) and a single
+          <button> when only the undo behavior matters (completed).
+          Non-admin members see a static tile with no interactions. */}
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '600' }}>
           {t('chips.selectPlayer', { done: `${completedPlayersCount}/${players.length}` })}
@@ -880,41 +1127,139 @@ const ChipEntryScreen = () => {
             const isSelected = selectedPlayerId === player.id;
             const chips = getPlayerChipPoints(player.id);
             const profit = getPlayerProfit(player.id);
-            
-            return (
-              <button
-                key={player.id}
-                onClick={() => isCompleted ? undoPlayerCompletion(player.id) : selectPlayer(player.id)}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '20px',
-                  border: isSelected ? '2px solid var(--primary)' : isCompleted ? '2px solid #22c55e' : '2px solid var(--border)',
-                  background: isCompleted ? 'rgba(34, 197, 94, 0.15)' : isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  minWidth: '80px',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <span style={{ 
-                  fontWeight: '600', 
+            const otherMode: 'color' | 'total' = defaultEntryMode === 'color' ? 'total' : 'color';
+            const showSecondary = isAdmin && !isCompleted;
+
+            // Outer tile styles shared between completed (button) and
+            // pending (div) variants so the visual identity is identical.
+            const tileBorder = isSelected
+              ? '2px solid var(--primary)'
+              : isCompleted
+                ? '2px solid #22c55e'
+                : '2px solid var(--border)';
+            const tileBg = isCompleted
+              ? 'rgba(34, 197, 94, 0.15)'
+              : isSelected
+                ? 'rgba(16, 185, 129, 0.15)'
+                : 'var(--surface)';
+            const tileStyle: React.CSSProperties = {
+              borderRadius: '12px',
+              border: tileBorder,
+              background: tileBg,
+              minWidth: '96px',
+              transition: 'all 0.15s ease',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+            };
+
+            // Top zone content — same for both completed and pending.
+            const topZone = (
+              <>
+                <span style={{
+                  fontWeight: 600,
                   fontSize: '0.9rem',
-                  color: isCompleted ? '#22c55e' : isSelected ? 'var(--primary)' : 'var(--text)'
+                  color: isCompleted ? '#22c55e' : isSelected ? 'var(--primary)' : 'var(--text)',
                 }}>
-                  {isCompleted && '✓ '}{player.playerName}
+                  {isCompleted && '\u200E✓ '}{player.playerName}
                 </span>
                 {chips > 0 && (
-                  <span style={{ 
-                    fontSize: '0.7rem', 
+                  <span style={{
+                    fontSize: '0.7rem',
                     color: profit >= 0 ? 'var(--success)' : 'var(--danger)',
-                    marginTop: '0.15rem'
+                    marginTop: '0.15rem',
                   }}>
                     {profit >= 0 ? '\u200E+' : ''}{cleanNumber(profit)}
                   </span>
                 )}
-              </button>
+              </>
+            );
+
+            // Completed variant: whole tile is one undo button. The
+            // bottom zone is hidden — switching modes for a completed
+            // player goes through "undo → re-tap with the desired
+            // zone" which is more discoverable than a hidden affordance
+            // on a "done" tile.
+            if (isCompleted) {
+              return (
+                <button
+                  key={player.id}
+                  onClick={() => isAdmin && undoPlayerCompletion(player.id)}
+                  disabled={!isAdmin}
+                  style={{
+                    ...tileStyle,
+                    cursor: isAdmin ? 'pointer' : 'default',
+                    padding: '0.55rem 0.75rem',
+                    alignItems: 'center',
+                  }}
+                >
+                  {topZone}
+                </button>
+              );
+            }
+
+            // Pending / selected variant: two separate buttons inside a
+            // div wrapper so each zone has its own tap target. Member
+            // (non-admin) sees just the top zone as a static label
+            // (the existing screen is already locked to admin for
+            // mutations; members see live state for situational
+            // awareness).
+            return (
+              <div key={player.id} style={tileStyle}>
+                <button
+                  type="button"
+                  onClick={() => selectPlayerWithMode(player.id, defaultEntryMode)}
+                  disabled={!isAdmin}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: isAdmin ? 'pointer' : 'default',
+                    fontFamily: 'inherit',
+                    padding: '0.55rem 0.75rem 0.4rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    width: '100%',
+                  }}
+                  title={
+                    defaultEntryMode === 'color'
+                      ? t('chips.entryMode.color')
+                      : t('chips.entryMode.total')
+                  }
+                >
+                  {topZone}
+                </button>
+                {showSecondary && (
+                  <button
+                    type="button"
+                    onClick={() => selectPlayerWithMode(player.id, otherMode)}
+                    style={{
+                      background: 'rgba(148, 163, 184, 0.10)',
+                      border: 'none',
+                      borderTop: '1px solid rgba(148, 163, 184, 0.25)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      padding: '0.32rem 0.5rem',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      width: '100%',
+                      textAlign: 'center',
+                    }}
+                    title={
+                      otherMode === 'total'
+                        ? t('chips.entryMode.total')
+                        : t('chips.entryMode.color')
+                    }
+                  >
+                    {otherMode === 'total'
+                      ? t('chips.entryMode.tileSecondary.total')
+                      : t('chips.entryMode.tileSecondary.color')}
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -922,6 +1267,122 @@ const ChipEntryScreen = () => {
 
       {/* Selected Player Chip Entry */}
       {selectedPlayer && (() => {
+        // Migration 080 — branch the per-player view by entry mode.
+        // For total-mode players, render a compact summary card with
+        // an "edit total" button that re-opens the TotalNumpadModal
+        // and a "switch to color" link (with confirm) for changing
+        // mode mid-entry. The color-mode view (chip grid + photo AI
+        // banner + per-color buttons) is the existing flow below.
+        if (selectedPlayer.entryMode === 'total') {
+          const totalChips = selectedPlayer.totalChipCount ?? 0;
+          const moneyValue = totalChips * valuePerChip;
+          const profit = getPlayerProfit(selectedPlayer.id);
+          return (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
+                <span className={getProfitColor(profit)} style={{ fontWeight: 700 }}>
+                  {profit >= 0 ? '\u200E+' : ''}{cleanNumber(profit)}
+                </span>
+              </div>
+
+              <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
+                {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
+              </div>
+
+              {/* Big editable total. Tapping the number re-opens the
+                  TotalNumpadModal pre-filled, so admins can correct
+                  a mistype without going through undo. */}
+              <button
+                type="button"
+                onClick={() => isAdmin && selectPlayerWithMode(selectedPlayer.id, 'total')}
+                disabled={!isAdmin}
+                style={{
+                  width: '100%',
+                  marginTop: '0.5rem',
+                  marginBottom: '0.5rem',
+                  background: 'var(--surface)',
+                  border: '1px dashed rgba(148, 163, 184, 0.4)',
+                  borderRadius: '12px',
+                  padding: '1.1rem',
+                  cursor: isAdmin ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                }}
+              >
+                <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)' }}>
+                  {totalChips.toLocaleString('he-IL')}{t('chips.chipsSuffix')}
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  = {cleanNumber(moneyValue)}
+                </span>
+              </button>
+
+              {/* Switch-mode escape hatch with confirm. The confirm is
+                  important: switching to color wipes total_chip_count
+                  (handled atomically by updateGamePlayerEntryMode) and
+                  re-opens the per-color numpad at chip 0. */}
+              {isAdmin && chipValues.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ok = window.confirm(
+                      t('chips.entryMode.switchConfirm').replace('{player}', selectedPlayer.playerName),
+                    );
+                    if (ok) selectPlayerWithMode(selectedPlayer.id, 'color');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: '0.78rem',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '2px',
+                    padding: '0.25rem 0',
+                    width: '100%',
+                    textAlign: 'center',
+                    marginBottom: '0.75rem',
+                  }}
+                >
+                  {t('chips.entryMode.switchLink').replace('{mode}', t('chips.entryMode.color'))}
+                </button>
+              )}
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                paddingTop: '0.5rem',
+                borderTop: '1px solid var(--border)',
+              }}>
+                <button
+                  onClick={() => markPlayerDoneWithTotal(selectedPlayer.id, totalChips)}
+                  disabled={!isAdmin}
+                  style={{
+                    background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    cursor: isAdmin ? 'pointer' : 'default',
+                    boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                    opacity: isAdmin ? 1 : 0.6,
+                  }}
+                >
+                  {t('chips.done')}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // ── Color-mode view (today's flow) ──────────────────────
         // Per-player photo-counting derived state. All of this is
         // additive: when no photo has been taken for this player,
         // photoResult is undefined and the rendering below collapses
@@ -961,6 +1422,38 @@ const ChipEntryScreen = () => {
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
             {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
           </div>
+
+          {/* Migration 080 — switch-mode escape hatch (color → total).
+              For when admin opened color-by-color but realised this
+              player's stack is easier to total. Confirm dialog warns
+              that the in-progress per-color counts will be wiped. */}
+          {isAdmin && (
+            <div style={{ marginTop: '0.25rem', marginBottom: '0.5rem', textAlign: 'end' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const hasPartial = Object.values(chipCounts[selectedPlayer.id] || {}).some(v => v > 0);
+                  const ok = !hasPartial || window.confirm(
+                    t('chips.entryMode.switchConfirm').replace('{player}', selectedPlayer.playerName),
+                  );
+                  if (ok) selectPlayerWithMode(selectedPlayer.id, 'total');
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.72rem',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                  padding: '0.2rem 0',
+                }}
+              >
+                {t('chips.entryMode.switchLink').replace('{mode}', t('chips.entryMode.total'))}
+              </button>
+            </div>
+          )}
 
           {/* AI Photo Banner — appears only after a successful photo for this player */}
           {photoResult && (
@@ -1566,6 +2059,27 @@ const ChipEntryScreen = () => {
           setPhotoTargetPlayerId(targetId);
           setPhotoOpen(true);
         }}
+      />
+
+      {/* Total Numpad Modal — quick-total chip entry (migration 080).
+          Renders only when the admin opened a player tile via the
+          "total" zone (or via the per-player switch link inside the
+          color flow). currentValue reads from the player's persisted
+          totalChipCount so re-opening the modal shows the prior
+          number, allowing edits before tapping Done. */}
+      <TotalNumpadModal
+        isOpen={totalNumpadOpen}
+        playerName={players.find(p => p.id === totalNumpadPlayerId)?.playerName || ''}
+        currentValue={players.find(p => p.id === totalNumpadPlayerId)?.totalChipCount ?? 0}
+        valuePerChip={valuePerChip}
+        chipsPerRebuy={chipsPerRebuy}
+        formatMoney={formatCurrency}
+        onConfirm={(value) => {
+          if (totalNumpadPlayerId) {
+            markPlayerDoneWithTotal(totalNumpadPlayerId, value);
+          }
+        }}
+        onClose={() => setTotalNumpadOpen(false)}
       />
 
       {/* Photo Capture Modal — additive to manual flow.

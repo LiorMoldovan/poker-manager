@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.62.5';
+export const APP_VERSION = '5.62.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.62.6',
+    date: '2026-05-15',
+    changes: [
+      '⚡ Quick-total chip entry: tap player to enter ONE total chip count',
+      '🔀 Per-player mode switch between color-by-color and total entry',
+      '⚙️ Group default mode in Settings → Chips',
+    ],
+  },
   {
     version: '5.62.5',
     date: '2026-05-15',

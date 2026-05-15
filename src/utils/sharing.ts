@@ -1,8 +1,14 @@
 import { GamePlayer, Settlement, SkippedTransfer, ChipValue } from '../types';
 import { cleanNumber } from './calculations';
 
-// Calculate total chips for a player
+// Calculate total chips for a player. Migration 080 — branch on
+// entryMode so quick-total players (chip_counts = {}) report their
+// real total instead of 0 in the WhatsApp share text. Color mode
+// (today's behavior) sums per-color counts.
 const getTotalChipsForPlayer = (player: GamePlayer, chipValues: ChipValue[]): number => {
+  if (player.entryMode === 'total') {
+    return player.totalChipCount ?? 0;
+  }
   let total = 0;
   for (const [chipId, count] of Object.entries(player.chipCounts)) {
     const chip = chipValues.find(c => c.id === chipId);
@@ -190,6 +196,31 @@ function freezeAnimations(root: HTMLElement): () => void {
  * Captures a DOM element as screenshot(s), splitting vertically if too tall.
  * Returns an array of File objects ready for navigator.share or download.
  */
+/**
+ * Temporarily hide one or more elements during a screenshot capture
+ * so they don't appear in the snapshot, then restore them.
+ *
+ * Use case: a card has interactive controls (sort dropdowns, mode
+ * buttons) that should be visible in the live UI but excluded from
+ * the shareable image. Pass the controls element(s) here, capture
+ * the parent card with `captureAndSplit`, then call the returned
+ * cleanup function (typically inside a try/finally so a thrown
+ * capture error never leaves controls invisible).
+ *
+ * Null/undefined elements are silently skipped — convenient when
+ * the caller passes `someRef.current` without null-guarding.
+ */
+export function hideForCapture(...elements: (HTMLElement | null | undefined)[]): () => void {
+  const restorers: Array<() => void> = [];
+  for (const el of elements) {
+    if (!el) continue;
+    const original = el.style.display;
+    el.style.display = 'none';
+    restorers.push(() => { el.style.display = original; });
+  }
+  return () => { for (const r of restorers) r(); };
+}
+
 export const captureAndSplit = async (
   element: HTMLElement,
   baseName: string,

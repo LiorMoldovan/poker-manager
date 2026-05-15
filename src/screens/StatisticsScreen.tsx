@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { captureAndSplit, shareFiles } from '../utils/sharing';
+import { captureAndSplit, hideForCapture, shareFiles } from '../utils/sharing';
 import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
@@ -28,10 +28,10 @@ const meNameStyle = { color: ME_NAME_COLOR } as const;
 // Tiered: short names render at base size, longer names step down.
 const getNameFontSize = (name: string, baseRem: number): string => {
   const len = (name || '').length;
-  if (len <= 8) return `${baseRem}rem`;
-  if (len <= 11) return `${(baseRem * 0.9).toFixed(3)}rem`;
-  if (len <= 14) return `${(baseRem * 0.8).toFixed(3)}rem`;
-  return `${(baseRem * 0.7).toFixed(3)}rem`;
+  if (len <= 9) return `${baseRem}rem`;
+  if (len <= 12) return `${(baseRem * 0.92).toFixed(3)}rem`;
+  if (len <= 15) return `${(baseRem * 0.85).toFixed(3)}rem`;
+  return `${(baseRem * 0.75).toFixed(3)}rem`;
 };
 
 const StatisticsScreen = () => {
@@ -61,6 +61,10 @@ const StatisticsScreen = () => {
   const [recordsSubTab, setRecordsSubTab] = useState<RecordsSubTab>('global');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss' | 'avgGainLoss'>('profit');
+  // Local sort key for the Podium-Rate table (independent of the
+  // main player table's `sortBy`). Defaults to 'total' to match
+  // the table's headline metric (the 🏆 column).
+  const [podiumSort, setPodiumSort] = useState<'total' | 'first' | 'second' | 'third' | 'games'>('total');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes] = useState<Set<PlayerType>>(new Set(['permanent', 'permanent_guest', 'guest']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
@@ -104,6 +108,12 @@ const StatisticsScreen = () => {
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
   const podiumRatesRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
+  // Refs for the interactive controls strips inside two of the
+  // share-able cards. Hidden via `hideForCapture` during the
+  // screenshot so the snapshot keeps the card chrome (background,
+  // rounded corners, padding) but excludes the dropdown/buttons.
+  const tableControlsRef = useRef<HTMLDivElement>(null);
+  const podiumControlsRef = useRef<HTMLDivElement>(null);
 
   // Chronicle AI state
   const [chronicleStories, setChronicleStories] = useState<Record<string, string>>({});
@@ -173,11 +183,15 @@ const StatisticsScreen = () => {
   const handleShareTable = async () => {
     if (!tableRef.current) return;
     setIsSharing(true);
+    const restoreControls = hideForCapture(tableControlsRef.current);
     try {
       const files = await captureAndSplit(tableRef.current, 'poker-statistics');
       await shareFiles(files, t('stats.title'));
     } catch (e) { console.error('Error sharing:', e); }
-    finally { setIsSharing(false); }
+    finally {
+      restoreControls();
+      setIsSharing(false);
+    }
   };
 
   const handleShareTop20 = async () => {
@@ -213,11 +227,15 @@ const StatisticsScreen = () => {
   const handleSharePodiumRates = async () => {
     if (!podiumRatesRef.current) return;
     setIsSharingPodiumRates(true);
+    const restoreControls = hideForCapture(podiumControlsRef.current);
     try {
       const files = await captureAndSplit(podiumRatesRef.current, 'poker-podium-rates');
       await shareFiles(files, t('stats.podiumRates'));
     } catch (e) { console.error('Error sharing podium rates:', e); }
-    finally { setIsSharingPodiumRates(false); }
+    finally {
+      restoreControls();
+      setIsSharingPodiumRates(false);
+    }
   };
 
   const handleSharePodium = async () => {
@@ -1001,14 +1019,19 @@ const StatisticsScreen = () => {
   }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Per-player place-finish rates (1st/2nd/3rd) for the current time
-  // period. Mirrors the trivia "rate champion" logic in HomeDashboard:
+  // period:
   //  · Place is awarded only when the top finisher actually won
   //    (sorted[0].profit > 0). Avoids crediting "winners" of all-loss
   //    games where the highest profit is still negative.
-  //  · Players gated to ≥30% participation in the period (same gate
-  //    Lior approved for the home-trivia rate cards). Excludes
-  //    one-night wonders without being so strict that only the
-  //    most-active player qualifies.
+  //  · Eligibility piggy-backs on `filteredStats`, which already
+  //    respects the screen-wide "active only" toggle and the
+  //    player-selection filter — so this table follows the same
+  //    inclusion rules as every other table on the screen. We do NOT
+  //    apply a separate 30%-participation gate here (we used to);
+  //    that double-gated a player who passed the screen's threshold
+  //    but not the trivia gate, which was confusing — the visible
+  //    "active only (7+ games)" badge said one thing and the table
+  //    silently said another.
   //  · Sorted by 1st-place rate desc, then 2nd, then 3rd, then
   //    games desc — the table headlines the win-rate dimension while
   //    keeping consistent finishers visible.
@@ -1023,7 +1046,7 @@ const StatisticsScreen = () => {
       return true;
     });
     const totalGames = periodGames.length;
-    if (totalGames === 0) return { rows: [], totalGames: 0, minGames: 0 };
+    if (totalGames === 0) return { rows: [], totalGames: 0 };
 
     const periodGameIds = new Set(periodGames.map(g => g.id));
     const periodGP = getAllGamePlayers().filter(gp => periodGameIds.has(gp.gameId));
@@ -1052,25 +1075,58 @@ const StatisticsScreen = () => {
       if (sorted.length >= 3) { const e3 = counts.get(sorted[2].playerName); if (e3) e3.thirds++; }
     }
 
-    const minGames = Math.max(1, Math.ceil(totalGames * 0.3));
     const visibleNames = new Set(filteredStats.map(s => s.playerName));
     const rows = Array.from(counts.values())
-      .filter(c => c.games >= minGames && visibleNames.has(c.playerName))
-      .map(c => ({
-        ...c,
-        firstRate: c.games > 0 ? (c.firsts / c.games) * 100 : 0,
-        secondRate: c.games > 0 ? (c.seconds / c.games) * 100 : 0,
-        thirdRate: c.games > 0 ? (c.thirds / c.games) * 100 : 0,
-      }))
-      .sort((a, b) =>
-        b.firstRate - a.firstRate ||
-        b.secondRate - a.secondRate ||
-        b.thirdRate - a.thirdRate ||
-        b.games - a.games
-      );
-
-    return { rows, totalGames, minGames };
+      .filter(c => visibleNames.has(c.playerName))
+      .map(c => {
+        const totalPodiums = c.firsts + c.seconds + c.thirds;
+        return {
+          ...c,
+          totalPodiums,
+          firstRate: c.games > 0 ? (c.firsts / c.games) * 100 : 0,
+          secondRate: c.games > 0 ? (c.seconds / c.games) * 100 : 0,
+          thirdRate: c.games > 0 ? (c.thirds / c.games) * 100 : 0,
+          // Total podium rate = how often the player reaches the
+          // top 3 in any capacity. Mathematically equivalent to
+          // summing the three per-medal rates (same denominator),
+          // and that's how it will read on the row: the new
+          // column's % equals the sum of the three medal columns.
+          totalRate: c.games > 0 ? (totalPodiums / c.games) * 100 : 0,
+        };
+      });
+    // Sort happens in `sortedPodiumRows` (depends on `podiumSort`).
+    return { rows, totalGames };
   }, [filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  // Apply the user-selected sort to the podium-rate rows. Each
+  // primary key falls back through the same chain as the previous
+  // default so ties resolve sensibly (e.g. equal 🥇 rate → highest
+  // 🏆 wins, then most games).
+  const sortedPodiumRows = useMemo(() => {
+    const rows = [...podiumRateStats.rows];
+    const cmp = (a: typeof rows[number], b: typeof rows[number]) => {
+      switch (podiumSort) {
+        case 'first':
+          return b.firstRate - a.firstRate || b.totalRate - a.totalRate || b.games - a.games;
+        case 'second':
+          return b.secondRate - a.secondRate || b.totalRate - a.totalRate || b.games - a.games;
+        case 'third':
+          return b.thirdRate - a.thirdRate || b.totalRate - a.totalRate || b.games - a.games;
+        case 'games':
+          return b.games - a.games || b.totalRate - a.totalRate;
+        case 'total':
+        default:
+          return (
+            b.totalRate - a.totalRate ||
+            b.firstRate - a.firstRate ||
+            b.secondRate - a.secondRate ||
+            b.thirdRate - a.thirdRate ||
+            b.games - a.games
+          );
+      }
+    };
+    return rows.sort(cmp);
+  }, [podiumRateStats.rows, podiumSort]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -2386,51 +2442,55 @@ const StatisticsScreen = () => {
             </>
           )}
 
-          {/* TABLE Options - Sort dropdown + Table Mode toggle */}
-          {viewMode === 'table' && (
-            <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
-                style={{
-                  padding: '0.3rem 0.4rem',
-                  fontSize: '0.7rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
-                <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
-                <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
-              </select>
-              {viewMode === 'table' && (['profit', 'avgGainLoss', 'gainLoss'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setTableMode(mode)}
-                  style={{
-                    padding: '0.3rem 0.45rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '6px',
-                    border: tableMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: tableMode === mode ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: tableMode === mode ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {mode === 'profit' ? t('stats.sortProfit') : mode === 'gainLoss' ? t('stats.gainLoss') : t('stats.avgGainLoss')}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* TABLE VIEW */}
+          {/* TABLE VIEW
+              Card structure: outer .card carries `tableRef` so the
+              shareable screenshot inherits the full card chrome
+              (background, rounded corners, padding, shadow). The
+              controls strip carries `tableControlsRef` and is
+              hidden via `hideForCapture` only during snapshotting,
+              so it stays visible to the live user but is excluded
+              from the shared image. */}
           {viewMode === 'table' && (
             <>
-              <div ref={tableRef} className="card" style={{ padding: '0.5rem', overflowX: 'auto' }}>
+              <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
+                <div ref={tableControlsRef} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
+                    style={{
+                      padding: '0.3rem 0.4rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
+                    <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
+                    <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
+                  </select>
+                  {(['profit', 'avgGainLoss', 'gainLoss'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setTableMode(mode)}
+                      style={{
+                        padding: '0.3rem 0.45rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '6px',
+                        border: tableMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)',
+                        background: tableMode === mode ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                        color: tableMode === mode ? 'var(--primary)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {mode === 'profit' ? t('stats.modeProfit') : mode === 'gainLoss' ? t('stats.gainLoss') : t('stats.avgGainLoss')}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ overflowX: 'auto' }}>
                 <div style={{ 
                   textAlign: 'center', 
                   fontSize: '0.7rem', 
@@ -2450,22 +2510,22 @@ const StatisticsScreen = () => {
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.playerCol')}</th>
                       {tableMode === 'profit' ? (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '22%' }}>{t('stats.profitCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '16%' }}>{t('stats.avgCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '20%' }}>{t('stats.profitCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '14%' }}>{t('stats.avgCol')}</th>
                         </>
                       ) : tableMode === 'gainLoss' ? (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--success)' }}>{t('stats.gainCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--danger)' }}>{t('stats.lossCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '17%', color: 'var(--success)' }}>{t('stats.gainCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '17%', color: 'var(--danger)' }}>{t('stats.lossCol')}</th>
                         </>
                       ) : (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--success)' }}>{t('stats.avgWinCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--danger)' }}>{t('stats.avgLossCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '17%', color: 'var(--success)' }}>{t('stats.avgWinCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '17%', color: 'var(--danger)' }}>{t('stats.avgLossCol')}</th>
                         </>
                       )}
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '13%' }}>{t('stats.gamesCol')}</th>
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '13%' }}>{t('stats.winRateCol')}</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '10%' }}>{t('stats.gamesCol')}</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '11%' }}>{t('stats.winRateCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2548,7 +2608,8 @@ const StatisticsScreen = () => {
                   })}
                 </tbody>
               </table>
-            </div>
+                </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
                 <button
                   onClick={handleShareTable}
@@ -2683,15 +2744,40 @@ const StatisticsScreen = () => {
               )}
 
               {/* Podium Rate Stats — 1st/2nd/3rd-place rates per player (period-scoped) */}
+              {/* Card structure: outer .card carries `podiumRatesRef`
+                  so the screenshot inherits full card chrome. The
+                  sort-dropdown strip carries `podiumControlsRef`
+                  and is hidden via `hideForCapture` only during
+                  snapshotting — visible to live users, excluded
+                  from the shared image. */}
               {podiumRateStats.rows.length > 0 && (
                 <div ref={podiumRatesRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: isRTL ? 'flex-start' : 'flex-end', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    <select
+                      value={podiumSort}
+                      onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
+                      style={{
+                        padding: '0.25rem 0.4rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="total" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.total')}</option>
+                      <option value="first" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.first')}</option>
+                      <option value="second" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.second')}</option>
+                      <option value="third" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.third')}</option>
+                      <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
+                    </select>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
-                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.4rem', opacity: 0.75 }}>
-                    {t('stats.podiumRatesNote')}
-                  </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{getTimeframeLabel()}</div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -2701,24 +2787,33 @@ const StatisticsScreen = () => {
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥇</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥈</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥉</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', borderInlineStart: '1px solid rgba(255,255,255,0.06)' }} title={t('stats.podiumTotalCol')}>{t('stats.podiumTotalCol')}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {podiumRateStats.rows.map((row, index) => {
+                      {sortedPodiumRows.map((row, index) => {
                         const isMe = identityName && row.playerName === identityName;
-                        const renderCell = (count: number, rate: number) => (
-                          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.25rem', whiteSpace: 'nowrap' }}>
-                            <span style={{ fontWeight: 600 }}>{Math.round(rate)}%</span>
+                        const renderCell = (count: number, rate: number, isTotal = false) => (
+                          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.15rem', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontWeight: isTotal ? 700 : 600, color: isTotal ? 'var(--text)' : undefined }}>{Math.round(rate)}%</span>
                             <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>({count})</span>
                           </span>
                         );
+                        // Rank-medal value follows the active sort:
+                        // sort by 🥇 → medal reflects gold count, etc.
+                        const medalValue =
+                          podiumSort === 'first' ? row.firsts :
+                          podiumSort === 'second' ? row.seconds :
+                          podiumSort === 'third' ? row.thirds :
+                          podiumSort === 'games' ? row.games :
+                          row.totalPodiums;
                         return (
                           <tr
                             key={row.playerName}
                             style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
                           >
                             <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
-                              {index + 1}{getMedal(index, row.firsts)}
+                              {index + 1}{getMedal(index, medalValue)}
                             </td>
                             <td style={{
                               padding: '0.3rem 0.2rem',
@@ -2741,11 +2836,27 @@ const StatisticsScreen = () => {
                             <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem' }}>
                               {renderCell(row.thirds, row.thirdRate)}
                             </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', borderInlineStart: '1px solid rgba(255,255,255,0.06)' }}>
+                              {renderCell(row.totalPodiums, row.totalRate, true)}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                  <div style={{
+                    fontSize: '0.6rem',
+                    color: 'var(--text-muted)',
+                    marginTop: '0.5rem',
+                    paddingTop: '0.4rem',
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    opacity: 0.75,
+                    fontStyle: 'italic',
+                    lineHeight: 1.5,
+                  }}>
+                    {t('stats.podiumRatesNote')}
+                  </div>
+                  </div>
                 </div>
               )}
               {podiumRateStats.rows.length > 0 && (

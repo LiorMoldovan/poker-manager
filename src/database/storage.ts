@@ -213,6 +213,8 @@ export const createGame = (playerIds: string[], location?: string, forecasts?: {
         chipCounts: {},
         finalValue: 0,
         profit: 0,
+        entryMode: 'color',
+        totalChipCount: null,
       });
     }
   });
@@ -400,6 +402,8 @@ export const addPlayerToGame = (gameId: string, playerId: string): GamePlayer | 
     chipCounts: {},
     finalValue: 0,
     profit: 0,
+    entryMode: 'color',
+    totalChipCount: null,
   };
 
   gamePlayers.push(newGamePlayer);
@@ -452,6 +456,39 @@ export const updateGamePlayerResults = (gamePlayerId: string, finalValue: number
   if (index !== -1) {
     gamePlayers[index].finalValue = finalValue;
     gamePlayers[index].profit = profit;
+    setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
+  }
+};
+
+// Migration 080 — quick-total chip entry mode.
+//
+// Atomic write: when switching INTO 'total', we wipe the abandoned
+// per-color counts so the row is internally consistent (no stale
+// chip_counts that could mislead display fallbacks). When switching
+// INTO 'color', we null out totalChipCount for the same reason.
+//
+// Called from ChipEntryScreen at three moments:
+//   1. selectPlayerWithMode — on first tap, persists the chosen mode
+//      so a realtime refresh / mid-flow reload shows the right modal.
+//   2. markPlayerDoneWithTotal — on Done from the TotalNumpadModal,
+//      persists the final total chip count.
+//   3. switchModeMidEntry — when admin clicks the in-modal switch link,
+//      after confirm dialog acknowledged.
+export const updateGamePlayerEntryMode = (
+  gamePlayerId: string,
+  entryMode: 'color' | 'total',
+  totalChipCount: number | null,
+): void => {
+  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
+  if (index !== -1) {
+    gamePlayers[index].entryMode = entryMode;
+    if (entryMode === 'total') {
+      gamePlayers[index].totalChipCount = totalChipCount;
+      gamePlayers[index].chipCounts = {};
+    } else {
+      gamePlayers[index].totalChipCount = null;
+    }
     setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   }
 };

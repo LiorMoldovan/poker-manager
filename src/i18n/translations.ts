@@ -1110,6 +1110,17 @@ const he = {
   'chips.color.black': 'שחור',
   'chips.color.yellow': 'צהוב',
 
+  // ── Quick-total chip entry mode (migration 080) ──
+  'chips.entryMode.color': 'לפי צבע',
+  'chips.entryMode.total': 'סך הכל',
+  'chips.entryMode.tileSecondary.color': 'ספירה לפי צבע',
+  'chips.entryMode.tileSecondary.total': 'סך הכל',
+  'chips.entryMode.totalNumpadTitle': 'סך הצ\'יפים',
+  'chips.entryMode.moneyEquivalent': '≈ {amount}',
+  'chips.entryMode.buyinHint': 'בייאין אחד = {chips} צ\'יפים',
+  'chips.entryMode.switchLink': 'החלף למצב {mode}',
+  'chips.entryMode.switchConfirm': 'פעולה זו תאפס את הספירה הנוכחית של {player}. להמשיך?',
+
   // ── Photo chip counting (per-player flow + Settings test card) ──
   'chips.photo.button': '📷 צלם קופה',
   'chips.photo.title': '📷 ספירת ז\'יטונים מתמונה',
@@ -2067,6 +2078,10 @@ const he = {
   'settings.game.playerA': 'שחקן א׳',
   'settings.game.playerB': 'שחקן ב׳',
   'settings.game.addBlocked': '+ הוסף',
+  'settings.game.chipEntryDefault': 'ברירת מחדל לספירה',
+  'settings.game.chipEntryDefaultHint': 'ניתן לשנות בזמן הספירה',
+  'settings.game.chipEntryOptionColor': 'לפי צבע',
+  'settings.game.chipEntryOptionTotal': 'סך הכל',
 
   // Settings > Players
   'settings.players.title': '👥 שחקנים ({count})',
@@ -3698,6 +3713,17 @@ const en: Record<keyof typeof he, string> = {
   'chips.color.black': 'Black',
   'chips.color.yellow': 'Yellow',
 
+  // ── Quick-total chip entry mode (migration 080) ──
+  'chips.entryMode.color': 'By color',
+  'chips.entryMode.total': 'Total',
+  'chips.entryMode.tileSecondary.color': 'Count by color',
+  'chips.entryMode.tileSecondary.total': 'Quick total',
+  'chips.entryMode.totalNumpadTitle': 'Total chips',
+  'chips.entryMode.moneyEquivalent': '≈ {amount}',
+  'chips.entryMode.buyinHint': '1 buy-in = {chips} chips',
+  'chips.entryMode.switchLink': 'Switch to {mode}',
+  'chips.entryMode.switchConfirm': 'This will clear the current count for {player}. Continue?',
+
   // ── Game Summary ──
   'summary.loading': 'Loading summary...',
   'summary.gameNotFound': 'Game Not Found',
@@ -4520,6 +4546,10 @@ const en: Record<keyof typeof he, string> = {
   'settings.game.playerA': 'Player A',
   'settings.game.playerB': 'Player B',
   'settings.game.addBlocked': '+ Add',
+  'settings.game.chipEntryDefault': 'Default chip count',
+  'settings.game.chipEntryDefaultHint': 'Can be changed during counting',
+  'settings.game.chipEntryOptionColor': 'By color',
+  'settings.game.chipEntryOptionTotal': 'Total',
 
   // Settings > Players
   'settings.players.title': '👥 Players ({count})',

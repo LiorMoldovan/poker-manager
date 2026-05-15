@@ -5474,12 +5474,18 @@ function buildTriviaList(
   // ── 22d. Most consistent earner — the regular with the LOWEST
   //          profit standard deviation. "Wow, that player is a
   //          metronome" type of insight; opposite of all the
-  //          "biggest swing" facts. Gates: regular = ≥ 20 games,
-  //          ≥ 3 such regulars exist (otherwise it's just "the
-  //          only person with games"), and we report their avg
-  //          alongside the variance signal so the fact also
-  //          carries a meaningful magnitude.
-  const regulars = playerStats.filter(p => p.gamesPlayed >= 20);
+  //          "biggest swing" facts.
+  //          Gates:
+  //            · regular = > 50 lifetime games (Lior's bar — we used
+  //              to allow ≥ 20 but a ~20-game sample is too noisy to
+  //              meaningfully crown someone "the steadiest");
+  //            · ≥ 3 such regulars exist (otherwise it's just "the
+  //              only person with games" wearing a crown).
+  //          The card now surfaces the actual stdev as a ±band so
+  //          the parenthetical reinforces the headline claim instead
+  //          of showing only the player's average (which doesn't
+  //          explain why they earned the title).
+  const regulars = playerStats.filter(p => p.gamesPlayed > 50);
   if (regulars.length >= 3) {
     const regularGameSets = new Map<string, number[]>();
     for (const ps of regulars) regularGameSets.set(ps.playerName, []);
@@ -5491,7 +5497,7 @@ function buildTriviaList(
     let lowestStdevPlayer: PlayerStats | null = null;
     for (const ps of regulars) {
       const profits = regularGameSets.get(ps.playerName) ?? [];
-      if (profits.length < 20) continue;
+      if (profits.length <= 50) continue;
       const mean = profits.reduce((s, p) => s + p, 0) / profits.length;
       const variance = profits.reduce((s, p) => s + (p - mean) ** 2, 0) / profits.length;
       const stdev = Math.sqrt(variance);
@@ -5505,6 +5511,7 @@ function buildTriviaList(
         icon: '📐',
         text: t('home.trivia.mostConsistent', {
           name: lowestStdevPlayer.playerName,
+          stdev: formatCurrency(Math.round(lowestStdev)),
           avg: formatCurrency(Math.round(lowestStdevPlayer.avgProfit)),
           games: lowestStdevPlayer.gamesPlayed,
         }),

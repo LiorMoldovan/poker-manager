@@ -402,8 +402,15 @@ const GameSummaryScreen = () => {
   // is fine for the current "evaluate quality" rollout phase.
   useEffect(() => { if (!comicUrl) setComicRegenCount(0); }, [comicUrl]);
 
-  // Calculate total chips for a player
+  // Calculate total chips for a player. Migration 080 — branch on
+  // entryMode so quick-total players (chip_counts={}) display their
+  // real total instead of 0. Color mode (today's behavior) uses the
+  // existing per-color sum. Final fallback to derived-from-finalValue
+  // covers stale rows where neither source is populated.
   const getTotalChips = (player: GamePlayer): number => {
+    if (player.entryMode === 'total') {
+      return player.totalChipCount ?? 0;
+    }
     const chipValues = getChipValues();
     let total = 0;
     for (const [chipId, count] of Object.entries(player.chipCounts)) {
@@ -412,7 +419,14 @@ const GameSummaryScreen = () => {
         total += count * chip.value;
       }
     }
-    return total;
+    if (total > 0) return total;
+    // Last-resort fallback for legacy rows with empty chipCounts but
+    // a non-zero finalValue. Uses the live valuePerChip (rebuyValue /
+    // chipsPerRebuy) which is fine as long as group settings haven't
+    // drifted since the game ended.
+    const settings = getSettings();
+    const vpc = (settings.rebuyValue || 30) / (settings.chipsPerRebuy || 10000);
+    return vpc > 0 ? Math.round(player.finalValue / vpc) : 0;
   };
 
   useEffect(() => {

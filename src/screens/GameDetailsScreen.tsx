@@ -43,8 +43,15 @@ const GameDetailsScreen = () => {
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Calculate total chips for a player (same as GameSummaryScreen)
+  // Calculate total chips for a player (same as GameSummaryScreen).
+  // Migration 080 — explicit branch on entryMode so quick-total
+  // players (chip_counts = {}, totalChipCount = N) display the
+  // stored chip count instead of falling through to finalValue
+  // (which is in money, not chip points).
   const getTotalChips = (player: GamePlayer): number => {
+    if (player.entryMode === 'total') {
+      return player.totalChipCount ?? 0;
+    }
     // First try to calculate from chipCounts
     if (player.chipCounts && Object.keys(player.chipCounts).length > 0) {
       const chipValues = getChipValues();
@@ -57,7 +64,8 @@ const GameDetailsScreen = () => {
       }
       if (total > 0) return total;
     }
-    // Fallback to finalValue
+    // Fallback to finalValue (legacy rows; in money, not chips, but
+    // preserves today's behavior for those edge cases).
     return player.finalValue;
   };
 

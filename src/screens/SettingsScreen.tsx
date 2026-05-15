@@ -631,6 +631,17 @@ const SettingsScreen = () => {
     showSaved();
   };
 
+  // Migration 080. Separate setter for the chip-entry default mode
+  // because its value type ('color' | 'total') doesn't fit the
+  // numeric/array signature of handleSettingsChange. Same persist
+  // pattern (set local + saveSettings + showSaved).
+  const handleChipEntryDefaultModeChange = (mode: 'color' | 'total') => {
+    const newSettings: Settings = { ...settings, chipEntryDefaultMode: mode };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    showSaved();
+  };
+
   const showSaved = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -1288,6 +1299,13 @@ const SettingsScreen = () => {
             )}
           </div>
 
+          {/* Group 1: Money + chips. Three numeric rows (buyin
+              value, chips per buyin, min transfer) followed by the
+              chip-entry default toggle — all four are about how
+              money becomes chips and back. Visual rhythm: numeric
+              inputs stack, then the segmented toggle reads as the
+              same kind of setting (per-row decoration, right-aligned
+              control). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1rem' }}>
             <div className="settings-row" style={{ animation: 'contentFadeIn 0.25s ease-out both' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1337,9 +1355,61 @@ const SettingsScreen = () => {
                 disabled={!canEditSettings}
               />
             </div>
+
+            {/* Migration 080 — group default chip-entry mode.
+                Belongs right next to the buyin / chips-per-buyin
+                rows because it controls how those chips get counted
+                back at end of night. Both modes are always available
+                via the small button on each player tile, so this is
+                a default-tap shortcut, not a hard switch. */}
+            <div className="settings-row" style={{ animation: 'contentFadeIn 0.25s ease-out 0.09s both' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('settings.game.chipEntryDefault')}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                  {t('settings.game.chipEntryDefaultHint')}
+                </div>
+              </div>
+              {(() => {
+                const currentMode: 'color' | 'total' = settings.chipEntryDefaultMode === 'total' ? 'total' : 'color';
+                const pillStyle = (active: boolean): React.CSSProperties => ({
+                  padding: '0.35rem 0.7rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                  borderRadius: '8px',
+                  border: active ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  background: active ? 'rgba(16,185,129,0.15)' : 'transparent',
+                  color: active ? 'var(--primary)' : 'var(--text-muted)',
+                  cursor: canEditSettings ? 'pointer' : 'not-allowed',
+                  opacity: canEditSettings ? 1 : 0.6,
+                  transition: 'all 0.15s ease',
+                  whiteSpace: 'nowrap',
+                });
+                return (
+                  <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => canEditSettings && handleChipEntryDefaultModeChange('color')}
+                      style={pillStyle(currentMode === 'color')}
+                      disabled={!canEditSettings}
+                    >
+                      {t('settings.game.chipEntryOptionColor')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => canEditSettings && handleChipEntryDefaultModeChange('total')}
+                      style={pillStyle(currentMode === 'total')}
+                      disabled={!canEditSettings}
+                    >
+                      {t('settings.game.chipEntryOptionTotal')}
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
-          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.09s both' }}>
+          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.12s both' }}>
             <label className="label" style={{ marginBottom: '0.4rem', display: 'block' }}>{t('settings.game.gameNightDays')}</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {[
@@ -1389,7 +1459,7 @@ const SettingsScreen = () => {
             </p>
           </div>
 
-          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.12s both' }}>
+          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.15s both' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
               <label className="label" style={{ margin: 0 }}>{t('settings.game.locations')}</label>
             </div>
@@ -1464,7 +1534,7 @@ const SettingsScreen = () => {
           </div>
 
           {/* Blocked Transfers */}
-          <div style={{ animation: 'contentFadeIn 0.25s ease-out 0.15s both' }}>
+          <div style={{ animation: 'contentFadeIn 0.25s ease-out 0.18s both' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
               <label className="label" style={{ margin: 0 }}>{t('settings.game.blockedTransfers')}</label>
             </div>

@@ -53,6 +53,13 @@ function toGame(row: Record<string, unknown>): Game {
 }
 
 function toGamePlayer(row: Record<string, unknown>): GamePlayer {
+  // entry_mode + total_chip_count come from migration 080. Default
+  // entryMode to 'color' so cached snapshots taken before the column
+  // existed (e.g. older PWA install resuming) still hydrate cleanly
+  // — they'll just see today's color flow until the next refresh.
+  const rawEntryMode = row.entry_mode as string | undefined;
+  const entryMode: 'color' | 'total' = rawEntryMode === 'total' ? 'total' : 'color';
+  const rawTotal = row.total_chip_count as number | string | null | undefined;
   return {
     id: row.id as string,
     gameId: row.game_id as string,
@@ -62,6 +69,8 @@ function toGamePlayer(row: Record<string, unknown>): GamePlayer {
     chipCounts: (row.chip_counts as Record<string, number>) || {},
     finalValue: Number(row.final_value),
     profit: Number(row.profit),
+    entryMode,
+    totalChipCount: rawTotal == null ? null : Number(rawTotal),
   };
 }
 
@@ -117,6 +126,13 @@ function toSettings(row: Record<string, unknown>): Settings {
   // before the migration applied).
   if (typeof row.share_chip_photos === 'boolean') {
     s.shareChipPhotos = row.share_chip_photos;
+  }
+  // chip_entry_default_mode (migration 080) — group default for the
+  // BIG-tap mode on each player tile in chip entry. Tolerate
+  // missing key on pre-080 deployments (mapper falls through to
+  // 'color' which is the DB-side default and today's behavior).
+  if (row.chip_entry_default_mode === 'total' || row.chip_entry_default_mode === 'color') {
+    s.chipEntryDefaultMode = row.chip_entry_default_mode;
   }
   return s;
 }
@@ -278,6 +294,12 @@ function gamePlayerToRow(gp: GamePlayer) {
     chip_counts: gp.chipCounts,
     final_value: gp.finalValue,
     profit: gp.profit,
+    // Migration 080. Default to 'color' if a stale in-memory object
+    // ever reaches the writer without entryMode set — protects from
+    // partial-shape migration bugs (would otherwise hit the CHECK
+    // constraint on the column).
+    entry_mode: gp.entryMode === 'total' ? 'total' : 'color',
+    total_chip_count: gp.totalChipCount ?? null,
   };
 }
 
@@ -323,6 +345,11 @@ function settingsToRow(s: Settings, groupId: string) {
     // owner who toggles it OFF after having toggled ON actually
     // persists the OFF state.
     share_chip_photos: s.shareChipPhotos === true,
+    // chip_entry_default_mode (migration 080) — group default for the
+    // BIG-tap mode in chip entry. Always send a concrete value so the
+    // CHECK constraint on the column is satisfied even when the
+    // in-memory Settings object came from a pre-080 cache snapshot.
+    chip_entry_default_mode: s.chipEntryDefaultMode === 'total' ? 'total' : 'color',
   };
 }
 
