@@ -487,6 +487,20 @@ export interface BuildBundle {
   // Default 'random' so any template that runs outside the driver
   // (e.g. unit tests) keeps its pre-2026-05-10 behavior.
   subjectScope: SubjectScope;
+  // Subjects already chosen by `pickSubject` in 'random' scope
+  // during this session. Used to bias subject selection AWAY from
+  // recent picks so the user doesn't get 3-4 questions in a row
+  // about the same player ("How many games has Hardun played? ·
+  // How many wins does Hardun have? · What's Hardun's biggest
+  // profit?"). Without this, with ~7 eligible non-self players and
+  // ~5 player-mode questions per session the birthday paradox makes
+  // subject collisions ~70% likely — what users perceive as
+  // "same questions". Cleared inside `pickSubject` when every
+  // eligible non-self subject has been used at least once, so
+  // generation never stalls on small groups (where exhaustion is
+  // expected). Owned by `generateTriviaBatch`; templates never
+  // touch it directly.
+  usedSubjects: Set<string>;
   // Indexed view of game_players, filtered to completed games only
   // and joined with the game's date.
   rows: PlayerGameRow[];
@@ -664,6 +678,7 @@ function buildBundle(ctx: TriviaContext): BuildBundle {
     eligibleNames,
     eligibilityFloor,
     subjectScope: 'random',
+    usedSubjects: new Set<string>(),
     rows,
     gameById: completedById,
     rowsByPlayer,
@@ -1347,14 +1362,29 @@ const GROUP_TEMPLATES: Template[] = [
 //              skips the template). Used by the 'players' (personal)
 //              mode and by the personal half of 'mixed' mode.
 //
-//   'random' — pick a non-self eligible player. Same behavior as
-//              before subjectScope existed: asking the user about
-//              themselves is too easy in this scope. Used by 'group'
-//              mode and by the broad half of 'mixed' mode.
+//   'random' — pick a non-self eligible player, BIASED AWAY from
+//              subjects already chosen in this session
+//              (`b.usedSubjects`). When every non-excluded subject
+//              has been used once the bias resets so generation
+//              never stalls on small groups (where exhaustion is
+//              the common case, not the edge case). Same selectable
+//              pool as before subjectScope existed: asking the user
+//              about themselves is too easy in this scope. Used by
+//              'group' mode and by the broad half of 'mixed' mode.
 //
 // `exclude` is honored only in 'random' scope (in 'self' the answer
 // is fixed). Most templates pass selfPlayerName as the default, but
 // some (matchup templates) pass it explicitly to be obvious.
+//
+// IMPORTANT — subjects are recorded in `b.usedSubjects` BEFORE the
+// caller's `tpl.build(...)` decides whether to return a question or
+// null. This means a template that picks "Hardun" then bails on
+// further data checks still "burns" Hardun for one round, which is
+// fine: the next pickSubject call will simply prefer a different
+// subject, exactly the behavior we want. The alternative
+// (post-build commit) would require threading a "what subject did
+// you pick?" back-channel through 38 template callsites and is not
+// worth the code weight.
 export function pickSubject(
   b: BuildBundle,
   exclude: string | null | undefined = b.ctx.selfPlayerName,
@@ -1364,11 +1394,23 @@ export function pickSubject(
     if (self && b.eligibleNames.includes(self)) return self;
     return null;
   }
-  const pool = exclude
+  const fullPool = exclude
     ? b.eligibleNames.filter(n => n !== exclude)
     : b.eligibleNames;
-  if (pool.length === 0) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (fullPool.length === 0) return null;
+  // Prefer subjects we haven't used yet this session. If every
+  // selectable subject has been used, clear the used-set so the
+  // next round of picks starts fresh — this guarantees forward
+  // progress on small groups where the eligible pool is smaller
+  // than the question count.
+  let pool = fullPool.filter(n => !b.usedSubjects.has(n));
+  if (pool.length === 0) {
+    b.usedSubjects.clear();
+    pool = fullPool;
+  }
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  b.usedSubjects.add(chosen);
+  return chosen;
 }
 
 const PLAYER_TEMPLATES: Template[] = [

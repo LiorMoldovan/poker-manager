@@ -724,10 +724,29 @@ export async function captureChipSelfie(
   const dataUrl = await readFileAsDataUrl(file);
   const img = await loadImage(dataUrl);
 
+  // v5.62 capture pipeline:
+  //
+  // 1. Square center crop with a TIGHTER inset (70% of min edge instead
+  //    of the full short side). This drops most of the background
+  //    (kitchen counter / poker mat) and keeps the chip filling the
+  //    frame, which is what the LLM needs as a reference. Previously
+  //    we used 100% of the short side, so a selfie taken with the chip
+  //    in the center of a larger frame would have ~30-50% green-felt
+  //    background — confusing the LLM's "this is what a Red chip looks
+  //    like" anchor.
+  //
+  // 2. Per-channel histogram stretch on the cropped result. Many user
+  //    selfies are washed out (indoor lighting, white-balance issues —
+  //    Lior's White chip read as grey-cream, Black chip read as grey).
+  //    A mild stretch pulls the darkest pixel to ~0 and the brightest
+  //    to ~255, restoring contrast without inventing detail. Skipped
+  //    on photos already in good condition (span > 200) so we don't
+  //    over-process well-lit captures.
   const SIZE = 256;
   const minEdge = Math.min(img.width, img.height);
-  const sx = Math.floor((img.width - minEdge) / 2);
-  const sy = Math.floor((img.height - minEdge) / 2);
+  const cropEdge = Math.floor(minEdge * 0.70);
+  const sx = Math.floor((img.width - cropEdge) / 2);
+  const sy = Math.floor((img.height - cropEdge) / 2);
 
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
@@ -736,10 +755,62 @@ export async function captureChipSelfie(
   if (!ctx) throw new Error('Canvas 2D context unavailable');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, minEdge, minEdge, 0, 0, SIZE, SIZE);
+  ctx.drawImage(img, sx, sy, cropEdge, cropEdge, 0, 0, SIZE, SIZE);
+
+  // Histogram stretch — only if the image is meaningfully washed out.
+  try {
+    const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
+    const data = imgData.data;
+    const minByCh = [255, 255, 255];
+    const maxByCh = [0, 0, 0];
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const v = data[i + c];
+        if (v < minByCh[c]) minByCh[c] = v;
+        if (v > maxByCh[c]) maxByCh[c] = v;
+      }
+    }
+    // Only stretch when every channel is meaningfully compressed.
+    // span < 220 means there's room to gain contrast on this channel.
+    const shouldStretch =
+      maxByCh[0] - minByCh[0] < 220 ||
+      maxByCh[1] - minByCh[1] < 220 ||
+      maxByCh[2] - minByCh[2] < 220;
+    if (shouldStretch) {
+      const lutR = buildStretchLUT(minByCh[0], maxByCh[0]);
+      const lutG = buildStretchLUT(minByCh[1], maxByCh[1]);
+      const lutB = buildStretchLUT(minByCh[2], maxByCh[2]);
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]     = lutR[data[i]];
+        data[i + 1] = lutG[data[i + 1]];
+        data[i + 2] = lutB[data[i + 2]];
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+  } catch (err) {
+    // getImageData can throw on tainted canvas — extremely unlikely
+    // since we drew from a same-origin object URL, but if it does we
+    // just keep the un-stretched crop. The selfie is still usable.
+    console.warn('[captureChipSelfie] histogram stretch skipped:', err);
+  }
 
   const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
   const base64 = jpegDataUrl.split(',')[1] || '';
 
   return { base64, mimeType: 'image/jpeg' };
+}
+
+/** Build a 256-entry lookup table that maps the [lo..hi] range linearly
+ *  to [0..255]. Used by `captureChipSelfie` for per-channel histogram
+ *  stretch. We clamp `lo` away from `hi` by at least 1 to avoid a
+ *  divide-by-zero on degenerate single-color crops. */
+function buildStretchLUT(lo: number, hi: number): Uint8Array {
+  const out = new Uint8Array(256);
+  const safeHi = Math.max(hi, lo + 1);
+  const range = safeHi - lo;
+  for (let i = 0; i < 256; i++) {
+    const v = Math.max(0, Math.min(255, Math.round(((i - lo) / range) * 255)));
+    out[i] = v;
+  }
+  return out;
 }

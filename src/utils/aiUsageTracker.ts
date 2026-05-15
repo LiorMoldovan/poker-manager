@@ -240,7 +240,7 @@ export function getTodayLog(): ActionEntry[] {
 // Known free-tier daily request limits (RPD) per model — conservative estimates
 const MODEL_RPD_LIMITS: Record<string, number> = {
   'gemini-3-flash-preview': 500,
-  'gemini-3.1-flash-lite-preview': 1000,
+  'gemini-3.1-flash-lite': 1000,
   'gemini-2.5-flash': 500,
 };
 const DEFAULT_RPD = 500;

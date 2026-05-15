@@ -24,6 +24,16 @@ const ME_NAME_COLOR = '#60a5fa';
 const meRowStyle = { background: ME_BG, borderRight: '3px solid #3b82f6' } as const;
 const meNameStyle = { color: ME_NAME_COLOR } as const;
 
+// Auto-shrink long player names so narrow mobile cells don't ellipsize.
+// Tiered: short names render at base size, longer names step down.
+const getNameFontSize = (name: string, baseRem: number): string => {
+  const len = (name || '').length;
+  if (len <= 8) return `${baseRem}rem`;
+  if (len <= 11) return `${(baseRem * 0.85).toFixed(3)}rem`;
+  if (len <= 14) return `${(baseRem * 0.72).toFixed(3)}rem`;
+  return `${(baseRem * 0.62).toFixed(3)}rem`;
+};
+
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,12 +95,14 @@ const StatisticsScreen = () => {
   const [isSharingHallOfFame, setIsSharingHallOfFame] = useState(false);
   const [isSharingRebuyStats, setIsSharingRebuyStats] = useState(false);
   const [isSharingTop10, setIsSharingTop10] = useState(false);
+  const [isSharingPodiumRates, setIsSharingPodiumRates] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const top10Ref = useRef<HTMLDivElement>(null);
   const podiumRef = useRef<HTMLDivElement>(null);
   const hallOfFameRef = useRef<HTMLDivElement>(null);
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
+  const podiumRatesRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
 
   // Chronicle AI state
@@ -196,6 +208,16 @@ const StatisticsScreen = () => {
       await shareFiles(files, t('stats.rebuyStats'));
     } catch (e) { console.error('Error sharing rebuy stats:', e); }
     finally { setIsSharingRebuyStats(false); }
+  };
+
+  const handleSharePodiumRates = async () => {
+    if (!podiumRatesRef.current) return;
+    setIsSharingPodiumRates(true);
+    try {
+      const files = await captureAndSplit(podiumRatesRef.current, 'poker-podium-rates');
+      await shareFiles(files, t('stats.podiumRates'));
+    } catch (e) { console.error('Error sharing podium rates:', e); }
+    finally { setIsSharingPodiumRates(false); }
   };
 
   const handleSharePodium = async () => {
@@ -978,6 +1000,78 @@ const StatisticsScreen = () => {
     return { totalGames, gamesWithoutRebuys };
   }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
+  // Per-player place-finish rates (1st/2nd/3rd) for the current time
+  // period. Mirrors the trivia "rate champion" logic in HomeDashboard:
+  //  · Place is awarded only when the top finisher actually won
+  //    (sorted[0].profit > 0). Avoids crediting "winners" of all-loss
+  //    games where the highest profit is still negative.
+  //  · Players gated to ≥30% participation in the period (same gate
+  //    Lior approved for the home-trivia rate cards). Excludes
+  //    one-night wonders without being so strict that only the
+  //    most-active player qualifies.
+  //  · Sorted by 1st-place rate desc, then 2nd, then 3rd, then
+  //    games desc — the table headlines the win-rate dimension while
+  //    keeping consistent finishers visible.
+  const podiumRateStats = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const periodGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    const totalGames = periodGames.length;
+    if (totalGames === 0) return { rows: [], totalGames: 0, minGames: 0 };
+
+    const periodGameIds = new Set(periodGames.map(g => g.id));
+    const periodGP = getAllGamePlayers().filter(gp => periodGameIds.has(gp.gameId));
+
+    type Counts = { playerName: string; games: number; firsts: number; seconds: number; thirds: number };
+    const counts = new Map<string, Counts>();
+
+    const playersByGame = new Map<string, typeof periodGP>();
+    for (const gp of periodGP) {
+      const arr = playersByGame.get(gp.gameId);
+      if (arr) arr.push(gp);
+      else playersByGame.set(gp.gameId, [gp]);
+    }
+
+    for (const players of playersByGame.values()) {
+      if (players.length === 0) continue;
+      for (const p of players) {
+        const e = counts.get(p.playerName) ?? { playerName: p.playerName, games: 0, firsts: 0, seconds: 0, thirds: 0 };
+        e.games++;
+        counts.set(p.playerName, e);
+      }
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      if (sorted[0].profit <= 0) continue;
+      const e1 = counts.get(sorted[0].playerName); if (e1) e1.firsts++;
+      if (sorted.length >= 2) { const e2 = counts.get(sorted[1].playerName); if (e2) e2.seconds++; }
+      if (sorted.length >= 3) { const e3 = counts.get(sorted[2].playerName); if (e3) e3.thirds++; }
+    }
+
+    const minGames = Math.max(1, Math.ceil(totalGames * 0.3));
+    const visibleNames = new Set(filteredStats.map(s => s.playerName));
+    const rows = Array.from(counts.values())
+      .filter(c => c.games >= minGames && visibleNames.has(c.playerName))
+      .map(c => ({
+        ...c,
+        firstRate: c.games > 0 ? (c.firsts / c.games) * 100 : 0,
+        secondRate: c.games > 0 ? (c.seconds / c.games) * 100 : 0,
+        thirdRate: c.games > 0 ? (c.thirds / c.games) * 100 : 0,
+      }))
+      .sort((a, b) =>
+        b.firstRate - a.firstRate ||
+        b.secondRate - a.secondRate ||
+        b.thirdRate - a.thirdRate ||
+        b.games - a.games
+      );
+
+    return { rows, totalGames, minGames };
+  }, [filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
     if (index === 0) return ' 🥇';
@@ -1741,7 +1835,7 @@ const StatisticsScreen = () => {
                           <span style={{ fontSize: '0.9rem' }}>
                             {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
                           </span>
-                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: getNameFontSize(player.playerName, 0.65), ...(isMe ? meNameStyle : {}) }}>
                             {player.playerName}
                           </span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
@@ -1793,7 +1887,7 @@ const StatisticsScreen = () => {
                           ...(isMe ? { outline: '1.5px solid #3b82f6' } : {})
                         }}>
                           <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: getNameFontSize(player.playerName, 0.65), ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                         </div>
                         );
@@ -1841,7 +1935,7 @@ const StatisticsScreen = () => {
                           ...(isMe ? { outline: '1.5px solid #3b82f6' } : {})
                         }}>
                           <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: getNameFontSize(player.playerName, 0.65), ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                         </div>
                         );
@@ -2408,7 +2502,7 @@ const StatisticsScreen = () => {
                         </span>
                           )}
                       </td>
-                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>
+                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isRTL ? 'right' : 'left', fontSize: getNameFontSize(player.playerName, 0.8), ...(isMe ? meNameStyle : {}) }}>
                           {player.playerName}
                       </td>
                         {tableMode === 'profit' ? (
@@ -2584,6 +2678,96 @@ const StatisticsScreen = () => {
                     }}
                   >
                     {isSharingRebuyStats ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* Podium Rate Stats — 1st/2nd/3rd-place rates per player (period-scoped) */}
+              {podiumRateStats.rows.length > 0 && (
+                <div ref={podiumRatesRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                    {t('stats.podiumRates')}
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.4rem', opacity: 0.75 }}>
+                    {t('stats.podiumRatesNote')}
+                  </div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥇</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥈</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>🥉</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {podiumRateStats.rows.map((row, index) => {
+                        const isMe = identityName && row.playerName === identityName;
+                        const renderCell = (count: number, rate: number) => (
+                          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.25rem', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontWeight: 600 }}>{Math.round(rate)}%</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>({count})</span>
+                          </span>
+                        );
+                        return (
+                          <tr
+                            key={row.playerName}
+                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
+                          >
+                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
+                              {index + 1}{getMedal(index, row.firsts)}
+                            </td>
+                            <td style={{
+                              padding: '0.3rem 0.2rem',
+                              whiteSpace: 'nowrap',
+                              fontWeight: '500',
+                              textAlign: isRTL ? 'right' : 'left',
+                              ...(isMe ? meNameStyle : {})
+                            }}>
+                              {row.playerName}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--text-muted)' }}>
+                              {row.games}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem' }}>
+                              {renderCell(row.firsts, row.firstRate)}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem' }}>
+                              {renderCell(row.seconds, row.secondRate)}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem' }}>
+                              {renderCell(row.thirds, row.thirdRate)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {podiumRateStats.rows.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    onClick={handleSharePodiumRates}
+                    disabled={isSharingPodiumRates}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingPodiumRates ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}

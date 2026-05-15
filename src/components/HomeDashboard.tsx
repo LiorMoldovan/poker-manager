@@ -2634,9 +2634,17 @@ function RotatingFactCard({
     transition: 'background 0.15s ease, color 0.15s ease',
   };
   // The chevron buttons get a tighter weight + slightly bigger
-  // glyph so the `‹ › ` arrows read crisply at 26 px.
+  // glyph so the `‹ › ` arrows read crisply. They're also bumped
+  // to 32 px (vs the 26 px base) so the touch target is forgiving
+  // on mobile — at 26 px users routinely missed the button and
+  // the surrounding card-tap fired instead, sending them to the
+  // trivia game by mistake. 32 px is still well below the dominant
+  // visual elements but lifts the hit area above the iOS ~32 px
+  // accidental-tap threshold.
   const chevronBtnStyle: React.CSSProperties = {
     ...ctrlBtnStyle,
+    width: 32,
+    height: 32,
     fontSize: '1.15rem',
     fontWeight: 400,
     fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -2688,13 +2696,29 @@ function RotatingFactCard({
   // visually mirrors the row → the LEFT chevron ends up being
   // "next" which contradicts the Western pagination convention
   // every web user expects (`‹` = back, `›` = next).
+  //
+  // The wrapper carries an `onClick` that calls `stopPropagation`,
+  // which turns the entire accessory area (chevrons + counter +
+  // the gaps between them + the negative-margin/padding safe-zone)
+  // into a "no-navigate" region. Without this, a mobile user who
+  // taps a few pixels off the chevron ends up triggering the
+  // surrounding card-tap and getting whisked to the trivia game.
+  // The padding/negative-margin pair grows the safe zone WITHOUT
+  // shifting the visible layout — the row still aligns the same
+  // way, but the touch-safe envelope around the controls is ~14 px
+  // larger on every side.
   const accessory = (
-    <div style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '0.3rem',
-      direction: 'ltr',
-    }}>
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        direction: 'ltr',
+        padding: '6px 8px',
+        margin: '-6px -8px',
+      }}
+    >
       {canCycle && (
         <>
           <button
@@ -2742,16 +2766,33 @@ function RotatingFactCard({
   //     vertical space for a single 26 px icon)
   //   • absolute-positioning over the subtitle (previous design —
   //     forced a bottom-padding bump and risked text overlap)
+  // Wrapped in a `stopPropagation` span with the same safe-zone
+  // padding as the chevron accessory — a tap immediately around
+  // the share button (the gap between subtitle text and the icon,
+  // a slightly off-button miss) stays inert instead of bubbling
+  // to the card-tap-to-play handler. The button itself still calls
+  // `stopPropagation` in `handleShare` so the wrapper is defensive,
+  // not load-bearing.
   const shareNode = (
-    <button
-      type="button"
-      onClick={handleShare}
-      title={shareLabel}
-      aria-label={shareLabel}
-      style={shareBtnStyle}
+    <span
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'inline-flex',
+        padding: '6px 8px',
+        margin: '-6px -8px',
+        flexShrink: 0,
+      }}
     >
-      📤
-    </button>
+      <button
+        type="button"
+        onClick={handleShare}
+        title={shareLabel}
+        aria-label={shareLabel}
+        style={shareBtnStyle}
+      >
+        📤
+      </button>
+    </span>
   );
 
   // Final composed subtitle: animated text + share button on the same
@@ -3367,6 +3408,97 @@ function buildPersonalFactsList(
     }
   }
 
+  // 10b/c/d. Place-rank facts (1st, 2nd, 3rd, all-time). Mirrors
+  //          the home-trivia "מלך הזכיות / מלך המקומות השניים /
+  //          מלך המקומות השלישיים" cards but framed personally —
+  //          tells the player exactly where THEY stand on each
+  //          place board, with their own count and rate. Gates:
+  //              · ≥ 30 group games (matches home-trivia gate so
+  //                we don't surface ranks on tiny groups)
+  //              · player has ≥ 10 games (already true on the
+  //                outer mostCommonFinish gate, but kept explicit)
+  //              · the player has ≥ 3 finishes in this place
+  //                (else "you're #X with 1 finish" reads as noise)
+  //              · player is in top 5 by absolute count (else
+  //                ranks like "#15 in 3rd-place finishes" are
+  //                uninteresting)
+  //          When the player is rank 1, uses a celebratory "king"
+  //          translation; otherwise the rank-style copy.
+  const completedGameCount = completedGameIds.size;
+  if (myStats.gamesPlayed >= 10 && completedGameCount >= 30) {
+    // Build per-player place counts across all completed games. We
+    // re-derive from `gamePlayers` (rather than reusing
+    // `profitsByGameByPlayer`, which only covers games I played in)
+    // because the rank computation needs counts for every player in
+    // the group, not just my opponents.
+    type PlaceCounts = { wins: number; seconds: number; thirds: number; games: number };
+    const placeCountsByPlayer = new Map<string, PlaceCounts>();
+    const playersByGameAll = new Map<string, typeof gamePlayers>();
+    for (const gp of gamePlayers) {
+      if (!completedGameIds.has(gp.gameId)) continue;
+      const arr = playersByGameAll.get(gp.gameId);
+      if (arr) arr.push(gp);
+      else playersByGameAll.set(gp.gameId, [gp]);
+    }
+    for (const players of playersByGameAll.values()) {
+      if (players.length === 0) continue;
+      // Game appearance count for everyone present.
+      for (const p of players) {
+        const e = placeCountsByPlayer.get(p.playerName) ?? { wins: 0, seconds: 0, thirds: 0, games: 0 };
+        e.games++;
+        placeCountsByPlayer.set(p.playerName, e);
+      }
+      // Place finishes only when there's a real winner (top profit > 0)
+      // — same guard the home-trivia 1st/2nd/3rd cards use.
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      if (sorted[0].profit <= 0) continue;
+      const e1 = placeCountsByPlayer.get(sorted[0].playerName);
+      if (e1) e1.wins++;
+      if (sorted.length >= 2) {
+        const e2 = placeCountsByPlayer.get(sorted[1].playerName);
+        if (e2) e2.seconds++;
+      }
+      if (sorted.length >= 3) {
+        const e3 = placeCountsByPlayer.get(sorted[2].playerName);
+        if (e3) e3.thirds++;
+      }
+    }
+
+    const myCounts = placeCountsByPlayer.get(playerName);
+    if (myCounts) {
+      const placeFacts: Array<{
+        key: keyof PlaceCounts;
+        icon: string;
+        kingT: TranslationKey;
+        rankT: TranslationKey;
+      }> = [
+        { key: 'wins',    icon: '👑', kingT: 'home.aboutYou.firstPlaceKing',  rankT: 'home.aboutYou.firstPlaceRank' },
+        { key: 'seconds', icon: '🥈', kingT: 'home.aboutYou.secondPlaceKing', rankT: 'home.aboutYou.secondPlaceRank' },
+        { key: 'thirds',  icon: '🥉', kingT: 'home.aboutYou.thirdPlaceKing',  rankT: 'home.aboutYou.thirdPlaceRank' },
+      ];
+      for (const { key, icon, kingT, rankT } of placeFacts) {
+        const myCount = myCounts[key];
+        if (myCount < 3) continue;
+        // Rank only among players who have AT LEAST ONE finish in
+        // this place AND meet the same ≥10 games gate as `groupRank`
+        // — otherwise a 1-game rookie who happened to finish 2nd
+        // crowds the leaderboard.
+        const ranked = [...placeCountsByPlayer.entries()]
+          .filter(([, v]) => v[key] > 0 && v.games >= 10)
+          .sort((a, b) => b[1][key] - a[1][key]);
+        const rank = ranked.findIndex(([n]) => n === playerName) + 1;
+        if (rank <= 0 || rank > 5) continue;
+        const pct = myCounts.games > 0 ? Math.round((myCount / myCounts.games) * 100) : 0;
+        facts.push({
+          icon,
+          text: rank === 1
+            ? t(kingT, { count: myCount, games: myCounts.games, pct })
+            : t(rankT, { rank, count: myCount, games: myCounts.games, pct }),
+        });
+      }
+    }
+  }
+
   // 11. Member since — first game date + total games. Anchors
   //     a player's emotional sense of how long they've been at
   //     the felt. Gates: ≥ 5 games AND first game ≥ 60 days
@@ -3890,6 +4022,46 @@ function buildTriviaList(
     else allTimePlayersByGame.set(gp.gameId, [gp]);
   }
 
+  // Per-player game counts (year + all-time). Built once so any
+  // "rate champion" fact (#4/#4b/#17a-d below) can divide a per-place
+  // count by games played without re-walking gamePlayers. Used to
+  // surface the relative-rate angle next to the absolute-count angle —
+  // a player with a lot of wins might just be the most active player,
+  // so the higher win % among regulars is the more interesting story.
+  const playerYearGames = new Map<string, number>();
+  for (const gp of yearGP) {
+    playerYearGames.set(gp.playerName, (playerYearGames.get(gp.playerName) ?? 0) + 1);
+  }
+  const playerAllTimeGames = new Map<string, number>();
+  for (const gp of allTimeGP) {
+    playerAllTimeGames.set(gp.playerName, (playerAllTimeGames.get(gp.playerName) ?? 0) + 1);
+  }
+
+  // Find the player with the highest place-rate (place finishes /
+  // games played) among players whose participation is at least 30%
+  // of the games in scope. The 30% gate (per Lior) excludes one-night
+  // wonders without being so strict that only the absolute-count
+  // champion could ever qualify. Returns null when no eligible player
+  // exists. Callers compare against the absolute-count champion and
+  // only show the rate suffix when it's a different player — otherwise
+  // the message is redundant.
+  const findRateChamp = (
+    placeCounts: Map<string, number>,
+    gameCounts: Map<string, number>,
+    totalGames: number,
+  ): { name: string; pct: number; wins: number; games: number } | null => {
+    if (totalGames <= 0) return null;
+    const minGames = Math.max(1, Math.ceil(totalGames * 0.3));
+    let best: { name: string; pct: number; wins: number; games: number } | null = null;
+    for (const [name, count] of placeCounts) {
+      const games = gameCounts.get(name) ?? 0;
+      if (games < minGames) continue;
+      const pct = (count / games) * 100;
+      if (!best || pct > best.pct) best = { name, pct, wins: count, games };
+    }
+    return best;
+  };
+
   // Recently-active = appeared in any completed game in the last 60
   // days. Used to gate facts that reference a player's "current" state
   // (e.g. streak leader) so a frozen streak from someone who quit
@@ -4044,6 +4216,11 @@ function buildTriviaList(
   //    dropped from the translation when we reworded the line —
   //    sentence reads as a noun-phrase headline now ("Win champion
   //    this year: …"), so no gendered verb is needed.
+  //    Single-winner case also surfaces a rate-champion suffix when
+  //    a different regular has a higher win-rate (so the absolute
+  //    leader isn't just the most-played player). Multi-tied case
+  //    keeps the original copy — adding a rate twist there reads
+  //    confusingly.
   let topWinnerThisYearCount = 0;
   if (yearGameIds.size >= 3) {
     const wins = new Map<string, number>();
@@ -4059,18 +4236,35 @@ function buildTriviaList(
     if (topVal >= 2) {
       topWinnerThisYearCount = topVal;
       const tied = sorted.filter(([, v]) => v === topVal).map(([n]) => n);
-      list.push({
-        icon: '👑',
-        text: tied.length === 1
-          ? t('home.trivia.mostWins', { name: tied[0], count: topVal })
-          : t('home.trivia.mostWinsMulti', { players: tied.join(', '), count: topVal }),
-      });
+      let text: string;
+      if (tied.length > 1) {
+        text = t('home.trivia.mostWinsMulti', { players: tied.join(', '), count: topVal });
+      } else {
+        const champGames = playerYearGames.get(tied[0]) ?? 0;
+        const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
+        const rate = findRateChamp(wins, playerYearGames, yearGameIds.size);
+        text = rate && rate.name !== tied[0]
+          ? t('home.trivia.mostWinsWithRate', {
+              name: tied[0],
+              count: topVal,
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostWins', { name: tied[0], count: topVal, champGames, champPct });
+      }
+      list.push({ icon: '👑', text });
     }
   }
 
   // 4b. Most #1 finishes ALL-TIME. Mirror of #4 — only surface when
   //     strictly larger than the year-scoped count so the two facts
-  //     don't echo each other on a fresh group.
+  //     don't echo each other on a fresh group. Same rate-champion
+  //     suffix logic as #4 — single-winner gets the suffix when a
+  //     different regular has a higher lifetime win-rate.
   if (allCompletedGameIds.size >= 5) {
     const winsAll = new Map<string, number>();
     for (const gameId of allCompletedGameIds) {
@@ -4084,12 +4278,27 @@ function buildTriviaList(
     const topVal = sorted[0]?.[1] ?? 0;
     if (topVal >= 5 && topVal > topWinnerThisYearCount) {
       const tied = sorted.filter(([, v]) => v === topVal).map(([n]) => n);
-      list.push({
-        icon: '👑',
-        text: tied.length === 1
-          ? t('home.trivia.mostWinsAllTime', { name: tied[0], count: topVal })
-          : t('home.trivia.mostWinsAllTimeMulti', { players: tied.join(', '), count: topVal }),
-      });
+      let text: string;
+      if (tied.length > 1) {
+        text = t('home.trivia.mostWinsAllTimeMulti', { players: tied.join(', '), count: topVal });
+      } else {
+        const champGames = playerAllTimeGames.get(tied[0]) ?? 0;
+        const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
+        const rate = findRateChamp(winsAll, playerAllTimeGames, allCompletedGameIds.size);
+        text = rate && rate.name !== tied[0]
+          ? t('home.trivia.mostWinsAllTimeWithRate', {
+              name: tied[0],
+              count: topVal,
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostWinsAllTime', { name: tied[0], count: topVal, champGames, champPct });
+      }
+      list.push({ icon: '👑', text });
     }
   }
 
@@ -4126,35 +4335,55 @@ function buildTriviaList(
   // 4c. Most podiums (top-3 finishes) THIS YEAR. Counts top-3 by
   //     profit per game where the player finished above zero (no
   //     real podium if everyone tanked). Threshold prevents
-  //     surfacing on too few games.
+  //     surfacing on too few games. Single-leader case ALWAYS
+  //     inlines the absolute champion's podium-rate (`{champPct}`)
+  //     so the user can sanity-check the framing — "13 of 19" tells
+  //     a different story from "13 of 50". When a *different*
+  //     regular has a higher podium rate (per `findRateChamp`'s
+  //     30%-participation gate), append the rate suffix; otherwise
+  //     the simple base copy stands. Outer `playerYearGames`
+  //     (line ~4031) already counts every player's appearances —
+  //     we used to rebuild it here, but that shadowed the shared
+  //     map and risked drift if one definition ever changed.
   if (yearGameIds.size >= 4) {
     const podiumYear = new Map<string, number>();
-    const playerYearGames = new Map<string, number>();
     for (const gameId of yearGameIds) {
       const players = playersByGame.get(gameId);
       if (!players || players.length === 0) continue;
-      const sorted = [...players].sort((a, b) => b.profit - a.profit);
-      const podium = sorted.slice(0, 3).filter(p => p.profit > 0);
+      const sortedByProfit = [...players].sort((a, b) => b.profit - a.profit);
+      const podium = sortedByProfit.slice(0, 3).filter(p => p.profit > 0);
       for (const p of podium) podiumYear.set(p.playerName, (podiumYear.get(p.playerName) ?? 0) + 1);
-      for (const p of players) playerYearGames.set(p.playerName, (playerYearGames.get(p.playerName) ?? 0) + 1);
     }
     const sorted = [...podiumYear.entries()].sort((a, b) => b[1] - a[1]);
     const topVal = sorted[0]?.[1] ?? 0;
     if (topVal >= 3) {
       const tied = sorted.filter(([, v]) => v === topVal).map(([n]) => n);
-      list.push({
-        icon: '🥇',
-        text: tied.length === 1
-          ? t('home.trivia.mostPodiumsYear', {
+      let text: string;
+      if (tied.length > 1) {
+        text = t('home.trivia.mostPodiumsYearMulti', { players: tied.join(', '), count: topVal });
+      } else {
+        const champGames = playerYearGames.get(tied[0]) ?? topVal;
+        const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
+        const rate = findRateChamp(podiumYear, playerYearGames, yearGameIds.size);
+        text = rate && rate.name !== tied[0]
+          ? t('home.trivia.mostPodiumsYearWithRate', {
               name: tied[0],
               count: topVal,
-              games: playerYearGames.get(tied[0]) ?? topVal,
+              games: champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              rateGames: rate.games,
             })
-          : t('home.trivia.mostPodiumsYearMulti', {
-              players: tied.join(', '),
+          : t('home.trivia.mostPodiumsYear', {
+              name: tied[0],
               count: topVal,
-            }),
-      });
+              games: champGames,
+              champPct,
+            });
+      }
+      list.push({ icon: '🥇', text });
     }
   }
 
@@ -4193,17 +4422,44 @@ function buildTriviaList(
       })();
       if (topPodiumAllTimeCount >= Math.ceil(yearLeaderCount * 1.5) || topPodiumAllTimeCount >= yearLeaderCount + 5) {
         const tied = sortedAll.filter(([, v]) => v === topVal).map(([n]) => n);
-        list.push({
-          icon: '🥇',
-          text: tied.length === 1
-            ? t('home.trivia.mostPodiumsAllTime', { name: tied[0], count: topVal })
-            : t('home.trivia.mostPodiumsAllTimeMulti', { players: tied.join(', '), count: topVal }),
-        });
+        let text: string;
+        if (tied.length > 1) {
+          text = t('home.trivia.mostPodiumsAllTimeMulti', { players: tied.join(', '), count: topVal });
+        } else {
+          // Same rate-suffix pattern as #4c — inline absolute champ's
+          // pct always, append a rate-champion comparison only when a
+          // *different* regular has a higher all-time podium rate.
+          const champGames = playerAllTimeGames.get(tied[0]) ?? topVal;
+          const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
+          const rate = findRateChamp(podiumAll, playerAllTimeGames, allCompletedGameIds.size);
+          text = rate && rate.name !== tied[0]
+            ? t('home.trivia.mostPodiumsAllTimeWithRate', {
+                name: tied[0],
+                count: topVal,
+                games: champGames,
+                champPct,
+                rateName: rate.name,
+                pct: Math.round(rate.pct),
+                wins: rate.wins,
+                rateGames: rate.games,
+              })
+            : t('home.trivia.mostPodiumsAllTime', {
+                name: tied[0],
+                count: topVal,
+                games: champGames,
+                champPct,
+              });
+        }
+        list.push({ icon: '🥇', text });
       }
     }
   }
 
-  // 7. Most popular location this year.
+  // 7. Most popular location this year. Denominator is `yearGameIds.size`
+  //    (every completed game in the year), not just located games — the
+  //    user-facing "X% of games" is most useful as "share of all year
+  //    games", which is what people actually compare against. Games
+  //    without a `location` simply don't accrue to any spot.
   const locationCounts = new Map<string, number>();
   for (const g of games) {
     if (g.status !== 'completed') continue;
@@ -4212,10 +4468,15 @@ function buildTriviaList(
     locationCounts.set(g.location, (locationCounts.get(g.location) ?? 0) + 1);
   }
   const topLocation = [...locationCounts.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (topLocation && topLocation[1] >= 3) {
+  if (topLocation && topLocation[1] >= 3 && yearGameIds.size > 0) {
     list.push({
       icon: '📍',
-      text: t('home.trivia.popularLocation', { location: topLocation[0], count: topLocation[1] }),
+      text: t('home.trivia.popularLocation', {
+        location: topLocation[0],
+        count: topLocation[1],
+        total: yearGameIds.size,
+        pct: Math.round((topLocation[1] / yearGameIds.size) * 100),
+      }),
     });
   }
 
@@ -4370,7 +4631,12 @@ function buildTriviaList(
       const dayLabel = t(`home.trivia.dayOfWeek.${dayKeys[topDayIdx]}`);
       list.push({
         icon: '🌙',
-        text: t('home.trivia.popularDay', { day: dayLabel, count: dayCounts[topDayIdx] }),
+        text: t('home.trivia.popularDay', {
+          day: dayLabel,
+          count: dayCounts[topDayIdx],
+          total: yearGameIds.size,
+          pct: yearGameIds.size > 0 ? Math.round((dayCounts[topDayIdx] / yearGameIds.size) * 100) : 0,
+        }),
       });
     }
   }
@@ -4409,7 +4675,12 @@ function buildTriviaList(
       if (topCount >= 2) {
         list.push({
           icon: '🪑',
-          text: t('home.trivia.mostCommonSize', { players: topSize, count: topCount }),
+          text: t('home.trivia.mostCommonSize', {
+            players: topSize,
+            count: topCount,
+            total: yearGameIds.size,
+            pct: yearGameIds.size > 0 ? Math.round((topCount / yearGameIds.size) * 100) : 0,
+          }),
         });
       }
     }
@@ -4483,16 +4754,44 @@ function buildTriviaList(
     }
     const top2ndYear = [...secondPlaceYear.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top2ndYear && top2ndYear[1] >= 2) {
+      const champGames = playerYearGames.get(top2ndYear[0]) ?? 0;
+      const champPct = champGames > 0 ? Math.round((top2ndYear[1] / champGames) * 100) : 0;
+      const rate = findRateChamp(secondPlaceYear, playerYearGames, yearGameIds.size);
       list.push({
         icon: '🥈',
-        text: t('home.trivia.mostSecondPlaces', { name: top2ndYear[0], count: top2ndYear[1] }),
+        text: rate && rate.name !== top2ndYear[0]
+          ? t('home.trivia.mostSecondPlacesWithRate', {
+              name: top2ndYear[0],
+              count: top2ndYear[1],
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostSecondPlaces', { name: top2ndYear[0], count: top2ndYear[1], champGames, champPct }),
       });
     }
     const top3rdYear = [...thirdPlaceYear.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top3rdYear && top3rdYear[1] >= 2) {
+      const champGames = playerYearGames.get(top3rdYear[0]) ?? 0;
+      const champPct = champGames > 0 ? Math.round((top3rdYear[1] / champGames) * 100) : 0;
+      const rate = findRateChamp(thirdPlaceYear, playerYearGames, yearGameIds.size);
       list.push({
         icon: '🥉',
-        text: t('home.trivia.mostThirdPlaces', { name: top3rdYear[0], count: top3rdYear[1] }),
+        text: rate && rate.name !== top3rdYear[0]
+          ? t('home.trivia.mostThirdPlacesWithRate', {
+              name: top3rdYear[0],
+              count: top3rdYear[1],
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostThirdPlaces', { name: top3rdYear[0], count: top3rdYear[1], champGames, champPct }),
       });
     }
   }
@@ -4524,16 +4823,44 @@ function buildTriviaList(
     }
     const top2ndAll = [...secondPlaceAll.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top2ndAll && top2ndAll[1] >= 5) {
+      const champGames = playerAllTimeGames.get(top2ndAll[0]) ?? 0;
+      const champPct = champGames > 0 ? Math.round((top2ndAll[1] / champGames) * 100) : 0;
+      const rate = findRateChamp(secondPlaceAll, playerAllTimeGames, allCompletedGameIds.size);
       list.push({
         icon: '🥈',
-        text: t('home.trivia.mostSecondPlacesAllTime', { name: top2ndAll[0], count: top2ndAll[1] }),
+        text: rate && rate.name !== top2ndAll[0]
+          ? t('home.trivia.mostSecondPlacesAllTimeWithRate', {
+              name: top2ndAll[0],
+              count: top2ndAll[1],
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostSecondPlacesAllTime', { name: top2ndAll[0], count: top2ndAll[1], champGames, champPct }),
       });
     }
     const top3rdAll = [...thirdPlaceAll.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top3rdAll && top3rdAll[1] >= 5) {
+      const champGames = playerAllTimeGames.get(top3rdAll[0]) ?? 0;
+      const champPct = champGames > 0 ? Math.round((top3rdAll[1] / champGames) * 100) : 0;
+      const rate = findRateChamp(thirdPlaceAll, playerAllTimeGames, allCompletedGameIds.size);
       list.push({
         icon: '🥉',
-        text: t('home.trivia.mostThirdPlacesAllTime', { name: top3rdAll[0], count: top3rdAll[1] }),
+        text: rate && rate.name !== top3rdAll[0]
+          ? t('home.trivia.mostThirdPlacesAllTimeWithRate', {
+              name: top3rdAll[0],
+              count: top3rdAll[1],
+              champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              games: rate.games,
+            })
+          : t('home.trivia.mostThirdPlacesAllTime', { name: top3rdAll[0], count: top3rdAll[1], champGames, champPct }),
       });
     }
   }
@@ -5432,15 +5759,22 @@ function buildTriviaList(
       // Opponents who actually lead the king in their H2H. Tracked
       // so the trivia copy can name them ("only X leads the H2H")
       // instead of leaving the user wondering who the missing
-      // opponents are. Ties (aOverB === bOverA) are neither
-      // "above" nor "below" the king and are intentionally
-      // excluded from this list.
+      // opponents are.
       lostTo: { name: string; lead: number }[];
-    } = { name: '', beat: 0, total: 0, lostTo: [] };
+      // Opponents who tied the king's H2H (aOverB === bOverA with at
+      // least one decided shared game). Without this list, sentences
+      // like "X dominates — beats 21 of 24, only Y leads" leave the
+      // user wondering where the other 2 opponents went. Tracked
+      // separately from `lostTo` because ties don't count against
+      // dominance — they just deserve a remark so the math reads
+      // honestly.
+      tied: { name: string; shared: number }[];
+    } = { name: '', beat: 0, total: 0, lostTo: [], tied: [] };
     for (const a of allNames) {
       let beat = 0;
       let total = 0;
       const lostTo: { name: string; lead: number }[] = [];
+      const tied: { name: string; shared: number }[] = [];
       for (const b of allNames) {
         if (a === b) continue;
         const aOverB = pair.get(a)?.get(b) ?? 0;
@@ -5450,36 +5784,43 @@ function buildTriviaList(
         total++;
         if (aOverB > bOverA) beat++;
         else if (bOverA > aOverB) lostTo.push({ name: b, lead: bOverA - aOverB });
+        else tied.push({ name: b, shared: sharedAB });
       }
       // A is "king" only if they have a strict winning H2H against
       // a clear majority of qualified opponents. The 60% bar mirrors
       // the in-the-green threshold and prevents a "X beats 4 of 7"
       // (57%) borderline case from claiming dominance.
       if (total >= 4 && beat >= 4 && beat / total >= 0.6 && beat > bestKing.beat) {
-        bestKing = { name: a, beat, total, lostTo };
+        bestKing = { name: a, beat, total, lostTo, tied };
       }
     }
     if (bestKing.beat > 0) {
       // Sort the opponents who lead the king by H2H gap descending so
       // the most-dominant-over-king appears first when we list them.
       bestKing.lostTo.sort((a, b) => b.lead - a.lead);
+      // Sort tied opponents by shared games desc so the
+      // most-frequently-faced rival reads first ("tie with regular
+      // opponent X" beats "tie with rare opponent Y" for narrative).
+      bestKing.tied.sort((a, b) => b.shared - a.shared);
       const leaderCount = bestKing.lostTo.length;
-      const leadersStr = bestKing.lostTo.map(l => l.name).join(language === 'he' ? ', ' : ', ');
+      const leadersStr = bestKing.lostTo.map(l => l.name).join(', ');
       const key =
         leaderCount === 0
           ? 'home.trivia.h2hKing'
           : leaderCount === 1
             ? 'home.trivia.h2hKingWithLead'
             : 'home.trivia.h2hKingWithLeadPlural';
-      list.push({
-        icon: '🤜',
-        text: t(key, {
-          name: bestKing.name,
-          beat: bestKing.beat,
-          total: bestKing.total,
-          leaders: leadersStr,
-        }),
+      let text = t(key, {
+        name: bestKing.name,
+        beat: bestKing.beat,
+        total: bestKing.total,
+        leaders: leadersStr,
       });
+      if (bestKing.tied.length > 0) {
+        const tiedStr = bestKing.tied.map(p => p.name).join(', ');
+        text += t('home.trivia.h2hKingTieSuffix', { tied: tiedStr });
+      }
+      list.push({ icon: '🤜', text });
     }
   }
 

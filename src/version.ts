@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.61.1';
+export const APP_VERSION = '5.62.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,27 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.62.0',
+    date: '2026-05-15',
+    changes: [
+      '📷 Chip photo counter rewritten — whole-photo single AI call',
+      '🚫 Retired fragile client-side stack detector (was missing stacks)',
+      '🎯 Selfies sent as labelled reference images to the AI',
+      '⚡ Faster: one API call instead of N+1 per photo',
+      '🧹 Removed dormant "Tune AI" button (architecture made it redundant)',
+      '🖼 Cleaner chip-row layout (selfie + clear merged into one cell)',
+      '✨ Auto-enhance new chip selfies (tighter crop + contrast boost)',
+      '🏆 Trivia win/2nd/3rd cards now surface % rate alongside count',
+      '👑 New "About You" cards — your rank on each place leaderboard',
+      '🤜 H2H king card now names tied opponents too',
+      '📊 New "Podium Rate" table in Statistics',
+      '📈 Graphs H2H/Impact now include allowlisted regulars',
+      '🎯 Trivia avoids re-asking about the same player back-to-back',
+      '👆 Bigger tap targets on fact-card chevrons + share button',
+      '🔄 Updated Gemini model names (preview → stable)',
+    ],
+  },
   {
     version: '5.61.1',
     date: '2026-05-15',

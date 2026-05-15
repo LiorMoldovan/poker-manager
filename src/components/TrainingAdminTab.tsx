@@ -1557,7 +1557,7 @@ JSON בלבד, בלי markdown:`;
 
       try {
         // Try stable gemini-2.5-flash first (preview models often hit 503/504 under load)
-        const SCAN_MODELS = ['gemini-2.5-flash', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'];
+        const SCAN_MODELS = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
         let result: unknown[] | null = null;
 
         let lastError = '';

@@ -1803,7 +1803,7 @@ export interface PoolBatchResult {
 // Stable gemini-2.5-flash is tried first for reliability; previews are slow/overloaded.
 const POOL_GEN_MODELS = [
   { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite' },
   { version: 'v1beta', model: 'gemini-3-flash-preview' },
 ];
 const BATCH_SIZE = 6; // questions per single API call (fits comfortably in <20s)

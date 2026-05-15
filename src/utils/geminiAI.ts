@@ -9,8 +9,6 @@ import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, T
 import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
-import { supabase } from '../database/supabaseClient';
-import { getGroupId } from '../database/supabaseCache';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
@@ -18,21 +16,29 @@ import { proxyGeminiGenerate, proxyGeminiGenerateWithSignal, proxyGeminiModels, 
 import { isGeminiEnabledForCurrentGroup } from './aiEligibility';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
-import type { DownscaledImage, RGB, HSL } from './imageUtils';
-import type { DetectStackRegionsResult } from './stackDetection';
+
+// v5.62 — DownscaledImage, RGB, HSL, DetectStackRegionsResult imports
+// removed alongside the per-stack pipeline they served. The whole-photo
+// counter operates directly on the base64 the modal hands us.
+
+/** Clamp a numeric value to a closed range. Locally re-introduced after
+ *  the per-stack pipeline (where it lived) was deleted. */
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
 export const API_CONFIGS = [
   { version: 'v1beta', model: 'gemini-3-flash-preview' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite' },
   { version: 'v1beta', model: 'gemini-2.5-flash' },
 ];
 
 // Friendly display names for UI badge
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-3-flash-preview': '3 Flash',
-  'gemini-3.1-flash-lite-preview': '3.1 Flash-Lite',
+  'gemini-3.1-flash-lite': '3.1 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
   'gemini-2.5-pro': '2.5 Pro',
   // Comic image provider — Pollinations (anonymous, free).
@@ -4030,364 +4036,12 @@ const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
   { version: 'v1beta', model: 'gemini-2.5-flash' },
 ];
 
-// Tolerant JSON parser for the per-stack chip-count response. The
-// rebuilt v5.59 pipeline calls the LLM ONCE PER STACK (not once per
-// photo), so the expected shape is now `{ count: number }` — a single
-// integer, no positions, no per-stack arrays. Strict JSON.parse is
-// tried first; if that fails we apply minimal textual repairs (strip
-// code fences, pull outermost braces, normalize quoting) and retry.
-// Throws on irrecoverable input.
-function parseSingleStackResponse(raw: string): { count?: number } {
-  const trimmed = raw.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    /* fall through */
-  }
-  let candidate = trimmed
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-  const firstBrace = candidate.indexOf('{');
-  const lastBrace = candidate.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    candidate = candidate.slice(firstBrace, lastBrace + 1);
-  }
-  candidate = candidate.replace(
-    /([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g,
-    '$1"$2"$3',
-  );
-  candidate = candidate.replace(/'([^'"]*)'/g, '"$1"');
-  candidate = candidate.replace(/,\s*([}\]])/g, '$1');
-  return JSON.parse(candidate);
-}
+// v5.62 — `DEFAULT_CHIP_COUNT_STRATEGY` removed alongside the per-stack
+// pipeline it served. The whole-photo prompt is hand-crafted inline in
+// `runWholePhotoShot` and doesn't use a swappable strategy block. If
+// future feedback shows a systematic bias we can re-introduce a tuning
+// surface for the new prompt structure.
 
-// ── Helpers (per-stack LLM call, voter, total-value sanity check) ─────
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
-
-/** Default per-stack counting strategy block.
- *
- *  v5.59 rebuild: this block is now interpolated into a SINGLE-STACK
- *  prompt (not the multi-stack photo prompt of v5.48–v5.58). Each LLM
- *  call sees ONE chip-stack crop + an optional reference image of one
- *  chip of that color, and returns ONE integer count. The strategy
- *  block guides the model through the failure modes that are still
- *  per-stack: top-chip occlusion, bottom-shadow blur, identical-color
- *  fusion in the middle.
- *
- *  IMPORTANT for the tuner: this block is the only tunable part of
- *  the per-stack prompt. The output schema (`{count: integer}`) and
- *  the surrounding context lines are load-bearing for the parser
- *  and must NOT be changed. The tuner LLM is prompted to return a
- *  replacement for THIS block only and must keep the
- *  `CRITICAL counting strategy — READ THIS CAREFULLY:` header so
- *  `tuneChipCountStrategy` can validate the response. */
-export const DEFAULT_CHIP_COUNT_STRATEGY = `CRITICAL counting strategy — READ THIS CAREFULLY:
-
-You are looking at ONE vertical stack of poker chips. Count the chips.
-
-Vision models systematically UNDERCOUNT chip stacks because:
-  (a) The TOPMOST chip's edge ring is partially hidden by its own face — its ring blends into the chip face below.
-  (b) The BOTTOMMOST chip's ring may merge into the surface shadow.
-  (c) Adjacent chips of identical color can visually fuse in the middle of a stack.
-
-To counter this:
-1. Count from BOTTOM to TOP, one chip at a time.
-2. Examine the TOPMOST chip carefully — its visible face IS a chip even when its edge ring is half-hidden behind itself. Add it to the count.
-3. Examine the BOTTOMMOST chip carefully — even if its ring is dark against the surface, if you can see the top of its rim, count it.
-4. When you're between two possible counts (e.g. "5 or 6 visible rings"), choose the HIGHER count. The systematic bias is to undercount, so erring high cancels it.
-5. Do NOT invent chips beyond what's actually visible. If you see exactly 4 chips, say 4 — the round-up rule applies only to GENUINE ambiguity.
-6. If a reference image of ONE chip of this color is provided alongside the stack, use it to anchor what "one chip" looks like — count that exact pattern in the stack.`;
-
-/** Run ONE per-stack LLM counting call. Returns the integer count, or
- *  null on any failure (network / HTTP / parse / abort). The caller
- *  feeds this into `combineLLMAndGeometry` alongside the geometric
- *  signals — a null here just means the LLM contributed nothing and
- *  the voter falls back on geometry alone.
- *
- *  Includes the chip selfie as a few-shot reference image when the
- *  group has one stored. Published research on counting tasks
- *  consistently shows a 10-25 pp accuracy gain from this. */
-async function runSingleStackShot(args: {
-  version: string;
-  model: string;
-  apiKey: string;
-  stackBase64: string;
-  stackMimeType: string;
-  selfieBase64: string | null;
-  selfieMimeType: string | null;
-  chipColorName: string;
-  strategyBlock: string;
-  abortSignal?: AbortSignal;
-}): Promise<{ count: number | null; errorMsg: string; errorCode: PhotoChipCountErrorCode }> {
-  const {
-    version, model, apiKey, stackBase64, stackMimeType,
-    selfieBase64, selfieMimeType, chipColorName, strategyBlock, abortSignal,
-  } = args;
-
-  const referencePreface = selfieBase64
-    ? `You will see TWO images:\n  (1) Reference: ONE poker chip of color "${chipColorName}".\n  (2) Target: a vertical stack of the SAME chips.\nCount the chips in the TARGET stack.`
-    : `You will see ONE image: a vertical stack of "${chipColorName}" poker chips. Count the chips in the stack.`;
-
-  const promptText = `${referencePreface}\n\n${strategyBlock}\n\nReturn ONLY a JSON object with a single integer field: { "count": <number-of-chips> }`;
-
-  const parts: Array<Record<string, unknown>> = [{ text: promptText }];
-  if (selfieBase64 && selfieMimeType) {
-    parts.push({ inline_data: { mime_type: selfieMimeType, data: selfieBase64 } });
-  }
-  parts.push({ inline_data: { mime_type: stackMimeType, data: stackBase64 } });
-
-  const payload = {
-    contents: [{ parts }],
-    generationConfig: {
-      temperature: 0.0,
-      maxOutputTokens: 64,
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: 'OBJECT',
-        properties: { count: { type: 'INTEGER' } },
-        required: ['count'],
-      },
-    },
-  };
-
-  let response: Response;
-  try {
-    response = await proxyGeminiGenerateWithSignal(version, model, apiKey, payload, abortSignal);
-  } catch (err) {
-    if (abortSignal?.aborted) return { count: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[runSingleStackShot] ${model} (${chipColorName}) network error:`, msg);
-    return { count: null, errorMsg: msg, errorCode: 'network' };
-  }
-
-  if (abortSignal?.aborted) return { count: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
-
-  if (!response.ok) {
-    let errorMsg = `HTTP ${response.status}`;
-    try {
-      const body = await response.json() as { error?: { message?: string } };
-      if (body?.error?.message) errorMsg = body.error.message;
-    } catch { /* keep status */ }
-    console.warn(`[runSingleStackShot] ${model} (${chipColorName}) HTTP error:`, errorMsg);
-    return { count: null, errorMsg, errorCode: 'httpError' };
-  }
-
-  let raw = '{}';
-  let parsed: { count?: number };
-  try {
-    const data = await response.json();
-    raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    parsed = parseSingleStackResponse(raw);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[runSingleStackShot] ${model} (${chipColorName}) parse failed:`, msg, 'raw:', raw.slice(0, 200));
-    return { count: null, errorMsg: `Parse failed: ${msg}`, errorCode: 'parseFailed' };
-  }
-
-  const count = Number.isFinite(Number(parsed.count)) && Number(parsed.count) >= 0
-    ? Math.floor(Number(parsed.count))
-    : null;
-  if (count === null) {
-    console.warn(`[runSingleStackShot] ${model} (${chipColorName}) unexpected shape:`, raw.slice(0, 200));
-    return { count: null, errorMsg: 'Unexpected shape', errorCode: 'unexpectedShape' };
-  }
-  return { count, errorMsg: '', errorCode: 'httpError' };
-}
-
-/** Combine ONE per-stack LLM count with the three geometric counts
- *  (bottom-chip / gradient-count / shared-cal — collected by the
- *  caller from chipGeometry.geometricChipCount) into a single final
- *  count + honest confidence + reasoning string + provenance object.
- *
- *  This is the heart of v5.59's "honest confidence". We're no longer
- *  asking the LLM to agree with itself across temperature shots
- *  (which can all be wrong in the same direction); we're cross-
- *  validating the LLM against three deterministic image-analysis
- *  methods and reporting confidence only when at least 2 of 4
- *  signals agree.
- *
- *  Voting rules:
- *   - Collect every non-null count signal (LLM + geometric A/B/C).
- *   - Two signals "agree" when they are within ±1 chip of each other.
- *   - Pick the count with the most agreements; tiebreak by highest
- *     individual confidence.
- *   - When all signals agree, confidence is HIGH (boosted toward 95).
- *   - When 2/3 or 2/4 agree, confidence is MEDIUM (60–80).
- *   - When everyone disagrees, anti-undercount bias kicks in: prefer
- *     the higher candidate, but cap confidence at 50 and flag
- *     `needsVerify` so the UI shows a yellow border.
- *   - Color-mismatch penalty: when the detected stack's dominant
- *     color is far from the matched chip's reference (the stack
- *     detector's `matchDistance` exceeded a moderate threshold but
- *     it was still the closest match), confidence is multiplied by
- *     0.65 — a soft signal that the player may have the wrong
- *     denomination here.
- *   - Stack-height penalty: tall stacks (> 12) are inherently harder
- *     to count even with all signals agreeing. Confidence is scaled
- *     down for stacks above 12 chips. */
-function combineLLMAndGeometry(args: {
-  llmCount: number | null;
-  geometryBottomChip: number | null;
-  geometryGradientCount: number | null;
-  geometrySharedCal: number | null;
-  /** Confidence (0-100) reported by the geometric voter — used as
-   *  per-method weight when multiple geometric methods returned a
-   *  count. */
-  geometryConfidence: number;
-  /** Distance from detected stack's dominant color to its matched
-   *  chip color (HSL distance, 0-100). Above 18 we apply a soft
-   *  color-mismatch penalty even though the matcher accepted it. */
-  colorMatchDistance: number;
-}): {
-  count: number;
-  confidence: number;
-  agreementScore: number;
-  needsVerify: boolean;
-  reasoning: string;
-} {
-  const {
-    llmCount, geometryBottomChip, geometryGradientCount,
-    geometrySharedCal, geometryConfidence, colorMatchDistance,
-  } = args;
-
-  // Build the candidate list with per-source labels for reasoning.
-  const sources: Array<{ label: string; count: number; weight: number }> = [];
-  if (llmCount !== null) sources.push({ label: 'LLM', count: llmCount, weight: 1.0 });
-  if (geometryBottomChip !== null) sources.push({ label: 'bottom-chip', count: geometryBottomChip, weight: 0.85 });
-  if (geometryGradientCount !== null) sources.push({ label: 'gradient', count: geometryGradientCount, weight: 0.75 });
-  if (geometrySharedCal !== null) sources.push({ label: 'shared-cal', count: geometrySharedCal, weight: 0.80 });
-
-  // No signals at all — degenerate case (shouldn't happen since the
-  // pipeline always at least tries the LLM, but defensive).
-  if (sources.length === 0) {
-    return {
-      count: 0,
-      confidence: 5,
-      agreementScore: 0,
-      needsVerify: true,
-      reasoning: 'no signals available — defaulting to 0',
-    };
-  }
-
-  // Pairwise agreements within ±1.
-  const agreementCount = (target: number) =>
-    sources.filter(s => Math.abs(s.count - target) <= 1).length;
-
-  const ranked = [...sources]
-    .map(s => ({ ...s, agree: agreementCount(s.count) }))
-    .sort((x, y) => y.agree - x.agree || y.weight - x.weight || y.count - x.count);
-
-  const winner = ranked[0];
-
-  // Anti-undercount bias when nothing agrees: bump to the highest
-  // candidate provided the difference is small (≤ 2).
-  let finalCount = winner.count;
-  let agreementScore = winner.agree / sources.length;
-  let needsVerify = false;
-  let reasoningParts: string[] = [];
-
-  if (winner.agree === sources.length && sources.length >= 2) {
-    // All sources agree — high confidence path.
-    reasoningParts.push(`all ${sources.length} signals agree on ${finalCount}`);
-  } else if (winner.agree >= 2) {
-    reasoningParts.push(`${winner.agree}/${sources.length} signals agree on ${finalCount}`);
-  } else {
-    // Nothing agrees. Prefer the higher candidate (anti-undercount).
-    const sortedDesc = [...sources].sort((a, b) => b.count - a.count);
-    const higher = sortedDesc[0];
-    if (higher.count - winner.count <= 2) {
-      finalCount = higher.count;
-    }
-    needsVerify = true;
-    reasoningParts.push(`signals disagree (${sources.map(s => `${s.label}=${s.count}`).join(', ')}) — chose ${finalCount} (higher = anti-undercount)`);
-  }
-
-  // Base confidence by agreement quality.
-  let confidence: number;
-  if (winner.agree === sources.length && sources.length >= 3) {
-    confidence = 95;
-  } else if (winner.agree === sources.length && sources.length === 2) {
-    confidence = 88;
-  } else if (winner.agree >= 3) {
-    confidence = 82;
-  } else if (winner.agree === 2) {
-    confidence = 70;
-  } else if (sources.length === 1) {
-    confidence = Math.min(60, sources[0].label === 'LLM' ? 55 : Math.round(geometryConfidence * 0.7));
-  } else {
-    confidence = 45;
-  }
-
-  // Stack-height penalty (independent of signal agreement — counting
-  // 18 chips by edge rings is hard for ALL methods).
-  if (finalCount > 12 && finalCount <= 18) {
-    confidence = Math.round(confidence * 0.85);
-    reasoningParts.push(`tall stack (${finalCount}) — slight penalty`);
-  } else if (finalCount > 18) {
-    confidence = Math.round(confidence * 0.65);
-    reasoningParts.push(`very tall stack (${finalCount}) — heavy penalty`);
-    needsVerify = true;
-  }
-
-  // Color-mismatch soft penalty.
-  if (colorMatchDistance > 18 && colorMatchDistance <= 30) {
-    confidence = Math.round(confidence * 0.80);
-    reasoningParts.push(`color match weak (distance ${colorMatchDistance.toFixed(0)})`);
-  } else if (colorMatchDistance > 30) {
-    confidence = Math.round(confidence * 0.60);
-    reasoningParts.push(`color mismatch (distance ${colorMatchDistance.toFixed(0)}) — wrong arrangement?`);
-    needsVerify = true;
-  }
-
-  // Honesty cap: never claim > 95% even with perfect agreement.
-  confidence = clamp(confidence, 5, 95);
-
-  // Empty stacks (count=0) get a confidence override — easy to
-  // verify "nothing here" visually, so high confidence by default
-  // unless color signals say otherwise.
-  if (finalCount === 0 && colorMatchDistance < 30) {
-    confidence = 92;
-    needsVerify = false;
-    reasoningParts = ['empty stack (count = 0) — confirmed by detector'];
-  }
-
-  return {
-    count: finalCount,
-    confidence,
-    agreementScore,
-    needsVerify,
-    reasoning: reasoningParts.join('; '),
-  };
-}
-
-/** Total-value sanity check (live-game flow only — runs when
- *  expectedTotalValue is provided).
- *
- *  When the summed AI total is off by EXACTLY one chip denomination
- *  from the expected bankroll, identify the lowest-confidence
- *  non-zero stack and adjust its count by ±1 to reconcile. The
- *  reasoning is empirical: when the AI miscounts by exactly one
- *  chip's worth, it almost always missed (or hallucinated) one chip
- *  in a single stack — and the lowest-confidence stack is the most
- *  likely culprit.
- *
- *  Records `totalValueAdjustedFrom` in the adjusted stack's
- *  provenance so the UI can surface a small "adjusted from N" badge
- *  with tooltip.
- *
- *  Returns whether an adjustment was applied, the original sum, the
- *  expected sum, and which stack id was adjusted (if any). When no
- *  adjustment was needed (totals already match) or when no
- *  reconcilable mismatch was found (off by more than one denomination,
- *  or all stacks user-edited), returns adjustedStackId=null.
- *
- *  MUTATES the supplied stacks in place — the adjustment is intended
- *  to land in the same `PhotoChipCountStack` array the caller is
- *  about to return. */
 function applyTotalValueSanityCheck(
   stacks: PhotoChipCountStack[],
   chipById: Map<string, ChipValue>,
@@ -4449,263 +4103,226 @@ function applyTotalValueSanityCheck(
   };
 }
 
-// ─── Legacy v5.48-v5.58 helpers (DELETED — replaced by per-stack pipeline above)
-// The following symbols were removed in v5.59:
-//   clamp(n, lo, hi)       — kept once above as a private helper
-//   hexToHsl(hex)          — replaced by imageUtils.hexToRgb + rgbToHsl
-//   colorDistance(a, b)    — replaced by imageUtils.hslDistance
-//   COLOR_MATCH_THRESHOLD  — color matching now lives in stackDetection
-//   interface RawShot      — multi-shot consensus is gone
-//   computeStackConfidence — replaced by combineLLMAndGeometry
-//   computeOverallConfidence — replaced by inline weighted average in countChipsFromPhoto
-//   combineShots           — per-stack pipeline assembles results directly
-//   buildChipCountPayload  — replaced by runSingleStackShot's inline payload build
-//   runChipCountShot       — replaced by runSingleStackShot
+// v5.62 — `loadActiveChipCountStrategy` removed alongside the per-stack
+// pipeline it served. The whole-photo prompt is a single inline template
+// in `runWholePhotoShot`. If we re-introduce a tuner for the new prompt
+// later, we'll fetch the override here. Tuner table and feedback schema
+// stay in place (still useful for accuracy tracking even without runtime
+// override).
 
-/** Tuner LLM choice. Text-only, fast, cheap — the tuner produces
- *  a small JSON output and benefits more from quick iteration than
- *  from Pro-level reasoning. Pro is reserved for the actual
- *  chip-counting hot path. Falls back through the Flash variants
- *  if the primary is unavailable for the group's API key. */
-const CHIP_TUNER_MODELS: ReadonlyArray<{ version: string; model: string }> = [
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-3-flash-preview' },
-];
-
-/** Empirical feedback summary the tuner consumes. Subset of
- *  `FeedbackStats` from chipFeedbackStats.ts — we duplicate the
- *  fields here as a thin DTO instead of importing the full type
- *  to keep the geminiAI.ts module free of UI-shaped imports. */
-export interface ChipTuningInput {
-  totalSamples: number;
-  totalStacksAll: number;
-  pctPerfectStacks: number;
-  avgSignedBias: number;
-  avgAbsError: number;
-  perColor: Array<{
-    color: string;
-    samples: number;
-    avgSignedDelta: number;
-    avgAbsDelta: number;
-    pctCorrect: number;
-  }>;
-  /** Most recent N (default 10) saves' avg absolute error. Provides
-   *  the tuner with "is the current strategy already improving
-   *  trend, or stuck?" signal so it can decide between aggressive
-   *  rewrite vs. incremental tweak. */
-  recentAvgAbsDelta: number | null;
-  earlierAvgAbsDelta: number | null;
-}
-
-export type ChipTuningResult =
-  | { ok: true; strategy: string; description: string; modelUsed: string }
-  | { ok: false; error: string };
-
-/** Run the tuning LLM and return a proposed new strategy block +
- *  a one-line description of the change. Does NOT write to the
- *  database — that's the caller's responsibility (so the caller
- *  can add baseline metadata, ownership checks, etc.).
+/** Run ONE whole-photo LLM call. Sends every chip selfie as a few-shot
+ *  reference image alongside the target photo, asks Gemini to count
+ *  chips per color in the target photo, parses a structured per-color
+ *  response.
  *
- *  Phase 2 of the in-app tuning loop, v5.56+. */
-export async function tuneChipCountStrategy(input: {
-  stats: ChipTuningInput;
-  currentStrategy: string;
-}): Promise<ChipTuningResult> {
-  const { stats, currentStrategy } = input;
+ *  v5.62 — replaces the v5.59 per-stack pipeline (client-side stack
+ *  detection + cropping + N per-stack LLM calls + 3 geometric methods
+ *  + voting). That pipeline had a fatal failure mode in real-world
+ *  photos: when the client-side white-stripe stack detector missed
+ *  stacks, the downstream LLM was never called for them, so entire
+ *  colors silently returned "0 chips" with no warning to the user.
+ *  Lior caught this on May 15 ("after all your checks and improvements
+ *  the results are ridiculous") — the test card found 1 of 6 stacks,
+ *  the real-game flow found 0 of 5.
+ *
+ *  Whole-photo is structurally robust to "missed stack": the LLM SEES
+ *  every stack in the photo at once, can't miss them via heuristic
+ *  failure. Trade-off: slightly higher per-stack count variance
+ *  (±1-2 chips on a 10-chip stack) versus the much worse "missing
+ *  entire stacks" failure mode of the per-stack pipeline. Per Lior:
+ *  "before there was some count error per stack, now its meaningless
+ *  it doesn't find anything" — off-by-1 is acceptable, missing stacks
+ *  is not.
+ *
+ *  Key improvement over v5.41's whole-photo predecessor: the user's
+ *  chip selfies (added in v5.59) are sent as labelled few-shot reference
+ *  images. The LLM sees "this is what the user calls a Red chip" right
+ *  before being asked to count, which empirically gives 10-25pp accuracy
+ *  on counting tasks per published research. */
+async function runWholePhotoShot(args: {
+  version: string;
+  model: string;
+  apiKey: string;
+  imageBase64: string;
+  imageMimeType: string;
+  chips: ChipValue[];
+  abortSignal?: AbortSignal;
+}): Promise<{
+  countsByColor: Map<string, number> | null;
+  errorMsg: string;
+  errorCode: PhotoChipCountErrorCode;
+}> {
+  const { version, model, apiKey, imageBase64, imageMimeType, chips, abortSignal } = args;
 
-  if (stats.totalSamples === 0) {
-    return { ok: false, error: 'No feedback samples to tune from' };
+  const parts: Array<Record<string, unknown>> = [];
+
+  const chipsWithSelfies = chips.filter(c => c.selfieBase64);
+  const colorsList = chips.map(c => `"${c.color}"`).join(', ');
+
+  if (chipsWithSelfies.length > 0) {
+    parts.push({
+      text: `You will see ${chipsWithSelfies.length} REFERENCE images (one per chip color the user has) followed by ONE TARGET photo. The reference images show what each chip color looks like for this user.\n\nReference images:`,
+    });
+    for (const chip of chipsWithSelfies) {
+      parts.push({ text: `\n${chip.color} chip:` });
+      parts.push({ inline_data: { mime_type: 'image/jpeg', data: chip.selfieBase64! } });
+    }
+    parts.push({ text: `\n\nTARGET photo (count chips of each color in this image):` });
+  } else {
+    parts.push({
+      text: `You will see ONE photo of poker chips arranged in stacks by color. The user has these chip colors: ${colorsList}.`,
+    });
   }
 
-  // Format per-color block as a readable table the model can
-  // pattern-match over. Sorted by sample count desc inside
-  // FeedbackStats already.
-  const perColorLines = stats.perColor.length === 0
-    ? '  (no per-color data yet)'
-    : stats.perColor.map(c => {
-        const sign = c.avgSignedDelta > 0 ? '+' : '';
-        return `  - ${c.color}: ${c.samples} samples, signed bias ${sign}${c.avgSignedDelta.toFixed(2)}, abs error ${c.avgAbsDelta.toFixed(2)}, ${(c.pctCorrect * 100).toFixed(0)}% correct`;
-      }).join('\n');
+  parts.push({ inline_data: { mime_type: imageMimeType, data: imageBase64 } });
 
-  const trendLine = (stats.recentAvgAbsDelta !== null && stats.earlierAvgAbsDelta !== null)
-    ? `\n- Recent ${stats.recentAvgAbsDelta.toFixed(2)} abs error vs earlier ${stats.earlierAvgAbsDelta.toFixed(2)} abs error (${stats.recentAvgAbsDelta < stats.earlierAvgAbsDelta ? 'improving' : 'getting worse'})`
-    : '';
+  parts.push({
+    text: `
 
-  // The tuner prompt. Hard constraints on output shape are
-  // load-bearing — the parser downstream EXPECTS the strategy
-  // block to start with the literal "CRITICAL counting strategy"
-  // header, and the JSON wrapper is enforced by responseSchema.
-  const tunerPrompt = `You are tuning the prompt of a chip-counting AI for a poker app. The chip-counter receives a photo of poker chips arranged in vertical color-separated stacks and must count the chips in each stack. We have empirical feedback comparing what the AI counted vs the actual count.
+Count how many chips of EACH color appear in the TARGET photo.
 
-YOUR TASK: produce an improved version of the "CRITICAL counting strategy" prompt block, based on the empirical evidence below. Target the specific failure modes you see in the data.
+Counting strategy:
+- The photo shows chips arranged in stacks, typically one stack per color, taken at an angled side view.
+- For each color the user has (${colorsList}), find the stack of that color and count the chips in it.
+- Count from BOTTOM to TOP, one chip at a time. Each visible edge ring = one chip.
+- The TOPMOST chip's edge ring is partially hidden by its own top face — its face IS a chip, COUNT IT.
+- The BOTTOMMOST chip's ring may merge into the surface shadow — if you can see its top rim, COUNT IT.
+- When between two possible counts ("9 or 10 rings"), prefer the HIGHER count. Vision models systematically undercount; erring high cancels the bias.
+- If a color does not appear in the target photo, return 0 for that color.
+- Do NOT invent chips that aren't there.
 
-HARD CONSTRAINTS on your output (strategy field):
-- It MUST start with the literal header "CRITICAL counting strategy — READ THIS CAREFULLY:" (the downstream prompt template depends on this).
-- It MUST be a clear list of counting instructions, numbered or bulleted, addressing the chip-counting task only.
-- DO NOT change the output format, JSON schema, or position layout — those are fixed elsewhere in the prompt and you must NOT touch them.
-- It MUST be in English (the chip-counting LLM works in English).
-- It SHOULD be no longer than ~25 lines. Concise + targeted beats verbose.
+Return ONLY a JSON object with this exact schema (one entry per color, in the same order):
+{
+  "counts": [
+${chips.map(c => `    { "color": ${JSON.stringify(c.color)}, "count": <integer> }`).join(',\n')}
+  ]
+}
 
-INTERPRETATION RULES for the empirical data:
-- The "signed bias" number is computed as (real chip count - AI chip count), summed per session.
-- POSITIVE "signed bias" = AI is UNDERCOUNTING (real had MORE chips than AI saw — this is the most common failure for vision LLMs).
-- NEGATIVE "signed bias" = AI is OVERCOUNTING (AI hallucinated chips that aren't there — much rarer).
-- A specific color with much higher abs error than others = that color confuses the model (likely color similarity, low contrast, or unusual edge ring pattern).
-- "% correct" near 100% = stable, leave that color alone. Near 50% = needs help.
+The "color" values MUST match the user's exact color names: ${colorsList}. Case differences are tolerated (we lowercase before matching).`,
+  });
 
-CURRENT strategy block (which you are REPLACING in full):
-"""
-${currentStrategy}
-"""
-
-EMPIRICAL feedback from ${stats.totalSamples} ground-truth comparisons (${stats.totalStacksAll} total stacks):
-- Perfect-stack rate: ${stats.pctPerfectStacks.toFixed(0)}%
-- Average signed bias: ${stats.avgSignedBias.toFixed(2)} chips per session (positive = undercount, negative = overcount)
-- Average absolute error: ${stats.avgAbsError.toFixed(2)} chips per session${trendLine}
-- Per-color breakdown:
-${perColorLines}
-
-Now return your tuning. The "description" field must be ONE short sentence (≤20 words) summarizing what your changes are targeting (this gets shown to the human owner in the version history).`;
-
-  const apiKey = getSettings()?.geminiApiKey || '';
-
-  let lastError = '';
-  for (const { version, model } of CHIP_TUNER_MODELS) {
-    try {
-      const resp = await proxyGeminiGenerate(version, model, apiKey, {
-        contents: [{ parts: [{ text: tunerPrompt }] }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 2048,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              strategy: { type: 'STRING' },
-              description: { type: 'STRING' },
+  const payload = {
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0.0,
+      maxOutputTokens: 512,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          counts: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                color: { type: 'STRING' },
+                count: { type: 'INTEGER' },
+              },
+              required: ['color', 'count'],
             },
-            required: ['strategy', 'description'],
           },
         },
-      });
-      if (!resp.ok) {
-        let msg = `HTTP ${resp.status}`;
-        try {
-          const body = await resp.json() as { error?: { message?: string } };
-          if (body?.error?.message) msg = body.error.message;
-        } catch { /* keep status */ }
-        lastError = msg;
-        console.warn(`[tuneChipCount] ${model} failed:`, msg);
-        continue;
-      }
-      const data = await resp.json();
-      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      let parsed: { strategy?: string; description?: string };
-      try {
-        parsed = JSON.parse(raw);
-      } catch (e) {
-        lastError = e instanceof Error ? e.message : 'Parse failed';
-        console.warn(`[tuneChipCount] ${model} parse failed:`, raw.slice(0, 200));
-        continue;
-      }
-      const strategy = (parsed.strategy || '').trim();
-      const description = (parsed.description || '').trim();
-      if (!strategy.startsWith('CRITICAL counting strategy')) {
-        // Reject results that don't honor the header constraint —
-        // the chip-counting prompt template glues this directly
-        // into the larger prompt, so a malformed header would
-        // silently degrade every photo count for the group.
-        lastError = 'Strategy missing required header';
-        console.warn(`[tuneChipCount] ${model} returned malformed strategy:`, strategy.slice(0, 100));
-        continue;
-      }
-      if (strategy.length < 100 || strategy.length > 4000) {
-        lastError = 'Strategy length out of bounds';
-        console.warn(`[tuneChipCount] ${model} strategy length suspicious:`, strategy.length);
-        continue;
-      }
-      return {
-        ok: true,
-        strategy,
-        description: description || 'AI-generated tuning',
-        modelUsed: model,
-      };
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
-      console.warn(`[tuneChipCount] ${model} threw:`, lastError);
-    }
-  }
+        required: ['counts'],
+      },
+    },
+  };
 
-  return { ok: false, error: lastError || 'Tuner failed' };
-}
-
-/** Load the active runtime override of the chip-counting strategy
- *  block, if any. Reads the LATEST row from
- *  `chip_count_tuning_overrides` for the current group. Returns
- *  null when there is no row, when the latest row's
- *  `prompt_strategy` is null (= group-owner reverted to default),
- *  or on any read error.
- *
- *  Called once per `countChipsFromPhoto` invocation. The added
- *  latency is one indexed lookup (idx_cctun_group_created), which
- *  is dwarfed by the Gemini call itself — totally fine in the
- *  hot path.
- *
- *  Phase 2 of the in-app tuning loop, v5.56+. */
-async function loadActiveChipCountStrategy(): Promise<string | null> {
-  const gid = getGroupId();
-  if (!gid) return null;
+  let response: Response;
   try {
-    const { data, error } = await supabase
-      .from('chip_count_tuning_overrides')
-      .select('prompt_strategy')
-      .eq('group_id', gid)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (error) {
-      console.warn('[chip-count] override load failed:', error.message);
-      return null;
-    }
-    if (!data || data.length === 0) return null;
-    const row = data[0] as { prompt_strategy: string | null };
-    if (!row.prompt_strategy || row.prompt_strategy.trim().length === 0) {
-      // Latest row is an explicit "revert to default" entry.
-      return null;
-    }
-    return row.prompt_strategy;
-  } catch (e) {
-    console.warn('[chip-count] override load threw:', e);
-    return null;
+    response = await proxyGeminiGenerateWithSignal(version, model, apiKey, payload, abortSignal);
+  } catch (err) {
+    if (abortSignal?.aborted) return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[runWholePhotoShot] ${model} network error:`, msg);
+    return { countsByColor: null, errorMsg: msg, errorCode: 'network' };
   }
+
+  if (abortSignal?.aborted) return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+
+  if (!response.ok) {
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const body = await response.json() as { error?: { message?: string } };
+      if (body?.error?.message) errorMsg = body.error.message;
+    } catch { /* keep status */ }
+    console.warn(`[runWholePhotoShot] ${model} HTTP error:`, errorMsg);
+    return { countsByColor: null, errorMsg, errorCode: 'httpError' };
+  }
+
+  let raw = '{}';
+  let parsed: { counts?: Array<{ color?: string; count?: number }> };
+  try {
+    const data = await response.json();
+    raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    parsed = JSON.parse(raw.trim());
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[runWholePhotoShot] ${model} parse failed:`, msg, 'raw:', raw.slice(0, 200));
+    return { countsByColor: null, errorMsg: `Parse failed: ${msg}`, errorCode: 'parseFailed' };
+  }
+
+  if (!parsed.counts || !Array.isArray(parsed.counts)) {
+    console.warn(`[runWholePhotoShot] ${model} unexpected shape:`, raw.slice(0, 300));
+    return { countsByColor: null, errorMsg: 'Missing counts array', errorCode: 'unexpectedShape' };
+  }
+
+  const map = new Map<string, number>();
+  for (const item of parsed.counts) {
+    if (!item.color || typeof item.color !== 'string') continue;
+    const n = Number(item.count);
+    if (!Number.isFinite(n) || n < 0) continue;
+    // Key by lowercase color name for case-insensitive lookup. If the LLM
+    // ever capitalizes inconsistently, the dispatcher still matches.
+    map.set(item.color.trim().toLowerCase(), Math.floor(n));
+  }
+
+  return { countsByColor: map, errorMsg: '', errorCode: 'httpError' };
 }
 
-/**
- * Photo chip-counting orchestrator (rebuilt v5.59).
- *
- * Pipeline (top to bottom):
- *   1. sampleMatColor              — get the background reference HSL
- *   2. detectStackRegions          — primary white-stripe density →
- *                                    fallback edge density → final
- *                                    fallback even partition.
- *                                    Includes color-mapping to the
- *                                    chip palette + empty-stack gap
- *                                    analysis + per-photo white-balance.
- *   3. (parallel per stack) cropToRegion → geometricChipCount + LLM
- *      single-stack call. The largest stack runs Method-A geometric
- *      first to derive `sharedChipPxHeight` for cross-stack
- *      calibration; other stacks reuse it.
- *   4. combineLLMAndGeometry       — multi-signal voting per stack.
- *   5. applyTotalValueSanityCheck  — when expectedTotalValue is
- *      supplied, nudge ±1 chip on the lowest-confidence stack if the
- *      summed total is off by exactly one chip denomination.
- *   6. Assemble PhotoChipCountResult with full provenance per stack.
- *
- * Failure mode: never throws. Always returns a PhotoChipCountResult,
- * with `error` populated when the pipeline couldn't produce usable
- * output (no image, no chips configured, all detection paths failed,
- * all LLM models failed). The caller surfaces a toast and the manual
- * chip-entry flow stays untouched.
- */
+/** Whole-photo call with the standard CHIP_COUNT_MODELS fallback chain.
+ *  Returns the first model that produced a valid counts map. */
+async function runWholePhotoWithFallback(args: {
+  imageBase64: string;
+  imageMimeType: string;
+  chips: ChipValue[];
+  apiKey: string;
+  abortSignal?: AbortSignal;
+  onProgress?: (model: string, attempt: number) => void;
+}): Promise<{
+  countsByColor: Map<string, number> | null;
+  modelUsed: string | null;
+  attempts: number;
+  errorMsg: string;
+  errorCode: PhotoChipCountErrorCode;
+}> {
+  let lastMsg = '';
+  let lastCode: PhotoChipCountErrorCode = 'httpError';
+  let attempt = 0;
+  for (const { version, model } of CHIP_COUNT_MODELS) {
+    attempt++;
+    if (args.abortSignal?.aborted) {
+      return { countsByColor: null, modelUsed: null, attempts: attempt, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+    }
+    args.onProgress?.(model, attempt);
+    const out = await runWholePhotoShot({
+      version,
+      model,
+      apiKey: args.apiKey,
+      imageBase64: args.imageBase64,
+      imageMimeType: args.imageMimeType,
+      chips: args.chips,
+      abortSignal: args.abortSignal,
+    });
+    if (out.countsByColor) {
+      return { countsByColor: out.countsByColor, modelUsed: model, attempts: attempt, errorMsg: '', errorCode: 'httpError' };
+    }
+    lastMsg = out.errorMsg;
+    lastCode = out.errorCode;
+    if (out.errorCode === 'cancelled') break;
+  }
+  return { countsByColor: null, modelUsed: null, attempts: attempt, errorMsg: lastMsg, errorCode: lastCode };
+}
+
 export async function countChipsFromPhoto(
   input: CountChipsFromPhotoInput,
 ): Promise<PhotoChipCountResult> {
@@ -4718,364 +4335,120 @@ export async function countChipsFromPhoto(
     return emptyChipCountResult('No chip values configured for this group', 'noChipsConfig');
   }
 
-  // Lazy import to avoid pulling canvas-using modules into any non-
-  // browser code path that imports geminiAI.ts (e.g. the comic-script
-  // generator currently runs in the same module). Keeps tree-shaking
-  // and SSR safety predictable.
-  const { sampleMatColor, cropToRegion } = await import('./imageUtils');
-  const { detectStackRegions } = await import('./stackDetection');
-  const { geometricChipCount } = await import('./chipGeometry');
-
   const orderedChips: ChipValue[] = [...chipValues].sort((a, b) => a.value - b.value);
   const chipById = new Map(orderedChips.map(c => [c.id, c]));
-
-  // ── Phase 1: stack detection ──────────────────────────────────────
-  onProgress?.({
-    phase: 'detecting-stacks',
-    model: '',
-    modelDisplay: '',
-    attempt: 0,
-    totalModels: 0,
-  });
-  if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
-
-  const downscaledForDetection: DownscaledImage = {
-    base64: imageBase64,
-    mimeType,
-    width: 0,
-    height: 0,
-    byteSize: imageBase64.length * 0.75,
-  };
-
-  let matSample: { rgb: RGB; hsl: HSL };
-  try {
-    matSample = await sampleMatColor(downscaledForDetection);
-  } catch (e) {
-    console.warn('[countChipsFromPhoto] mat sampling failed:', e);
-    matSample = { rgb: { r: 50, g: 80, b: 60 }, hsl: { h: 130, s: 0.25, l: 0.25 } };
-  }
-
-  let detection: DetectStackRegionsResult;
-  try {
-    detection = await detectStackRegions(
-      downscaledForDetection,
-      orderedChips,
-      matSample.hsl,
-      orderedChips.length,
-    );
-  } catch (e) {
-    console.warn('[countChipsFromPhoto] stack detection threw:', e);
-    return emptyChipCountResult('Stack detection failed', 'stackDetectionFailed');
-  }
-
-  if (!detection.stacks.length) {
-    return emptyChipCountResult('No chip stacks detected in photo', 'stackDetectionFailed');
-  }
-
-  // ── Phase 2: cross-stack calibration ───────────────────────────────
-  onProgress?.({
-    phase: 'calibrating',
-    model: '',
-    modelDisplay: '',
-    attempt: 0,
-    totalModels: 0,
-  });
-  if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
-
-  // Calibrate from the largest non-placeholder region: it has the
-  // most pixel signal so its bottom-chip detection is most reliable.
-  // The resulting `sharedChipPxHeight` then anchors all other stacks'
-  // Method-C (shared-cal) geometric counts.
-  const realRegions = detection.stacks.filter(s => s.detectionMethod !== 'empty-stack-gap');
-  let sharedChipPxHeight: number | undefined;
-  if (realRegions.length > 0) {
-    const largest = [...realRegions].sort(
-      (a, b) => b.region.height - a.region.height,
-    )[0];
-    try {
-      const largestCrop = await cropToRegion(downscaledForDetection, largest.region);
-      const calibration = await geometricChipCount({ stackCrop: largestCrop });
-      if (calibration.detectedChipPxHeight && calibration.detectedChipPxHeight > 5) {
-        sharedChipPxHeight = calibration.detectedChipPxHeight;
-      }
-    } catch (e) {
-      console.warn('[countChipsFromPhoto] calibration failed:', e);
-    }
-  }
-
-  // ── Phase 3: per-stack counting (LLM + geometry) ───────────────────
-  const strategyOverride = await loadActiveChipCountStrategy();
   const apiKey = getSettings()?.geminiApiKey || '';
 
-  // Build the per-stack work plan. Empty-stack placeholders are handled
-  // synchronously (no LLM call needed); real stacks each spawn a
-  // parallel async task that runs the LLM call + geometry side by side.
-  const stackTotal = detection.stacks.length;
-  let stacksDone = 0;
-
-  type StackWork = {
-    detected: typeof detection.stacks[number];
-    position: number;
-    chip: ChipValue;
-  };
-  const workItems: StackWork[] = detection.stacks
-    .map((d, idx) => {
-      const chip = d.matchedChipId ? chipById.get(d.matchedChipId) : undefined;
-      if (!chip) return null;
-      return { detected: d, position: idx + 1, chip };
-    })
-    .filter((w): w is StackWork => w !== null);
-
-  // Re-order positions: canonical small → high based on chip.value
-  // (matches the user's instructed left-to-right arrangement and the
-  // chip-row order in ChipEntryScreen).
-  workItems.sort((a, b) => a.chip.value - b.chip.value);
-  workItems.forEach((w, i) => { w.position = i + 1; });
-
+  // v5.62 — whole-photo single LLM call. Previously this function dispatched
+  // through a per-stack pipeline (detectStackRegions → cropToRegion ×N →
+  // runSingleStackShot ×N + geometricChipCount ×N + combineLLMAndGeometry).
+  // The stack-detection step was too fragile in real-world photos: when it
+  // missed stacks (which it did often — kitchen counters, varied lighting,
+  // short stacks), entire chip colors silently returned 0 with no warning.
+  // Whole-photo trades "off-by-1 per stack" for "never miss a stack" —
+  // empirically the right trade.
+  //
+  // Progress reporting uses the legacy `attempting` phase (which the modal
+  // already handles cleanly as "asking model X…"). The per-stack `counting-
+  // stacks` phase with stackIndex/stackTotal is no longer used since there
+  // are no per-stack subcalls.
   onProgress?.({
-    phase: 'counting-stacks',
-    model: '',
-    modelDisplay: '',
+    phase: 'attempting',
+    model: CHIP_COUNT_MODELS[0].model,
+    modelDisplay: MODEL_DISPLAY_NAMES[CHIP_COUNT_MODELS[0].model] || CHIP_COUNT_MODELS[0].model,
     attempt: 0,
-    totalModels: 0,
-    stackIndex: 0,
-    stackTotal,
+    totalModels: CHIP_COUNT_MODELS.length,
   });
-
-  type PerStackOutcome = {
-    stack: PhotoChipCountStack;
-    modelUsed: string | null;
-  };
-
-  const tasks = workItems.map(async (work): Promise<PerStackOutcome> => {
-    const { detected, position, chip } = work;
-
-    // Empty-stack placeholders short-circuit — skip both LLM and
-    // geometry, return count=0 with high confidence.
-    if (detected.detectionMethod === 'empty-stack-gap') {
-      const stack: PhotoChipCountStack = {
-        position,
-        chipId: chip.id,
-        color: chip.color,
-        count: 0,
-        confidence: 95,
-        region: detected.region,
-        geometricCount: 0,
-        geometricMethod: 'empty-stack-detected',
-        agreementScore: 1,
-        needsVerify: false,
-        detectedDominantHex: detected.dominantHex,
-        provenance: {
-          llmCount: null,
-          geometryBottomChip: null,
-          geometryGradientCount: null,
-          geometrySharedCal: null,
-          finalCount: 0,
-          finalConfidence: 95,
-          reasoning: 'empty stack — chip color missing from photo, count = 0',
-        },
-      };
-      stacksDone++;
-      onProgress?.({
-        phase: 'counting-stacks',
-        model: '',
-        modelDisplay: '',
-        attempt: 0,
-        totalModels: 0,
-        stackIndex: stacksDone,
-        stackTotal,
-      });
-      return { stack, modelUsed: null };
-    }
-
-    // Crop the source image to this stack's region.
-    let stackCrop: DownscaledImage;
-    try {
-      stackCrop = await cropToRegion(downscaledForDetection, detected.region);
-    } catch (e) {
-      console.warn(`[countChipsFromPhoto] crop failed for ${chip.color}:`, e);
-      // Fall through — record what we have and let the voter handle nulls.
-      stackCrop = downscaledForDetection;
-    }
-
-    // Run geometry + LLM in parallel. Each LLM call has its own model
-    // fallback chain so a single bad model can't take down the whole
-    // photo's count.
-    const [geomResult, llmResult] = await Promise.all([
-      geometricChipCount({ stackCrop, sharedChipPxHeight })
-        .catch(e => {
-          console.warn(`[countChipsFromPhoto] geometry threw for ${chip.color}:`, e);
-          return {
-            count: null as number | null,
-            confidence: 0,
-            method: 'failed' as const,
-            detectedChipPxHeight: null as number | null,
-            diagnostic: undefined,
-          };
-        }),
-      runWithChipCountModelFallback({
-        stackBase64: stackCrop.base64,
-        stackMimeType: stackCrop.mimeType,
-        selfieBase64: chip.selfieBase64 ?? null,
-        selfieMimeType: chip.selfieBase64 ? 'image/jpeg' : null,
-        chipColorName: chip.color,
-        strategyBlock: strategyOverride ?? DEFAULT_CHIP_COUNT_STRATEGY,
-        apiKey,
-        abortSignal,
-      }),
-    ]);
-
-    // Vote.
-    const voted = combineLLMAndGeometry({
-      llmCount: llmResult.count,
-      geometryBottomChip: geomResult.diagnostic?.bottomChip?.count ?? null,
-      geometryGradientCount: geomResult.diagnostic?.gradientCount?.count ?? null,
-      geometrySharedCal: geomResult.diagnostic?.sharedCal?.count ?? null,
-      geometryConfidence: geomResult.confidence,
-      colorMatchDistance: detected.matchDistance,
-    });
-
-    const stack: PhotoChipCountStack = {
-      position,
-      chipId: chip.id,
-      color: chip.color,
-      count: voted.count,
-      confidence: voted.confidence,
-      region: detected.region,
-      geometricCount: geomResult.count,
-      geometricMethod: geomResult.method,
-      agreementScore: voted.agreementScore,
-      needsVerify: voted.needsVerify,
-      detectedDominantHex: detected.dominantHex,
-      provenance: {
-        llmCount: llmResult.count,
-        geometryBottomChip: geomResult.diagnostic?.bottomChip?.count ?? null,
-        geometryGradientCount: geomResult.diagnostic?.gradientCount?.count ?? null,
-        geometrySharedCal: geomResult.diagnostic?.sharedCal?.count ?? null,
-        finalCount: voted.count,
-        finalConfidence: voted.confidence,
-        reasoning: voted.reasoning + (llmResult.modelUsed ? ` [LLM=${llmResult.modelUsed}]` : ''),
-      },
-    };
-    stacksDone++;
-    onProgress?.({
-      phase: 'counting-stacks',
-      model: llmResult.modelUsed || '',
-      modelDisplay: llmResult.modelUsed ? (MODEL_DISPLAY_NAMES[llmResult.modelUsed] || llmResult.modelUsed) : '',
-      attempt: 0,
-      totalModels: 0,
-      stackIndex: stacksDone,
-      stackTotal,
-    });
-    return { stack, modelUsed: llmResult.modelUsed };
-  });
-
-  const outcomes = await Promise.all(tasks);
   if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
 
-  const stacks = outcomes.map(o => o.stack);
+  const result = await runWholePhotoWithFallback({
+    imageBase64,
+    imageMimeType: mimeType,
+    chips: orderedChips,
+    apiKey,
+    abortSignal,
+    onProgress: (model, attempt) => onProgress?.({
+      phase: 'attempting',
+      model,
+      modelDisplay: MODEL_DISPLAY_NAMES[model] || model,
+      attempt: attempt - 1,
+      totalModels: CHIP_COUNT_MODELS.length,
+    }),
+  });
 
-  // ── Phase 4: total-value sanity check (live game flow only) ────────
+  if (abortSignal?.aborted) return emptyChipCountResult('Cancelled', 'cancelled');
+  if (!result.countsByColor) {
+    return emptyChipCountResult(result.errorMsg || 'AI count failed', result.errorCode);
+  }
+
+  // Build PhotoChipCountStack[] from the per-color count map, preserving
+  // the canonical small→high chip order so the UI rows line up.
+  const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
+    const count = result.countsByColor!.get(chip.color.trim().toLowerCase()) ?? 0;
+    // Per-stack confidence: high (80) when LLM returned a non-zero count
+    // for this color (treating LLM agreement with itself as the only
+    // signal we have in the whole-photo path), lower (45) for zeros so
+    // the UI doesn't show a fake 95% on a missed stack.
+    const confidence = count > 0 ? 80 : 45;
+    return {
+      position: idx + 1,
+      chipId: chip.id,
+      color: chip.color,
+      count,
+      confidence,
+      provenance: {
+        llmCount: count,
+        geometryBottomChip: null,
+        geometryGradientCount: null,
+        geometrySharedCal: null,
+        finalCount: count,
+        finalConfidence: confidence,
+        reasoning: `whole-photo LLM count via ${result.modelUsed}`,
+      },
+    };
+  });
+
+  // Total-value sanity check: when expected total is provided (live game
+  // flow), adjust the lowest-confidence stack by ±1 chip if the sum is
+  // off by exactly one chip denomination.
   let totalValueCheckResult: PhotoChipCountResult['totalValueCheckResult'] = null;
   if (typeof expectedTotalValue === 'number' && expectedTotalValue > 0) {
     onProgress?.({
       phase: 'reconciling-totals',
-      model: '',
-      modelDisplay: '',
-      attempt: 0,
-      totalModels: 0,
+      model: result.modelUsed || '',
+      modelDisplay: result.modelUsed ? (MODEL_DISPLAY_NAMES[result.modelUsed] || result.modelUsed) : '',
+      attempt: result.attempts,
+      totalModels: CHIP_COUNT_MODELS.length,
     });
     totalValueCheckResult = applyTotalValueSanityCheck(stacks, chipById, expectedTotalValue);
   }
 
-  // ── Phase 5: assemble result ───────────────────────────────────────
   const totalValue = stacks.reduce((sum, s) => {
     const chip = chipById.get(s.chipId);
     return sum + (chip ? s.count * chip.value : 0);
   }, 0);
 
-  // Stack-count-weighted average of per-stack confidence. A 10-chip
-  // stack contributes 10× the weight of a 1-chip stack — bigger
-  // counts dominate the headline number, which matches user intuition.
+  // Overall confidence (count-weighted, capped at 85 since whole-photo
+  // has no cross-validation signal). All zeros → 30 (something's wrong).
   const meaningful = stacks.filter(s => s.count > 0);
   let overallConfidence: number;
   if (meaningful.length === 0) {
-    // All zero — vacuously confident if every stack returned an
-    // empty-stack placeholder.
-    overallConfidence = stacks.every(s => s.geometricMethod === 'empty-stack-detected') ? 92 : 50;
+    overallConfidence = 30;
   } else {
     const weightSum = meaningful.reduce((acc, s) => acc + s.count, 0);
     const weightedConfSum = meaningful.reduce((acc, s) => acc + s.count * s.confidence, 0);
-    overallConfidence = clamp(Math.round(weightedConfSum / weightSum), 5, 95);
+    overallConfidence = clamp(Math.round(weightedConfSum / weightSum), 30, 85);
   }
-
-  // Aggregate model used (most frequent winner across stacks).
-  const modelCounts = new Map<string, number>();
-  for (const o of outcomes) {
-    if (o.modelUsed) modelCounts.set(o.modelUsed, (modelCounts.get(o.modelUsed) || 0) + 1);
-  }
-  let modelUsed = CHIP_COUNT_MODELS[0].model;
-  let bestN = 0;
-  for (const [m, n] of modelCounts.entries()) {
-    if (n > bestN) { bestN = n; modelUsed = m; }
-  }
-  const totalLlmCalls = Array.from(modelCounts.values()).reduce((a, b) => a + b, 0);
-  if (totalLlmCalls > 0) modelUsed = `${modelUsed}×${totalLlmCalls}`;
-
-  const recountStackIds = stacks.filter(s => s.needsVerify).map(s => s.chipId);
 
   return {
     stacks,
     overallConfidence,
     totalValue,
-    modelUsed,
-    shotsUsed: totalLlmCalls,
-    recountStackIds,
-    whiteBalanceApplied: detection.stripeSampleCount >= 50,
+    modelUsed: result.modelUsed || CHIP_COUNT_MODELS[0].model,
+    shotsUsed: 1,
+    recountStackIds: stacks.filter(s => s.confidence < 70).map(s => s.chipId),
     totalValueCheckResult,
-    detectionSignal: detection.signalUsed,
   };
-}
-
-/** Try the LLM for one stack across the model fallback chain. Returns
- *  the first successful count, or null with errorCode if the entire
- *  chain failed for this stack. */
-async function runWithChipCountModelFallback(args: {
-  stackBase64: string;
-  stackMimeType: string;
-  selfieBase64: string | null;
-  selfieMimeType: string | null;
-  chipColorName: string;
-  strategyBlock: string;
-  apiKey: string;
-  abortSignal?: AbortSignal;
-}): Promise<{ count: number | null; modelUsed: string | null; errorMsg: string; errorCode: PhotoChipCountErrorCode }> {
-  let lastErrorMsg = '';
-  let lastErrorCode: PhotoChipCountErrorCode = 'httpError';
-  for (const { version, model } of CHIP_COUNT_MODELS) {
-    if (args.abortSignal?.aborted) return { count: null, modelUsed: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
-    const out = await runSingleStackShot({
-      version,
-      model,
-      apiKey: args.apiKey,
-      stackBase64: args.stackBase64,
-      stackMimeType: args.stackMimeType,
-      selfieBase64: args.selfieBase64,
-      selfieMimeType: args.selfieMimeType,
-      chipColorName: args.chipColorName,
-      strategyBlock: args.strategyBlock,
-      abortSignal: args.abortSignal,
-    });
-    if (out.count !== null) {
-      return { count: out.count, modelUsed: model, errorMsg: '', errorCode: 'httpError' };
-    }
-    lastErrorMsg = out.errorMsg;
-    lastErrorCode = out.errorCode;
-    if (out.errorCode === 'cancelled') {
-      return { count: null, modelUsed: null, errorMsg: lastErrorMsg, errorCode: 'cancelled' };
-    }
-  }
-  return { count: null, modelUsed: null, errorMsg: lastErrorMsg, errorCode: lastErrorCode };
 }
 
 function emptyChipCountResult(

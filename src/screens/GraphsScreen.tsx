@@ -23,6 +23,27 @@ import { useTranslation } from '../i18n';
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 
+// Allowlist of non-permanent player IDs that should still appear in
+// player-vs-player views (Head-to-Head + Impact). The H2H + Impact
+// dropdowns are otherwise restricted to `type === 'permanent'`,
+// because plain `guest` and most `permanent_guest` players don't have
+// enough games to make the comparisons meaningful. Players added here
+// get treated as permanent for those two views only — color map,
+// dropdowns, and impact "other players" loop. The rest of the screen
+// (cumulative chart, AI insights, color-by-permanent-position) is
+// unchanged.
+//
+// Once a player here is promoted to `type === 'permanent'`, their
+// entry here becomes a no-op and can be removed.
+//
+// Current entries:
+//   - 'aa4de7f1-0b57-4946-a11d-f554d2a864f9' = קובי (group d1998bed,
+//     marked permanent_guest but plays often enough that the owner
+//     wants him in H2H + Impact). Pending promotion to permanent.
+const EXTRA_COMPARISON_PLAYER_IDS = new Set<string>([
+  'aa4de7f1-0b57-4946-a11d-f554d2a864f9',
+]);
+
 // Color palette for players - stable mapping by player ID
 const PLAYER_COLORS = [
   '#10B981', // Green
@@ -133,12 +154,30 @@ const GraphsScreen = () => {
     finally { setSharing(false); }
   };
 
-  // Color mapping - stable by player order in permanent list
+  // Players eligible for the player-vs-player views (Head-to-Head +
+  // Impact dropdowns and the Impact "other players" comparison loop).
+  // Permanent players + the EXTRA_COMPARISON_PLAYER_IDS allowlist (see
+  // top of file). Order: permanents in their original list order, then
+  // allowlisted extras appended — keeps stable color assignments.
+  const comparisonViewPlayers = useMemo(() => {
+    const permanent = players.filter(p => p.type === 'permanent');
+    const extras = players.filter(p => p.type !== 'permanent' && EXTRA_COMPARISON_PLAYER_IDS.has(p.id));
+    return [...permanent, ...extras];
+  }, [players]);
+
+  // Color mapping - stable by player order in permanent list. Plus
+  // an explicit allowlist of non-permanent player IDs that should also
+  // appear in player-vs-player views (Head-to-Head + Impact). See
+  // EXTRA_COMPARISON_PLAYER_IDS below for the rationale.
   const playerColorMap = useMemo(() => {
     const map = new Map<string, string>();
     const permanentPlayers = players.filter(p => p.type === 'permanent');
     permanentPlayers.forEach((player, index) => {
       map.set(player.id, PLAYER_COLORS[index % PLAYER_COLORS.length]);
+    });
+    const extras = players.filter(p => EXTRA_COMPARISON_PLAYER_IDS.has(p.id) && !map.has(p.id));
+    extras.forEach((player, index) => {
+      map.set(player.id, PLAYER_COLORS[(permanentPlayers.length + index) % PLAYER_COLORS.length]);
     });
     return map;
   }, [players]);
@@ -669,11 +708,14 @@ const GraphsScreen = () => {
     });
   }, [selectedPlayers, getPlayerName]);
 
-  // Impact data - for a selected player, how their avg changes with/without each other player
+  // Impact data - for a selected player, how their avg changes with/without each other player.
+  // Uses `comparisonViewPlayers` (permanents + the EXTRA_COMPARISON_PLAYER_IDS allowlist).
+  // Plain `guest` and unlisted `permanent_guest` players are intentionally excluded — their
+  // game counts are too low to make the with/without comparison statistically useful.
   const impactData = useMemo(() => {
     if (!impactPlayerId) return [];
 
-    const permanentPlayers = players.filter(p => p.type === 'permanent' && p.id !== impactPlayerId);
+    const comparisonPlayers = comparisonViewPlayers.filter(p => p.id !== impactPlayerId);
     const results: Array<{
       otherPlayerId: string;
       otherPlayerName: string;
@@ -691,7 +733,7 @@ const GraphsScreen = () => {
       totalWithout: number;
     }> = [];
 
-    for (const other of permanentPlayers) {
+    for (const other of comparisonPlayers) {
       let withProfit = 0, withGames = 0, withWins = 0;
       let withoutProfit = 0, withoutGames = 0, withoutWins = 0;
 
@@ -737,7 +779,7 @@ const GraphsScreen = () => {
 
     results.sort((a, b) => b.impact - a.impact);
     return results;
-  }, [impactPlayerId, filteredGames, gamePlayers, players, getPlayerColor]);
+  }, [impactPlayerId, filteredGames, gamePlayers, comparisonViewPlayers, getPlayerColor]);
 
   const getTimeframeLabel = () => {
     const locale = language === 'he' ? 'he-IL' : 'en-US';
@@ -1220,7 +1262,7 @@ const GraphsScreen = () => {
                 cursor: 'pointer',
               }}
             >
-              {players.filter(p => p.type === 'permanent').map(p => (
+              {comparisonViewPlayers.map(p => (
                 <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
             </select>
@@ -1240,7 +1282,7 @@ const GraphsScreen = () => {
                 cursor: 'pointer',
               }}
             >
-              {players.filter(p => p.type === 'permanent').map(p => (
+              {comparisonViewPlayers.map(p => (
                 <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
             </select>
@@ -2168,7 +2210,7 @@ const GraphsScreen = () => {
                 cursor: 'pointer',
               }}
             >
-              {players.filter(p => p.type === 'permanent').map(p => (
+              {comparisonViewPlayers.map(p => (
                 <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
             </select>

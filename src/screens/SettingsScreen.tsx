@@ -36,11 +36,12 @@ import { submitChipCountFeedback } from '../utils/chipCountFeedback';
 import {
   aggregateFeedback,
   trendVerdict,
-  TUNE_THRESHOLD_SAMPLES,
   type FeedbackStats,
   type RawFeedbackRow,
 } from '../utils/chipFeedbackStats';
-import { tuneAndApply, revertChipTuningToDefault, checkAndAutoRollbackIfNeeded } from '../utils/chipCountTuner';
+// v5.62 — chip-count tuner removed (the wins came from the architectural
+// switch to whole-photo, not from LLM-driven prompt tuning). Feedback
+// dashboard below stays for accuracy visibility.
 import {
   LineChart,
   Line,
@@ -202,33 +203,9 @@ const SettingsScreen = () => {
   const [chipFeedbackError, setChipFeedbackError] = useState<string | null>(null);
   const [chipFeedbackRefreshTick, setChipFeedbackRefreshTick] = useState(0);
 
-  // Tuning button state (Phase 2 of the in-app tuning loop, v5.56+).
-  //   * `chipTuningInFlight` flips true while the tuner LLM call
-  //     + Supabase write are running. Disables the button and
-  //     swaps to a spinner / "tuning..." label.
-  //   * `chipTuningResult` holds the LAST tuning attempt result,
-  //     either { ok: true, description } or { ok: false, error }.
-  //     We surface the description on success ("AI tightened blue
-  //     stack guidance — try a fresh photo to verify") and the
-  //     error on failure. Cleared on the next button click.
-  const [chipTuningInFlight, setChipTuningInFlight] = useState(false);
-  const [chipTuningResult, setChipTuningResult] = useState<
-    | { ok: true; description: string }
-    | { ok: false; error: string }
-    | null
-  >(null);
-  const [chipRevertInFlight, setChipRevertInFlight] = useState(false);
-  // Auto-rollback banner (Phase 3 of the in-app tuning loop, v5.57+).
-  // Set when `checkAndAutoRollbackIfNeeded` actually fires a rollback
-  // during a dashboard load; rendered as a yellow warning banner at
-  // the TOP of the dashboard card so the owner sees it immediately
-  // (not buried under the KPI tiles). Dismissible.
-  const [chipAutoRollback, setChipAutoRollback] = useState<{
-    description: string;
-    postAvg: number;
-    baseline: number;
-    postSamples: number;
-  } | null>(null);
+  // v5.62 — tuning UI state removed alongside the per-stack pipeline.
+  // The chip_count_tuning_overrides table stays in the DB but is now
+  // never read or written from the UI.
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -551,65 +528,21 @@ const SettingsScreen = () => {
     setChipFeedbackError(null);
     (async () => {
       try {
-        // Phase 3: run the auto-rollback safety net BEFORE loading the
-        // dashboard data. Owner-only — see comment above for why.
-        // If a rollback fires, the load below will observe the new
-        // state (latest tuning row = the auto-revert) and reset the
-        // rowsSinceLastTuning counter accordingly. The banner state
-        // is set so the owner sees the explanation at the top of
-        // the card. No-op when the latest tuning is already a
-        // revert, when no tuning exists, when fewer than 5
-        // post-tuning samples exist, or when post-tuning accuracy
-        // matches/beats baseline — the common cases.
-        if (isOwner) {
-          const rollback = await checkAndAutoRollbackIfNeeded();
-          if (cancelled) return;
-          if (rollback.rolledBack && rollback.description && rollback.postAvg !== undefined && rollback.baseline !== undefined && rollback.postSamples !== undefined) {
-            setChipAutoRollback({
-              description: rollback.description,
-              postAvg: rollback.postAvg,
-              baseline: rollback.baseline,
-              postSamples: rollback.postSamples,
-            });
-          }
-        }
-
-        // Last 200 saves is plenty for the dashboard math (and the
-        // trend chart can't display more than a couple hundred
-        // points usefully anyway). Order asc/desc doesn't matter
-        // because aggregateFeedback re-sorts.
-        const [{ data: rows, error: rowsErr }, { data: tunings, error: tuneErr }] = await Promise.all([
-          supabase
-            .from('chip_count_feedback')
-            .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks, pipeline_meta')
-            .eq('group_id', gid)
-            .order('created_at', { ascending: false })
-            .limit(200),
-          supabase
-            .from('chip_count_tuning_overrides')
-            .select('created_at')
-            .eq('group_id', gid)
-            .order('created_at', { ascending: false })
-            .limit(1),
-        ]);
+        // v5.62 — auto-rollback + tuning history load removed alongside
+        // the tuning UI. Just load feedback rows for the dashboard.
+        const { data: rows, error: rowsErr } = await supabase
+          .from('chip_count_feedback')
+          .select('id, created_at, player_name, game_id, player_id, model_used, overall_confidence, shots_used, total_stacks, correct_stacks, total_chip_delta, total_abs_delta, expected_total_value, rebuys, chips_per_rebuy, stacks, pipeline_meta')
+          .eq('group_id', gid)
+          .order('created_at', { ascending: false })
+          .limit(200);
         if (cancelled) return;
         if (rowsErr) {
           setChipFeedbackError(rowsErr.message);
           setChipFeedbackStats(null);
           return;
         }
-        // Tuning-table errors are non-fatal — the dashboard still
-        // works without "rows since last tuning" being accurate.
-        if (tuneErr) {
-          console.warn('[chip-feedback] tuning history load failed:', tuneErr.message);
-        }
-        const lastTuningAt = (tunings && tunings.length > 0)
-          ? (tunings[0] as { created_at: string }).created_at
-          : null;
-        const stats = aggregateFeedback(
-          (rows ?? []) as RawFeedbackRow[],
-          lastTuningAt,
-        );
+        const stats = aggregateFeedback((rows ?? []) as RawFeedbackRow[], null);
         setChipFeedbackStats(stats);
       } catch (e) {
         if (cancelled) return;
@@ -1823,44 +1756,95 @@ const SettingsScreen = () => {
                   />
                   {canEditChips && (
                     <>
-                      {/* Selfie thumbnail (when present) — clickable to retake.
-                          When absent, the camera button below is the entry point. */}
-                      {hasSelfie && (
-                        <img
-                          src={`data:image/jpeg;base64,${chip.selfieBase64}`}
-                          alt={t('settings.chips.selfieAlt')}
-                          title={t('settings.chips.selfieRetake')}
+                      {/* v5.62 — selfie cell. ONE compact widget instead
+                          of the old three-button cluster (thumb + retake +
+                          clear ✕). When a selfie exists: render the thumb;
+                          clicking the thumb retakes; the tiny × in the
+                          corner clears. When no selfie: a 📷 button takes
+                          the first one. The hidden <input> handles the
+                          actual file pick for both paths. */}
+                      {hasSelfie ? (
+                        <div
+                          style={{
+                            position: 'relative',
+                            width: '32px',
+                            height: '32px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img
+                            src={`data:image/jpeg;base64,${chip.selfieBase64}`}
+                            alt={t('settings.chips.selfieAlt')}
+                            title={busy ? t('settings.chips.selfieTake') : t('settings.chips.selfieRetake')}
+                            onClick={() => {
+                              if (busy) return;
+                              setChipSelfieBusyId(chip.id);
+                              const input = document.getElementById(`chip-selfie-input-${chip.id}`) as HTMLInputElement | null;
+                              input?.click();
+                            }}
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              cursor: busy ? 'wait' : 'pointer',
+                              border: '2px solid rgba(16,185,129,0.5)',
+                              opacity: busy ? 0.4 : 1,
+                              display: 'block',
+                            }}
+                          />
+                          {/* Tiny × overlay to clear the selfie without
+                              having to dig through a context menu. Stops
+                              propagation so it never accidentally retakes. */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (busy) return;
+                              handleClearSelfie(chip.id);
+                            }}
+                            title={t('settings.chips.selfieClear')}
+                            aria-label={t('settings.chips.selfieClear')}
+                            style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              insetInlineEnd: '-4px',
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '50%',
+                              background: '#1f2937',
+                              border: '1px solid var(--border)',
+                              color: '#fca5a5',
+                              fontSize: '0.65rem',
+                              lineHeight: 1,
+                              padding: 0,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontFamily: 'inherit',
+                              opacity: busy ? 0.4 : 1,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="row-action"
                           onClick={() => {
                             if (busy) return;
                             setChipSelfieBusyId(chip.id);
                             const input = document.getElementById(`chip-selfie-input-${chip.id}`) as HTMLInputElement | null;
                             input?.click();
                           }}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            cursor: busy ? 'wait' : 'pointer',
-                            border: '2px solid rgba(16,185,129,0.5)',
-                            opacity: busy ? 0.5 : 1,
-                          }}
-                        />
+                          title={t('settings.chips.selfieTake')}
+                          disabled={busy}
+                          style={{ opacity: busy ? 0.5 : 1 }}
+                        >
+                          {busy ? '⏳' : '📷'}
+                        </button>
                       )}
-                      <button
-                        className="row-action"
-                        onClick={() => {
-                          if (busy) return;
-                          setChipSelfieBusyId(chip.id);
-                          const input = document.getElementById(`chip-selfie-input-${chip.id}`) as HTMLInputElement | null;
-                          input?.click();
-                        }}
-                        title={hasSelfie ? t('settings.chips.selfieRetake') : t('settings.chips.selfieTake')}
-                        disabled={busy}
-                        style={{ opacity: busy ? 0.5 : 1 }}
-                      >
-                        {busy ? '⏳' : (hasSelfie ? '🔄' : '📷')}
-                      </button>
                       <input
                         id={`chip-selfie-input-${chip.id}`}
                         type="file"
@@ -1873,16 +1857,6 @@ const SettingsScreen = () => {
                           void handleSelfieFile(chip.id, f);
                         }}
                       />
-                      {hasSelfie && (
-                        <button
-                          className="row-action"
-                          onClick={() => handleClearSelfie(chip.id)}
-                          title={t('settings.chips.selfieClear')}
-                          style={{ fontSize: '0.7rem' }}
-                        >
-                          ✕
-                        </button>
-                      )}
                       <button
                         className="row-action row-action-danger"
                         onClick={() => setDeleteChipConfirm({ id: chip.id, name: translateChipColor(chip.color, t) })}
@@ -3825,55 +3799,7 @@ const SettingsScreen = () => {
             {t('settings.chipDashboard.helper')}
           </p>
 
-          {/* Auto-rollback banner (Phase 3 safety net) — shown only
-              when the last dashboard load detected that a recent
-              tuning made things worse and reverted automatically.
-              Dismissible — closing it just clears the local state
-              for this session, the underlying revert row stays in
-              the DB. */}
-          {chipAutoRollback && (
-            <div style={{
-              padding: '0.65rem 0.8rem',
-              background: 'rgba(234,179,8,0.12)',
-              border: '1px solid rgba(234,179,8,0.4)',
-              borderRadius: '8px',
-              fontSize: '0.78rem',
-              lineHeight: 1.5,
-              color: '#fbbf24',
-              marginBottom: '0.6rem',
-              position: 'relative',
-            }}>
-              <button
-                type="button"
-                onClick={() => setChipAutoRollback(null)}
-                style={{
-                  position: 'absolute',
-                  insetInlineEnd: '0.3rem',
-                  insetBlockStart: '0.3rem',
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#fbbf24',
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  lineHeight: 1,
-                  padding: '0.2rem 0.4rem',
-                  fontFamily: 'inherit',
-                }}
-                aria-label={t('settings.chipDashboard.autoRollbackDismiss')}
-              >
-                ×
-              </button>
-              <div style={{ fontWeight: 700, marginBottom: '0.3rem' }}>
-                ⚠ {t('settings.chipDashboard.autoRollbackTitle')}
-              </div>
-              <div style={{ opacity: 0.95 }}>
-                {t('settings.chipDashboard.autoRollbackDetail')
-                  .replace('{post}', chipAutoRollback.postAvg.toFixed(2))
-                  .replace('{baseline}', chipAutoRollback.baseline.toFixed(2))
-                  .replace('{n}', String(chipAutoRollback.postSamples))}
-              </div>
-            </div>
-          )}
+          {/* v5.62 — auto-rollback banner removed alongside the tuning UI. */}
 
           {chipFeedbackError && (
             <div style={{
@@ -3930,8 +3856,6 @@ const SettingsScreen = () => {
             };
             const formatSigned = (n: number): string =>
               `${n > 0 ? '+' : ''}${n.toFixed(1)}`;
-            const tuneAvailable = stats.rowsSinceLastTuning >= TUNE_THRESHOLD_SAMPLES;
-            const tuneRemaining = Math.max(0, TUNE_THRESHOLD_SAMPLES - stats.rowsSinceLastTuning);
 
             return (
               <>
@@ -4267,223 +4191,10 @@ const SettingsScreen = () => {
                   </div>
                 )}
 
-                {/* Tuning gate. Owner-only — the underlying RLS on
-                    chip_count_tuning_overrides INSERT is owner-only,
-                    so non-owner admins (co-testers) see a small
-                    read-only hint instead of the gate. */}
-                {!isOwner ? (
-                  <div style={{
-                    marginTop: '0.5rem',
-                    padding: '0.55rem 0.75rem',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px dashed var(--border)',
-                    borderRadius: '10px',
-                    fontSize: '0.72rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.5,
-                    textAlign: 'center',
-                  }}>
-                    {t('settings.chipDashboard.tuneOwnerOnly')}
-                  </div>
-                ) : (
-                <div style={{
-                  marginTop: '0.5rem',
-                  padding: '0.6rem 0.75rem',
-                  background: tuneAvailable ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${tuneAvailable ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
-                  borderRadius: '10px',
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-muted)',
-                    marginBottom: '0.4rem',
-                  }}>
-                    <span>{t('settings.chipDashboard.tuneCounter')}</span>
-                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                      {Math.min(stats.rowsSinceLastTuning, TUNE_THRESHOLD_SAMPLES)}/{TUNE_THRESHOLD_SAMPLES}
-                    </span>
-                  </div>
-                  {/* Progress bar */}
-                  <div style={{
-                    height: '4px',
-                    background: 'rgba(255,255,255,0.05)',
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                    marginBottom: '0.55rem',
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${Math.min(100, (stats.rowsSinceLastTuning / TUNE_THRESHOLD_SAMPLES) * 100)}%`,
-                      background: tuneAvailable
-                        ? 'linear-gradient(90deg, #6366f1, #8b5cf6)'
-                        : 'rgba(99,102,241,0.5)',
-                      transition: 'width 0.3s ease',
-                    }} />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!tuneAvailable || chipTuningInFlight || chipRevertInFlight}
-                    onClick={async () => {
-                      if (!tuneAvailable || chipTuningInFlight) return;
-                      setChipTuningResult(null);
-                      setChipTuningInFlight(true);
-                      try {
-                        const res = await tuneAndApply({
-                          totalSamples: stats.totalSamples,
-                          totalStacksAll: stats.totalStacksAll,
-                          pctPerfectStacks: stats.pctPerfectStacks,
-                          avgSignedBias: stats.avgSignedBias,
-                          avgAbsError: stats.avgAbsError,
-                          perColor: stats.perColor.map(c => ({
-                            color: c.color,
-                            samples: c.samples,
-                            avgSignedDelta: c.avgSignedDelta,
-                            avgAbsDelta: c.avgAbsDelta,
-                            pctCorrect: c.pctCorrect,
-                          })),
-                          recentAvgAbsDelta: stats.recentAvgAbsDelta,
-                          earlierAvgAbsDelta: stats.earlierAvgAbsDelta,
-                        });
-                        if (res.ok) {
-                          setChipTuningResult({ ok: true, description: res.description });
-                          // Refresh dashboard so the counter resets to 0/10
-                          // (the new tuning row's created_at becomes the
-                          // new "lastTuningAt", so all currently-counted
-                          // samples drop out of `rowsSinceLastTuning`).
-                          setChipFeedbackRefreshTick(t => t + 1);
-                        } else {
-                          setChipTuningResult({ ok: false, error: res.error });
-                        }
-                      } catch (e) {
-                        setChipTuningResult({
-                          ok: false,
-                          error: e instanceof Error ? e.message : 'Tuning failed',
-                        });
-                      } finally {
-                        setChipTuningInFlight(false);
-                      }
-                    }}
-                    title={
-                      tuneAvailable
-                        ? t('settings.chipDashboard.tuneNowTitle')
-                        : t('settings.chipDashboard.tuneLockedTitle')
-                    }
-                    style={{
-                      width: '100%',
-                      background: !tuneAvailable
-                        ? 'rgba(255,255,255,0.04)'
-                        : chipTuningInFlight
-                          ? 'rgba(99,102,241,0.18)'
-                          : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                      border: !tuneAvailable
-                        ? '1px dashed var(--border)'
-                        : '1px solid transparent',
-                      color: !tuneAvailable ? 'var(--text-muted)' : 'white',
-                      padding: '0.55rem',
-                      borderRadius: '10px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: (!tuneAvailable || chipTuningInFlight) ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit',
-                      transition: 'background 0.15s ease',
-                    }}
-                  >
-                    {chipTuningInFlight
-                      ? t('settings.chipDashboard.tuningInFlight')
-                      : tuneAvailable
-                        ? t('settings.chipDashboard.tuneNow')
-                        : `${t('settings.chipDashboard.tuneLocked')} — ${tuneRemaining} ${t('settings.chipDashboard.tuneRemaining')}`}
-                  </button>
-
-                  {/* Tuning result banner — success (green) or error (red). */}
-                  {chipTuningResult && (
-                    <div style={{
-                      marginTop: '0.5rem',
-                      padding: '0.55rem 0.7rem',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      lineHeight: 1.5,
-                      background: chipTuningResult.ok
-                        ? 'rgba(16,185,129,0.1)'
-                        : 'rgba(239,68,68,0.1)',
-                      border: `1px solid ${chipTuningResult.ok ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'}`,
-                      color: chipTuningResult.ok ? '#10b981' : '#fca5a5',
-                    }}>
-                      <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>
-                        {chipTuningResult.ok
-                          ? `✓ ${t('settings.chipDashboard.tuneSuccess')}`
-                          : `✗ ${t('settings.chipDashboard.tuneError')}`}
-                      </div>
-                      <div style={{ opacity: 0.9 }}>
-                        {chipTuningResult.ok ? chipTuningResult.description : chipTuningResult.error}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Revert button — always visible so a bad tune can
-                      be undone immediately. Reverts by inserting a
-                      null-strategy row (= "use hardcoded default"). */}
-                  <button
-                    type="button"
-                    disabled={chipRevertInFlight || chipTuningInFlight}
-                    onClick={async () => {
-                      if (chipRevertInFlight) return;
-                      setChipTuningResult(null);
-                      setChipRevertInFlight(true);
-                      try {
-                        const res = await revertChipTuningToDefault();
-                        if (res.ok) {
-                          setChipTuningResult({
-                            ok: true,
-                            description: t('settings.chipDashboard.revertSuccess'),
-                          });
-                          setChipFeedbackRefreshTick(t => t + 1);
-                        } else {
-                          setChipTuningResult({ ok: false, error: res.error });
-                        }
-                      } catch (e) {
-                        setChipTuningResult({
-                          ok: false,
-                          error: e instanceof Error ? e.message : 'Revert failed',
-                        });
-                      } finally {
-                        setChipRevertInFlight(false);
-                      }
-                    }}
-                    style={{
-                      marginTop: '0.4rem',
-                      width: '100%',
-                      background: 'transparent',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-muted)',
-                      padding: '0.4rem',
-                      borderRadius: '8px',
-                      fontSize: '0.72rem',
-                      cursor: chipRevertInFlight ? 'wait' : 'pointer',
-                      fontFamily: 'inherit',
-                      opacity: chipRevertInFlight ? 0.5 : 1,
-                    }}
-                  >
-                    {chipRevertInFlight
-                      ? t('settings.chipDashboard.reverting')
-                      : `↩ ${t('settings.chipDashboard.revertToDefault')}`}
-                  </button>
-
-                  <p style={{
-                    margin: '0.5rem 0 0',
-                    fontSize: '0.65rem',
-                    color: 'var(--text-muted)',
-                    opacity: 0.8,
-                    lineHeight: 1.4,
-                    textAlign: 'center',
-                  }}>
-                    {t('settings.chipDashboard.tuneHowItWorks')}
-                  </p>
-                </div>
-                )}
+                {/* v5.62 — tuning gate (progress bar + tune/revert buttons)
+                    removed alongside the per-stack pipeline. The dashboard
+                    above is now passive: shows accuracy/bias/error so you
+                    can spot patterns, but no auto-tune action. */}
               </>
             );
           })()}
