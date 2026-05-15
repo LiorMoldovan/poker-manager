@@ -73,6 +73,11 @@ interface PhotoCaptureModalProps {
   expectedTotalValue?: number;
   /** Title shown in the modal header. Defaults to a generic Hebrew string. */
   title?: string;
+  /** Telemetry tag (v5.62.4) — passed straight into `countChipsFromPhoto`
+   *  so the `chip_count_debug` row records WHICH call site this came
+   *  from. Defaults to 'unknown'. The live-game flow should set
+   *  'live-game'; the Settings test card should set 'settings-test'. */
+  debugContext?: 'live-game' | 'settings-test' | 'unknown';
 }
 
 const PhotoCaptureModal = ({
@@ -82,6 +87,7 @@ const PhotoCaptureModal = ({
   chipValues,
   expectedTotalValue,
   title,
+  debugContext = 'unknown',
 }: PhotoCaptureModalProps) => {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('instruction');
@@ -197,6 +203,7 @@ const PhotoCaptureModal = ({
         mimeType: previewMimeType,
         chipValues,
         expectedTotalValue,
+        debugContext,
         abortSignal: controller.signal,
         // Live status updates throughout the per-stack pipeline (v5.59
         // rebuild). The orchestrator emits four primary phases —

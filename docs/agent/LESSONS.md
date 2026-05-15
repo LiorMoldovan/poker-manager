@@ -82,3 +82,13 @@
 **Fix**: don't reach for stash when the goal is "extract my files from a mixed working tree". Use `git add <my-files-only>` → `git status` to verify the staged set → `git commit` directly. Other-agent unstaged stuff stays in working tree untouched. When `git status` mentions divergence from origin, run `git log --oneline --all --graph -10` BEFORE committing.
 
 **Burned**: 30min untangling the v5.58.0 commit on 2026-05-10 — wrong files captured, soft-reset exposed a separate origin divergence.
+
+---
+
+## "Deployed bundle contains the hotfix code" ≠ "hotfix actually works"
+
+**Gotcha**: Verifying a hotfix by grep'ing the deployed JS chunk for a literal string (e.g. ` ```json `) proves the code path exists in production. It does NOT prove the path is reached on a real failure, or that it covers the actual failure shape. Without an end-to-end test exercising the recovery branch against a real (or mocked) upstream response, the hotfix can be a no-op for the user and you'll think it shipped.
+
+**Fix**: when fixing a recovery/parser path, write a small standalone test (node `.mjs` script is enough) that feeds plausible failure-shape inputs through the recovery function and verifies each one is salvaged or correctly rejected. Run it BEFORE shipping. The static "the deployed bundle has the function" check is a sanity check, not a validation.
+
+**Burned**: v5.62.1 hotfix added markdown-fence handling for the chip-count parser. Static verification confirmed the fenced-JSON branch existed in `geminiAI-B1tyAH7s.js` on prod. Real user kept getting parseFailed on every photo for the entire v5.62.1 + v5.62.2 window because the actual failure mode wasn't markdown-fenced — it was something else we never saw. Cost two failed Lior tests and a frustrated "do you have logs? do you see the issue?" before v5.62.3 added the 5-strategy salvager AND surfaced the raw response so we'd finally have visibility.

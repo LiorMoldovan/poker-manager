@@ -16,6 +16,9 @@ import { proxyGeminiGenerate, proxyGeminiGenerateWithSignal, proxyGeminiModels, 
 import { isGeminiEnabledForCurrentGroup } from './aiEligibility';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
+import { logChipCountAttempt, type ChipCountDebugContext, type ChipCountDebugOutcome } from './chipCountDebug';
+// `ChipCountDebugOutcome` is used inside `runWholePhotoShot.logAttempt`'s
+// signature. The import is type-only so it has no runtime cost.
 
 // v5.62 — DownscaledImage, RGB, HSL, DetectStackRegionsResult imports
 // removed alongside the per-stack pipeline they served. The whole-photo
@@ -3965,6 +3968,12 @@ export interface CountChipsFromPhotoInput {
    *  sanity check kicks in — if the AI total is off by exactly one
    *  chip denomination, the lowest-confidence stack gets a ±1 nudge. */
   expectedTotalValue?: number;
+  /** Telemetry hint (`chip_count_debug.context`) so we can later filter
+   *  rows by whether they came from the live-game flow (no
+   *  expectedTotalValue but inside ChipEntryScreen) versus the
+   *  settings test card (no game context). Defaults to 'unknown' if
+   *  the caller omits it. */
+  debugContext?: ChipCountDebugContext;
   abortSignal?: AbortSignal;
   /** Optional progress callback. The rebuilt per-stack pipeline
    *  (v5.59+) fires the new pipeline phases — `detecting-stacks` →
@@ -4147,12 +4156,34 @@ async function runWholePhotoShot(args: {
   imageMimeType: string;
   chips: ChipValue[];
   abortSignal?: AbortSignal;
+  /** Telemetry context — passed straight to `chip_count_debug.context`. */
+  debugContext: ChipCountDebugContext;
+  /** Which attempt this is in the fallback chain (1-based). */
+  attemptIndex: number;
+  /** Total models in the chain — needed for the telemetry row. */
+  totalModels: number;
 }): Promise<{
   countsByColor: Map<string, number> | null;
   errorMsg: string;
   errorCode: PhotoChipCountErrorCode;
 }> {
-  const { version, model, apiKey, imageBase64, imageMimeType, chips, abortSignal } = args;
+  const {
+    version,
+    model,
+    apiKey,
+    imageBase64,
+    imageMimeType,
+    chips,
+    abortSignal,
+    debugContext,
+    attemptIndex,
+    totalModels,
+  } = args;
+
+  const shotStart = Date.now();
+  const chipColorsConfigured = chips.map(c => c.color);
+  const chipsWithSelfiesCount = chips.filter(c => c.selfieBase64).length;
+  const imageByteCount = imageBase64.length;
 
   const parts: Array<Record<string, unknown>> = [];
 
@@ -4239,25 +4270,69 @@ Replace the example numbers above with your real counts. The "color" values MUST
     },
   };
 
+  // Shared telemetry shim — every return path through this function
+  // calls this exactly once. Fire-and-forget; never blocks.
+  const logAttempt = (
+    outcome: ChipCountDebugOutcome,
+    fields: {
+      errorMessage?: string;
+      rawResponse?: string;
+      finalCounts?: Record<string, number>;
+      salvageStrategy?: number;
+      httpStatus?: number;
+    } = {},
+  ): void => {
+    void logChipCountAttempt({
+      model,
+      attemptIndex,
+      totalModels,
+      context: debugContext,
+      outcome,
+      errorMessage: fields.errorMessage,
+      rawResponse: fields.rawResponse,
+      finalCounts: fields.finalCounts,
+      salvageStrategy: fields.salvageStrategy,
+      httpStatus: fields.httpStatus,
+      imageByteCount,
+      chipColorsConfigured,
+      selfiesAttached: chipsWithSelfiesCount,
+      durationMs: Date.now() - shotStart,
+    });
+  };
+
   let response: Response;
   try {
     response = await proxyGeminiGenerateWithSignal(version, model, apiKey, payload, abortSignal);
   } catch (err) {
-    if (abortSignal?.aborted) return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+    if (abortSignal?.aborted) {
+      logAttempt('cancelled');
+      return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[runWholePhotoShot] ${model} network error:`, msg);
+    logAttempt('network', { errorMessage: msg });
     return { countsByColor: null, errorMsg: msg, errorCode: 'network' };
   }
 
-  if (abortSignal?.aborted) return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+  if (abortSignal?.aborted) {
+    logAttempt('cancelled', { httpStatus: response.status });
+    return { countsByColor: null, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+  }
 
   if (!response.ok) {
     let errorMsg = `HTTP ${response.status}`;
+    let bodyText = '';
     try {
-      const body = await response.json() as { error?: { message?: string } };
+      bodyText = await response.text();
+      const body = JSON.parse(bodyText) as { error?: { message?: string } };
       if (body?.error?.message) errorMsg = body.error.message;
-    } catch { /* keep status */ }
+    } catch { /* keep status; bodyText may still be populated */ }
     console.warn(`[runWholePhotoShot] ${model} HTTP error:`, errorMsg);
+    logAttempt('httpError', {
+      errorMessage: errorMsg,
+      rawResponse: bodyText,
+      httpStatus: response.status,
+    });
     return { countsByColor: null, errorMsg, errorCode: 'httpError' };
   }
 
@@ -4268,6 +4343,10 @@ Replace the example numbers above with your real counts. The "color" values MUST
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[runWholePhotoShot] ${model} response.json() failed:`, msg);
+    logAttempt('parseFailed', {
+      errorMessage: `response.json() failed: ${msg}`,
+      httpStatus: response.status,
+    });
     return {
       countsByColor: null,
       errorMsg: `Bad response from AI proxy: ${msg}`,
@@ -4286,10 +4365,16 @@ Replace the example numbers above with your real counts. The "color" values MUST
   } catch { /* SSR / restricted contexts */ }
 
   const validColors = chips.map(c => c.color.trim().toLowerCase());
-  const counts = extractChipCounts(raw, validColors);
+  const salvage = extractChipCounts(raw, validColors);
 
-  if (counts && counts.size > 0) {
-    return { countsByColor: counts, errorMsg: '', errorCode: 'httpError' };
+  if (salvage && salvage.counts.size > 0) {
+    logAttempt('success', {
+      rawResponse: raw,
+      finalCounts: Object.fromEntries(salvage.counts),
+      salvageStrategy: salvage.strategy,
+      httpStatus: response.status,
+    });
+    return { countsByColor: salvage.counts, errorMsg: '', errorCode: 'httpError' };
   }
 
   // All recovery strategies failed. Surface the first 250 chars of the
@@ -4303,6 +4388,11 @@ Replace the example numbers above with your real counts. The "color" values MUST
       ? raw.slice(0, 250) + '…'
       : raw;
   console.warn(`[runWholePhotoShot] ${model} no salvageable counts. raw:`, raw.slice(0, 1000));
+  logAttempt('parseFailed', {
+    errorMessage: 'No salvageable counts in response',
+    rawResponse: raw,
+    httpStatus: response.status,
+  });
   return {
     countsByColor: null,
     errorMsg: `[${model}] ${excerpt}`,
@@ -4312,10 +4402,11 @@ Replace the example numbers above with your real counts. The "color" values MUST
 
 /** Multi-strategy salvager for Gemini's chip-count response.
  *
- *  Returns the largest map of color→count we can recover, or null if
- *  literally nothing usable is in the text. Designed so the photo flow
- *  succeeds even when Gemini ignores `responseSchema` and emits prose,
- *  markdown-fenced JSON, broken JSON, or plain-text lists.
+ *  Returns the largest map of color→count we can recover plus the index
+ *  of the strategy that won (1..5), or null if literally nothing usable
+ *  is in the text. Designed so the photo flow succeeds even when Gemini
+ *  ignores `responseSchema` and emits prose, markdown-fenced JSON,
+ *  broken JSON, or plain-text lists.
  *
  *  Strategies run in order of strictness:
  *    1. JSON.parse on the raw text
@@ -4327,8 +4418,16 @@ Replace the example numbers above with your real counts. The "color" values MUST
  *       `colorName - N` / `- colorName N` lines, restricted to the
  *       valid color list (so we don't pick up unrelated digits).
  *
- *  The first strategy that yields at least ONE recognized color wins. */
-function extractChipCounts(raw: string, validColors: string[]): Map<string, number> | null {
+ *  The first strategy that yields at least ONE recognized color wins.
+ *  The strategy index is returned so we can log it to the telemetry
+ *  table — across hundreds of attempts we'll see which strategies are
+ *  actually doing the work and trim/tighten the rest. */
+export interface SalvageResult {
+  counts: Map<string, number>;
+  strategy: number;
+}
+
+export function extractChipCounts(raw: string, validColors: string[]): SalvageResult | null {
   if (!raw || raw.trim().length === 0) return null;
 
   const validSet = new Set(validColors);
@@ -4359,14 +4458,14 @@ function extractChipCounts(raw: string, validColors: string[]): Map<string, numb
 
   // Strategy 1: raw
   let result = tryParseObject(raw);
-  if (result) return result;
+  if (result) return { counts: result, strategy: 1 };
 
   // Strategy 2: strip markdown fences (```json … ``` or ``` … ```)
   if (raw.includes('```')) {
     const fenceMatch = raw.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
     if (fenceMatch && fenceMatch[1]) {
       result = tryParseObject(fenceMatch[1].trim());
-      if (result) return result;
+      if (result) return { counts: result, strategy: 2 };
     }
   }
 
@@ -4375,7 +4474,7 @@ function extractChipCounts(raw: string, validColors: string[]): Map<string, numb
   const lastBrace = raw.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
     result = tryParseObject(raw.slice(firstBrace, lastBrace + 1));
-    if (result) return result;
+    if (result) return { counts: result, strategy: 3 };
   }
 
   // Strategy 4: regex-extract "color": "X", "count": N pairs even from
@@ -4400,7 +4499,7 @@ function extractChipCounts(raw: string, validColors: string[]): Map<string, numb
       salvaged.set(color, n);
     }
   }
-  if (salvaged.size > 0) return salvaged;
+  if (salvaged.size > 0) return { counts: salvaged, strategy: 4 };
 
   // Strategy 5: plain-text scan. Lines like "white: 5", "red = 3",
   // "* black - 0", "Blue 7 chips". We only accept matches where the
@@ -4424,7 +4523,7 @@ function extractChipCounts(raw: string, validColors: string[]): Map<string, numb
       textPairs.set(color, n);
     }
   }
-  if (textPairs.size > 0) return textPairs;
+  if (textPairs.size > 0) return { counts: textPairs, strategy: 5 };
 
   return null;
 }
@@ -4438,6 +4537,7 @@ async function runWholePhotoWithFallback(args: {
   apiKey: string;
   abortSignal?: AbortSignal;
   onProgress?: (model: string, attempt: number) => void;
+  debugContext: ChipCountDebugContext;
 }): Promise<{
   countsByColor: Map<string, number> | null;
   modelUsed: string | null;
@@ -4462,6 +4562,9 @@ async function runWholePhotoWithFallback(args: {
       imageMimeType: args.imageMimeType,
       chips: args.chips,
       abortSignal: args.abortSignal,
+      debugContext: args.debugContext,
+      attemptIndex: attempt,
+      totalModels: CHIP_COUNT_MODELS.length,
     });
     if (out.countsByColor) {
       return { countsByColor: out.countsByColor, modelUsed: model, attempts: attempt, errorMsg: '', errorCode: 'httpError' };
@@ -4477,6 +4580,14 @@ export async function countChipsFromPhoto(
   input: CountChipsFromPhotoInput,
 ): Promise<PhotoChipCountResult> {
   const { imageBase64, mimeType, chipValues, expectedTotalValue, abortSignal, onProgress } = input;
+  // Context auto-detection so we don't need every call site to thread
+  // the tag explicitly: the live-game flow (ChipEntryScreen) always
+  // passes `expectedTotalValue` (rebuys × chipsPerRebuy); the Settings
+  // test card never does. If the caller passes `debugContext`
+  // explicitly, respect that — but the default is auto-derived.
+  const debugContext: ChipCountDebugContext =
+    input.debugContext
+    ?? (typeof expectedTotalValue === 'number' && expectedTotalValue > 0 ? 'live-game' : 'settings-test');
 
   if (!imageBase64) {
     return emptyChipCountResult('Missing image data', 'missingImage');
@@ -4517,6 +4628,7 @@ export async function countChipsFromPhoto(
     chips: orderedChips,
     apiKey,
     abortSignal,
+    debugContext,
     onProgress: (model, attempt) => onProgress?.({
       phase: 'attempting',
       model,

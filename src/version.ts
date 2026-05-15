@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.62.3';
+export const APP_VERSION = '5.62.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.62.4',
+    date: '2026-05-15',
+    changes: [
+      '📊 Chip-count telemetry: every photo attempt now logs to a debug table',
+      '🔍 Diagnostics include raw AI response, salvage strategy, and timing',
+    ],
+  },
   {
     version: '5.62.3',
     date: '2026-05-15',
