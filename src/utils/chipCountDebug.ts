@@ -17,6 +17,7 @@
 
 import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
+import { isObserverMode } from '../auth/observerMode';
 import { APP_VERSION } from '../version';
 
 const RAW_EXCERPT_MAX = 4096;
@@ -61,6 +62,12 @@ export interface ChipCountDebugRow {
  */
 export async function logChipCountAttempt(row: ChipCountDebugRow): Promise<void> {
   try {
+    // Observer-mode block — debug telemetry should belong to the
+    // group whose user actually triggered the chip-count attempt,
+    // not to a super admin observing their group. AI proxy gate
+    // already prevents the upstream call so this is mostly belt
+    // and braces, but cheap to add and consistent with the rest.
+    if (isObserverMode()) return;
     const groupId = getGroupId();
     if (!groupId) return;
 

@@ -176,18 +176,24 @@ interface HomeDashboardProps {
 }
 
 export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnabled, hasActiveGame }: HomeDashboardProps) {
-  const showAdminCta = isAdmin && !hasActiveGame;
-  const { t, language: i18nLanguage } = useTranslation();
-  const navigate = useNavigate();
-  // Observer mode (super admin browsing a non-member group): suppress
-  // personal framing on the schedule card. The synthetic playerName
-  // ("👁 Super Admin") doesn't match any player record, so the
-  // existing flow would render "👁 Super Admin, מחכים להצבעה שלך" —
-  // a vote nudge for someone who can't actually vote in this group.
-  // Falling back to playerName=null routes ScheduleCard to its
-  // generic title path (`home.schedule.openTitle`).
+  // Observer mode (super admin browsing a non-member group):
+  //  - Suppress personal framing on the schedule card. The
+  //    synthetic playerName ("👁 Super Admin") doesn't match any
+  //    player record, so the existing flow would render "👁 Super
+  //    Admin, מחכים להצבעה שלך" — a vote nudge for someone who
+  //    can't actually vote in this group. Falling back to
+  //    playerName=null routes ScheduleCard to its generic title
+  //    path (`home.schedule.openTitle`).
+  //  - Hide the "Start New Game" CTA. App.tsx already redirects
+  //    /new-game back to "/" for observers, so the button would
+  //    just bounce back home with no game created. Hiding it
+  //    entirely is cleaner than letting the operator press a
+  //    button that visibly does nothing.
   const { multiGroup } = usePermissions();
   const isObserver = multiGroup?.isObservingNonMember ?? false;
+  const showAdminCta = isAdmin && !hasActiveGame && !isObserver;
+  const { t, language: i18nLanguage } = useTranslation();
+  const navigate = useNavigate();
   const effectivePlayerName = isObserver ? null : playerName;
 
   // ── Pull-to-refresh ─────────────────────────────────────────

@@ -1670,6 +1670,9 @@ const he = {
   'settings.title': 'הגדרות',
   'settings.saved': '✓ הגדרות נשמרו',
   'settings.observerReadonly': 'מצב צפייה כסופר אדמין — שינויים לא יישמרו לקבוצה זו',
+  'observer.banner': '👁 מצב צפייה — אתה צופה ב-{group} כסופר אדמין. כל השינויים, ה-AI, ההתראות והאימיילים מנוטרלים כדי למנוע פגיעה בנתוני הקבוצה.',
+  'observer.bannerShort': '👁 מצב צפייה (קריאה בלבד)',
+  'observer.actionBlocked': 'הפעולה חסומה במצב צפייה',
   'settings.tabGroup': '🏠 קבוצה',
   'settings.tabSchedule': '📅 המשחק הבא',
   'settings.tabPlayers': '👥 שחקנים',
@@ -2049,7 +2052,7 @@ const he = {
 
   // Settings > Game
   'settings.game.title': '💰 הגדרות משחק',
-  'settings.game.adminOnly': '🔒 רק מנהל יכול לערוך הגדרות משחק',
+  'settings.game.adminOnly': 'רק מנהל יכול לערוך הגדרות משחק',
   'settings.game.buyinValue': 'ערך קנייה',
   'settings.game.buyinValueHelper': 'הסכום שכל שחקן משלם עבור כל כניסה או ריביי',
   'settings.game.chipsPerBuyin': 'צ\'יפים לקנייה',
@@ -4183,6 +4186,9 @@ const en: Record<keyof typeof he, string> = {
   'settings.title': 'Settings',
   'settings.saved': '✓ Settings saved',
   'settings.observerReadonly': 'Super admin observer mode — changes will not save to this group',
+  'observer.banner': '👁 Observer mode — you are viewing {group} as a super admin. All edits, AI, notifications and emails are disabled to protect this group\'s data.',
+  'observer.bannerShort': '👁 Observer mode (read-only)',
+  'observer.actionBlocked': 'Action blocked in observer mode',
   'settings.tabGroup': '🏠 Group',
   'settings.tabSchedule': '📅 Next Game',
   'settings.tabPlayers': '👥 Players',
@@ -4514,7 +4520,7 @@ const en: Record<keyof typeof he, string> = {
 
   // Settings > Game
   'settings.game.title': '💰 Game Settings',
-  'settings.game.adminOnly': '🔒 Only Admin can edit game settings',
+  'settings.game.adminOnly': 'Only Admin can edit game settings',
   'settings.game.buyinValue': 'Buyin Value',
   'settings.game.buyinValueHelper': 'The amount each player pays per entry or rebuy',
   'settings.game.chipsPerBuyin': 'Chips per Buyin',

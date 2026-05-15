@@ -460,6 +460,26 @@ function logSyncError(table: string, op: string, error: { message: string }) {
 
 async function pushToSupabase(key: string) {
   if (!state) return;
+  // Observer-mode kill switch — defence in depth against a class of
+  // silent data-destruction bugs where a super admin observing a
+  // group via GroupSwitcher inadvertently writes to that group.
+  // The `super_admins_full_access` RLS policy grants ALL operations
+  // on every group-isolated table to super admins, so RLS is NOT
+  // the safety net here — the only thing keeping cross-group writes
+  // from happening is what the client chooses to send. Everything
+  // that mutates Supabase from the client funnels through this
+  // function (the cache is the single write path), so blocking
+  // here guarantees no STORAGE_KEYS-driven write reaches Supabase
+  // in observer mode regardless of which screen / hook / handler
+  // initiated the cacheSet that triggered it. Read paths
+  // (fetchAllRows, supabase.from().select(), RPC reads) are
+  // unaffected — observers still see real values, they just can't
+  // write them back. See migration 082 header for the original
+  // settings-wipe regression that motivated this layer.
+  if (isObserverMode()) {
+    console.warn(`[cache] write skipped (${key}) — observer mode is read-only`);
+    return;
+  }
   const gid = state.groupId;
 
   switch (key) {
@@ -703,22 +723,9 @@ async function pushToSupabase(key: string) {
       break;
     }
     case STORAGE_KEYS.SETTINGS: {
-      // Defence in depth against the v6.1.0 silent-wipe regression
-      // (see migration 082 header for the full story). When a super
-      // admin observes a group via GroupSwitcher their cache holds
-      // that group's settings, but the RLS policy
-      // `super_admins_full_access` lets them upsert the row anyway —
-      // any drive-by interaction with the Settings tab would
-      // overwrite the observed group's real values. Migration 082
-      // fixed the LOAD path so observers see real values; this
-      // guard belt-and-braces the WRITE path so even a UI bug that
-      // somehow re-introduces a stale settings cache can't bleed
-      // back to Supabase. Settings save is intentionally not
-      // available in observer mode (read-only by design).
-      if (isObserverMode()) {
-        console.warn('[cache] settings push skipped — observer mode is read-only for settings');
-        break;
-      }
+      // Observer-mode write guard moved to the top of
+      // pushToSupabase (covers every STORAGE_KEYS case in one
+      // place) — see header of pushToSupabase for full rationale.
       const settings = state.data.get(key) as Settings;
       if (settings) {
         const { error } = await supabase.from('settings').upsert(settingsToRow(settings, gid), { onConflict: 'group_id' });
@@ -1194,6 +1201,15 @@ export function cacheRemoveItem(key: string): void {
 // TTS pool operations (per-game keys)
 export function cacheSaveTTS(gameId: string, pool: unknown, model?: string): void {
   if (!state) return;
+  // Observer-mode write block — TTS persistence shouldn't happen
+  // when a super admin observes a group. Same rationale as the
+  // pushToSupabase top-level guard. We still update the in-memory
+  // cache so the observed-group's playback works during this
+  // session, but no DB write occurs.
+  if (isObserverMode()) {
+    state.ttsPools.set(gameId, { pool, model });
+    return;
+  }
   state.ttsPools.set(gameId, { pool, model });
   supabase.from('tts_pools').upsert({
     game_id: gameId,
@@ -1212,6 +1228,10 @@ export function cacheLoadTTSModel(gameId: string): string | null {
 
 export function cacheDeleteTTS(gameId: string): void {
   if (!state) return;
+  if (isObserverMode()) {
+    state.ttsPools.delete(gameId);
+    return;
+  }
   state.ttsPools.delete(gameId);
   supabase.from('tts_pools').delete().eq('game_id', gameId).then(null, () => {});
 }
@@ -1229,6 +1249,7 @@ export function getAllPlayerTraits(): Map<string, PlayerTraits> {
 export async function savePlayerTraits(playerId: string, playerName: string, traits: PlayerTraits): Promise<void> {
   if (!state) return;
   state.playerTraits.set(playerName, traits);
+  if (isObserverMode()) return;
   const { error } = await supabase.from('player_traits').upsert({
     player_id: playerId,
     nickname: traits.nickname || null,

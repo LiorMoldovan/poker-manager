@@ -1325,7 +1325,14 @@ const SettingsScreen = () => {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>{t('settings.game.title')}</h2>
-            {!canEditSettings && (
+            {/* Card-level "admin only" badge — surfaces the
+                permission gate to non-admin members. Suppressed in
+                observer mode because (a) the top yellow banner
+                already explains the read-only constraint, and (b)
+                "Only Admin can edit" is misleading copy for a
+                super-admin observer who IS technically admin via
+                the synthesized membership in App.tsx. */}
+            {!canEditSettings && !isObserver && (
               <span style={{
                 padding: '0.25rem 0.6rem', borderRadius: '6px',
                 background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.25)',

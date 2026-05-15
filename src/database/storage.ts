@@ -29,6 +29,7 @@ import {
   type PollChangeRecipient,
 } from './supabaseCache';
 import { supabase } from './supabaseClient';
+import { isObserverMode } from '../auth/observerMode';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -147,6 +148,16 @@ export const playerHasGames = (playerId: string): boolean => {
 };
 
 export const deletePlayer = (id: string): void => {
+  // Observer-mode block — super admins observing a group must
+  // never trigger a direct `delete` on the observed group's
+  // tables; super_admins_full_access RLS would let it succeed.
+  // UI buttons are already disabled via canEditPlayers, but this
+  // is defence in depth for any code path that calls deletePlayer
+  // directly. See migration 082 header for the underlying story.
+  if (isObserverMode()) {
+    console.warn('[storage] deletePlayer skipped — observer mode is read-only');
+    return;
+  }
   // Server-side delete is explicit. The PLAYERS sync flush is upsert-only
   // (see supabaseCache.ts case STORAGE_KEYS.PLAYERS) — without this direct
   // call a deleted player would linger on Supabase forever.
@@ -344,6 +355,11 @@ export const updateSharedExpense = (gameId: string, expense: SharedExpense): voi
 };
 
 export const deleteGame = (id: string): void => {
+  // Observer-mode block — see deletePlayer for rationale.
+  if (isObserverMode()) {
+    console.warn('[storage] deleteGame skipped — observer mode is read-only');
+    return;
+  }
   const all = getAllGames();
   const target = all.find(g => g.id === id);
 
@@ -413,6 +429,11 @@ export const addPlayerToGame = (gameId: string, playerId: string): GamePlayer | 
 
 // Remove a player from an active game (player didn't show up)
 export const removeGamePlayer = (gamePlayerId: string): boolean => {
+  // Observer-mode block — see deletePlayer for rationale.
+  if (isObserverMode()) {
+    console.warn('[storage] removeGamePlayer skipped — observer mode is read-only');
+    return false;
+  }
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
   const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
   if (index !== -1) {
@@ -708,7 +729,12 @@ const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'friday' | '
   };
 
   const groupId = getGroupId();
-  if (groupId) {
+  // Observer-mode block — backups capture the OBSERVED group's
+  // current state, but the row would be tagged with that group's
+  // id and live there forever (super_admins_full_access RLS lets
+  // the insert through). The observed group never asked for this
+  // backup. Skip silently.
+  if (groupId && !isObserverMode()) {
     supabase.from('backups').insert({
       id: backup.id,
       group_id: groupId,
@@ -965,6 +991,16 @@ export const saveGameAiSummary = async (
   summary: string,
   model?: string,
 ): Promise<void> => {
+  // Observer-mode block — AI summaries belong to the observed
+  // group; the AI proxy gate already prevents the upstream call,
+  // but this is defence in depth in case a cached summary arrives
+  // here through some other path. The cache mirror below also
+  // skips so we don't poison local state with a value that won't
+  // persist.
+  if (isObserverMode()) {
+    console.warn('[storage] saveGameAiSummary skipped — observer mode is read-only');
+    return;
+  }
   const updates: Record<string, unknown> = { ai_summary: summary || null };
   if (model !== undefined) updates.ai_summary_model = model || null;
 
@@ -1000,6 +1036,13 @@ const comicObjectPath = (groupId: string, gameId: string): string =>
  * Throws on RLS / network failure so the orchestrator can degrade gracefully.
  */
 export const uploadComicImage = async (gameId: string, png: Blob): Promise<string> => {
+  // Observer-mode block — comics are billed-AI artefacts owned by
+  // the observed group, not the super admin. Throw so the comic
+  // pipeline aborts cleanly rather than silently producing an
+  // orphan blob in the bucket.
+  if (isObserverMode()) {
+    throw new Error('Comic upload disabled in observer mode');
+  }
   const groupId = getGroupId();
   if (!groupId) throw new Error('No group context — cannot upload comic');
 
@@ -1046,6 +1089,7 @@ export const saveGameComic = (
  * generation will overwrite, and DB-row deletion makes orphans inert.
  */
 export const deleteComicAsset = async (gameId: string): Promise<void> => {
+  if (isObserverMode()) return;
   const groupId = getGroupId();
   if (!groupId) return;
   const path = comicObjectPath(groupId, gameId);
@@ -1443,6 +1487,15 @@ export interface RestoreResult {
 export async function restoreFromBackup(json: string, groupId: string): Promise<RestoreResult> {
   const errors: string[] = [];
   let tablesRestored = 0;
+
+  // Observer-mode block — restoring a backup overwrites every
+  // group-isolated table for the target group. A super admin
+  // observer accidentally triggering Settings > Restore could
+  // wipe the observed group's entire history. UI gates the button
+  // already, but this is the unbreakable last line of defence.
+  if (isObserverMode()) {
+    return { success: false, tablesRestored: 0, errors: ['Restore disabled in observer mode'] };
+  }
 
   let backup: FullBackupData;
   try {

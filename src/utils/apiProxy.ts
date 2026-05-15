@@ -1,8 +1,34 @@
 import { supabase } from '../database/supabaseClient';
 import { getSettings } from '../database/storage';
 import { getGroupId } from '../database/supabaseCache';
+import { isObserverMode } from '../auth/observerMode';
 import { isEmailEnabledForCurrentGroup, notifyEmailDisabled } from './emailEligibility';
 import { markAIProxyAvailable, markAIProxyUnavailable, isAIProxyKnownUnavailable } from './aiEligibility';
+
+// Synthetic 403 returned for any AI / TTS / push / email side-effect
+// proxy invoked while a super admin is observing a group via
+// GroupSwitcher. The observer's apiKey context is the OBSERVED
+// group's key (post-migration 082 the cache holds real values for
+// observers), so any forwarded call would be billed to that group's
+// quota — that's a non-trivial money / quota leak as well as
+// polluting the observed group's usage logs. The block is here at
+// the proxy layer so we catch every caller (UI, background AI
+// orchestrator, retries, watchdogs) in one place. Read-only proxies
+// (proxyEmailUsage, proxyElevenLabsUsage, proxyGetEmailQuotaConfig,
+// proxyGeminiModels) are NOT blocked because they don't move money
+// — they just report numbers a super admin legitimately needs to
+// see while diagnosing the observed group.
+function observerBlockedResponse(kind: string): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'observerModeBlocked',
+        message: `${kind} disabled in observer mode (would bill observed group's quota)`,
+      },
+    }),
+    { status: 403, headers: { 'Content-Type': 'application/json' } },
+  );
+}
 
 // Synthesize a 503 response with a stable error code so every retry
 // loop downstream can recognize "the AI proxy isn't reachable in this
@@ -95,6 +121,7 @@ export async function proxyGeminiGenerate(
   _apiKey: string,
   payload: unknown
 ): Promise<Response> {
+  if (isObserverMode()) return observerBlockedResponse('Gemini generation');
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
@@ -112,6 +139,7 @@ export async function proxyGeminiGenerateWithSignal(
   payload: unknown,
   signal?: AbortSignal
 ): Promise<Response> {
+  if (isObserverMode()) return observerBlockedResponse('Gemini generation');
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
@@ -139,6 +167,7 @@ export async function proxyGeminiImage(
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<Response> {
+  if (isObserverMode()) return observerBlockedResponse('Gemini image generation');
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
   const groupId = getGroupId();
@@ -253,6 +282,7 @@ export async function proxyElevenLabsTTS(
   outputFormat = 'mp3_22050_32',
   signal?: AbortSignal
 ): Promise<Response> {
+  if (isObserverMode()) return observerBlockedResponse('ElevenLabs TTS');
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
   const groupId = getGroupId();
@@ -349,6 +379,13 @@ export async function proxySendEmail(payload: {
   payLink?: string;
   kind?: EmailKind;
 }): Promise<EmailSendResult> {
+  // Observer-mode block — sending email from the observed group's
+  // context would land in the observed group's `email_usage_log`
+  // and (more concerning) would deliver real mail to that group's
+  // members under the observed group's branding.
+  if (isObserverMode()) {
+    return { ok: false, reason: 'forbidden', error: 'Email sending disabled in observer mode' };
+  }
   if (!isEmailEnabledForCurrentGroup()) {
     notifyEmailDisabled(payload.kind);
     return { ok: false, reason: 'email_disabled', error: 'Email sending is disabled for this group' };
@@ -419,6 +456,9 @@ export async function proxySendBroadcastEmail(payload: {
   senderName?: string;
   kind?: EmailKind;
 }): Promise<EmailSendResult> {
+  if (isObserverMode()) {
+    return { ok: false, reason: 'forbidden', error: 'Email broadcast disabled in observer mode' };
+  }
   if (!isEmailEnabledForCurrentGroup()) {
     notifyEmailDisabled(payload.kind);
     return { ok: false, reason: 'email_disabled', error: 'Email sending is disabled for this group' };
@@ -777,6 +817,10 @@ export async function proxySendPush(payload: {
   targetPlayerNames?: string[];
   url?: string;
 }): Promise<{ sent: number; total: number; details?: { player: string; type: string; status: number | string; ok: boolean }[] } | null> {
+  if (isObserverMode()) {
+    console.warn('[push] send blocked — observer mode would notify observed group members');
+    return null;
+  }
   try {
     const auth = await getAuthHeaders();
     const res = await fetch('/api/send-push', {

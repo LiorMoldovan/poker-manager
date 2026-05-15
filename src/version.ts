@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.1.1';
+export const APP_VERSION = '6.2.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.2.0',
+    date: '2026-05-15',
+    changes: [
+      '🛡 Hardened super-admin observer mode — full read-only',
+      '🚫 Cache write kill-switch blocks every group write',
+      '🤖 AI / TTS / email / push blocked for observers',
+      '👁 Global observer banner on every screen',
+      '🧱 4 more read RPCs accept super-admin observers',
+    ],
+  },
   {
     version: '6.1.1',
     date: '2026-05-15',

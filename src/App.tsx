@@ -1479,6 +1479,44 @@ function SupabaseApp() {
         {pushNudge}
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
+          {/* Global observer-mode banner. Visible on EVERY route
+              (including focus-mode game screens) so a super admin
+              observing a foreign group via GroupSwitcher always
+              knows their context is read-only. The cache kill
+              switch in `pushToSupabase` and the AI proxy gate in
+              `apiProxy.ts` silently block the actual writes — this
+              banner is the *visible* cue so the operator doesn't
+              get confused when buttons appear to do nothing. Uses
+              the compact label on focus routes (live game / chip
+              entry / game summary) where vertical space matters
+              most, and the full explanatory copy on the rest. */}
+          {isObservingNonMember && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 50,
+                width: '100%',
+                padding: hideNav ? '0.35rem 0.75rem' : '0.5rem 1rem',
+                background: 'rgba(234, 179, 8, 0.15)',
+                borderBottom: '1px solid rgba(234, 179, 8, 0.4)',
+                color: '#ca8a04',
+                fontSize: hideNav ? '0.72rem' : '0.8rem',
+                fontWeight: 600,
+                textAlign: 'center',
+                direction: 'rtl',
+              }}
+            >
+              {hideNav
+                ? t('observer.bannerShort')
+                : t('observer.banner').replace(
+                    '{group}',
+                    observedGroupMeta?.groupName ?? '',
+                  )}
+            </div>
+          )}
           {/* On focus-mode routes (hideNav) we drop the global
               `.main-content { padding-bottom: 6rem }` reservation
               for the now-hidden bottom nav. Otherwise the trivia /
@@ -1506,7 +1544,11 @@ function SupabaseApp() {
                     somehow lands here, no form leaks through. */}
                 <Route
                   path="/new-game"
-                  element={isAdmin ? <NewGameScreen /> : <Navigate to="/" replace />}
+                  element={
+                    isAdmin && !isObservingNonMember
+                      ? <NewGameScreen />
+                      : <Navigate to="/" replace />
+                  }
                 />
                 <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
                 <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
