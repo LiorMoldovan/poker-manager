@@ -4221,7 +4221,16 @@ function buildTriviaList(
   //    leader isn't just the most-played player). Multi-tied case
   //    keeps the original copy — adding a rate twist there reads
   //    confusingly.
+  //    `mostWinsRateChamp` is captured here and consumed by the
+  //    `bestWinRate` block (#21) further down so we don't surface
+  //    a standalone "highest win rate" card that names the same
+  //    player at the same percentage we already inlined here —
+  //    that's pure echo. When a different player wins #21 (because
+  //    findRateChamp's 30%-participation gate is stricter than
+  //    bestWinRate's 3-game gate), both cards ride and tell
+  //    distinct stories.
   let topWinnerThisYearCount = 0;
+  let mostWinsRateChamp: { name: string; pct: number } | null = null;
   if (yearGameIds.size >= 3) {
     const wins = new Map<string, number>();
     for (const gameId of yearGameIds) {
@@ -4243,18 +4252,25 @@ function buildTriviaList(
         const champGames = playerYearGames.get(tied[0]) ?? 0;
         const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
         const rate = findRateChamp(wins, playerYearGames, yearGameIds.size);
-        text = rate && rate.name !== tied[0]
-          ? t('home.trivia.mostWinsWithRate', {
-              name: tied[0],
-              count: topVal,
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostWins', { name: tied[0], count: topVal, champGames, champPct });
+        if (rate && rate.name !== tied[0]) {
+          text = t('home.trivia.mostWinsWithRate', {
+            name: tied[0],
+            count: topVal,
+            champGames,
+            champPct,
+            rateName: rate.name,
+            pct: Math.round(rate.pct),
+            wins: rate.wins,
+            games: rate.games,
+          });
+          mostWinsRateChamp = { name: rate.name, pct: Math.round(rate.pct) };
+        } else {
+          text = t('home.trivia.mostWins', { name: tied[0], count: topVal, champGames, champPct });
+          // Append the affirmation when the absolute champion is
+          // ALSO the rate champion — without it, readers wonder
+          // whether a different rate king is silently hidden.
+          if (rate && rate.name === tied[0]) text += t('home.trivia.alsoRateKing');
+        }
       }
       list.push({ icon: '👑', text });
     }
@@ -4263,8 +4279,9 @@ function buildTriviaList(
   // 4b. Most #1 finishes ALL-TIME. Mirror of #4 — only surface when
   //     strictly larger than the year-scoped count so the two facts
   //     don't echo each other on a fresh group. Same rate-champion
-  //     suffix logic as #4 — single-winner gets the suffix when a
-  //     different regular has a higher lifetime win-rate.
+  //     suffix logic as #4 — single-winner gets the WithRate variant
+  //     when a different regular has a higher lifetime win-rate, and
+  //     the alsoRateKing affirmation when the same player wins both.
   if (allCompletedGameIds.size >= 5) {
     const winsAll = new Map<string, number>();
     for (const gameId of allCompletedGameIds) {
@@ -4285,18 +4302,21 @@ function buildTriviaList(
         const champGames = playerAllTimeGames.get(tied[0]) ?? 0;
         const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
         const rate = findRateChamp(winsAll, playerAllTimeGames, allCompletedGameIds.size);
-        text = rate && rate.name !== tied[0]
-          ? t('home.trivia.mostWinsAllTimeWithRate', {
-              name: tied[0],
-              count: topVal,
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostWinsAllTime', { name: tied[0], count: topVal, champGames, champPct });
+        if (rate && rate.name !== tied[0]) {
+          text = t('home.trivia.mostWinsAllTimeWithRate', {
+            name: tied[0],
+            count: topVal,
+            champGames,
+            champPct,
+            rateName: rate.name,
+            pct: Math.round(rate.pct),
+            wins: rate.wins,
+            games: rate.games,
+          });
+        } else {
+          text = t('home.trivia.mostWinsAllTime', { name: tied[0], count: topVal, champGames, champPct });
+          if (rate && rate.name === tied[0]) text += t('home.trivia.alsoRateKing');
+        }
       }
       list.push({ icon: '👑', text });
     }
@@ -4365,23 +4385,26 @@ function buildTriviaList(
         const champGames = playerYearGames.get(tied[0]) ?? topVal;
         const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
         const rate = findRateChamp(podiumYear, playerYearGames, yearGameIds.size);
-        text = rate && rate.name !== tied[0]
-          ? t('home.trivia.mostPodiumsYearWithRate', {
-              name: tied[0],
-              count: topVal,
-              games: champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              rateGames: rate.games,
-            })
-          : t('home.trivia.mostPodiumsYear', {
-              name: tied[0],
-              count: topVal,
-              games: champGames,
-              champPct,
-            });
+        if (rate && rate.name !== tied[0]) {
+          text = t('home.trivia.mostPodiumsYearWithRate', {
+            name: tied[0],
+            count: topVal,
+            games: champGames,
+            champPct,
+            rateName: rate.name,
+            pct: Math.round(rate.pct),
+            wins: rate.wins,
+            rateGames: rate.games,
+          });
+        } else {
+          text = t('home.trivia.mostPodiumsYear', {
+            name: tied[0],
+            count: topVal,
+            games: champGames,
+            champPct,
+          });
+          if (rate && rate.name === tied[0]) text += t('home.trivia.alsoRateKing');
+        }
       }
       list.push({ icon: '🥇', text });
     }
@@ -4427,28 +4450,33 @@ function buildTriviaList(
           text = t('home.trivia.mostPodiumsAllTimeMulti', { players: tied.join(', '), count: topVal });
         } else {
           // Same rate-suffix pattern as #4c — inline absolute champ's
-          // pct always, append a rate-champion comparison only when a
-          // *different* regular has a higher all-time podium rate.
+          // pct always, append a rate-champion comparison when a
+          // *different* regular has a higher all-time podium rate, or
+          // the alsoRateKing affirmation when the same player wins
+          // both the count and the rate.
           const champGames = playerAllTimeGames.get(tied[0]) ?? topVal;
           const champPct = champGames > 0 ? Math.round((topVal / champGames) * 100) : 0;
           const rate = findRateChamp(podiumAll, playerAllTimeGames, allCompletedGameIds.size);
-          text = rate && rate.name !== tied[0]
-            ? t('home.trivia.mostPodiumsAllTimeWithRate', {
-                name: tied[0],
-                count: topVal,
-                games: champGames,
-                champPct,
-                rateName: rate.name,
-                pct: Math.round(rate.pct),
-                wins: rate.wins,
-                rateGames: rate.games,
-              })
-            : t('home.trivia.mostPodiumsAllTime', {
-                name: tied[0],
-                count: topVal,
-                games: champGames,
-                champPct,
-              });
+          if (rate && rate.name !== tied[0]) {
+            text = t('home.trivia.mostPodiumsAllTimeWithRate', {
+              name: tied[0],
+              count: topVal,
+              games: champGames,
+              champPct,
+              rateName: rate.name,
+              pct: Math.round(rate.pct),
+              wins: rate.wins,
+              rateGames: rate.games,
+            });
+          } else {
+            text = t('home.trivia.mostPodiumsAllTime', {
+              name: tied[0],
+              count: topVal,
+              games: champGames,
+              champPct,
+            });
+            if (rate && rate.name === tied[0]) text += t('home.trivia.alsoRateKing');
+          }
         }
         list.push({ icon: '🥇', text });
       }
@@ -4757,42 +4785,46 @@ function buildTriviaList(
       const champGames = playerYearGames.get(top2ndYear[0]) ?? 0;
       const champPct = champGames > 0 ? Math.round((top2ndYear[1] / champGames) * 100) : 0;
       const rate = findRateChamp(secondPlaceYear, playerYearGames, yearGameIds.size);
-      list.push({
-        icon: '🥈',
-        text: rate && rate.name !== top2ndYear[0]
-          ? t('home.trivia.mostSecondPlacesWithRate', {
-              name: top2ndYear[0],
-              count: top2ndYear[1],
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostSecondPlaces', { name: top2ndYear[0], count: top2ndYear[1], champGames, champPct }),
-      });
+      let text: string;
+      if (rate && rate.name !== top2ndYear[0]) {
+        text = t('home.trivia.mostSecondPlacesWithRate', {
+          name: top2ndYear[0],
+          count: top2ndYear[1],
+          champGames,
+          champPct,
+          rateName: rate.name,
+          pct: Math.round(rate.pct),
+          wins: rate.wins,
+          games: rate.games,
+        });
+      } else {
+        text = t('home.trivia.mostSecondPlaces', { name: top2ndYear[0], count: top2ndYear[1], champGames, champPct });
+        if (rate && rate.name === top2ndYear[0]) text += t('home.trivia.alsoRateKing');
+      }
+      list.push({ icon: '🥈', text });
     }
     const top3rdYear = [...thirdPlaceYear.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top3rdYear && top3rdYear[1] >= 2) {
       const champGames = playerYearGames.get(top3rdYear[0]) ?? 0;
       const champPct = champGames > 0 ? Math.round((top3rdYear[1] / champGames) * 100) : 0;
       const rate = findRateChamp(thirdPlaceYear, playerYearGames, yearGameIds.size);
-      list.push({
-        icon: '🥉',
-        text: rate && rate.name !== top3rdYear[0]
-          ? t('home.trivia.mostThirdPlacesWithRate', {
-              name: top3rdYear[0],
-              count: top3rdYear[1],
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostThirdPlaces', { name: top3rdYear[0], count: top3rdYear[1], champGames, champPct }),
-      });
+      let text: string;
+      if (rate && rate.name !== top3rdYear[0]) {
+        text = t('home.trivia.mostThirdPlacesWithRate', {
+          name: top3rdYear[0],
+          count: top3rdYear[1],
+          champGames,
+          champPct,
+          rateName: rate.name,
+          pct: Math.round(rate.pct),
+          wins: rate.wins,
+          games: rate.games,
+        });
+      } else {
+        text = t('home.trivia.mostThirdPlaces', { name: top3rdYear[0], count: top3rdYear[1], champGames, champPct });
+        if (rate && rate.name === top3rdYear[0]) text += t('home.trivia.alsoRateKing');
+      }
+      list.push({ icon: '🥉', text });
     }
   }
   // All-time variant — only when the group has enough history
@@ -4826,42 +4858,46 @@ function buildTriviaList(
       const champGames = playerAllTimeGames.get(top2ndAll[0]) ?? 0;
       const champPct = champGames > 0 ? Math.round((top2ndAll[1] / champGames) * 100) : 0;
       const rate = findRateChamp(secondPlaceAll, playerAllTimeGames, allCompletedGameIds.size);
-      list.push({
-        icon: '🥈',
-        text: rate && rate.name !== top2ndAll[0]
-          ? t('home.trivia.mostSecondPlacesAllTimeWithRate', {
-              name: top2ndAll[0],
-              count: top2ndAll[1],
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostSecondPlacesAllTime', { name: top2ndAll[0], count: top2ndAll[1], champGames, champPct }),
-      });
+      let text: string;
+      if (rate && rate.name !== top2ndAll[0]) {
+        text = t('home.trivia.mostSecondPlacesAllTimeWithRate', {
+          name: top2ndAll[0],
+          count: top2ndAll[1],
+          champGames,
+          champPct,
+          rateName: rate.name,
+          pct: Math.round(rate.pct),
+          wins: rate.wins,
+          games: rate.games,
+        });
+      } else {
+        text = t('home.trivia.mostSecondPlacesAllTime', { name: top2ndAll[0], count: top2ndAll[1], champGames, champPct });
+        if (rate && rate.name === top2ndAll[0]) text += t('home.trivia.alsoRateKing');
+      }
+      list.push({ icon: '🥈', text });
     }
     const top3rdAll = [...thirdPlaceAll.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top3rdAll && top3rdAll[1] >= 5) {
       const champGames = playerAllTimeGames.get(top3rdAll[0]) ?? 0;
       const champPct = champGames > 0 ? Math.round((top3rdAll[1] / champGames) * 100) : 0;
       const rate = findRateChamp(thirdPlaceAll, playerAllTimeGames, allCompletedGameIds.size);
-      list.push({
-        icon: '🥉',
-        text: rate && rate.name !== top3rdAll[0]
-          ? t('home.trivia.mostThirdPlacesAllTimeWithRate', {
-              name: top3rdAll[0],
-              count: top3rdAll[1],
-              champGames,
-              champPct,
-              rateName: rate.name,
-              pct: Math.round(rate.pct),
-              wins: rate.wins,
-              games: rate.games,
-            })
-          : t('home.trivia.mostThirdPlacesAllTime', { name: top3rdAll[0], count: top3rdAll[1], champGames, champPct }),
-      });
+      let text: string;
+      if (rate && rate.name !== top3rdAll[0]) {
+        text = t('home.trivia.mostThirdPlacesAllTimeWithRate', {
+          name: top3rdAll[0],
+          count: top3rdAll[1],
+          champGames,
+          champPct,
+          rateName: rate.name,
+          pct: Math.round(rate.pct),
+          wins: rate.wins,
+          games: rate.games,
+        });
+      } else {
+        text = t('home.trivia.mostThirdPlacesAllTime', { name: top3rdAll[0], count: top3rdAll[1], champGames, champPct });
+        if (rate && rate.name === top3rdAll[0]) text += t('home.trivia.alsoRateKing');
+      }
+      list.push({ icon: '🥉', text });
     }
   }
 
@@ -4917,6 +4953,16 @@ function buildTriviaList(
   //         with one lucky win don't crown themselves). Computed from
   //         this-year participation only — the all-time win-rate
   //         leaderboard already lives in /statistics.
+  //         Suppressed when it would just echo the rate-champion
+  //         already inlined into #4 (`mostWinsWithRate`). The wins
+  //         card carries strictly more info (it pairs the rate champ
+  //         WITH the absolute count champion), so the standalone
+  //         #21 card is pure duplicate when both pick the same
+  //         player at the same displayed percentage. We still ride
+  //         when the two diverge — #4's `findRateChamp` uses a
+  //         stricter 30%-participation gate than #21's 3-game gate,
+  //         so a hot newcomer with few games can crown #21 while
+  //         a different established regular crowns #4's rate suffix.
   if (yearGameIds.size >= 4) {
     const stats = new Map<string, { wins: number; games: number }>();
     for (const gameId of yearGameIds) {
@@ -4937,13 +4983,18 @@ function buildTriviaList(
       const pct = (e.wins / e.games) * 100;
       if (pct > topRate.pct) topRate = { name, pct, games: e.games, wins: e.wins };
     }
-    if (topRate.pct >= 30) {
+    const roundedPct = Math.round(topRate.pct);
+    const echoesMostWins =
+      mostWinsRateChamp !== null &&
+      mostWinsRateChamp.name === topRate.name &&
+      mostWinsRateChamp.pct === roundedPct;
+    if (topRate.pct >= 30 && !echoesMostWins) {
       list.push({
         icon: '🎯',
         text: t('home.trivia.bestWinRate', {
           name: topRate.name,
           verb: verbForName('won', topRate.name, language),
-          pct: Math.round(topRate.pct),
+          pct: roundedPct,
           wins: topRate.wins,
           games: topRate.games,
         }),

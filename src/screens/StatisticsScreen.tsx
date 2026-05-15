@@ -29,9 +29,9 @@ const meNameStyle = { color: ME_NAME_COLOR } as const;
 const getNameFontSize = (name: string, baseRem: number): string => {
   const len = (name || '').length;
   if (len <= 8) return `${baseRem}rem`;
-  if (len <= 11) return `${(baseRem * 0.85).toFixed(3)}rem`;
-  if (len <= 14) return `${(baseRem * 0.72).toFixed(3)}rem`;
-  return `${(baseRem * 0.62).toFixed(3)}rem`;
+  if (len <= 11) return `${(baseRem * 0.9).toFixed(3)}rem`;
+  if (len <= 14) return `${(baseRem * 0.8).toFixed(3)}rem`;
+  return `${(baseRem * 0.7).toFixed(3)}rem`;
 };
 
 const StatisticsScreen = () => {

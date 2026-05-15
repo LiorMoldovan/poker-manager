@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.62.0';
+export const APP_VERSION = '5.62.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.62.1',
+    date: '2026-05-15',
+    changes: [
+      '🩹 Hotfix: chip-count parser tolerates markdown-wrapped AI replies',
+      '🏅 Trivia: affirm when count champion is also the rate champion',
+      '🔇 Trivia: hide "best win rate" card when it echoes "most wins"',
+    ],
+  },
   {
     version: '5.62.0',
     date: '2026-05-15',

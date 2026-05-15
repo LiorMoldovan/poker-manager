@@ -4254,10 +4254,43 @@ The "color" values MUST match the user's exact color names: ${colorsList}. Case 
   try {
     const data = await response.json();
     raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    parsed = JSON.parse(raw.trim());
+
+    // Tolerant JSON extraction. Free-tier Gemini models frequently
+    // ignore `responseMimeType: 'application/json'` + responseSchema
+    // and wrap the JSON in markdown fences (```json\n{...}\n```), or
+    // prepend a one-line acknowledgement ("Sure, here you go:")
+    // before the JSON. We try, in order:
+    //   1. Strip ```json ... ``` or ``` ... ``` fences if present
+    //   2. Parse straight
+    //   3. If that still fails, extract the first balanced {...}
+    //      block from the cleaned text and parse THAT
+    // Step 3 is the same defensive technique the trivia/forecast/
+    // summary parsers in this file use — extracted into one place
+    // here so future call sites can copy the pattern. Step 1+2
+    // catches ~95% of well-behaved responses; step 3 catches the
+    // long tail (Bard-era preview models that occasionally narrate
+    // before complying).
+    let jsonText = raw;
+    if (jsonText.includes('```json')) {
+      jsonText = jsonText.split('```json')[1].split('```')[0];
+    } else if (jsonText.includes('```')) {
+      jsonText = jsonText.split('```')[1].split('```')[0];
+    }
+    jsonText = jsonText.trim();
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      const firstBrace = jsonText.indexOf('{');
+      const lastBrace = jsonText.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        parsed = JSON.parse(jsonText.slice(firstBrace, lastBrace + 1));
+      } else {
+        throw new Error('No JSON object found in response');
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[runWholePhotoShot] ${model} parse failed:`, msg, 'raw:', raw.slice(0, 200));
+    console.warn(`[runWholePhotoShot] ${model} parse failed:`, msg, 'raw:', raw.slice(0, 300));
     return { countsByColor: null, errorMsg: `Parse failed: ${msg}`, errorCode: 'parseFailed' };
   }
 
