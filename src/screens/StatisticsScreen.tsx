@@ -2988,7 +2988,6 @@ const StatisticsScreen = () => {
                     sort dropdown, so the redundant
                     " • שחקנים פעילים" suffix was dropped. */}
                 <div style={{
-                  textAlign: 'center',
                   fontSize: '0.7rem',
                   color: 'var(--text-muted)',
                   marginBottom: '0.5rem',
@@ -2996,7 +2995,7 @@ const StatisticsScreen = () => {
                   borderBottom: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'flex-start',
                   gap: '0.4rem',
                   flexWrap: 'wrap',
                 }}>
