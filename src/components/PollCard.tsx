@@ -513,28 +513,25 @@ export default function PollCard(props: PollCardProps) {
                   opacity: isDisabled ? 0.55 : 1,
                 }}
               >
-                {/* Tile header — date / location + STATE badges +
-                    admin manual-pick affordance.
-                    The proxy count is data, not state, so it moved
-                    to the summary row below to keep the header from
-                    line-wrapping on multi-state confirmed polls
-                    with long Hebrew location names. Locked wins
-                    over Leading (a locked date isn't "leading"
-                    any more — it's settled). The 📌 button lives
-                    here (not in the RSVP/action row) because at
-                    five buttons (yes / maybe / no / ➕ / 📌) the
-                    action row would wrap on a 360px viewport.
-                    Conceptually the manual-pick is a state change
-                    on the tile ("admin overrides the leader") so
-                    it groups naturally with the Locked / Leading
-                    badges.
-                    On narrow phones (≤360px) Hebrew dates +
-                    long location names + Leading + 📌 used to push
-                    the header onto 3 visual lines. The fix: the
-                    left column stacks date-on-top, location-below
-                    (truncated with ellipsis), so the badge cluster
-                    on the right always pairs with the date row,
-                    not with whatever the location wrap left behind.
+                {/* Tile header — date / location on the left, admin
+                    action chips (📌 בחר / 🔓 שחרר / ❌ הוצא /
+                    ♻️ החזר) on the right. State badges (Locked /
+                    Leading / Disabled / FillPinned) used to live in
+                    the right cluster too but the long Hebrew
+                    FillPinned badge would push the action chips
+                    onto a third row on a 360px viewport — so
+                    badges moved to their own banner row below the
+                    header (see "state badge banner" further down).
+                    The 📌 button lives here (not in the RSVP/action
+                    row) because at five buttons (yes / maybe / no /
+                    ➕ / 📌) the RSVP row would wrap on a 360px
+                    viewport. Conceptually it's an admin override
+                    chip so it groups naturally with the other
+                    admin chips here.
+                    The left column stacks date-on-top, location-
+                    below (truncated with ellipsis), so the right
+                    cluster always pairs with the date row, not
+                    with whatever the location wrap left behind.
                     `minWidth: 0` on the left column is what allows
                     `text-overflow: ellipsis` to actually clip
                     inside a flex child (otherwise the child grows
@@ -571,49 +568,21 @@ export default function PollCard(props: PollCardProps) {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
-                    {/* Disabled badge — owns the badge slot exclusively
-                        when an admin has excluded the date. Other
-                        state badges (Locked / Leading / FillPinned)
-                        are mutually exclusive with this one by
-                        construction: SQL blocks disabling the pinned
-                        date, and leader detection skips disabled
-                        dates, so isPinnedHere + isLeading are both
-                        false here. We still guard the render
-                        explicitly so a future code change can't
-                        accidentally show two conflicting badges. */}
-                    {isDisabled && (
-                      <span
-                        title={t('schedule.dateDisabledTooltip')}
-                        style={{
-                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                          background: 'rgba(148, 163, 184, 0.12)', color: '#94a3b8',
-                          border: '1px solid rgba(148, 163, 184, 0.40)',
-                        }}>{t('schedule.dateDisabledBadge')}</span>
-                    )}
-                    {!isDisabled && isLockedHere && (
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                        background: 'rgba(16, 185, 129, 0.14)', color: '#34d399',
-                        border: '1px solid rgba(16, 185, 129, 0.40)',
-                      }}>✅ {t('schedule.lockedDate')}</span>
-                    )}
-                    {!isDisabled && !isLockedHere && !isFillPinnedLocked && isLeading && (
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                        background: 'rgba(99, 102, 241, 0.14)', color: '#a5b4fc',
-                        border: '1px solid rgba(99, 102, 241, 0.40)',
-                      }}>👑 {t('schedule.leadingDate')}</span>
-                    )}
-                    {!isDisabled && isFillPinnedLocked && (
-                      <span
-                        title={t('schedule.errorFillPinnedFirst')}
-                        style={{
-                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                          background: 'rgba(250, 204, 21, 0.12)', color: '#facc15',
-                          border: '1px solid rgba(250, 204, 21, 0.40)',
-                        }}>{t('schedule.fillPinnedFirstBadge')}</span>
-                    )}
+                  {/* Right cluster — admin action chips only.
+                      Status badges (Disabled / Locked / Leading /
+                      FillPinned) live in their own banner row below
+                      the header (see "state badge banner" further
+                      down). Keeping the badges out of this cluster
+                      means the small action chips (📌 בחר / 🔓 שחרר /
+                      ❌ הוצא) always stay alongside the date on the
+                      first line — even when a long Hebrew badge like
+                      `🔒 ממלאים תאריך אחר` would otherwise push them
+                      to a third line on a 360px viewport. */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    flexWrap: 'wrap', flexShrink: 0,
+                    maxWidth: '100%', minWidth: 0,
+                  }}>
                     {/* Admin manual-pick / re-pin. Multi-date polls only,
                         hidden on the already-pinned tile, hidden once a
                         game has been started from the poll, hidden on
@@ -704,6 +673,57 @@ export default function PollCard(props: PollCardProps) {
                     )}
                   </div>
                 </div>
+
+                {/* State badge banner — own row below the header. At
+                    most one of the four badges renders per tile
+                    (mutually exclusive by construction: SQL blocks
+                    disabling the pinned date, leader detection skips
+                    disabled + confirmed polls, and FillPinned only
+                    applies to non-pinned tiles of confirmed-below-
+                    target polls).
+                    Lives between the header and the progress bar so
+                    the "why is this tile locked / leading / disabled"
+                    reason is the first thing the user reads after the
+                    date, without competing with the small admin chips
+                    for horizontal space on a 360px viewport. */}
+                {(isDisabled || isLockedHere || isLeading || isFillPinnedLocked) && (
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8,
+                  }}>
+                    {isDisabled && (
+                      <span
+                        title={t('schedule.dateDisabledTooltip')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                          background: 'rgba(148, 163, 184, 0.12)', color: '#94a3b8',
+                          border: '1px solid rgba(148, 163, 184, 0.40)',
+                        }}>{t('schedule.dateDisabledBadge')}</span>
+                    )}
+                    {!isDisabled && isLockedHere && (
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                        background: 'rgba(16, 185, 129, 0.14)', color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.40)',
+                      }}>✅ {t('schedule.lockedDate')}</span>
+                    )}
+                    {!isDisabled && !isLockedHere && !isFillPinnedLocked && isLeading && (
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                        background: 'rgba(99, 102, 241, 0.14)', color: '#a5b4fc',
+                        border: '1px solid rgba(99, 102, 241, 0.40)',
+                      }}>👑 {t('schedule.leadingDate')}</span>
+                    )}
+                    {!isDisabled && isFillPinnedLocked && (
+                      <span
+                        title={t('schedule.errorFillPinnedFirst')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                          background: 'rgba(250, 204, 21, 0.12)', color: '#facc15',
+                          border: '1px solid rgba(250, 204, 21, 0.40)',
+                        }}>{t('schedule.fillPinnedFirstBadge')}</span>
+                    )}
+                  </div>
+                )}
 
                 {/* Single-row vote summary: progress bar · yes/target ratio.
                     The bar takes flex:1 so it stretches to fill the row, with
