@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.2.1';
+export const APP_VERSION = '6.3.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.3.0',
+    date: '2026-05-16',
+    changes: [
+      '✏️ Editable counts on the photo test — fix any wrong number in place',
+      '✓ "Save correct count" button stores the photo + truth for prompt tuning',
+    ],
+  },
   {
     version: '6.2.1',
     date: '2026-05-15',

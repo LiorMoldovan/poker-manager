@@ -1669,8 +1669,8 @@ const he = {
   // ── Settings ──
   'settings.title': 'הגדרות',
   'settings.saved': '✓ הגדרות נשמרו',
-  'observer.banner': '👁 מצב צפייה — אתה צופה ב-{group} כסופר אדמין. כל השינויים, ה-AI, ההתראות והאימיילים מנוטרלים כדי למנוע פגיעה בנתוני הקבוצה.',
-  'observer.bannerShort': '👁 מצב צפייה (קריאה בלבד)',
+  'observer.banner': '👁 צפייה ב-{group} · קריאה בלבד',
+  'observer.bannerShort': '👁 צפייה · קריאה בלבד',
   'observer.actionBlocked': 'הפעולה חסומה במצב צפייה',
   'settings.tabGroup': '🏠 קבוצה',
   'settings.tabSchedule': '📅 המשחק הבא',
@@ -2155,6 +2155,15 @@ const he = {
   'settings.photoTest.tryAgain': 'בדיקה נוספת',
   'settings.photoTest.disabledNoKey': 'בקבוצה הזו עדיין אין מפתח Gemini — הזינו מפתח בכרטיס "מפתחות API" שלמעלה כדי להפעיל את הבדיקה.',
   'settings.photoTest.disabledNoChips': 'נדרש להגדיר ז\'יטונים לקבוצה — היכנס ללשונית "ז\'יטונים" והוסף ערכים כדי להפעיל את הבדיקה.',
+  'settings.photoTest.correction.save': '✓ שמור ספירה נכונה',
+  'settings.photoTest.correction.saving': '⏳ שומר…',
+  'settings.photoTest.correction.saved': '✓ נשמר — {diff} תיקונים',
+  'settings.photoTest.correction.savedPerfect': '✓ נשמר — ה-AI דייק',
+  'settings.photoTest.correction.savedHint': 'התיקון נשמר. צלמו תמונה נוספת או חכו שאני אקרא את כל הדגימות ואשפר את המודל.',
+  'settings.photoTest.correction.tryAgain': '⚠ נסה שוב לשמור',
+  'settings.photoTest.correction.saveFailed': 'השמירה נכשלה',
+  'settings.photoTest.correction.noPhoto': 'אין תמונה לשמירה',
+  'settings.photoTest.correction.aiSaid': 'ה-AI ספר',
   // v5.62.2 — chip-count feedback loop fully retired. The following
   // key blocks were removed in this version because nothing renders
   // them any more:
@@ -4184,8 +4193,8 @@ const en: Record<keyof typeof he, string> = {
   // ── Settings ──
   'settings.title': 'Settings',
   'settings.saved': '✓ Settings saved',
-  'observer.banner': '👁 Observer mode — you are viewing {group} as a super admin. All edits, AI, notifications and emails are disabled to protect this group\'s data.',
-  'observer.bannerShort': '👁 Observer mode (read-only)',
+  'observer.banner': '👁 Viewing {group} · read-only',
+  'observer.bannerShort': '👁 Observing · read-only',
   'observer.actionBlocked': 'Action blocked in observer mode',
   'settings.tabGroup': '🏠 Group',
   'settings.tabSchedule': '📅 Next Game',
@@ -4579,6 +4588,15 @@ const en: Record<keyof typeof he, string> = {
   'settings.photoTest.tryAgain': 'Test again',
   'settings.photoTest.disabledNoKey': 'This group has no active Gemini key — set a key in the "API Keys" card above to enable the test.',
   'settings.photoTest.disabledNoChips': 'Chip values must be configured for this group — open the "Chips" tab and add values to enable the test.',
+  'settings.photoTest.correction.save': '✓ Save correct count',
+  'settings.photoTest.correction.saving': '⏳ Saving…',
+  'settings.photoTest.correction.saved': '✓ Saved — {diff} corrections',
+  'settings.photoTest.correction.savedPerfect': '✓ Saved — AI was perfect',
+  'settings.photoTest.correction.savedHint': 'Correction saved. Take another photo or wait for me to read all the samples and improve the model.',
+  'settings.photoTest.correction.tryAgain': '⚠ Try saving again',
+  'settings.photoTest.correction.saveFailed': 'Save failed',
+  'settings.photoTest.correction.noPhoto': 'No photo to save',
+  'settings.photoTest.correction.aiSaid': 'AI said',
   // v5.62.2 — chip-count feedback loop fully retired. See the matching
   // note in the Hebrew block above for details on what was removed.
   'settings.players.permanentDesc': 'Main roster — permanent group members',

@@ -59,6 +59,7 @@ import { isEdgeBrowser } from '../utils/tts';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
 import { captureChipSelfie } from '../utils/imageUtils';
+import { logChipCountCorrection } from '../utils/chipCountCorrections';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
@@ -154,8 +155,20 @@ const SettingsScreen = () => {
   const [photoTestPreview, setPhotoTestPreview] = useState<string>('');
   const [photoTestPreviewMime, setPhotoTestPreviewMime] = useState<string>('image/jpeg');
 
-  // v5.62.2 — chip-count accuracy dashboard state and the tuning UI
-  // were removed alongside the feedback loop. See top-of-file note.
+  // v6.2.x chip-count correction loop (replaces the v5.62.2-retired
+  // dashboard with a leaner human-in-the-loop tool):
+  //   * `photoTestTruth` is keyed by chipId and holds the user-editable
+  //     count per color. Seeded from the AI result on every new photo;
+  //     user edits override per cell.
+  //   * `photoTestSaveStatus` drives the save button's label.
+  //   * `photoTestSavedDiff` is the delta we logged on the latest save,
+  //     surfaced in the "saved" toast.
+  // Reset on every new photo result via an effect below.
+  const [photoTestTruth, setPhotoTestTruth] = useState<Record<string, number>>({});
+  const [photoTestSaveStatus, setPhotoTestSaveStatus] =
+    useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [photoTestSaveError, setPhotoTestSaveError] = useState<string>('');
+  const [photoTestSavedDiff, setPhotoTestSavedDiff] = useState<number>(0);
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
@@ -410,6 +423,96 @@ const SettingsScreen = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Seed the editable truth map every time a new AI result comes in.
+  // We aggregate the per-stack AI counts to per-color (same shape the
+  // display row uses below), so the inputs default to whatever the AI
+  // returned and the user only edits the wrong cells. Also clears any
+  // prior save state so the button text doesn't say "saved" against a
+  // fresh photo.
+  useEffect(() => {
+    if (!photoTestResult || photoTestResult.error) {
+      setPhotoTestTruth({});
+      setPhotoTestSaveStatus('idle');
+      setPhotoTestSaveError('');
+      setPhotoTestSavedDiff(0);
+      return;
+    }
+    const seed: Record<string, number> = {};
+    for (const stack of photoTestResult.stacks) {
+      seed[stack.chipId] = (seed[stack.chipId] ?? 0) + stack.count;
+    }
+    setPhotoTestTruth(seed);
+    setPhotoTestSaveStatus('idle');
+    setPhotoTestSaveError('');
+    setPhotoTestSavedDiff(0);
+  }, [photoTestResult]);
+
+  // Save handler for the "save correct count" button on the photo
+  // test card. Persists the photo + AI's per-color counts + the user's
+  // corrected counts to `chip_count_corrections`. The agent reads
+  // these rows later via the Supabase MCP and uses them to iterate
+  // the prompt or attach few-shot examples — the app does nothing
+  // automatic with them.
+  const handleSaveChipCorrection = useCallback(async () => {
+    if (!photoTestResult || photoTestResult.error) return;
+    if (!photoTestPreview) {
+      setPhotoTestSaveStatus('error');
+      setPhotoTestSaveError(t('settings.photoTest.correction.noPhoto'));
+      return;
+    }
+
+    // Aggregate AI's per-stack counts down to per-color (matching the
+    // shape of `photoTestTruth`). Then translate both maps from chipId
+    // keys to color-name keys for the row payload — color names join
+    // cleanly with `chip_count_debug.final_counts` (which is also
+    // color-keyed) so the agent can correlate rows across the two
+    // tables when reviewing.
+    const aiByChipId: Record<string, number> = {};
+    for (const stack of photoTestResult.stacks) {
+      aiByChipId[stack.chipId] = (aiByChipId[stack.chipId] ?? 0) + stack.count;
+    }
+    const aiCounts: Record<string, number> = {};
+    const truthCounts: Record<string, number> = {};
+    for (const chip of chipValues) {
+      const colorKey = chip.color.toLowerCase();
+      aiCounts[colorKey] = aiByChipId[chip.id] ?? 0;
+      truthCounts[colorKey] = Number.isFinite(photoTestTruth[chip.id])
+        ? photoTestTruth[chip.id]
+        : 0;
+    }
+
+    setPhotoTestSaveStatus('saving');
+    setPhotoTestSaveError('');
+
+    const selfiesCount = chipValues.filter(c => !!c.selfieBase64).length;
+
+    const res = await logChipCountCorrection({
+      model: photoTestResult.modelUsed || '',
+      context: 'settings-test',
+      selfiesAttached: selfiesCount,
+      photoBase64: photoTestPreview,
+      photoMimeType: photoTestPreviewMime,
+      chipColorsConfigured: chipValues.map(c => c.color),
+      aiCounts,
+      truthCounts,
+    });
+
+    if (res.ok) {
+      setPhotoTestSaveStatus('saved');
+      setPhotoTestSavedDiff(res.totalDiff);
+    } else {
+      setPhotoTestSaveStatus('error');
+      setPhotoTestSaveError(res.error || t('settings.photoTest.correction.saveFailed'));
+    }
+  }, [
+    photoTestResult,
+    photoTestPreview,
+    photoTestPreviewMime,
+    photoTestTruth,
+    chipValues,
+    t,
+  ]);
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -3481,18 +3584,55 @@ const SettingsScreen = () => {
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                             ×{chip.value}
                           </span>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              fontSize: '1.05rem',
-                              minWidth: '2.5rem',
-                              textAlign: 'center',
-                              color: 'var(--text)',
-                            }}
-                            title={stackCount > 1 ? `(${stackCount}×)` : undefined}
-                          >
-                            {agg.aiCount}
-                          </span>
+                          {/* Editable count cell (v6.2.x chip correction loop).
+                              Default = AI's aggregated count for this color.
+                              User can tap to correct any wrong number; the
+                              border turns amber when the value differs from
+                              the AI's. The original AI count is preserved
+                              in the title so it's recoverable mid-edit. */}
+                          {(() => {
+                            const truthVal = Number.isFinite(photoTestTruth[agg.chipId])
+                              ? photoTestTruth[agg.chipId]
+                              : agg.aiCount;
+                            const isEdited = truthVal !== agg.aiCount;
+                            return (
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                min={0}
+                                value={truthVal}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  // Allow clearing the cell briefly — store as
+                                  // 0 so the JSON payload stays integer-shaped.
+                                  if (raw === '') {
+                                    setPhotoTestTruth(prev => ({ ...prev, [agg.chipId]: 0 }));
+                                    setPhotoTestSaveStatus(s => s === 'saved' ? 'idle' : s);
+                                    return;
+                                  }
+                                  const n = Math.max(0, Math.floor(Number(raw)));
+                                  if (!Number.isFinite(n)) return;
+                                  setPhotoTestTruth(prev => ({ ...prev, [agg.chipId]: n }));
+                                  setPhotoTestSaveStatus(s => s === 'saved' ? 'idle' : s);
+                                }}
+                                title={`${t('settings.photoTest.correction.aiSaid')}: ${agg.aiCount}${stackCount > 1 ? ` (${stackCount}×)` : ''}`}
+                                style={{
+                                  width: '3.4rem',
+                                  padding: '0.3rem 0.4rem',
+                                  background: 'rgba(255,255,255,0.04)',
+                                  border: `1px solid ${isEdited ? 'rgba(234,179,8,0.6)' : 'var(--border)'}`,
+                                  borderRadius: '6px',
+                                  color: 'var(--text)',
+                                  fontFamily: 'inherit',
+                                  fontSize: '1rem',
+                                  fontWeight: 700,
+                                  textAlign: 'center',
+                                  direction: 'ltr',
+                                }}
+                              />
+                            );
+                          })()}
                           <span
                             style={{
                               fontSize: '0.7rem',
@@ -3535,6 +3675,78 @@ const SettingsScreen = () => {
                     <span>{photoTestResult.totalValue.toLocaleString()}</span>
                   </div>
 
+                  {/* v6.2.x — chip correction loop save button. Persists
+                      photo + AI counts + user truth to chip_count_corrections
+                      so the agent can read the rows via MCP and iterate
+                      the prompt or attach few-shot examples. The button
+                      is always enabled (a "no diff" save is still useful
+                      data — confirms the AI nailed that scene). */}
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <button
+                      type="button"
+                      onClick={handleSaveChipCorrection}
+                      disabled={photoTestSaveStatus === 'saving'}
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem',
+                        background: photoTestSaveStatus === 'saved'
+                          ? 'rgba(16,185,129,0.18)'
+                          : photoTestSaveStatus === 'error'
+                            ? 'rgba(239,68,68,0.18)'
+                            : 'rgba(59,130,246,0.18)',
+                        border: `1px solid ${
+                          photoTestSaveStatus === 'saved'
+                            ? 'rgba(16,185,129,0.55)'
+                            : photoTestSaveStatus === 'error'
+                              ? 'rgba(239,68,68,0.55)'
+                              : 'rgba(59,130,246,0.55)'
+                        }`,
+                        color: photoTestSaveStatus === 'saved'
+                          ? '#34d399'
+                          : photoTestSaveStatus === 'error'
+                            ? '#fca5a5'
+                            : '#93c5fd',
+                        borderRadius: '8px',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        cursor: photoTestSaveStatus === 'saving' ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {photoTestSaveStatus === 'saving'
+                        ? t('settings.photoTest.correction.saving')
+                        : photoTestSaveStatus === 'saved'
+                          ? (photoTestSavedDiff === 0
+                              ? t('settings.photoTest.correction.savedPerfect')
+                              : t('settings.photoTest.correction.saved', { diff: photoTestSavedDiff }))
+                          : photoTestSaveStatus === 'error'
+                            ? t('settings.photoTest.correction.tryAgain')
+                            : t('settings.photoTest.correction.save')}
+                    </button>
+                    {photoTestSaveStatus === 'error' && photoTestSaveError && (
+                      <div style={{
+                        marginTop: '0.4rem',
+                        fontSize: '0.72rem',
+                        color: '#fca5a5',
+                        direction: 'ltr',
+                        textAlign: 'left',
+                        fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+                        wordBreak: 'break-word',
+                      }}>
+                        {photoTestSaveError}
+                      </div>
+                    )}
+                    {photoTestSaveStatus === 'saved' && (
+                      <div style={{
+                        marginTop: '0.4rem',
+                        fontSize: '0.74rem',
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.4,
+                      }}>
+                        {t('settings.photoTest.correction.savedHint')}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"
