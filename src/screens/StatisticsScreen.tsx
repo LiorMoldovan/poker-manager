@@ -2937,6 +2937,14 @@ const StatisticsScreen = () => {
           {viewMode === 'table' && (
             <>
               <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
+                {/* Card title — matches the other 4 tables' chrome
+                    (centered, same font weight/size). Lives ABOVE the
+                    controls strip so the title doesn't get hidden by
+                    `hideForCapture` during share screenshots — viewers
+                    of the shared image still see what the table is. */}
+                <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  {t('stats.playerRanking')}
+                </div>
                 {/* Single-row controls strip with `space-between`:
                     [sort] and [mode] anchor to the inline-start
                     (physical right in RTL), [active-toggle] anchors

@@ -958,25 +958,48 @@ interface ScheduleCardProps extends SectionProps {
 }
 
 function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
-  // Small "+N more open polls" line wedged into the bottom of the card
-  // body. Same click target as the card (→ /schedule), so we don't
-  // duplicate interactivity — it reads as a footnote, not a button.
-  // Returns `null` when there's no second poll, which lets callers
-  // safely append it to any body slot without branching: the empty
-  // node collapses to nothing.
+  // Small "+N more open polls" badge wedged into the bottom of the
+  // card body. Rendered as a blue pill chip so it reads as a distinct
+  // call-to-action regardless of the card's own accent (amber missing-
+  // seat, green filled, blue voted) — a muted-italic footnote was too
+  // easy to miss against the warning card states. Blue is the "vote
+  // awareness" colour family already used by the `openYouVoted` card,
+  // so it stays inside the dashboard's existing visual vocabulary.
+  //
+  // The outer flex wrapper keeps the chip from stretching to the full
+  // card width — the pill should look like a tappable badge, not a
+  // banner line. Click target is the whole card (already routes to
+  // `/schedule`), so we don't duplicate interactivity here.
+  //
+  // Disappears automatically when the second poll closes: the count
+  // is recomputed from the same eligibility filter as `activePoll`,
+  // which excludes `cancelled` / `expired` polls, past-dated polls,
+  // and confirmed polls that are already linked to a game. Realtime
+  // cache updates re-render the parent within ~500ms of any remote
+  // status change, so the footer vanishes without a manual refresh.
   const extraPollsFooter: React.ReactNode = additionalActivePollCount > 0 ? (
     <div style={{
-      fontSize: '0.68rem',
-      color: 'var(--text-muted)',
-      paddingTop: '0.4rem',
-      borderTop: '1px solid rgba(255,255,255,0.06)',
-      lineHeight: 1.4,
-      opacity: 0.85,
-      fontStyle: 'italic',
+      display: 'flex',
+      paddingTop: '0.55rem',
     }}>
-      {additionalActivePollCount === 1
-        ? t('home.schedule.additionalPollsOne')
-        : t('home.schedule.additionalPollsMany', { n: additionalActivePollCount })}
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.35rem',
+        fontSize: '0.72rem',
+        fontWeight: 600,
+        color: '#93c5fd',
+        background: 'rgba(59, 130, 246, 0.14)',
+        border: '1px solid rgba(59, 130, 246, 0.40)',
+        borderRadius: 999,
+        padding: '0.3rem 0.7rem',
+        lineHeight: 1.3,
+      }}>
+        <span aria-hidden>🗳</span>
+        {additionalActivePollCount === 1
+          ? t('home.schedule.additionalPollsOne')
+          : t('home.schedule.additionalPollsMany', { n: additionalActivePollCount })}
+      </span>
     </div>
   ) : null;
 
