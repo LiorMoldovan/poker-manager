@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.4.2';
+export const APP_VERSION = '6.5.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.5.0',
+    date: '2026-05-16',
+    changes: [
+      '🏁 New "average placement" table on Statistics',
+      '📤 All share buttons now say just "שתף"',
+      '🔔 Excluded poll dates broadcast push + email',
+      '🎯 Home glance: "one seat left" pill on near-full dates',
+      '❌ Home glance: excluded dates struck through',
+    ],
+  },
   {
     version: '6.4.2',
     date: '2026-05-16',

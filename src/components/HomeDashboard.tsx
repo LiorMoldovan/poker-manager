@@ -1282,117 +1282,184 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
       paddingTop: '0.5rem',
       borderTop: '1px solid rgba(255,255,255,0.08)',
     }}>
-      {sortedDates.map(d => {
-        const yesCount = poll.votes.filter(
-          v => v.dateId === d.id && v.response === 'yes'
-        ).length;
-        // The viewer's own response on THIS date — independent of
-        // whether they voted on other dates. We surface all three
-        // RSVP states (yes/no/maybe) so a member who said "no" to
-        // Friday but "yes" to Thursday/Saturday sees a clear marker
-        // on Friday too — not silence, which would read as "I didn't
-        // vote" when in fact they did.
-        const myResponse: 'yes' | 'no' | 'maybe' | null = (() => {
-          if (myPlayerId === null) return null;
-          const mine = poll.votes.find(
-            v => v.dateId === d.id && v.playerId === myPlayerId
-          );
-          return mine?.response ?? null;
-        })();
-        const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
-        const dayName = Number.isNaN(dt.getTime())
-          ? ''
-          : dt.toLocaleDateString('he-IL', { weekday: 'short' });
-        const dateStr = Number.isNaN(dt.getTime())
-          ? d.proposedDate
-          : dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-        const timeStr = d.proposedTime ? d.proposedTime.slice(0, 5) : null;
-        const labelParts = [dayName, dateStr].filter(Boolean);
-        const label = labelParts.join(' · ') + (timeStr ? ` · ${timeStr}` : '');
-        // The most-popular date gets a faint highlight so the viewer's
-        // eye is drawn to the option closest to filling. We compute it
-        // once per render — ties don't matter (any of them will glow).
-        const isLeading = yesCount > 0 && yesCount === Math.max(
-          ...sortedDates.map(x => poll.votes.filter(v => v.dateId === x.id && v.response === 'yes').length)
+      {(() => {
+        // Pre-compute the max yes-count across ENABLED dates only.
+        // Excluded dates are out of the running per migration 086
+        // (set_game_poll_date_disabled drops them from candidate
+        // selection and the auto-close trigger), so an excluded date
+        // with a stale yes-vote must not steal the "leader" highlight
+        // from a live one. Computing once outside the row map avoids
+        // an O(n²) scan inside the per-row isLeading check.
+        const enabledMaxYes = Math.max(
+          0,
+          ...sortedDates
+            .filter(x => !x.disabledAt)
+            .map(x => poll.votes.filter(v => v.dateId === x.id && v.response === 'yes').length)
         );
-        return (
-          <div
-            key={d.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.78rem',
-              lineHeight: 1.3,
-              opacity: isLeading ? 1 : 0.85,
-            }}
-          >
-            <span style={{
-              flex: '1 1 auto',
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: 'var(--text)',
-              fontWeight: isLeading ? 600 : 400,
-            }}>
-              {label}
-            </span>
-            {(() => {
-              // Color the pill by stance:
-              //   yes     → green  (positive commitment)
-              //   no      → red    (negative — clear, not "you didn't vote")
-              //   maybe   → amber  (uncertain — same hue we use for warnings)
-              //   skipped → grey   (you participated in the poll but did
-              //                     not respond to THIS date — distinct
-              //                     from "haven't voted at all", which
-              //                     uses no pill)
-              //
-              // The "skipped" pill is only meaningful on the "voted"
-              // card variant. On the "haven't voted yet" card, every
-              // row is in skipped state, so a pill on every row would
-              // be visual noise — the card title already carries the
-              // meaning. We gate it on `hasMyVote` from the outer
-              // scope.
-              if (!myResponse && !hasMyVote) return null;
-              const tone = myResponse === 'yes'
-                ? { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', key: 'home.schedule.openGlanceMineYes' as const }
-                : myResponse === 'no'
-                ? { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', key: 'home.schedule.openGlanceMineNo' as const }
-                : myResponse === 'maybe'
-                ? { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.16)', key: 'home.schedule.openGlanceMineMaybe' as const }
-                : { fg: 'var(--text-muted)', bg: 'rgba(148, 163, 184, 0.16)', key: 'home.schedule.openGlanceMineSkipped' as const };
-              return (
+        return sortedDates.map(d => {
+          const yesCount = poll.votes.filter(
+            v => v.dateId === d.id && v.response === 'yes'
+          ).length;
+          // Excluded by admin — voting is closed server-side; the
+          // home glance must mirror that so a member glancing here
+          // doesn't think "huh, no one's voting for Fri" when the
+          // truth is voting was disabled.
+          const isDisabled = !!d.disabledAt;
+          // The viewer's own response on THIS date — independent of
+          // whether they voted on other dates. We surface all three
+          // RSVP states (yes/no/maybe) so a member who said "no" to
+          // Friday but "yes" to Thursday/Saturday sees a clear marker
+          // on Friday too — not silence, which would read as "I didn't
+          // vote" when in fact they did. Suppressed entirely on
+          // excluded dates — the ❌ הוצא badge is the dominant signal
+          // there, and stacking the viewer's stale stance on top adds
+          // noise without information.
+          const myResponse: 'yes' | 'no' | 'maybe' | null = (() => {
+            if (myPlayerId === null) return null;
+            const mine = poll.votes.find(
+              v => v.dateId === d.id && v.playerId === myPlayerId
+            );
+            return mine?.response ?? null;
+          })();
+          const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
+          const dayName = Number.isNaN(dt.getTime())
+            ? ''
+            : dt.toLocaleDateString('he-IL', { weekday: 'short' });
+          const dateStr = Number.isNaN(dt.getTime())
+            ? d.proposedDate
+            : dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+          const timeStr = d.proposedTime ? d.proposedTime.slice(0, 5) : null;
+          const labelParts = [dayName, dateStr].filter(Boolean);
+          const label = labelParts.join(' · ') + (timeStr ? ` · ${timeStr}` : '');
+          // The most-popular ENABLED date gets a faint highlight so
+          // the viewer's eye is drawn to the option closest to
+          // filling. Excluded dates never lead.
+          const isLeading = !isDisabled && yesCount > 0 && yesCount === enabledMaxYes;
+          // Urgency pill: a live date one yes-vote away from hitting
+          // target is the single most actionable signal on this card
+          // — surface it so members see "this game is one click from
+          // happening" without opening the schedule tab. Capped at
+          // exactly 1 to keep the pill scarce and meaningful; broader
+          // "almost there" thresholds dilute the call to action.
+          const isOneSeatLeft = !isDisabled
+            && poll.targetPlayerCount - yesCount === 1
+            && yesCount > 0;
+          return (
+            <div
+              key={d.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.78rem',
+                lineHeight: 1.3,
+                opacity: isDisabled ? 0.45 : (isLeading ? 1 : 0.85),
+              }}
+            >
+              <span style={{
+                flex: '1 1 auto',
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: 'var(--text)',
+                fontWeight: isLeading ? 600 : 400,
+                textDecoration: isDisabled ? 'line-through' : 'none',
+              }}>
+                {label}
+              </span>
+              {isOneSeatLeft && (
                 <span style={{
                   flexShrink: 0,
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  color: tone.fg,
-                  background: tone.bg,
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  color: '#f59e0b',
+                  background: 'rgba(245, 158, 11, 0.18)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
                   padding: '1px 6px',
                   borderRadius: 6,
+                  whiteSpace: 'nowrap',
                 }}>
-                  {t(tone.key)}
+                  {t('home.schedule.openGlanceOneSeatLeft')}
                 </span>
-              );
-            })()}
-            <span style={{
-              flexShrink: 0,
-              fontWeight: 700,
-              color: 'var(--text)',
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-              {/* Order: target first then yes-count, so in RTL the
-                  numerator (current participants) lands on the right —
-                  matching how the rest of the dashboard reads. */}
-              <span style={{ opacity: 0.5, fontWeight: 400, fontSize: '0.72rem' }}>
-                {poll.targetPlayerCount}{' / '}
+              )}
+              {(() => {
+                // Excluded date wins the pill slot — admin closed
+                // voting here, so we replace the stance pill with the
+                // ❌ הוצא badge. This keeps the row geometry stable
+                // (one pill, not two) and avoids the awkward "you
+                // said no on a date that's been removed anyway".
+                if (isDisabled) {
+                  return (
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: 'var(--text-muted)',
+                      background: 'rgba(148, 163, 184, 0.16)',
+                      padding: '1px 6px',
+                      borderRadius: 6,
+                    }}>
+                      {t('home.schedule.openGlanceDisabled')}
+                    </span>
+                  );
+                }
+                // Color the pill by stance:
+                //   yes     → green  (positive commitment)
+                //   no      → red    (negative — clear, not "you didn't vote")
+                //   maybe   → amber  (uncertain — same hue we use for warnings)
+                //   skipped → grey   (you participated in the poll but did
+                //                     not respond to THIS date — distinct
+                //                     from "haven't voted at all", which
+                //                     uses no pill)
+                //
+                // The "skipped" pill is only meaningful on the "voted"
+                // card variant. On the "haven't voted yet" card, every
+                // row is in skipped state, so a pill on every row would
+                // be visual noise — the card title already carries the
+                // meaning. We gate it on `hasMyVote` from the outer
+                // scope.
+                if (!myResponse && !hasMyVote) return null;
+                const tone = myResponse === 'yes'
+                  ? { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', key: 'home.schedule.openGlanceMineYes' as const }
+                  : myResponse === 'no'
+                  ? { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', key: 'home.schedule.openGlanceMineNo' as const }
+                  : myResponse === 'maybe'
+                  ? { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.16)', key: 'home.schedule.openGlanceMineMaybe' as const }
+                  : { fg: 'var(--text-muted)', bg: 'rgba(148, 163, 184, 0.16)', key: 'home.schedule.openGlanceMineSkipped' as const };
+                return (
+                  <span style={{
+                    flexShrink: 0,
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    color: tone.fg,
+                    background: tone.bg,
+                    padding: '1px 6px',
+                    borderRadius: 6,
+                  }}>
+                    {t(tone.key)}
+                  </span>
+                );
+              })()}
+              <span style={{
+                flexShrink: 0,
+                fontWeight: 700,
+                color: 'var(--text)',
+                fontVariantNumeric: 'tabular-nums',
+                textDecoration: isDisabled ? 'line-through' : 'none',
+              }}>
+                {/* Order: target first then yes-count, so in RTL the
+                    numerator (current participants) lands on the right —
+                    matching how the rest of the dashboard reads. */}
+                <span style={{ opacity: 0.5, fontWeight: 400, fontSize: '0.72rem' }}>
+                  {poll.targetPlayerCount}{' / '}
+                </span>
+                {yesCount}
               </span>
-              {yesCount}
-            </span>
-          </div>
-        );
-      })}
+            </div>
+          );
+        });
+      })()}
     </div>
   ) : null;
 
@@ -3209,24 +3276,35 @@ function buildPersonalFactsList(
     });
   }
 
-  // 4. Nemesis — opponent who finished above you most often.
-  //    Sample size gates: ≥ 5 shared games AND ≥ 4 beats so a
-  //    single rough night doesn't crown a nemesis.
-  const beatsBy = new Map<string, { beats: number; sharedGames: number }>();
+  // 4. Nemesis — opponent who has a NET-NEGATIVE head-to-head record
+  //    against you. We track both directions (they finished above you
+  //    AND you finished above them) and require beats > mineAbove —
+  //    otherwise an opponent you actually dominate (e.g. 113-64) gets
+  //    crowned just because you share lots of games with them. Sample
+  //    gates: ≥ 5 shared games AND ≥ 4 beats so a single rough night
+  //    doesn't crown a nemesis. Rank by net deficit (beats - mineAbove),
+  //    tiebreak by absolute beats. If nobody is net-negative against
+  //    you, skip the card — you simply don't have a nemesis right now.
+  const beatsBy = new Map<string, { beats: number; mineAbove: number; sharedGames: number }>();
   for (const [, inner] of profitsByGameByPlayer) {
     const myProfit = inner.get(playerName);
     if (myProfit === undefined) continue;
     for (const [name, profit] of inner) {
       if (name === playerName) continue;
-      const entry = beatsBy.get(name) ?? { beats: 0, sharedGames: 0 };
+      const entry = beatsBy.get(name) ?? { beats: 0, mineAbove: 0, sharedGames: 0 };
       entry.sharedGames += 1;
       if (profit > myProfit) entry.beats += 1;
+      else if (profit < myProfit) entry.mineAbove += 1;
       beatsBy.set(name, entry);
     }
   }
   const topNemesis = [...beatsBy.entries()]
-    .filter(([, v]) => v.sharedGames >= 5 && v.beats >= 4)
-    .sort((a, b) => b[1].beats - a[1].beats)[0];
+    .filter(([, v]) => v.sharedGames >= 5 && v.beats >= 4 && v.beats > v.mineAbove)
+    .sort((a, b) => {
+      const deficitA = a[1].beats - a[1].mineAbove;
+      const deficitB = b[1].beats - b[1].mineAbove;
+      return deficitB - deficitA || b[1].beats - a[1].beats;
+    })[0];
   if (topNemesis) {
     facts.push({
       icon: '👻',

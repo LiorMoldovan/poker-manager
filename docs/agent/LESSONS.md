@@ -102,3 +102,23 @@
 **Fix**: when fixing a recovery/parser path, write a small standalone test (node `.mjs` script is enough) that feeds plausible failure-shape inputs through the recovery function and verifies each one is salvaged or correctly rejected. Run it BEFORE shipping. The static "the deployed bundle has the function" check is a sanity check, not a validation.
 
 **Burned**: v5.62.1 hotfix added markdown-fence handling for the chip-count parser. Static verification confirmed the fenced-JSON branch existed in `geminiAI-B1tyAH7s.js` on prod. Real user kept getting parseFailed on every photo for the entire v5.62.1 + v5.62.2 window because the actual failure mode wasn't markdown-fenced — it was something else we never saw. Cost two failed Lior tests and a frustrated "do you have logs? do you see the issue?" before v5.62.3 added the 5-strategy salvager AND surfaced the raw response so we'd finally have visibility.
+
+---
+
+## Hand-rolled `<input type="number" value={n}>` snaps backspace-to-empty back to a number
+
+**Gotcha**: A controlled `<input type="number">` bound to a number state (`value={n}`) with `onChange={e => set(parseInt(e.target.value, 10) || 0)}` silently snaps an empty field back to 0 (or whatever fallback we passed). Users hitting backspace to clear the cell watch their digits get replaced by `0` and have to tap-and-select-all to actually overwrite. tsc + lints don't catch it; you only notice when you're a user trying to retype.
+
+**Fix**: use `src/components/NumericInput.tsx` instead. It holds a string draft internally, lets the field be empty mid-edit, and only emits a number to its `onChange` when the draft is parseable. Snaps back to the last committed value on blur (or `0` if you allow it). Drop-in replacement: same `value` / `min` / `max` / `style` / `onBlur` props. The component's header comment documents the bug for the next person.
+
+**Burned**: hit three times in three weeks — the chip-row in v5.62.x (fixed when NumericInput was originally built), the chip-correction cell on the Settings test card in v6.3.1, and **six** more in `ScheduleTab.tsx` in v6.4.0 (create-poll target/delay, edit-poll target/delay, group-config default target/default delay). If this pattern reappears one more time, promote this lesson to `.cursor/rules/numeric-inputs.mdc` ("any new `<input type="number">` must use `NumericInput`, no exceptions").
+
+---
+
+## A fallback that fabricates plausible-looking output is worse than no answer
+
+**Gotcha**: When the primary model/service fails and the fallback "succeeds" but produces semantically wrong output (looks like a real result, but isn't actually doing the task), users trust the fake answer instead of retrying. A user-visible result with structure but no real signal is a confidence trap — every time the fallback fires, the user's mental model of "the AI is broken in obvious ways" gets weaker, and the next subtle real failure goes uncaught. Better to surface "model busy, try again" than to ship something that grammatically matches the schema but ignored the input.
+
+**Fix**: don't add a fallback model/service to a chain unless you have evidence it actually does the task. "It's in the same family" / "the docs say it's multimodal" is not evidence — empirical telemetry is. If your fallback ever produces output that's distinguishable from the primary's correct output (constant values, repeated patterns, hits a canonical example from the prompt verbatim), it's not a fallback — it's a liar. Pull it. Show a clean error and let the user retry or escalate.
+
+**Burned**: chip-count `gemini-2.5-flash` fallback (v5.59 → v6.4.0). It was added as a "safety net" for when `gemini-3-flash-preview` was rate-limited. Telemetry from `chip_count_corrections` on 2026-05-16 showed it returned `10` for every non-zero color across every photo it ran on (4 of Lior's 6 test photos). It wasn't counting — it was pattern-matching the "stack of 10" canonical example in our prompt. For ~7 months it silently degraded the feature's effective accuracy whenever the primary hiccupped. Removing it in v6.4.1 was a strict improvement.

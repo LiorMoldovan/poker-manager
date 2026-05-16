@@ -2119,7 +2119,12 @@ export async function enqueuePollNotificationRpc(
 // (per-100Q crossing). Poll lifecycle, vote-change, and trivia reports
 // auto-enqueue via DB triggers and don't need this client path.
 export async function enqueueNotificationRpc(
-  kind: 'reminder' | 'training_report_filed' | 'training_report_resolved' | 'training_milestone',
+  // Kinds that the client enqueues directly (vs. DB-trigger-enqueued
+  // lifecycle kinds like 'creation' / 'expanded' / 'confirmed' that
+  // flow through `enqueue_poll_notification`). Each kind's CHECK
+  // value lives in `notification_jobs.kind` (constraint
+  // notification_jobs_kind_check — see migrations 066 + 087).
+  kind: 'reminder' | 'training_report_filed' | 'training_report_resolved' | 'training_milestone' | 'date_excluded',
   groupId: string,
   payload: Record<string, unknown>,
   pollId?: string | null,

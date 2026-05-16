@@ -27,6 +27,7 @@ import {
   runSchedulerSweep,
   sendReminderNotifications,
   sendVoteChangeNotifications,
+  sendDateExcludedNotifications,
 } from '../utils/scheduleNotifications';
 import { supabase } from '../database/supabaseClient';
 import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game } from '../types';
@@ -847,7 +848,11 @@ export default function ScheduleTab() {
   // with a toast — the action is trivially reversible (one tap to
   // toggle back) so we skip the confirmation modal. Realtime cache
   // refresh re-renders the affected tile in its new state.
-  const handleToggleDateDisabled = async (dateId: string, currentlyDisabled: boolean) => {
+  const handleToggleDateDisabled = async (
+    poll: GamePoll,
+    dateId: string,
+    currentlyDisabled: boolean,
+  ) => {
     try {
       await setPollDateDisabled(dateId, !currentlyDisabled);
       showMsg('success', t(
@@ -855,6 +860,22 @@ export default function ScheduleTab() {
           ? 'schedule.includeDateSuccess'
           : 'schedule.excludeDateSuccess',
       ));
+      // Broadcast push + email when an admin actively EXCLUDES a date
+      // (not on re-include — bringing a date back is a quieter,
+      // additive change that doesn't redirect anyone's commitment).
+      // Recipients = poll voters ∪ permanent members; see
+      // sendDateExcludedNotifications for the full audience rules.
+      //
+      // Fire-and-forget — the toast already confirmed the SQL success.
+      // A push-enqueue failure shouldn't unwind the user-visible "date
+      // was excluded" feedback; we log it and move on, same pattern as
+      // sendReminderNotifications below.
+      if (!currentlyDisabled) {
+        void sendDateExcludedNotifications(poll, dateId)
+          .catch(err => {
+            console.warn('sendDateExcludedNotifications failed:', err);
+          });
+      }
     } catch (e) {
       showMsg('error', handleRpcError(e));
     }
@@ -1027,7 +1048,9 @@ export default function ScheduleTab() {
           onEdit={() => setEditPoll(poll)}
           onManualClose={(dateId) => handleManualClose(poll, dateId)}
           onReleasePin={() => handleReleasePin(poll)}
-          onToggleDateDisabled={handleToggleDateDisabled}
+          onToggleDateDisabled={(dateId, currentlyDisabled) =>
+            handleToggleDateDisabled(poll, dateId, currentlyDisabled)
+          }
           onCancel={() => setShowCancelModal({ pollId: poll.id })}
           onDelete={() => handleDeletePoll(poll)}
           isSubscribed={subscribedPollIds.has(poll.id)}
@@ -2485,15 +2508,23 @@ function ShareDateCompetitionStrip({
   //      target / invitation share).
   //   2. Otherwise the unique vote leader wins; ties produce no
   //      leader row.
+  //   3. Excluded dates (migration 086) never lead — even if they
+  //      retain a stale top yes-count from before being disabled,
+  //      they're not in the running and must not steal the highlight
+  //      from a live runner-up. Excluded dates still RENDER in the
+  //      strip below (per-date row map iterates raw poll.dates) so the
+  //      viewer can see "these used to be options" — they just lose
+  //      the leader rail.
   let leaderId: string | null = null;
   let topYes = 0;
-  for (const d of poll.dates) {
+  const enabledDates = poll.dates.filter(d => !d.disabledAt);
+  for (const d of enabledDates) {
     const y = dateStats.get(d.id)?.yes ?? 0;
     if (y > topYes) topYes = y;
   }
   if (topYes > 0) {
     let count = 0;
-    for (const d of poll.dates) {
+    for (const d of enabledDates) {
       const y = dateStats.get(d.id)?.yes ?? 0;
       if (y === topYes) { count++; leaderId = d.id; }
     }
@@ -2524,14 +2555,19 @@ function ShareDateCompetitionStrip({
           const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
           const isLeader = d.id === leaderId;
           const pct = Math.min(100, Math.round((s.yes / Math.max(1, poll.targetPlayerCount)) * 100));
-          // Same glyph rule as the in-app DateCompetitionStrip — see
-          // there for the rationale. ✅ for the locked-in date only;
-          // the leader-at-target trophy was dropped because it
-          // jumped to the vote-leader (not the admin's pick) once a
-          // poll dropped below target, producing a misleading
-          // "your pick lost" read. Green rail + bold weight handle
-          // the leading-row signal on their own.
+          // Excluded dates (migration 086 — set_game_poll_date_disabled)
+          // are not votable. The share card is a WhatsApp screenshot
+          // recipients will tap to vote on, so a normal-looking row on
+          // a closed date is misleading: recipients open the app,
+          // tap "yes", and bounce off the `date_disabled` server
+          // error. Render the row dimmed + struck + with an explicit
+          // ❌ הוצא pill so the screenshot tells the truth. The yes /
+          // maybe / no pill row collapses to a single excluded-badge
+          // so the geometry stays compact (one pill, not four), and
+          // the leader rail is force-cleared so an excluded date with
+          // a stale top yes-count doesn't show a green rail.
           const isConfirmedHere = confirmedDateId === d.id;
+          const isDisabled = !!d.disabledAt;
           const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
           return (
             // data-share-split lets the rasterised image splitter cut
@@ -2543,15 +2579,21 @@ function ShareDateCompetitionStrip({
               display: 'flex', flexDirection: 'column', gap: 6,
               padding: '8px 12px',
               borderRadius: 10,
-              borderInlineStart: isLeader ? `4px solid ${ACCENT_GREEN}` : '4px solid transparent',
-              background: isLeader ? `${ACCENT_GREEN}14` : 'transparent',
+              borderInlineStart: (isLeader && !isDisabled)
+                ? `4px solid ${ACCENT_GREEN}`
+                : '4px solid transparent',
+              background: (isLeader && !isDisabled) ? `${ACCENT_GREEN}14` : 'transparent',
+              opacity: isDisabled ? 0.5 : 1,
             }}>
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 gap: 12,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  {leaderGlyph && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
+                  textDecoration: isDisabled ? 'line-through' : 'none',
+                }}>
+                  {leaderGlyph && !isDisabled && (
                     <span style={{ fontSize: 22 }} aria-label={t('schedule.competition.leader')}>
                       {leaderGlyph}
                     </span>
@@ -2559,40 +2601,57 @@ function ShareDateCompetitionStrip({
                   <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <span style={{
-                    padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
-                    background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
-                    border: `1px solid ${ACCENT_GREEN}55`,
-                  }}>✓ {s.yes}</span>
-                  {poll.allowMaybe && (
+                  {isDisabled ? (
                     <span style={{
                       padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
-                      background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
-                      border: '1px solid rgba(234, 179, 8, 0.45)',
-                    }}>? {s.maybe}</span>
+                      background: 'rgba(148, 163, 184, 0.16)',
+                      color: TEXT_MUTED,
+                      border: '1px solid rgba(148, 163, 184, 0.40)',
+                    }}>❌ הוצא</span>
+                  ) : (
+                    <>
+                      <span style={{
+                        padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
+                        background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
+                        border: `1px solid ${ACCENT_GREEN}55`,
+                      }}>✓ {s.yes}</span>
+                      {poll.allowMaybe && (
+                        <span style={{
+                          padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
+                          background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
+                          border: '1px solid rgba(234, 179, 8, 0.45)',
+                        }}>? {s.maybe}</span>
+                      )}
+                      <span style={{
+                        padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
+                        background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.40)',
+                      }}>✕ {s.no}</span>
+                    </>
                   )}
-                  <span style={{
-                    padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
-                    background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
-                    border: '1px solid rgba(239, 68, 68, 0.40)',
-                  }}>✕ {s.no}</span>
                 </div>
               </div>
-              <div style={{
-                height: 5, background: 'rgba(148, 163, 184, 0.18)',
-                borderRadius: 999, overflow: 'hidden',
-              }}>
+              {/* Progress bar is omitted on excluded rows — the bar
+                  visually implies "still filling toward target", which
+                  is contradictory on a date that's been closed. The
+                  ❌ הוצא pill above is the dominant signal. */}
+              {!isDisabled && (
                 <div style={{
-                  width: `${pct}%`, height: '100%',
-                  // Share card is always rendered RTL — gradient direction
-                  // is fixed accordingly so green lands on the closure
-                  // (target-reached) side of the bar.
-                  background: buildProgressGradient(true),
-                  backgroundSize: progressBackgroundSize(pct),
-                  backgroundPosition: 'right center',
-                  borderRadius: 999,
-                }} />
-              </div>
+                  height: 5, background: 'rgba(148, 163, 184, 0.18)',
+                  borderRadius: 999, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${pct}%`, height: '100%',
+                    // Share card is always rendered RTL — gradient direction
+                    // is fixed accordingly so green lands on the closure
+                    // (target-reached) side of the bar.
+                    background: buildProgressGradient(true),
+                    backgroundSize: progressBackgroundSize(pct),
+                    backgroundPosition: 'right center',
+                    borderRadius: 999,
+                  }} />
+                </div>
+              )}
             </div>
           );
         })}

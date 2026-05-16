@@ -55,7 +55,14 @@ type Kind =
   | 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled'
   | 'vote_change' | 'reminder'
   | 'trivia_report_filed' | 'trivia_report_resolved'
-  | 'training_report_filed' | 'training_report_resolved' | 'training_milestone';
+  | 'training_report_filed' | 'training_report_resolved' | 'training_milestone'
+  // Per-date exclude broadcast (migration 087). Client pre-builds the
+  // Hebrew push/email payload in sendDateExcludedNotifications and
+  // enqueues with the kind. Falls into the generic payload-driven
+  // branch of planForJob (line ~631) — no kind-specific handler
+  // needed; the recipient list is built client-side (poll voters ∪
+  // permanent members) and passed via `recipient_player_names`.
+  | 'date_excluded';
 
 interface Job {
   id: string;

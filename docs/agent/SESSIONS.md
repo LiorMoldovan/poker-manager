@@ -5,7 +5,49 @@
 
 ---
 
-## 2026-05-15 (latest) — v5.62.5 + v5.62.6 chip-count truncation fix + merge
+## 2026-05-16 (latest) — v6.4.1 / v6.4.2 — chip-count fallback was lying
+
+**Asked**: After v6.4.0, Lior ran 6 chip-count tests over ~20 minutes and said the results felt "random — small stacks weren't actually better than big ones." Wanted my analysis. Then: "i leave to you to decide what to do to achieve it." Plus a sharp question: "when you look at the pic, your model counts it well?"
+
+**Did**:
+- **Diagnosed via telemetry** (`chip_count_corrections` + `chip_count_debug`): not random at all. 4 of the 6 photos got HTTP 504 on the primary `gemini-3-flash-preview` (Google-side overload spike), fell back to `gemini-2.5-flash`, which returned `10` for every non-zero color — every time, regardless of actual photo content. The model was pattern-matching the "canonical stack of 10" we describe in the prompt instead of counting. The 2 photos that hit the primary directly: 17:04 diff=4 (good), 17:08 diff=19 (tall-stack saturation at 10).
+- **Vision sanity check**: pulled the worst-case photo (17:10, AI returned all-10s) via chunked `execute_sql` + base64 decode + Read-as-image, and counted it myself. Got Lior's exact truth: w5/r6/b4/g6/K7/Y0. The visual task IS solvable — the problem was the fallback model lying, not the task being impossible. Did the same for 17:04 (good case) to confirm vision works across photos.
+- **v6.4.1 fix**: dropped `gemini-2.5-flash` entirely from `CHIP_COUNT_MODELS` (single-model chain now). Added 1-retry on primary with 800ms backoff for transient 503/504/network. New `quotaExceeded` error code (HTTP 429 OR error body matching quota patterns) skips the retry and shows a clear Hebrew "20/day exhausted" message. Hardened prompt with explicit "do not default to 10, stacks can be 12/15/17/22+" guidance. Changed schema example numbers from 5/3/0/0/0/0 to 7/14/0/17/3/0 to remove the implicit small-number bias. tsc + lints clean. Committed locally first, asked Lior before pushing.
+- **v6.4.2 pickup**: bundled another agent's in-flight `PollCard.tsx` refactor (state badges moved to dedicated banner row so tile header doesn't wrap to 3 lines on narrow phones) when Lior said "push everything from all agents".
+
+**Learned**:
+- **The Supabase MCP + chunked photo extraction is a real diagnostic capability.** Before this session I'd been asking "what does the photo look like?" hypothetically. Now I can actually pull a 344KB JPEG from `chip_count_corrections`, decode it client-side via PowerShell + .NET regex, and Read it as an image. This is reusable for any chip-count investigation going forward — added to CONTEXT.md as a documented technique.
+- **A fallback model that's worse than no answer is actively destructive.** `gemini-2.5-flash` was added in v5.59 as a "safety net" for when the preview model failed. Telemetry showed it never actually saved a count — it just returned `10` for everything. The "safety net" was a confidence-stealer: users saw a result, trusted it, and were lied to. Removing it (the user-visible result becomes "try again") is a strict improvement.
+- **Schema example numbers are not neutral.** Carrying `5/3/0/0/0/0` as the responseSchema example anchored the model toward small counts. Even the GOOD model (17:08) saturated tall stacks at 10. Changing the example to include a 14 and a 17 is a known LLM few-shot bias-control technique and costs nothing. Generally: every literal in a structured-output prompt is a soft prior — design them deliberately.
+
+**Next**:
+- Wait for Lior's next test batch on v6.4.1. Expected: photos that hit the primary on the first try get near-perfect small-stack counts and ±1-3 on tall stacks (better than prior ±3-5). Photos where the primary 504s once get a transparent retry. Photos where the primary 504s twice get a clean error instead of fake 10s.
+- If next batch still shows tall-stack-cap-at-10 even with the new prompt, the next experiment is re-enabling `thinkingBudget` (we have 2048 maxOutputTokens of headroom now — the v5.62.5 truncation fix gave us room).
+
+---
+
+## 2026-05-16 — v6.3.0 / v6.3.1 / v6.4.0 — chip correction loop + backspace + all-agents merge
+
+**Asked**: Lior tested a photo via the new chip-count flow but had no way to feed his correct counts back to the agent. Then: AI was reporting a constant 80% confidence (45% for confirmed zeros), and the count cell wouldn't accept backspace-to-empty. Same backspace pattern existed in other inputs. Final ask: fix backspace everywhere and "merge all changes from all agents to git" — Lior would do the push from this session.
+
+**Did**:
+- **v6.3.0 — chip correction loop**: New `chip_count_corrections` table (mig 085, applied) stores photo bytes + AI per-color counts + Lior's truth. Settings → Services → photo test card got editable count inputs + "✓ שמור ספירה נכונה" button. Saves on tap, no in-app machine learning — agent reads rows via MCP and iterates the Gemini prompt (or attaches few-shot images) when there's enough signal.
+- **v6.3.1 — backspace + honest confidence**: First-pass chip-correction cells were hand-rolled `<input type="number" value={n}>` which snap empty→0 on backspace. Swapped to the existing `NumericInput` (string-draft internally). Same commit reworked confidence: prompt now instructs Gemini to self-rate `confidence: 0–100` per color (warned against constant values), schema added optional `confidence: INTEGER`, salvager carries it through. Overall confidence = unweighted average across all stacks (cap 95), no more hardcoded 80/45.
+- **v6.4.0 — backspace fix #2 + all-agents merge**: Re-grepped the whole `src/` tree for the same buggy pattern (`<input type="number" value={x}> + parseInt(...) || N`). Found 6 more in `ScheduleTab.tsx` (create-poll target/delay, edit-poll target/delay, group-config default target/default delay). All swapped to `NumericInput` with one new import. Then bundled two other agents' in-flight schedule work that was sitting uncommitted in Lior's working tree: release-pin (mig 084 — release a locked-in date back to voting without picking another), per-date exclude (mig 086 — admins can disable specific dates without losing votes, reversible), expansion-clock-through-mid-pin fix (mig 086 — pinning during the open window no longer resets the expand-to-guests countdown). All migrations were already applied to live DB (verified via `list_migrations`). One combined commit, then push.
+- **Telemetry confirmed quota was the wall yesterday** — `chip_count_debug` had a run of 6 `RESOURCE_EXHAUSTED` 429s with `quotaValue: 20`. Today's quota reset unblocked Lior to actually test the truncation fix from v5.62.5 (it works) and then drive the correction loop above.
+
+**Learned**:
+- **NumericInput is the standing answer for any numeric input in this codebase.** Hand-rolling `<input type="number" value={n}> + parseInt(...) || N` is a 100% repeat of a known UX bug. The component header even documents this (see its top comment). Promoting to a rule (`.cursor/rules/numeric-inputs.mdc`) if this pattern repeats one more time. For now: lesson in LESSONS.md with the 3 hits (chip-row in v6.3.1, ScheduleTab x6 in v6.4.0).
+- **AI self-rated confidence works much better than client-side heuristics** for telling the user "trust me on this one, doubt me on that one." The 80%-flat reports were dishonest signal that taught Lior to ignore confidence entirely. With per-color self-rating + a 50% live-game gate, the warning UI should fire when it matters.
+- **Multi-agent-WIP merge is easier when at least one agent commits idempotent SQL first.** Both 085 migrations (mine + the other agent's schedule-exclude-date) applied cleanly because each used `IF NOT EXISTS` / `CREATE OR REPLACE` and disjoint object names. The local file naming collision (the other agent had to rename their `085-` file to `086-` on disk) was the only friction, and only because two agents were working in parallel against the same migration number.
+
+**Next**:
+- Wait for Lior to log 5–10 more chip-correction rows before iterating the Gemini prompt. First sample had model returning `10` for every non-zero color — strong "default to canonical stack of 10" hallucination signal, but one sample isn't a pattern.
+- Watch for `LOW_CONFIDENCE_THRESHOLD = 50` review-screen fires in live games now that confidence actually varies. May surface friction if a real game has many medium-confidence stacks.
+
+---
+
+## 2026-05-15 — v5.62.5 + v5.62.6 chip-count truncation fix + merge
 
 **Asked**: Lior tested v5.62.4. Telemetry table immediately paid off — agent could SEE the raw Gemini responses in `chip_count_debug`. First observation: truncated JSON (`{"counts": [{"color": "White", "` literally cut off mid-string). Then: every subsequent attempt returned HTTP 429. Lior wanted the truncation fixed and then "merge all changes from all agents and push to git".
 

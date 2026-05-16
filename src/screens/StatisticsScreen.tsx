@@ -100,6 +100,7 @@ const StatisticsScreen = () => {
   const [isSharingRebuyStats, setIsSharingRebuyStats] = useState(false);
   const [isSharingTop10, setIsSharingTop10] = useState(false);
   const [isSharingPodiumRates, setIsSharingPodiumRates] = useState(false);
+  const [isSharingAvgPlacement, setIsSharingAvgPlacement] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const top10Ref = useRef<HTMLDivElement>(null);
@@ -107,6 +108,7 @@ const StatisticsScreen = () => {
   const hallOfFameRef = useRef<HTMLDivElement>(null);
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
   const podiumRatesRef = useRef<HTMLDivElement>(null);
+  const avgPlacementRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
   // Refs for the interactive controls strips inside two of the
   // share-able cards. Hidden via `hideForCapture` during the
@@ -114,6 +116,41 @@ const StatisticsScreen = () => {
   // rounded corners, padding) but excludes the dropdown/buttons.
   const tableControlsRef = useRef<HTMLDivElement>(null);
   const podiumControlsRef = useRef<HTMLDivElement>(null);
+  // Per-table "active only" override refs. Wrap each local toggle in a
+  // div with one of these refs so we can `hideForCapture` it during the
+  // table's share screenshot — the toggle is a live UI control, not
+  // part of the data the user wants to share. The main + podium
+  // toggles sit inside their existing controls-strip refs
+  // (`tableControlsRef`, `podiumControlsRef`) so they're already hidden
+  // during share screenshots. Top 10 / rebuy / avg placement sit on
+  // the timeframe / title row, outside those strips, so they need
+  // their own dedicated refs.
+  const top10ActiveToggleRef = useRef<HTMLDivElement>(null);
+  const rebuyActiveToggleRef = useRef<HTMLDivElement>(null);
+  const avgPlacementActiveToggleRef = useRef<HTMLDivElement>(null);
+
+  // Per-table override of the "active only" filter. Each table in the
+  // טבלה view gets its own toggle that defaults to mirroring the global
+  // `filterActiveOnly`. When the user flips a local toggle, that table
+  // alone uses the overridden value; touching the global toggle clears
+  // every override (clean-slate reset). When override differs from
+  // global, we re-derive the table's rows from `stats` ignoring
+  // `selectedPlayers` — which is the right semantic, since
+  // `selectedPlayers` was auto-clamped by global at useEffect time and
+  // override means "show this table as if global were the override
+  // value".
+  type ActiveOverrideTableId = 'main' | 'podium' | 'top10' | 'rebuy' | 'avgPlacement';
+  const [tableActiveOverrides, setTableActiveOverrides] = useState<Partial<Record<ActiveOverrideTableId, boolean>>>({});
+  const getEffectiveActive = (id: ActiveOverrideTableId): boolean =>
+    tableActiveOverrides[id] ?? filterActiveOnly;
+  const handleGlobalActiveToggle = () => {
+    setFilterActiveOnly(prev => !prev);
+    setTableActiveOverrides({});
+  };
+  const toggleTableActiveOverride = (id: ActiveOverrideTableId) => {
+    const current = tableActiveOverrides[id] ?? filterActiveOnly;
+    setTableActiveOverrides(prev => ({ ...prev, [id]: !current }));
+  };
 
   // Chronicle AI state
   const [chronicleStories, setChronicleStories] = useState<Record<string, string>>({});
@@ -207,21 +244,29 @@ const StatisticsScreen = () => {
   const handleShareTop10 = async () => {
     if (!top10Ref.current) return;
     setIsSharingTop10(true);
+    const restoreToggle = hideForCapture(top10ActiveToggleRef.current);
     try {
       const files = await captureAndSplit(top10Ref.current, 'poker-top10-wins');
       await shareFiles(files, t('stats.top10'));
     } catch (e) { console.error('Error sharing top 10:', e); }
-    finally { setIsSharingTop10(false); }
+    finally {
+      restoreToggle();
+      setIsSharingTop10(false);
+    }
   };
 
   const handleShareRebuyStats = async () => {
     if (!rebuyStatsRef.current) return;
     setIsSharingRebuyStats(true);
+    const restoreToggle = hideForCapture(rebuyActiveToggleRef.current);
     try {
       const files = await captureAndSplit(rebuyStatsRef.current, 'poker-rebuy-stats');
       await shareFiles(files, t('stats.rebuyStats'));
     } catch (e) { console.error('Error sharing rebuy stats:', e); }
-    finally { setIsSharingRebuyStats(false); }
+    finally {
+      restoreToggle();
+      setIsSharingRebuyStats(false);
+    }
   };
 
   const handleSharePodiumRates = async () => {
@@ -235,6 +280,20 @@ const StatisticsScreen = () => {
     finally {
       restoreControls();
       setIsSharingPodiumRates(false);
+    }
+  };
+
+  const handleShareAvgPlacement = async () => {
+    if (!avgPlacementRef.current) return;
+    setIsSharingAvgPlacement(true);
+    const restoreToggle = hideForCapture(avgPlacementActiveToggleRef.current);
+    try {
+      const files = await captureAndSplit(avgPlacementRef.current, 'poker-avg-placement');
+      await shareFiles(files, t('stats.avgPlacement'));
+    } catch (e) { console.error('Error sharing avg placement:', e); }
+    finally {
+      restoreToggle();
+      setIsSharingAvgPlacement(false);
     }
   };
 
@@ -444,6 +503,7 @@ const StatisticsScreen = () => {
     // Create array of all player-game results
     const allResults: Array<{
       playerName: string;
+      playerId: string;
       profit: number;
       date: string;
       gameId: string;
@@ -456,14 +516,18 @@ const StatisticsScreen = () => {
       
       for (const gp of gamePlayers) {
         if (!validPlayerIds.has(gp.playerId)) continue;
-        if (!selectedPlayers.has(gp.playerId)) continue;
-        
+        // No `selectedPlayers` filter here — top10TableData applies it
+        // (or its override-equivalent) at consumer time so the
+        // per-table "active only" toggle can swap visibility without
+        // re-iterating game data.
+
         if (gp.profit > 0) {
           const currentPlayer = players.find(p => p.id === gp.playerId);
           const playerName = currentPlayer?.name || gp.playerName;
-          
+
           allResults.push({
             playerName: playerName,
+            playerId: gp.playerId,
             profit: gp.profit,
             date: game.date,
             gameId: game.id,
@@ -472,11 +536,13 @@ const StatisticsScreen = () => {
         }
       }
     }
-    
+
     return allResults
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 20);
-  }, [stats, players, selectedTypes, selectedPlayers, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+      .sort((a, b) => b.profit - a.profit);
+    // No `.slice` here — top10TableData slices to 10 after applying
+    // its visibility filter, so a player who would only land in the
+    // top 10 once we widen visibility doesn't get pre-truncated.
+  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
   const top20WinsAllTime = useMemo(() => {
@@ -991,10 +1057,15 @@ const StatisticsScreen = () => {
       }
     }
 
+    // Return rebuy data for ALL players who played in the period.
+    // `rebuyTableData` applies the visibility filter at consumer time
+    // (driven by the global toggle, or the per-table override). This
+    // is what lets the local override widen back to inactive players
+    // without re-iterating game data.
     return Array.from(playerMap.values())
-      .filter(p => p.gamesPlayed > 0 && filteredStats.some(s => s.playerName === p.playerName))
+      .filter(p => p.gamesPlayed > 0)
       .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
-  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const rebuyDataCoverage = useMemo(() => {
     const dateFilter = getDateFilter();
@@ -1075,9 +1146,13 @@ const StatisticsScreen = () => {
       if (sorted.length >= 3) { const e3 = counts.get(sorted[2].playerName); if (e3) e3.thirds++; }
     }
 
-    const visibleNames = new Set(filteredStats.map(s => s.playerName));
+    // Build podium rows for ALL players who played in the period —
+    // no `filteredStats` filter applied here. Consumers (the global
+    // view via `podiumTableRows`, or any per-table override) decide
+    // which subset of names to show. This lets a per-table "active
+    // only" override widen back to inactive players without needing
+    // to re-iterate the game data.
     const rows = Array.from(counts.values())
-      .filter(c => visibleNames.has(c.playerName))
       .map(c => {
         const totalPodiums = c.firsts + c.seconds + c.thirds;
         return {
@@ -1094,16 +1169,53 @@ const StatisticsScreen = () => {
           totalRate: c.games > 0 ? (totalPodiums / c.games) * 100 : 0,
         };
       });
-    // Sort happens in `sortedPodiumRows` (depends on `podiumSort`).
+    // Sort + visibility filter happen in `podiumTableRows`.
     return { rows, totalGames };
-  }, [filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
-  // Apply the user-selected sort to the podium-rate rows. Each
-  // primary key falls back through the same chain as the previous
-  // default so ties resolve sensibly (e.g. equal 🥇 rate → highest
-  // 🏆 wins, then most games).
-  const sortedPodiumRows = useMemo(() => {
-    const rows = [...podiumRateStats.rows];
+  // Per-table visibility helpers for the "active only" override.
+  // When a table's effective flag matches the global, we reuse the
+  // globally-derived visibility (filteredStats — respects user's
+  // manual selectedPlayers refinement). When the effective flag
+  // differs, we derive afresh from `stats` — applying selectedTypes
+  // and the effective active filter, but NOT selectedPlayers (which
+  // was auto-clamped by the global toggle's useEffect and would
+  // otherwise hide the very rows the override is meant to surface).
+  const visibleNamesForActive = (eff: boolean): Set<string> => {
+    if (eff === filterActiveOnly) {
+      return new Set(filteredStats.map(s => s.playerName));
+    }
+    let pool = stats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+    if (eff) pool = pool.filter(s => s.gamesPlayed >= activeThreshold);
+    return new Set(pool.map(s => s.playerName));
+  };
+
+  // Main stats table rows — uses 'main' effective flag.
+  const mainTableSortedStats = useMemo(() => {
+    const eff = tableActiveOverrides.main ?? filterActiveOnly;
+    let pool: PlayerStats[];
+    if (eff === filterActiveOnly) {
+      pool = filteredStats;
+    } else {
+      pool = stats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+      if (eff) pool = pool.filter(s => s.gamesPlayed >= activeThreshold);
+    }
+    return [...pool].sort((a, b) => {
+      switch (sortBy) {
+        case 'profit': return b.totalProfit - a.totalProfit;
+        case 'games': return b.gamesPlayed - a.gamesPlayed;
+        case 'winRate': return b.winPercentage - a.winPercentage;
+        default: return 0;
+      }
+    });
+  }, [tableActiveOverrides.main, filterActiveOnly, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold, sortBy]);
+
+  // Podium-rate rows — uses 'podium' effective flag plus user's sort.
+  // Replaces the old `sortedPodiumRows`: tie-break chain is unchanged.
+  const podiumTableRows = useMemo(() => {
+    const eff = tableActiveOverrides.podium ?? filterActiveOnly;
+    const visible = visibleNamesForActive(eff);
+    const rows = podiumRateStats.rows.filter(r => visible.has(r.playerName));
     const cmp = (a: typeof rows[number], b: typeof rows[number]) => {
       switch (podiumSort) {
         case 'first':
@@ -1125,8 +1237,122 @@ const StatisticsScreen = () => {
           );
       }
     };
-    return rows.sort(cmp);
-  }, [podiumRateStats.rows, podiumSort]);
+    return [...rows].sort(cmp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableActiveOverrides.podium, filterActiveOnly, podiumRateStats.rows, podiumSort, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+
+  // Top 10 single-night wins — uses 'top10' effective flag.
+  // top20Wins is now unfiltered + unsliced (only `selectedTypes` was
+  // applied upstream); we filter by visibility here, then take the
+  // first 10. When effective matches global we still apply the
+  // selectedPlayers refinement; when it differs the override widens.
+  const top10TableData = useMemo(() => {
+    const eff = tableActiveOverrides.top10 ?? filterActiveOnly;
+    let allowed: (entry: { playerId: string; playerName: string }) => boolean;
+    if (eff === filterActiveOnly) {
+      allowed = (entry) => selectedPlayers.has(entry.playerId);
+    } else {
+      const visible = visibleNamesForActive(eff);
+      allowed = (entry) => visible.has(entry.playerName);
+    }
+    return top20Wins.filter(allowed).slice(0, 10);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableActiveOverrides.top10, filterActiveOnly, top20Wins, selectedPlayers, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+
+  // Rebuy stats table rows — uses 'rebuy' effective flag.
+  const rebuyTableData = useMemo(() => {
+    const eff = tableActiveOverrides.rebuy ?? filterActiveOnly;
+    const visible = visibleNamesForActive(eff);
+    return rebuyStats.filter(p => visible.has(p.playerName));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableActiveOverrides.rebuy, filterActiveOnly, rebuyStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+
+  // Per-player average finishing placement across all games in the
+  // current period:
+  //  · Within each game, players are ranked by profit (descending);
+  //    ties get the average of the positions they would have occupied
+  //    (fractional / "average" ranking — e.g. tied for 2nd & 3rd both
+  //    get 2.5). This is the mathematically defensible choice when the
+  //    aggregate metric is itself an average — competition ranking
+  //    (1, 2, 2, 4) would bias heavily toward whoever sits earlier in
+  //    the data after the tie, which is meaningless here.
+  //  · Aggregates per playerName: avg rank, best (min) rank, worst
+  //    (max) rank, games played. Same playerName-keyed shape used by
+  //    `podiumRateStats` so the same `visibleNamesForActive` filter
+  //    applies cleanly downstream.
+  //  · Like `podiumRateStats`, this returns rows for ALL players who
+  //    appeared in the period — visibility filtering happens in
+  //    `avgPlacementTableRows`.
+  const avgPlacementStats = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const periodGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    if (periodGames.length === 0) return [] as Array<{ playerName: string; games: number; avgRank: number; bestRank: number; worstRank: number }>;
+
+    const periodGameIds = new Set(periodGames.map(g => g.id));
+    const periodGP = getAllGamePlayers().filter(gp => periodGameIds.has(gp.gameId));
+
+    const playersByGame = new Map<string, typeof periodGP>();
+    for (const gp of periodGP) {
+      const arr = playersByGame.get(gp.gameId);
+      if (arr) arr.push(gp);
+      else playersByGame.set(gp.gameId, [gp]);
+    }
+
+    type Acc = { playerName: string; games: number; sumRank: number; bestRank: number; worstRank: number };
+    const acc = new Map<string, Acc>();
+
+    for (const players of playersByGame.values()) {
+      if (players.length === 0) continue;
+      const sorted = [...players].sort((a, b) => b.profit - a.profit);
+      // Walk runs of equal profit and assign each member the average
+      // of their would-be positions (1-indexed). Iterative O(n).
+      let i = 0;
+      while (i < sorted.length) {
+        let j = i;
+        while (j + 1 < sorted.length && sorted[j + 1].profit === sorted[i].profit) j++;
+        const avgPos = ((i + 1) + (j + 1)) / 2;
+        for (let k = i; k <= j; k++) {
+          const p = sorted[k];
+          const e = acc.get(p.playerName) ?? { playerName: p.playerName, games: 0, sumRank: 0, bestRank: Infinity, worstRank: -Infinity };
+          e.games++;
+          e.sumRank += avgPos;
+          if (avgPos < e.bestRank) e.bestRank = avgPos;
+          if (avgPos > e.worstRank) e.worstRank = avgPos;
+          acc.set(p.playerName, e);
+        }
+        i = j + 1;
+      }
+    }
+
+    return Array.from(acc.values()).map(e => ({
+      playerName: e.playerName,
+      games: e.games,
+      avgRank: e.games > 0 ? e.sumRank / e.games : 0,
+      bestRank: e.games > 0 ? e.bestRank : 0,
+      worstRank: e.games > 0 ? e.worstRank : 0,
+    }));
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  // Avg-placement rows — uses 'avgPlacement' effective flag, sorted
+  // by avg rank ascending (lower = better finishes).
+  const avgPlacementTableRows = useMemo(() => {
+    const eff = tableActiveOverrides.avgPlacement ?? filterActiveOnly;
+    const visible = visibleNamesForActive(eff);
+    const rows = avgPlacementStats.filter(r => visible.has(r.playerName));
+    return [...rows].sort((a, b) =>
+      a.avgRank - b.avgRank ||
+      a.bestRank - b.bestRank ||
+      b.games - a.games
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableActiveOverrides.avgPlacement, filterActiveOnly, avgPlacementStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -1134,6 +1360,40 @@ const StatisticsScreen = () => {
     if (index === 1) return ' 🥈';
     if (index === 2) return ' 🥉';
     return '';
+  };
+
+  // Compact "active only" toggle rendered inside each table card. When
+  // the table is overriding the global filter the border switches to
+  // the primary accent so the user can tell at a glance that this
+  // table no longer follows the page-level toggle. Tapping the global
+  // toggle clears every override; that's why we don't bother with a
+  // per-table reset link.
+  const renderActiveOverrideToggle = (id: ActiveOverrideTableId) => {
+    const eff = getEffectiveActive(id);
+    const overriding = tableActiveOverrides[id] !== undefined && tableActiveOverrides[id] !== filterActiveOnly;
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleTableActiveOverride(id); }}
+        title={overriding ? t('stats.localOverrideHint') : t('stats.activeOnly')}
+        style={{
+          padding: '0.2rem 0.5rem',
+          fontSize: '0.65rem',
+          borderRadius: '12px',
+          border: `1px solid ${overriding ? 'var(--primary)' : 'var(--border)'}`,
+          background: eff ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
+          color: eff ? 'var(--primary)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          fontWeight: 500,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.25rem',
+        }}
+      >
+        🎮 {eff ? t('stats.activeOnlyShort') : t('stats.allPlayersShort')}
+      </button>
+    );
   };
 
   // Calculate group records based on filtered stats
@@ -1436,7 +1696,7 @@ const StatisticsScreen = () => {
           </div>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFilterActiveOnly(!filterActiveOnly); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleGlobalActiveToggle(); }}
             style={{
               position: 'relative',
               width: '36px',
@@ -2009,7 +2269,7 @@ const StatisticsScreen = () => {
                   disabled={isSharingPodium}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                 >
-                  {isSharingPodium ? t('common.capturing') : t('stats.sharePodium')}
+                  {isSharingPodium ? t('common.capturing') : t('common.share')}
                 </button>
               </div>
 
@@ -2100,7 +2360,7 @@ const StatisticsScreen = () => {
                     disabled={isSharingHallOfFame}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingHallOfFame ? t('common.capturing') : t('stats.shareHallOfFame')}
+                    {isSharingHallOfFame ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}
@@ -2148,7 +2408,7 @@ const StatisticsScreen = () => {
                     disabled={isSharingTop20}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingTop20 ? t('common.capturing') : `${t('common.share')} Top 20`}
+                    {isSharingTop20 ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}
@@ -2453,7 +2713,15 @@ const StatisticsScreen = () => {
           {viewMode === 'table' && (
             <>
               <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
-                <div ref={tableControlsRef} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                {/* Single-row controls strip with `space-between`:
+                    [sort] and [mode] anchor to the inline-start
+                    (physical right in RTL), [active-toggle] anchors
+                    to the inline-end (physical left in RTL). The 3
+                    mode buttons used to live on a separate row;
+                    collapsing them into a single <select> matches
+                    the chrome of the sort dropdown and frees the row
+                    to fit everything on mobile. */}
+                <div ref={tableControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
@@ -2471,37 +2739,40 @@ const StatisticsScreen = () => {
                     <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
                     <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
                   </select>
-                  {(['profit', 'avgGainLoss', 'gainLoss'] as const).map(mode => (
-                    <button
-                      key={mode}
-                      onClick={() => setTableMode(mode)}
-                      style={{
-                        padding: '0.3rem 0.45rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '6px',
-                        border: tableMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)',
-                        background: tableMode === mode ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                        color: tableMode === mode ? 'var(--primary)' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {mode === 'profit' ? t('stats.modeProfit') : mode === 'gainLoss' ? t('stats.gainLoss') : t('stats.avgGainLoss')}
-                    </button>
-                  ))}
+                  <select
+                    value={tableMode}
+                    onChange={(e) => setTableMode(e.target.value as 'profit' | 'gainLoss' | 'avgGainLoss')}
+                    style={{
+                      padding: '0.3rem 0.4rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.modeProfit')}</option>
+                    <option value="avgGainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.avgGainLoss')}</option>
+                    <option value="gainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.gainLoss')}</option>
+                  </select>
+                  {renderActiveOverrideToggle('main')}
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                <div style={{ 
-                  textAlign: 'center', 
-                  fontSize: '0.7rem', 
-                  color: 'var(--text-muted)', 
+                {/* Timeframe row is plain text now — the active-only
+                    toggle moved up into the controls strip beside the
+                    sort dropdown, so the redundant
+                    " • שחקנים פעילים" suffix was dropped. */}
+                <div style={{
+                  textAlign: 'center',
+                  fontSize: '0.7rem',
+                  color: 'var(--text-muted)',
                   marginBottom: '0.5rem',
                   paddingBottom: '0.3rem',
-                  borderBottom: '1px solid var(--border)'
+                  borderBottom: '1px solid var(--border)',
                 }}>
                   📊 {getTimeframeLabel()}
                   {' • '}{t('stats.gamesCount', { count: totalGamesInPeriod })}
-                  {filterActiveOnly && t('stats.activePlayersNote')}
                 </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
@@ -2529,7 +2800,7 @@ const StatisticsScreen = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedStats.map((player, index) => {
+                  {mainTableSortedStats.map((player, index) => {
                     const currentRank = index + 1;
                     const prevRank = previousRankings.get(player.playerId);
                     const movement = prevRank ? prevRank - currentRank : 0; // positive = moved up
@@ -2632,117 +2903,6 @@ const StatisticsScreen = () => {
                 </button>
               </div>
 
-              {/* Rebuy Stats Table */}
-              {rebuyStats.length > 0 && (
-                <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
-                    {t('stats.rebuyStats')}
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
-                  {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
-                    <div style={{
-                      fontSize: '0.65rem',
-                      color: '#f59e0b',
-                      background: 'rgba(245, 158, 11, 0.1)',
-                      border: '1px solid rgba(245, 158, 11, 0.2)',
-                      borderRadius: '4px',
-                      padding: '0.3rem 0.5rem',
-                      marginBottom: '0.4rem',
-                      textAlign: 'center'
-                    }}>
-                      {t('stats.rebuyWarning', { missing: rebuyDataCoverage.gamesWithoutRebuys, total: rebuyDataCoverage.totalGames })}
-                    </div>
-                  )}
-                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
-                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyAvg')}>{t('stats.rebuyAvg')}</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyTotal')}>{t('stats.rebuyTotal')}</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyMax')}>{t('stats.rebuyMax')}</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rebuyStats.map((player, index) => {
-                        const avgBuyins = player.totalBuyins / player.gamesPlayed;
-                        const isMe = identityName && player.playerName === identityName;
-                        return (
-                          <tr 
-                            key={index}
-                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
-                          >
-                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
-                              {index + 1}
-                            </td>
-                            <td style={{ 
-                              padding: '0.3rem 0.2rem', 
-                              whiteSpace: 'nowrap',
-                              fontWeight: '500',
-                              textAlign: isRTL ? 'right' : 'left',
-                              ...(isMe ? meNameStyle : {})
-                            }}>
-                              {player.playerName}
-                            </td>
-                            <td style={{ 
-                              textAlign: 'center', 
-                              padding: '0.3rem 0.2rem',
-                              fontWeight: '600'
-                            }}>
-                              {avgBuyins.toFixed(1)}
-                            </td>
-                            <td style={{ 
-                              textAlign: 'center', 
-                              padding: '0.3rem 0.2rem',
-                              color: 'var(--text-muted)'
-                            }}>
-                              {cleanNumber(player.totalBuyins)}
-                            </td>
-                            <td style={{ 
-                              textAlign: 'center', 
-                              padding: '0.3rem 0.2rem'
-                            }}>
-                              {cleanNumber(player.maxBuyinsInGame)}
-                            </td>
-                            <td style={{ 
-                              textAlign: 'center', 
-                              padding: '0.3rem 0.2rem',
-                              color: 'var(--text-muted)'
-                            }}>
-                              {player.gamesPlayed}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {rebuyStats.length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                  <button
-                    onClick={handleShareRebuyStats}
-                    disabled={isSharingRebuyStats}
-                    style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.3rem',
-                      fontSize: '0.75rem',
-                      padding: '0.4rem 0.8rem',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {isSharingRebuyStats ? t('common.capturing') : t('common.share')}
-                  </button>
-                </div>
-              )}
-
               {/* Podium Rate Stats — 1st/2nd/3rd-place rates per player (period-scoped) */}
               {/* Card structure: outer .card carries `podiumRatesRef`
                   so the screenshot inherits full card chrome. The
@@ -2750,9 +2910,9 @@ const StatisticsScreen = () => {
                   and is hidden via `hideForCapture` only during
                   snapshotting — visible to live users, excluded
                   from the shared image. */}
-              {podiumRateStats.rows.length > 0 && (
+              {podiumTableRows.length > 0 && (
                 <div ref={podiumRatesRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                  <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: isRTL ? 'flex-start' : 'flex-end', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                  <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
                     <select
                       value={podiumSort}
                       onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
@@ -2772,6 +2932,7 @@ const StatisticsScreen = () => {
                       <option value="third" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.third')}</option>
                       <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
                     </select>
+                    {renderActiveOverrideToggle('podium')}
                   </div>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
@@ -2800,7 +2961,7 @@ const StatisticsScreen = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedPodiumRows.map((row, index) => {
+                      {podiumTableRows.map((row, index) => {
                         const isMe = identityName && row.playerName === identityName;
                         const renderCell = (count: number, rate: number, isTotal = false) => (
                           <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.15rem', whiteSpace: 'nowrap' }}>
@@ -2868,7 +3029,7 @@ const StatisticsScreen = () => {
                   </div>
                 </div>
               )}
-              {podiumRateStats.rows.length > 0 && (
+              {podiumTableRows.length > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                   <button
                     onClick={handleSharePodiumRates}
@@ -2892,13 +3053,24 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
-              {/* Top 10 Single Night Wins - Filtered by period */}
-              {top20Wins.length > 0 && (
+              {/* Top 10 Single Night Wins - Filtered by period
+                  Title sits clean and centered. The toggle is on the
+                  timeframe row underneath: absolute-positioned at the
+                  physical left edge (`left: 0` works in both LTR/RTL),
+                  with the timeframe text getting paddingLeft so the
+                  two never collide. Wrapped in `top10ActiveToggleRef`
+                  for `hideForCapture` on share. */}
+              {top10TableData.length > 0 && (
                 <div ref={top10Ref} className="card" style={{ padding: '0.5rem', marginTop: '0.5rem' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.top10')}
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
+                  <div style={{ position: 'relative', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem', minHeight: '22px', paddingLeft: '72px', display: 'flex', alignItems: 'center' }}>
+                    <div ref={top10ActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
+                      {renderActiveOverrideToggle('top10')}
+                    </div>
+                    {getTimeframeLabel()}
+                  </div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -2909,7 +3081,7 @@ const StatisticsScreen = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {top20Wins.slice(0, 10).map((entry, idx) => {
+                      {top10TableData.map((entry, idx) => {
                         const isMe = identityName && entry.playerName === identityName;
                         return (
                         <tr 
@@ -2928,14 +3100,221 @@ const StatisticsScreen = () => {
                   </table>
                 </div>
               )}
-              {top20Wins.length > 0 && (
+              {top10TableData.length > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                   <button
                     onClick={handleShareTop10}
                     disabled={isSharingTop10}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingTop10 ? t('common.capturing') : `${t('common.share')} Top 10`}
+                    {isSharingTop10 ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* Rebuy Stats Table — title stays clean & centered;
+                  toggle lives on the timeframe row, pinned to physical
+                  left via absolute positioning (same pattern as top 10). */}
+              {rebuyTableData.length > 0 && (
+                <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                    {t('stats.rebuyStats')}
+                  </div>
+                  <div style={{ position: 'relative', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem', minHeight: '22px', paddingLeft: '72px', display: 'flex', alignItems: 'center' }}>
+                    <div ref={rebuyActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
+                      {renderActiveOverrideToggle('rebuy')}
+                    </div>
+                    {getTimeframeLabel()}
+                  </div>
+                  {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
+                    <div style={{
+                      fontSize: '0.65rem',
+                      color: '#f59e0b',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      borderRadius: '4px',
+                      padding: '0.3rem 0.5rem',
+                      marginBottom: '0.4rem',
+                      textAlign: 'center'
+                    }}>
+                      {t('stats.rebuyWarning', { missing: rebuyDataCoverage.gamesWithoutRebuys, total: rebuyDataCoverage.totalGames })}
+                    </div>
+                  )}
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyAvg')}>{t('stats.rebuyAvg')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyTotal')}>{t('stats.rebuyTotal')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyMax')}>{t('stats.rebuyMax')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rebuyTableData.map((player, index) => {
+                        const avgBuyins = player.totalBuyins / player.gamesPlayed;
+                        const isMe = identityName && player.playerName === identityName;
+                        return (
+                          <tr 
+                            key={index}
+                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
+                          >
+                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
+                              {index + 1}
+                            </td>
+                            <td style={{ 
+                              padding: '0.3rem 0.2rem', 
+                              whiteSpace: 'nowrap',
+                              fontWeight: '500',
+                              textAlign: isRTL ? 'right' : 'left',
+                              ...(isMe ? meNameStyle : {})
+                            }}>
+                              {player.playerName}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              fontWeight: '600'
+                            }}>
+                              {avgBuyins.toFixed(1)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {cleanNumber(player.totalBuyins)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem'
+                            }}>
+                              {cleanNumber(player.maxBuyinsInGame)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {player.gamesPlayed}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {rebuyTableData.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    onClick={handleShareRebuyStats}
+                    disabled={isSharingRebuyStats}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingRebuyStats ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* Average Placement Table — driven by the same period
+                  + active-only + selected-players filters as every
+                  other table on this screen. Lower avg = better
+                  finishes. Toggle pinned top-left of the title row,
+                  same chrome pattern as top10/rebuy. */}
+              {avgPlacementTableRows.length > 0 && (
+                <div ref={avgPlacementRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.avgPlacement')}
+                  </div>
+                  <div style={{ position: 'relative', minHeight: '22px', marginBottom: '0.35rem' }}>
+                    <div ref={avgPlacementActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
+                      {renderActiveOverrideToggle('avgPlacement')}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '22px', paddingLeft: '72px' }}>{getTimeframeLabel()}</div>
+                  </div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.avgPlacementCol')}>{t('stats.avgPlacementCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.bestPlacementCol')}>{t('stats.bestPlacementCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.worstPlacementCol')}>{t('stats.worstPlacementCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {avgPlacementTableRows.map((row, index) => {
+                        const isMe = identityName && row.playerName === identityName;
+                        const formatRank = (r: number) => Number.isInteger(r) ? String(r) : r.toFixed(1);
+                        return (
+                          <tr key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
+                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
+                              {index + 1}{index < 3 ? ` ${['🥇', '🥈', '🥉'][index]}` : ''}
+                            </td>
+                            <td style={{
+                              padding: '0.3rem 0.2rem',
+                              whiteSpace: 'nowrap',
+                              fontWeight: '500',
+                              textAlign: isRTL ? 'right' : 'left',
+                              fontSize: getNameFontSize(row.playerName, 0.7),
+                              ...(isMe ? meNameStyle : {})
+                            }}>
+                              {row.playerName}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontWeight: '600' }}>
+                              {row.avgRank.toFixed(2)}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--success)' }}>
+                              {formatRank(row.bestRank)}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--text-muted)' }}>
+                              {formatRank(row.worstRank)}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--text-muted)' }}>
+                              {row.games}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {avgPlacementTableRows.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    onClick={handleShareAvgPlacement}
+                    disabled={isSharingAvgPlacement}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingAvgPlacement ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}

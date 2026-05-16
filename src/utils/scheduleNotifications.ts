@@ -248,7 +248,13 @@ function formatDateBullet(d: GamePollDate, defaultLoc?: string | null): string {
 // least one upcoming).
 function buildPollClosesAtLine(poll: GamePoll): string | null {
   const now = Date.now();
+  // Excluded dates are not votable (migration 086 — set_game_poll_date_disabled
+  // closes voting server-side), so the deadline must point at the soonest
+  // ENABLED date. Without this filter an admin who excludes the closest
+  // upcoming date still gets a reminder pointing at it — i.e. "voting
+  // closes in 2h" referring to a date members can't actually vote on.
   const stamps = poll.dates
+    .filter(d => !d.disabledAt)
     .map(d => {
       const time = d.proposedTime || '21:00';
       const ts = new Date(`${d.proposedDate}T${time}`).getTime();
@@ -300,6 +306,15 @@ function buildDatesAndLocationBlock(poll: GamePoll): { dateLines: string; locati
     yesByDateId.set(v.dateId, (yesByDateId.get(v.dateId) ?? 0) + 1);
   }
 
+  // Excluded dates (migration 086) are not votable, so they must not
+  // appear in invitation/reminder bullet lists — listing a closed date
+  // would invite members to vote on it and then bounce them off the
+  // server-side `date_disabled` error. At poll-creation time no date
+  // can be disabled yet, so this filter is a no-op for the initial
+  // invitation; it earns its keep on every reminder/expanded broadcast
+  // that fires AFTER the admin narrowed the candidate set.
+  const visibleDates = poll.dates.filter(d => !d.disabledAt);
+
   const renderBullet = (d: GamePollDate, withInlineLocation: boolean): string => {
     const head = withInlineLocation
       ? formatDateBullet(d, poll.defaultLocation)
@@ -313,13 +328,13 @@ function buildDatesAndLocationBlock(poll: GamePoll): { dateLines: string; locati
 
   const allShareDefault =
     !!poll.defaultLocation &&
-    poll.dates.every(d => !d.location || d.location === poll.defaultLocation);
+    visibleDates.every(d => !d.location || d.location === poll.defaultLocation);
 
   if (allShareDefault) {
-    const dateLines = poll.dates.map(d => renderBullet(d, false)).join('\n');
+    const dateLines = visibleDates.map(d => renderBullet(d, false)).join('\n');
     return { dateLines, locationLine: `מיקום - ${poll.defaultLocation}` };
   }
-  const dateLines = poll.dates.map(d => renderBullet(d, true)).join('\n');
+  const dateLines = visibleDates.map(d => renderBullet(d, true)).join('\n');
   return { dateLines, locationLine: '' };
 }
 
@@ -338,8 +353,10 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
   // Push body picks singular vs plural based on the proposed-date count
   // ("הוצע תאריך אחד" vs "הוצעו N תאריכים"). Polls almost always have
   // ≥ 2 dates so the singular branch is rare, but it's the right thing
-  // when an admin opens a vote on a single anchor date.
-  const datesCount = poll.dates.length;
+  // when an admin opens a vote on a single anchor date. Excluded dates
+  // are filtered (defensive — at invitation time none are disabled yet,
+  // but keeps the count honest for any reuse of this builder).
+  const datesCount = poll.dates.filter(d => !d.disabledAt).length;
   const pushBody = datesCount === 1
     ? 'הוצע תאריך אחד. היכנסו והצביעו 📅'
     : `הוצעו ${datesCount} תאריכים. היכנסו והצביעו 📅`;
@@ -360,7 +377,11 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
 }
 
 export function buildExpandedMessage(poll: GamePoll): BuiltMessage {
+  // Skip excluded dates (migration 086) — listing them in an "open to
+  // everyone" expansion announcement would invite votes on dates the
+  // server has already closed.
   const dateLines = poll.dates
+    .filter(d => !d.disabledAt)
     .map(d => formatDateBullet(d, poll.defaultLocation))
     .join('\n');
   const deadline = buildReminderDeadlineLine(poll);
@@ -1166,7 +1187,11 @@ function buildReminderDeadlineLine(poll: GamePoll): string | null {
     return `⏳ ההצבעה תיפתח לכולם בעוד ${formatReminderRemainingHebrew(remaining)}`;
   }
   if (poll.status === 'expanded') {
+    // Skip excluded dates — the deadline must refer to a date members
+    // can actually still vote on. Without the filter, excluding the
+    // soonest upcoming date would leave reminder text pointing at it.
     const stamps = poll.dates
+      .filter(d => !d.disabledAt)
       .map(d => {
         const time = d.proposedTime || '21:00';
         const ts = new Date(`${d.proposedDate}T${time}`).getTime();
@@ -1201,7 +1226,12 @@ function buildReminderDeadlineLine(poll: GamePoll): string | null {
 // the whole body stays singular 2nd-person and grammatically agrees.
 function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string {
   const target = poll.targetPlayerCount;
-  const stateLines = poll.dates.map(d => {
+  // Excluded dates are dropped from the "current state" panel — the
+  // reminder asks the recipient to commit on a still-open date, so
+  // listing closed ones is both misleading (they can't vote there) and
+  // demoralising (their old yes/maybe count shows next to a date the
+  // group already moved past).
+  const stateLines = poll.dates.filter(d => !d.disabledAt).map(d => {
     const head = `• ${formatHebrewDateTime(d)}`;
     const tally = buildPerDateYesTally(
       poll.votes.reduce(
@@ -1261,6 +1291,124 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
 // hebrewGender helpers from the Edge runtime. The trade-off is acceptable
 // — reminders are a single Hebrew sentence and the gender-neutral form
 // reads naturally.
+// ── Date-excluded broadcast ──
+//
+// Fired when an admin pulls a date out of the candidate set via
+// `set_game_poll_date_disabled` (migration 086). Goes out to:
+//   * Every player who voted on the poll (any response, any date) —
+//     they're engaged and the candidate set just changed under them.
+//   * Every permanent member — they're the core group; even if they
+//     haven't voted yet, narrowing the field is meaningful context.
+// The two sets are unioned + deduped, so a permanent member who's
+// already voted counts once.
+//
+// We deliberately do NOT exclude the admin who performed the action.
+// Mirrors the existing dispatch behaviour (dispatchCancellation also
+// includes the actor if they voted), and avoids leaking actor identity
+// into the recipient resolver. The minor cost — the actor's phone may
+// buzz once — is acceptable.
+//
+// Settings gate: respects `schedulePushEnabled` and
+// `scheduleEmailsEnabled` from group settings, same as reminder.
+// Empty strings in push_title / email_subject signal the worker to
+// skip that channel.
+
+const TITLE_DATE_EXCLUDED = '✂️ תאריך הוצא מההצבעה';
+
+function buildDateExcludedMessage(
+  poll: GamePoll,
+  excludedDate: GamePollDate,
+  remainingDates: GamePollDate[],
+): BuiltMessage {
+  const excludedLabel = formatHebrewDateTime(excludedDate);
+  // Singular vs plural agreement on the "remaining" count line. With
+  // exactly one date left the message reads "נשאר תאריך אחד פתוח"
+  // (counted-noun singular construct); with 2+ we use the bare
+  // cardinal "נשארו N תאריכים פתוחים".
+  const remainingCount = remainingDates.length;
+  const remainingLine = remainingCount === 0
+    ? 'לא נשארו תאריכים פתוחים בהצבעה.'
+    : remainingCount === 1
+    ? 'נשאר תאריך אחד פתוח להצבעה.'
+    : `נשארו ${remainingCount} תאריכים פתוחים להצבעה.`;
+  const remainingBullets = remainingDates
+    .map(d => formatDateBullet(d, poll.defaultLocation))
+    .join('\n');
+
+  const pushBody = remainingCount === 0
+    ? `${excludedLabel} הוצא מההצבעה. לא נשארו תאריכים פתוחים.`
+    : remainingCount === 1
+    ? `${excludedLabel} הוצא מההצבעה. נשאר תאריך אחד פתוח — היכנסו לעדכן.`
+    : `${excludedLabel} הוצא מההצבעה. נשארו ${remainingCount} תאריכים פתוחים — היכנסו לעדכן.`;
+
+  return {
+    pushTitle: TITLE_DATE_EXCLUDED,
+    pushBody,
+    emailSubject: TITLE_DATE_EXCLUDED,
+    emailBody: (name) =>
+      emailGreeting(name) +
+      `התאריך ${excludedLabel} הוצא מההצבעה לערב הפוקר.\n\n` +
+      `${remainingLine}` +
+      (remainingBullets ? `\n\n${remainingBullets}` : '') +
+      emailCtaBlock(poll, 'לעדכון ההצבעה'),
+  };
+}
+
+export async function sendDateExcludedNotifications(
+  poll: GamePoll,
+  excludedDateId: string,
+): Promise<void> {
+  const excludedDate = poll.dates.find(d => d.id === excludedDateId);
+  if (!excludedDate) {
+    // Caller bug — but bail silently rather than throwing into the
+    // toggle handler, which already showed a success toast.
+    console.warn('sendDateExcludedNotifications: excluded date not found in poll', { pollId: poll.id, excludedDateId });
+    return;
+  }
+
+  // Remaining = enabled dates AFTER this exclusion. We compute it from
+  // the freshly-mutated cache rather than trusting the in-flight poll
+  // arg: by the time we land here the realtime tick has usually fired
+  // and `getAllPolls()` already reflects the new `disabled_at`. Fall
+  // back to filtering the in-memory poll if the refresh hasn't landed
+  // yet so the message still makes sense.
+  const refreshedPoll = getAllPolls().find(p => p.id === poll.id) ?? poll;
+  const remainingDates = refreshedPoll.dates.filter(
+    d => !d.disabledAt && d.id !== excludedDateId,
+  );
+
+  // Recipient union: poll voters ∪ permanent members.
+  const voterIds = new Set(poll.votes.map(v => v.playerId));
+  const players = getAllPlayers();
+  const permanentIds = players
+    .filter(p => p.type === 'permanent')
+    .map(p => p.id);
+  const recipientIds = Array.from(new Set([...voterIds, ...permanentIds]));
+  const recipientNames = playerNamesForIds(recipientIds);
+
+  if (recipientNames.length === 0) {
+    // No-one to notify (degenerate group state). Bail before we burn
+    // an enqueue + worker cycle for an empty fan-out.
+    return;
+  }
+
+  const settings = getSettings();
+  const pushEnabled   = settings.schedulePushEnabled !== false;
+  const emailsEnabled = settings.scheduleEmailsEnabled === true;
+
+  const msg = buildDateExcludedMessage(refreshedPoll, excludedDate, remainingDates);
+
+  const cacheMod = await import('../database/supabaseCache');
+  await cacheMod.enqueueNotificationRpc('date_excluded', poll.groupId, {
+    push_title:    pushEnabled ? msg.pushTitle : '',
+    push_body:     pushEnabled ? msg.pushBody  : '',
+    email_subject: emailsEnabled ? msg.emailSubject : '',
+    email_body:    emailsEnabled ? msg.emailBody('') : '',
+    recipient_player_names: recipientNames,
+    url: deepLinkUrl(poll.id),
+  }, poll.id);
+}
+
 export async function sendReminderNotifications(
   poll: GamePoll,
   recipientNames: string[],
@@ -1276,7 +1424,12 @@ export async function sendReminderNotifications(
   // surface area. We build these client-side because the message is the
   // same for every recipient — no per-recipient personalization beyond
   // the greeting (which the worker handles) is required for reminders.
-  const { title: pushTitle, body: pushBody } = buildReminderPush(poll, poll.dates);
+  // Pass only enabled dates — excluded ones (migration 086) shouldn't
+  // appear in the "תאריכים פתוחים" bullet list of the push body.
+  const { title: pushTitle, body: pushBody } = buildReminderPush(
+    poll,
+    poll.dates.filter(d => !d.disabledAt),
+  );
   const link = emailVoteLink(poll);
   const cta = link ? `\n\n👉 להצבעה ולפרטים נוספים: ${link}` : '';
   const emailBody = `${buildReminderEmailBody(poll)}${cta}`;

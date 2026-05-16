@@ -1351,7 +1351,7 @@ const GraphsScreen = () => {
             disabled={isSharingChart}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
           >
-            {isSharingChart ? t('common.capturing') : t('graphs.shareGraph')}
+            {isSharingChart ? t('common.capturing') : t('common.share')}
           </button>
         </div>
       )}
@@ -1475,7 +1475,7 @@ const GraphsScreen = () => {
             disabled={isSharingInsights}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
           >
-            {isSharingInsights ? t('common.capturing') : t('graphs.shareInsights')}
+            {isSharingInsights ? t('common.capturing') : t('common.share')}
           </button>
         </div>
       )}
