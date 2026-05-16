@@ -3094,37 +3094,47 @@ const StatisticsScreen = () => {
                   from the shared image. */}
               {podiumTableRows.length > 0 && (
                 <div ref={podiumRatesRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                  <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-                    {/* Period dropdown is intentionally first here so
-                        it anchors to the RTL-start (visual right)
-                        edge — same physical position the time-period
-                        scope holds in the other tables' headers,
-                        keeping the "what timeframe am I looking at"
-                        affordance in a consistent place across the
-                        screen. Scoped to this table — the main /
-                        top10 / rebuy / avgPlacement cards keep their
-                        own existing ordering on purpose. */}
-                    {renderPeriodOverrideDropdown('podium')}
-                    <select
-                      value={podiumSort}
-                      onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
-                      style={{
-                        padding: '0.25rem 0.4rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <option value="total" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.total')}</option>
-                      <option value="first" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.first')}</option>
-                      <option value="second" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.second')}</option>
-                      <option value="third" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.third')}</option>
-                      <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
-                    </select>
-                    {renderActiveOverrideToggle('podium')}
+                  {/* 2-column controls grid (this card only):
+                        RIGHT column (RTL-start)     LEFT column (RTL-end)
+                          [📅 period      ]            [🎮 active-toggle]
+                          [🏆 podium-sort ]
+                      Same shape as the main table's 2×2 grid, just with
+                      one item missing in the left column. Outer
+                      `space-between` anchors the right column to
+                      inline-start (visual right in RTL) and the left
+                      column to inline-end. Inside each column,
+                      `alignItems: flex-start` lines the right column up
+                      against its right edge (RTL flips the cross-axis
+                      start) and `alignItems: flex-end` lines the left
+                      column up against its left edge. */}
+                  <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    {/* Right column — time-scope controls (period above sort). */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem' }}>
+                      {renderPeriodOverrideDropdown('podium')}
+                      <select
+                        value={podiumSort}
+                        onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
+                        style={{
+                          padding: '0.25rem 0.4rem',
+                          fontSize: '0.7rem',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface)',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="total" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.total')}</option>
+                        <option value="first" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.first')}</option>
+                        <option value="second" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.second')}</option>
+                        <option value="third" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.third')}</option>
+                        <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
+                      </select>
+                    </div>
+                    {/* Left column — player-set (active toggle, single item). */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                      {renderActiveOverrideToggle('podium')}
+                    </div>
                   </div>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
