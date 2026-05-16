@@ -19,6 +19,7 @@ const ERROR_CODE_TO_TRANSLATION: Record<PhotoChipCountErrorCode, TranslationKey>
   unexpectedShape:      'chips.photo.error.code.unexpectedShape',
   cancelled:            'chips.photo.error.code.cancelled',
   stackDetectionFailed: 'chips.photo.error.code.stackDetectionFailed',
+  quotaExceeded:        'chips.photo.error.code.quotaExceeded',
 };
 
 /**

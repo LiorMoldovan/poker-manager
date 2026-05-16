@@ -30,7 +30,13 @@ export type ChipCountDebugOutcome =
   | 'unexpectedShape'
   | 'httpError'
   | 'network'
-  | 'cancelled';
+  | 'cancelled'
+  // v6.4.1 — distinguish quota exhaustion (HTTP 429 / RESOURCE_EXHAUSTED)
+  // from generic httpError so post-hoc analysis can tell "Google's
+  // free-tier wall was hit" apart from "model overloaded / network".
+  // The DB column has no CHECK constraint on outcome so adding new
+  // values is non-breaking.
+  | 'quotaExceeded';
 
 export interface ChipCountDebugRow {
   model: string;

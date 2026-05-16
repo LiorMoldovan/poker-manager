@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.4.0';
+export const APP_VERSION = '6.4.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.4.1',
+    date: '2026-05-16',
+    changes: [
+      '🎯 Chip-count AI no longer falls back to a model that just returns 10',
+      '🔁 Primary chip-count model retries once on transient timeouts',
+      '📏 Prompt now forbids "default to 10" and admits stacks can be 15+',
+      '⚠️ Clear "daily Gemini quota reached" message instead of generic error',
+    ],
+  },
   {
     version: '6.4.0',
     date: '2026-05-16',

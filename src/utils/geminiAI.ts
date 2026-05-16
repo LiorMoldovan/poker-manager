@@ -4028,22 +4028,39 @@ export interface CountChipsFromPhotoInput {
 //   and can push them into rate-limit / parseFailed territory. So Pro
 //   is now removed entirely.
 //
-// Order rationale (post-v5.59):
-//   1. gemini-3-flash-preview    — empirically the only model the
+// Order rationale (post-v6.4.1):
+//   1. gemini-3-flash-preview    — empirically the ONLY model the
 //      cascade has ever succeeded on for this app. Multimodal-capable,
-//      respects responseSchema, low free-tier friction. Used in the
-//      multi-shot consensus pass below.
-//   2. gemini-2.5-flash          — stable Flash fallback when the
-//      preview model is rate-limited or returns malformed JSON.
+//      respects responseSchema, low free-tier friction, gives honest
+//      per-stack counts. We hit it TWICE before failing — 503/504
+//      from this model are transient (Google-side overload), not
+//      permanent, and the second attempt typically succeeds in 3-5s
+//      (see CHIP_COUNT_PRIMARY_RETRY logic below).
 //
-// What we lose: the theoretical accuracy ceiling of Pro on tall stacks.
-// What we gain: ~3 fewer API calls per photo (33% quota saving), faster
-// "successful path" latency (no 3-5s pro round-trip up front), and no
-// more parseFailed cascades from quota exhaustion.
+// What got REMOVED in v6.4.1: `gemini-2.5-flash` as a fallback.
+// Telemetry from `chip_count_corrections` showed that when 2.5-flash
+// took over (because 3-preview 504'd), it returned `10` for every
+// non-zero color — every single time, regardless of the actual photo.
+// It wasn't counting; it was pattern-matching the canonical "stack
+// of 10" we mention in the prompt. 4 of Lior's 6 test photos on
+// 2026-05-16 fell back to 2.5-flash and got fake "10-everywhere"
+// answers. Better to show a clean "model busy, try again" error than
+// to lie with garbage. If the primary is genuinely down for an
+// extended period, the user can retake; if it's a momentary spike,
+// the in-function retry handles it transparently.
 const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
   { version: 'v1beta', model: 'gemini-3-flash-preview' },
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
 ];
+
+// v6.4.1 — retry the primary once on transient failures (503 high
+// demand / 504 timeout / network / parseFailed). These all indicate
+// the request didn't actually get answered cleanly by Gemini, not
+// that the model "decided" something wrong about the photo. A second
+// shot after a brief backoff is dramatically cheaper than asking the
+// user to retake. Cap at 1 retry so worst-case latency is bounded at
+// ~50s (two 25s timeouts) rather than 75s+.
+const CHIP_COUNT_PRIMARY_RETRY = 1;
+const CHIP_COUNT_PRIMARY_RETRY_DELAY_MS = 800;
 
 // v5.62 — `DEFAULT_CHIP_COUNT_STRATEGY` removed alongside the per-stack
 // pipeline it served. The whole-photo prompt is hand-crafted inline in
@@ -4213,10 +4230,24 @@ async function runWholePhotoShot(args: {
   // new version describes the schema with a worked example (real digits),
   // matches the responseSchema field types, and leaves no syntactic
   // ambiguity.
+  // v6.4.1 — schema example uses VARIED counts (incl. a tall stack
+  // and a missing color) instead of the prior 5/3/0/0/0/0 sequence.
+  // The old example implicitly biased the model toward small numbers
+  // by showing only small-or-zero values; tall stacks (15+) routinely
+  // got capped at 10 in the wild. Now the example explicitly carries
+  // a 14 and a 17 so the model sees "this schema CAN hold large
+  // counts" before producing its own answer.
+  const samplePattern: Array<{ n: number; conf: number }> = [
+    { n: 7, conf: 92 },
+    { n: 14, conf: 75 },
+    { n: 0, conf: 100 },
+    { n: 17, conf: 65 },
+    { n: 3, conf: 95 },
+    { n: 0, conf: 100 },
+  ];
   const exampleCounts = chips.map((c, i) => {
-    const sampleN = i === 0 ? 5 : i === 1 ? 3 : 0;
-    const sampleConf = i === 0 ? 95 : i === 1 ? 70 : 100;
-    return `    { "color": ${JSON.stringify(c.color)}, "count": ${sampleN}, "confidence": ${sampleConf} }`;
+    const { n, conf } = samplePattern[i % samplePattern.length];
+    return `    { "color": ${JSON.stringify(c.color)}, "count": ${n}, "confidence": ${conf} }`;
   }).join(',\n');
 
   parts.push({
@@ -4234,6 +4265,12 @@ Counting strategy:
 - If a color does not appear in the target photo, return 0 for that color — DO NOT omit it from the output.
 - Do NOT invent chips that aren't there.
 - You MUST include an entry for EVERY color listed above, even if the count is 0.
+
+Hard rules to prevent common failure modes:
+- Stacks are NOT always 5 or 10 high. Real-world counts range from 1 to 25+. A stack visibly taller than your hand-width worth of chips is probably 12, 15, 17, or more — count the edges, don't round to 10.
+- Do NOT use 10 as a "safe default" when you are unsure. If you cannot count a stack precisely, give your best honest estimate of the actual count (which might be 6, or 14, or 22). Returning 10 for a stack you didn't really count is treated as a hallucination and is worse than a slightly-off real count.
+- Each stack must be counted INDEPENDENTLY. Do not let one stack's count influence another's. Two stacks that visibly differ in height MUST get different counts.
+- Tall stacks (visibly 12+ chips) are the most common source of undercount errors. When you see one, slow down and count edges in groups of 5 from the bottom — do not cap your answer at 10.
 
 Confidence per color (integer 0–100, REQUIRED for every entry):
 - This is YOUR self-assessed certainty for THAT specific count. Be honest — do NOT default everything to 80.
@@ -4363,12 +4400,21 @@ Replace the example numbers above with your real counts AND your real confidence
       if (body?.error?.message) errorMsg = body.error.message;
     } catch { /* keep status; bodyText may still be populated */ }
     console.warn(`[runWholePhotoShot] ${model} HTTP error:`, errorMsg);
-    logAttempt('httpError', {
+    // v6.4.1 — flag 429s specifically so the retry loop doesn't burn
+    // a second attempt against a quota wall it can't move. 429 from
+    // Gemini = `RESOURCE_EXHAUSTED` / "exceeded your current quota"
+    // — the second attempt will fail identically. Save the user
+    // ~1.5s of pointless wait and surface the quota message instead
+    // of a generic "model busy".
+    const isQuota = response.status === 429
+      || /quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(errorMsg);
+    const errorCode: PhotoChipCountErrorCode = isQuota ? 'quotaExceeded' : 'httpError';
+    logAttempt(isQuota ? 'quotaExceeded' : 'httpError', {
       errorMessage: errorMsg,
       rawResponse: bodyText,
       httpStatus: response.status,
     });
-    return { countsByColor: null, errorMsg, errorCode: 'httpError' };
+    return { countsByColor: null, errorMsg, errorCode };
   }
 
   let raw = '';
@@ -4602,8 +4648,13 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
   return null;
 }
 
-/** Whole-photo call with the standard CHIP_COUNT_MODELS fallback chain.
- *  Returns the first model that produced a valid counts map. */
+/** Whole-photo call with the chip-count model chain. v6.4.1: chain
+ *  is now a single model (gemini-3-flash-preview) tried up to
+ *  1+CHIP_COUNT_PRIMARY_RETRY times. Per-model retry is gated on
+ *  TRANSIENT failure codes (503/504/network/parseFailed) — we don't
+ *  burn quota retrying a permanent 401/403 or a successful response
+ *  with bad data. Returns the first attempt that produced a valid
+ *  counts map. */
 async function runWholePhotoWithFallback(args: {
   imageBase64: string;
   imageMimeType: string;
@@ -4622,11 +4673,37 @@ async function runWholePhotoWithFallback(args: {
   let lastMsg = '';
   let lastCode: PhotoChipCountErrorCode = 'httpError';
   let attempt = 0;
-  for (const { version, model } of CHIP_COUNT_MODELS) {
+
+  // Build the actual attempt sequence: each entry in CHIP_COUNT_MODELS
+  // expanded by its retry budget. With the v6.4.1 single-model chain
+  // and retry=1 this is [primary, primary-retry] — total 2 attempts.
+  const attemptPlan: Array<{ version: string; model: string; isRetry: boolean }> = [];
+  for (const m of CHIP_COUNT_MODELS) {
+    attemptPlan.push({ ...m, isRetry: false });
+    for (let r = 0; r < CHIP_COUNT_PRIMARY_RETRY; r++) {
+      attemptPlan.push({ ...m, isRetry: true });
+    }
+  }
+  const totalAttempts = attemptPlan.length;
+
+  for (const { version, model, isRetry } of attemptPlan) {
     attempt++;
     if (args.abortSignal?.aborted) {
       return { countsByColor: null, modelUsed: null, attempts: attempt, errorMsg: 'Cancelled', errorCode: 'cancelled' };
     }
+
+    // Backoff between retries of the same model so we don't pound a
+    // momentarily-overloaded endpoint.
+    if (isRetry && CHIP_COUNT_PRIMARY_RETRY_DELAY_MS > 0) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, CHIP_COUNT_PRIMARY_RETRY_DELAY_MS);
+        args.abortSignal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+      });
+      if (args.abortSignal?.aborted) {
+        return { countsByColor: null, modelUsed: null, attempts: attempt, errorMsg: 'Cancelled', errorCode: 'cancelled' };
+      }
+    }
+
     args.onProgress?.(model, attempt);
     const out = await runWholePhotoShot({
       version,
@@ -4638,14 +4715,20 @@ async function runWholePhotoWithFallback(args: {
       abortSignal: args.abortSignal,
       debugContext: args.debugContext,
       attemptIndex: attempt,
-      totalModels: CHIP_COUNT_MODELS.length,
+      totalModels: totalAttempts,
     });
     if (out.countsByColor) {
       return { countsByColor: out.countsByColor, modelUsed: model, attempts: attempt, errorMsg: '', errorCode: 'httpError' };
     }
     lastMsg = out.errorMsg;
     lastCode = out.errorCode;
-    if (out.errorCode === 'cancelled') break;
+
+    // Stop retrying on cancellation or quota — neither is fixable
+    // by a second attempt. (missingImage / noChipsConfig are caught
+    // before this loop runs, so they can't appear here.)
+    if (out.errorCode === 'cancelled' || out.errorCode === 'quotaExceeded') {
+      break;
+    }
   }
   return { countsByColor: null, modelUsed: null, attempts: attempt, errorMsg: lastMsg, errorCode: lastCode };
 }

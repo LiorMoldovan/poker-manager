@@ -401,7 +401,13 @@ export type PhotoChipCountErrorCode =
   | 'parseFailed'
   | 'unexpectedShape'
   | 'cancelled'
-  | 'stackDetectionFailed';
+  | 'stackDetectionFailed'
+  // v6.4.1 — distinguish "out of free-tier RPM/RPD" from generic
+  // HTTP errors so the retry loop skips burning a second attempt
+  // on the same wall (retry can't fix quota; user must wait or
+  // upgrade tier). UI can also render a quota-specific message
+  // instead of the generic "model busy".
+  | 'quotaExceeded';
 
 // Result of one photo-based chip count attempt. Returned by
 // countChipsFromPhoto in geminiAI.ts. `error` is set only when the
