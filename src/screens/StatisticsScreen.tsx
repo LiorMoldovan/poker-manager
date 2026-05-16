@@ -152,6 +152,47 @@ const StatisticsScreen = () => {
     setTableActiveOverrides(prev => ({ ...prev, [id]: !current }));
   };
 
+  // Per-table override of the period filter. Each table in the
+  // טבלה view gets its own period selector that defaults to "current"
+  // (mirrors the global period). When the user picks an explicit
+  // preset, that table sticks to it even if the global period changes.
+  // Same id space as `tableActiveOverrides`.
+  type TablePeriodPreset = 'all' | 'year' | 'half' | 'month';
+  type PeriodOverrideTableId = ActiveOverrideTableId;
+  const [tablePeriodOverrides, setTablePeriodOverrides] = useState<Partial<Record<PeriodOverrideTableId, TablePeriodPreset>>>({});
+  const [openPeriodDropdown, setOpenPeriodDropdown] = useState<PeriodOverrideTableId | null>(null);
+  const setTablePeriodOverride = (id: PeriodOverrideTableId, preset: TablePeriodPreset | null) => {
+    setTablePeriodOverrides(prev => {
+      const next = { ...prev };
+      if (preset === null) delete next[id];
+      else next[id] = preset;
+      return next;
+    });
+    setOpenPeriodDropdown(null);
+  };
+  // Compute a date filter for a fixed preset relative to today. Used
+  // when a per-table period override is active. Presets always anchor
+  // to the CURRENT calendar year/month — they're "this year",
+  // "this half", "this month" semantics, matching how a user would
+  // intuitively pick them from a per-table dropdown.
+  const getDateFilterForPreset = (preset: TablePeriodPreset): { start?: Date; end?: Date } | undefined => {
+    if (preset === 'all') return undefined;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    if (preset === 'year') {
+      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+    }
+    if (preset === 'half') {
+      if (month <= 6) return { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
+      return { start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+    }
+    // month
+    const m = month - 1;
+    const lastDay = new Date(year, m + 1, 0).getDate();
+    return { start: new Date(year, m, 1), end: new Date(year, m, lastDay, 23, 59, 59) };
+  };
+
   // Chronicle AI state
   const [chronicleStories, setChronicleStories] = useState<Record<string, string>>({});
   const [chronicleLoading, setChronicleLoading] = useState(false);
@@ -484,7 +525,8 @@ const StatisticsScreen = () => {
 
   // Get top 20 single night wins (filtered by period and player types)
   const top20Wins = useMemo(() => {
-    const dateFilter = getDateFilter();
+    const override = tablePeriodOverrides.top10;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
@@ -542,7 +584,7 @@ const StatisticsScreen = () => {
     // No `.slice` here — top10TableData slices to 10 after applying
     // its visibility filter, so a player who would only land in the
     // top 10 once we widen visibility doesn't get pre-truncated.
-  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [tablePeriodOverrides.top10, stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
   const top20WinsAllTime = useMemo(() => {
@@ -1005,7 +1047,8 @@ const StatisticsScreen = () => {
 
   // Rebuy stats per player for the selected period
   const rebuyStats = useMemo(() => {
-    const dateFilter = getDateFilter();
+    const override = tablePeriodOverrides.rebuy;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
@@ -1065,10 +1108,11 @@ const StatisticsScreen = () => {
     return Array.from(playerMap.values())
       .filter(p => p.gamesPlayed > 0)
       .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
-  }, [stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [tablePeriodOverrides.rebuy, stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const rebuyDataCoverage = useMemo(() => {
-    const dateFilter = getDateFilter();
+    const override = tablePeriodOverrides.rebuy;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
@@ -1087,7 +1131,7 @@ const StatisticsScreen = () => {
       }
     }
     return { totalGames, gamesWithoutRebuys };
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [tablePeriodOverrides.rebuy, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Per-player place-finish rates (1st/2nd/3rd) for the current time
   // period:
@@ -1107,7 +1151,8 @@ const StatisticsScreen = () => {
   //    games desc — the table headlines the win-rate dimension while
   //    keeping consistent finishers visible.
   const podiumRateStats = useMemo(() => {
-    const dateFilter = getDateFilter();
+    const override = tablePeriodOverrides.podium;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
     const periodGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
@@ -1171,7 +1216,7 @@ const StatisticsScreen = () => {
       });
     // Sort + visibility filter happen in `podiumTableRows`.
     return { rows, totalGames };
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [tablePeriodOverrides.podium, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Per-table visibility helpers for the "active only" override.
   // When a table's effective flag matches the global, we reuse the
@@ -1190,11 +1235,67 @@ const StatisticsScreen = () => {
     return new Set(pool.map(s => s.playerName));
   };
 
+  // Per-table visibility set respecting BOTH active-only override and
+  // period override. When the table has a period override active, we
+  // derive visibility from that period's stats (with active filter
+  // computed against that period's game count). Falls back to the
+  // global-stats visibility when no period override.
+  const visibleNamesForTable = (id: PeriodOverrideTableId): Set<string> => {
+    const periodOverride = tablePeriodOverrides[id];
+    const eff = tableActiveOverrides[id] ?? filterActiveOnly;
+    if (!periodOverride) return visibleNamesForActive(eff);
+    const overrideFilter = getDateFilterForPreset(periodOverride);
+    const overrideStats = getPlayerStats(overrideFilter);
+    let pool = overrideStats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+    if (eff) {
+      const overrideTotalGames = getAllGames().filter(g => {
+        if (g.status !== 'completed') return false;
+        if (!overrideFilter) return true;
+        const d = new Date(g.date || g.createdAt);
+        if (overrideFilter.start && d < overrideFilter.start) return false;
+        if (overrideFilter.end && d > overrideFilter.end) return false;
+        return true;
+      }).length;
+      const overrideThreshold = Math.ceil(overrideTotalGames * 0.33);
+      pool = pool.filter(s => s.gamesPlayed >= overrideThreshold);
+    }
+    return new Set(pool.map(s => s.playerName));
+  };
+
+  // When the main table has a period override, it needs its own
+  // stats + active-threshold pair derived from the override's games
+  // (not the global ones). When no override, this collapses to the
+  // global stats / activeThreshold / totalGamesInPeriod so the table
+  // stays cheap.
+  const mainEffectiveContext = useMemo(() => {
+    const override = tablePeriodOverrides.main;
+    if (!override) {
+      return { stats, threshold: activeThreshold, totalGames: totalGamesInPeriod, isOverride: false };
+    }
+    const overrideFilter = getDateFilterForPreset(override);
+    const overrideStats = getPlayerStats(overrideFilter);
+    const overrideTotalGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!overrideFilter) return true;
+      const d = new Date(g.date || g.createdAt);
+      if (overrideFilter.start && d < overrideFilter.start) return false;
+      if (overrideFilter.end && d > overrideFilter.end) return false;
+      return true;
+    }).length;
+    const overrideThreshold = Math.ceil(overrideTotalGames * 0.33);
+    return { stats: overrideStats, threshold: overrideThreshold, totalGames: overrideTotalGames, isOverride: true };
+  }, [tablePeriodOverrides.main, stats, activeThreshold, totalGamesInPeriod]);
+
   // Main stats table rows — uses 'main' effective flag.
   const mainTableSortedStats = useMemo(() => {
     const eff = tableActiveOverrides.main ?? filterActiveOnly;
     let pool: PlayerStats[];
-    if (eff === filterActiveOnly) {
+    if (mainEffectiveContext.isOverride) {
+      // Period override active — derive afresh from override stats,
+      // ignore `selectedPlayers` (mirrors active-override widening).
+      pool = mainEffectiveContext.stats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+      if (eff) pool = pool.filter(s => s.gamesPlayed >= mainEffectiveContext.threshold);
+    } else if (eff === filterActiveOnly) {
       pool = filteredStats;
     } else {
       pool = stats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
@@ -1208,13 +1309,12 @@ const StatisticsScreen = () => {
         default: return 0;
       }
     });
-  }, [tableActiveOverrides.main, filterActiveOnly, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold, sortBy]);
+  }, [tableActiveOverrides.main, filterActiveOnly, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold, mainEffectiveContext, sortBy]);
 
   // Podium-rate rows — uses 'podium' effective flag plus user's sort.
   // Replaces the old `sortedPodiumRows`: tie-break chain is unchanged.
   const podiumTableRows = useMemo(() => {
-    const eff = tableActiveOverrides.podium ?? filterActiveOnly;
-    const visible = visibleNamesForActive(eff);
+    const visible = visibleNamesForTable('podium');
     const rows = podiumRateStats.rows.filter(r => visible.has(r.playerName));
     const cmp = (a: typeof rows[number], b: typeof rows[number]) => {
       switch (podiumSort) {
@@ -1239,33 +1339,34 @@ const StatisticsScreen = () => {
     };
     return [...rows].sort(cmp);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableActiveOverrides.podium, filterActiveOnly, podiumRateStats.rows, podiumSort, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+  }, [tableActiveOverrides.podium, tablePeriodOverrides.podium, filterActiveOnly, podiumRateStats.rows, podiumSort, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   // Top 10 single-night wins — uses 'top10' effective flag.
   // top20Wins is now unfiltered + unsliced (only `selectedTypes` was
   // applied upstream); we filter by visibility here, then take the
-  // first 10. When effective matches global we still apply the
-  // selectedPlayers refinement; when it differs the override widens.
+  // first 10. When effective matches global AND no period override,
+  // we still apply the selectedPlayers refinement; otherwise overrides
+  // widen.
   const top10TableData = useMemo(() => {
     const eff = tableActiveOverrides.top10 ?? filterActiveOnly;
+    const periodOverride = tablePeriodOverrides.top10;
     let allowed: (entry: { playerId: string; playerName: string }) => boolean;
-    if (eff === filterActiveOnly) {
+    if (!periodOverride && eff === filterActiveOnly) {
       allowed = (entry) => selectedPlayers.has(entry.playerId);
     } else {
-      const visible = visibleNamesForActive(eff);
+      const visible = visibleNamesForTable('top10');
       allowed = (entry) => visible.has(entry.playerName);
     }
     return top20Wins.filter(allowed).slice(0, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableActiveOverrides.top10, filterActiveOnly, top20Wins, selectedPlayers, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+  }, [tableActiveOverrides.top10, tablePeriodOverrides.top10, filterActiveOnly, top20Wins, selectedPlayers, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   // Rebuy stats table rows — uses 'rebuy' effective flag.
   const rebuyTableData = useMemo(() => {
-    const eff = tableActiveOverrides.rebuy ?? filterActiveOnly;
-    const visible = visibleNamesForActive(eff);
+    const visible = visibleNamesForTable('rebuy');
     return rebuyStats.filter(p => visible.has(p.playerName));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableActiveOverrides.rebuy, filterActiveOnly, rebuyStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+  }, [tableActiveOverrides.rebuy, tablePeriodOverrides.rebuy, filterActiveOnly, rebuyStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   // Per-player average finishing placement across all games in the
   // current period:
@@ -1284,7 +1385,8 @@ const StatisticsScreen = () => {
   //    appeared in the period — visibility filtering happens in
   //    `avgPlacementTableRows`.
   const avgPlacementStats = useMemo(() => {
-    const dateFilter = getDateFilter();
+    const override = tablePeriodOverrides.avgPlacement;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
     const periodGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
@@ -1348,13 +1450,12 @@ const StatisticsScreen = () => {
       bestRank: e.games > 0 ? e.bestRank : 0,
       worstRank: e.games > 0 ? e.worstRank : 0,
     }));
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [tablePeriodOverrides.avgPlacement, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Avg-placement rows — uses 'avgPlacement' effective flag, sorted
   // by avg rank ascending (lower = better finishes).
   const avgPlacementTableRows = useMemo(() => {
-    const eff = tableActiveOverrides.avgPlacement ?? filterActiveOnly;
-    const visible = visibleNamesForActive(eff);
+    const visible = visibleNamesForTable('avgPlacement');
     const rows = avgPlacementStats.filter(r => visible.has(r.playerName));
     return [...rows].sort((a, b) =>
       a.avgRank - b.avgRank ||
@@ -1362,7 +1463,7 @@ const StatisticsScreen = () => {
       b.games - a.games
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableActiveOverrides.avgPlacement, filterActiveOnly, avgPlacementStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+  }, [tableActiveOverrides.avgPlacement, tablePeriodOverrides.avgPlacement, filterActiveOnly, avgPlacementStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -1403,6 +1504,119 @@ const StatisticsScreen = () => {
       >
         🎮 {eff ? t('stats.activeOnlyShort') : t('stats.allPlayersShort')}
       </button>
+    );
+  };
+
+  // Compute the human-readable label for a per-table period preset.
+  // Anchored to "today" — presets always mean "this year / half /
+  // month", consistent with how `getDateFilterForPreset` builds the
+  // actual date range.
+  const labelForPeriodPreset = (preset: TablePeriodPreset): string => {
+    if (preset === 'all') return language === 'he' ? 'כל הזמנים' : 'All Time';
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    if (preset === 'year') return language === 'he' ? `שנת ${year}` : `${year}`;
+    if (preset === 'half') {
+      const halfNum = month <= 6 ? 1 : 2;
+      return language === 'he' ? formatHebrewHalf(halfNum, year) : `H${halfNum} ${year}`;
+    }
+    return language === 'he'
+      ? `${HEBREW_MONTH_NAMES[month - 1]} ${year}`
+      : `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(year, month - 1, 1))} ${year}`;
+  };
+
+  // Per-table period dropdown. Replaces the static timeframe label on
+  // each table's header row. Default = "current" (inherit global). When
+  // the user picks an explicit preset, the button gains the primary
+  // accent so it's obvious at a glance the table no longer follows
+  // the page-level period.
+  const renderPeriodOverrideDropdown = (id: PeriodOverrideTableId) => {
+    const override = tablePeriodOverrides[id];
+    const isOpen = openPeriodDropdown === id;
+    const buttonLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
+    const options: Array<{ value: TablePeriodPreset | null; label: string }> = [
+      { value: null, label: t('stats.periodCurrent') },
+      { value: 'all', label: t('stats.periodAll') },
+      { value: 'year', label: t('stats.periodYear') },
+      { value: 'half', label: t('stats.periodHalf') },
+      { value: 'month', label: t('stats.periodMonth') },
+    ];
+    return (
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpenPeriodDropdown(isOpen ? null : id); }}
+          title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
+          style={{
+            padding: '0.2rem 0.5rem',
+            fontSize: '0.65rem',
+            borderRadius: '12px',
+            border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
+            background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
+            color: override ? 'var(--primary)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            maxWidth: '180px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          📅 {buttonLabel} {isOpen ? '▲' : '▼'}
+        </button>
+        {isOpen && (
+          <>
+            <div
+              onClick={() => setOpenPeriodDropdown(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                insetInlineStart: 0,
+                minWidth: '140px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '0.25rem',
+                zIndex: 999,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+              }}
+            >
+              {options.map(opt => {
+                const isSelected = (opt.value === null && !override) || opt.value === override;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTablePeriodOverride(id, opt.value); }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: isRTL ? 'right' : 'left',
+                      padding: '0.4rem 0.6rem',
+                      fontSize: '0.7rem',
+                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                      color: isSelected ? 'var(--primary)' : 'var(--text)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     );
   };
 
@@ -2780,9 +2994,14 @@ const StatisticsScreen = () => {
                   marginBottom: '0.5rem',
                   paddingBottom: '0.3rem',
                   borderBottom: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  flexWrap: 'wrap',
                 }}>
-                  📊 {getTimeframeLabel()}
-                  {' • '}{t('stats.gamesCount', { count: totalGamesInPeriod })}
+                  {renderPeriodOverrideDropdown('main')}
+                  <span>{' • '}{t('stats.gamesCount', { count: mainEffectiveContext.totalGames })}</span>
                 </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
@@ -2947,7 +3166,7 @@ const StatisticsScreen = () => {
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{getTimeframeLabel()}</div>
+                  <div style={{ marginBottom: '0.5rem' }}>{renderPeriodOverrideDropdown('podium')}</div>
                   {/* Horizontal-scroll fallback is scoped to just the
                       <table>, not the whole card. Wrapping title +
                       footer + table together caused a phantom
@@ -3079,7 +3298,7 @@ const StatisticsScreen = () => {
                     <div ref={top10ActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
                       {renderActiveOverrideToggle('top10')}
                     </div>
-                    {getTimeframeLabel()}
+                    {renderPeriodOverrideDropdown('top10')}
                   </div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
@@ -3134,7 +3353,7 @@ const StatisticsScreen = () => {
                     <div ref={rebuyActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
                       {renderActiveOverrideToggle('rebuy')}
                     </div>
-                    {getTimeframeLabel()}
+                    {renderPeriodOverrideDropdown('rebuy')}
                   </div>
                   {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
                     <div style={{
@@ -3250,11 +3469,11 @@ const StatisticsScreen = () => {
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.avgPlacement')}
                   </div>
-                  <div style={{ position: 'relative', minHeight: '22px', marginBottom: '0.35rem' }}>
+                  <div style={{ position: 'relative', minHeight: '22px', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', paddingLeft: '72px' }}>
                     <div ref={avgPlacementActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
                       {renderActiveOverrideToggle('avgPlacement')}
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '22px', paddingLeft: '72px' }}>{getTimeframeLabel()}</div>
+                    {renderPeriodOverrideDropdown('avgPlacement')}
                   </div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>

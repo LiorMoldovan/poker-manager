@@ -271,7 +271,16 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   // (no "active poll" message) but Home was still surfacing it as a
   // vote prompt, which contradicted the schedule view AND nagged
   // users about a vote on a date that has already passed.
-  const activePoll = useMemo(() => {
+  // Returns BOTH the headlined poll (one card slot) AND the count of
+  // *other* polls that would otherwise have been eligible — used by
+  // ScheduleCard to render a small "+N more open polls" footer so a
+  // member with two parallel votes pending isn't blind to the second
+  // one without having to open `/schedule`. We compute these together
+  // because the eligibility filter (status whitelist + not past-dated
+  // + not already linked to a game) must be IDENTICAL — otherwise the
+  // "+N more" count could include polls that wouldn't have qualified
+  // for the slot themselves, which is misleading.
+  const { activePoll, additionalActivePollCount } = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayStartTs = todayStart.getTime();
@@ -287,11 +296,21 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
       if (latestEod === 0) return false;
       return latestEod < todayStartTs;
     };
-    return (
+    const isEligible = (p: typeof polls[number]): boolean => {
+      if (isPastDated(p)) return false;
+      if (p.status === 'confirmed') return !p.confirmedGameId;
+      return p.status === 'open' || p.status === 'expanded';
+    };
+    const headline = (
       polls.find(p => p.status === 'confirmed' && !p.confirmedGameId && !isPastDated(p))
       ?? polls.find(p => (p.status === 'open' || p.status === 'expanded') && !isPastDated(p))
       ?? null
     );
+    const totalEligible = polls.filter(isEligible).length;
+    return {
+      activePoll: headline,
+      additionalActivePollCount: headline ? Math.max(0, totalEligible - 1) : 0,
+    };
   }, [polls]);
 
 
@@ -498,6 +517,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         step={STEP}
         t={t}
         poll={activePoll}
+        additionalActivePollCount={additionalActivePollCount}
         myPlayerId={myStats?.playerId ?? null}
         playerName={effectivePlayerName}
         isAdmin={isAdmin}
@@ -900,6 +920,15 @@ function NewGroupTeaserCard({ order, step, t }: SectionProps) {
 
 interface ScheduleCardProps extends SectionProps {
   poll: ReturnType<typeof getAllPolls>[number] | null;
+  // Count of OTHER eligible active polls beyond the one being shown.
+  // When > 0, the card renders a small footer line nudging the
+  // viewer to /schedule for the rest — so a member with two parallel
+  // votes pending isn't blind to the second one. Defaults to 0 (no
+  // footer rendered) — eligibility filter lives in HomeDashboard and
+  // must match the `activePoll` selection exactly, otherwise the
+  // count can falsely include polls that wouldn't have qualified for
+  // the slot either.
+  additionalActivePollCount: number;
   // The current viewer's linked playerId (NULL when the user hasn't
   // self-claimed a player yet). Used to detect whether *this* viewer
   // has cast a vote on the open poll, so the card can switch into a
@@ -928,7 +957,29 @@ interface ScheduleCardProps extends SectionProps {
   onClick: () => void;
 }
 
-function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
+function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
+  // Small "+N more open polls" line wedged into the bottom of the card
+  // body. Same click target as the card (→ /schedule), so we don't
+  // duplicate interactivity — it reads as a footnote, not a button.
+  // Returns `null` when there's no second poll, which lets callers
+  // safely append it to any body slot without branching: the empty
+  // node collapses to nothing.
+  const extraPollsFooter: React.ReactNode = additionalActivePollCount > 0 ? (
+    <div style={{
+      fontSize: '0.68rem',
+      color: 'var(--text-muted)',
+      paddingTop: '0.4rem',
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      lineHeight: 1.4,
+      opacity: 0.85,
+      fontStyle: 'italic',
+    }}>
+      {additionalActivePollCount === 1
+        ? t('home.schedule.additionalPollsOne')
+        : t('home.schedule.additionalPollsMany', { n: additionalActivePollCount })}
+    </div>
+  ) : null;
+
   if (!poll) {
     // Empty state is purely forward-looking — a teaser inviting the
     // viewer to come back when the next vote opens. We deliberately
@@ -1195,6 +1246,18 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
       );
     }
 
+    // Append the "+N more open polls" footer when present. We wrap
+    // both nodes in a fragment so the existing comingBody (attendees
+    // list or empty-state fallback) keeps its own borderTop and the
+    // footer adds its own — they read as two stacked footnotes
+    // rather than a single visual block.
+    const finalBody = (comingBody || extraPollsFooter) ? (
+      <>
+        {comingBody}
+        {extraPollsFooter}
+      </>
+    ) : null;
+
     return (
       <HomeCard
         order={order}
@@ -1204,7 +1267,7 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
         subtitle={subtitle}
         accessory={accessory}
         accent={accent}
-        body={comingBody}
+        body={finalBody}
         onClick={onClick}
       />
     );
@@ -1463,6 +1526,16 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
     </div>
   ) : null;
 
+  // Wrap the glance rows + the optional "+N more open polls" footer
+  // into a single body slot. Shared between the not-voted and voted
+  // branches so neither has to repeat the merge logic.
+  const glanceBodyWithFooter = (glanceBody || extraPollsFooter) ? (
+    <>
+      {glanceBody}
+      {extraPollsFooter}
+    </>
+  ) : null;
+
   if (!hasMyVote) {
     // Subtitle promotes the participation count to keep the page
     // dynamic across visits — but only when at least one member has
@@ -1481,7 +1554,7 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
           : t('home.schedule.openTitle')}
         subtitle={subtitle}
         accent="warning"
-        body={glanceBody}
+        body={glanceBodyWithFooter}
         onClick={onClick}
       />
     );
@@ -1501,7 +1574,7 @@ function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, isAdmin, n
         : t('home.schedule.openYouVoted')}
       subtitle={votedSubtitle}
       accent="info"
-      body={glanceBody}
+      body={glanceBodyWithFooter}
       onClick={onClick}
     />
   );

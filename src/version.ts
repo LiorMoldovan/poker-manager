@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.5.1';
+export const APP_VERSION = '6.6.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.6.0',
+    date: '2026-05-16',
+    changes: [
+      '📅 Each stats table can now pick its own period independently',
+      '🔄 Default stays "current" — no change unless you opt in',
+      '🗳️ Home shows "+N more open polls" when more than one is active',
+    ],
+  },
   {
     version: '6.5.1',
     date: '2026-05-16',
