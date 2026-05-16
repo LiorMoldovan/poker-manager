@@ -1478,7 +1478,6 @@ function SupabaseApp() {
         {installBanner}
         {pushNudge}
         <div className="app-container">
-          {!hideNav && <GroupSwitcher />}
           {/* Global observer-mode banner. Visible on EVERY route
               (including focus-mode game screens) so a super admin
               observing a foreign group via GroupSwitcher always
@@ -1486,27 +1485,33 @@ function SupabaseApp() {
               switch in `pushToSupabase` and the AI proxy gate in
               `apiProxy.ts` silently block the actual writes — this
               banner is the *visible* cue so the operator doesn't
-              get confused when buttons appear to do nothing. Uses
-              the compact label on focus routes (live game / chip
-              entry / game summary) where vertical space matters
-              most, and the full explanatory copy on the rest. */}
+              get confused when buttons appear to do nothing.
+
+              Rendered as a regular block at the very top of
+              `.app-container` (no `position`, no `sticky`/`fixed`).
+              Per-user feedback: a pinned bar covered content as
+              the user scrolled past it. A non-pinned bar gives
+              the visible cue at the top of every page transition
+              (it re-paints on every route change since `<main>`
+              fades in via `contentFadeIn`) without ever
+              occluding game data while scrolling. */}
           {isObservingNonMember && (
             <div
               role="status"
               aria-live="polite"
               style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 50,
                 width: '100%',
-                padding: hideNav ? '0.35rem 0.75rem' : '0.5rem 1rem',
-                background: 'rgba(234, 179, 8, 0.15)',
+                padding: '0.35rem 1rem',
+                background: 'rgba(234, 179, 8, 0.18)',
                 borderBottom: '1px solid rgba(234, 179, 8, 0.4)',
                 color: '#ca8a04',
-                fontSize: hideNav ? '0.72rem' : '0.8rem',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 textAlign: 'center',
                 direction: 'rtl',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {hideNav
@@ -1517,6 +1522,7 @@ function SupabaseApp() {
                   )}
             </div>
           )}
+          {!hideNav && <GroupSwitcher />}
           {/* On focus-mode routes (hideNav) we drop the global
               `.main-content { padding-bottom: 6rem }` reservation
               for the now-hidden bottom nav. Otherwise the trivia /

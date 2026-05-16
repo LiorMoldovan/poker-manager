@@ -15,7 +15,8 @@ import {
   getPollById as cacheGetPollById,
   getConfirmedPlayerIds as cacheGetConfirmedPlayerIds,
   getAnyResponseVoterIds as cacheGetAnyResponseVoterIds,
-  createPollRpc, castPollVoteRpc, cancelPollRpc, manuallyClosePollRpc,
+  createPollRpc, castPollVoteRpc, cancelPollRpc, manuallyClosePollRpc, releasePollPinRpc,
+  setPollDateDisabledRpc,
   setPollVotingLockRpc, resolvePollShareSlugRpc,
   expandPollRpc, updatePollTargetRpc, updatePollExpansionDelayRpc,
   updatePollMetaRpc, type PollMetaPatch,
@@ -1654,6 +1655,19 @@ export const deletePoll = (pollId: string): Promise<void> => deletePollRpc(pollI
 
 export const manuallyClosePoll = (pollId: string, dateId: string): Promise<void> =>
   manuallyClosePollRpc(pollId, dateId);
+
+// Migration 084: undo a manual pin without committing to a different
+// date. Reverts a confirmed poll back to its prior recruitment phase
+// (open / expanded). Server-side guard blocks polls that already have
+// a linked game.
+export const releasePollPin = (pollId: string): Promise<void> =>
+  releasePollPinRpc(pollId);
+
+// Migration 086: toggle per-date exclude. Excluded dates are visually
+// struck through, reject new votes, and are ignored by the auto-close
+// trigger. Existing votes are preserved across the toggle.
+export const setPollDateDisabled = (dateId: string, disabled: boolean): Promise<void> =>
+  setPollDateDisabledRpc(dateId, disabled);
 
 // Migration 039: admin-toggleable soft lock on a still-active poll
 // (open / expanded / confirmed). Locked polls reject every cast/admin

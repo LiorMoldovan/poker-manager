@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   getAllPolls, getAllPlayers, getSettings, saveSettings,
-  createPoll, castVote, cancelPoll, manuallyClosePoll,
+  createPoll, castVote, cancelPoll, manuallyClosePoll, releasePollPin,
+  setPollDateDisabled,
   updatePollMeta,
   deletePoll,
   adminCastVote, adminDeleteVote,
@@ -18,6 +19,7 @@ import { forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { formatHebrewHalf } from '../utils/calculations';
 import { useTranslation } from '../i18n';
 import { ToggleSwitch } from './ToggleSwitch';
+import { NumericInput } from './NumericInput';
 import type { TranslationKey } from '../i18n/translations';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { usePermissions } from '../App';
@@ -360,6 +362,11 @@ export default function ScheduleTab() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [manualClosePending, setManualClosePending] = useState<{ poll: GamePoll; dateId: string } | null>(null);
   const [manualCloseSubmitting, setManualCloseSubmitting] = useState(false);
+  // Release-pin confirmation modal — undo a manual pin without
+  // committing to a different date. The PollCard surfaces the
+  // affordance on the currently-pinned tile (migration 084).
+  const [releasePinPending, setReleasePinPending] = useState<{ poll: GamePoll } | null>(null);
+  const [releasePinSubmitting, setReleasePinSubmitting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   // Set of poll IDs the current user has opted in to receive vote-change
   // notifications for. Loaded once on mount and updated optimistically by
@@ -558,6 +565,13 @@ export default function ScheduleTab() {
     if (msg.includes('poll_locked')) return t('schedule.errorPollLocked');
     if (msg.includes('seat_full')) return t('schedule.errorSeatFull');
     if (msg.includes('no_player_link')) return t('schedule.errorNoPlayerLink');
+    // Migration 086 — per-date exclude error reasons. `date_disabled`
+    // is what cast_poll_vote raises if a member tries to RSVP on an
+    // excluded date; `date_is_pinned` / `last_enabled_date` are the
+    // two admin-action guards on set_game_poll_date_disabled.
+    if (msg.includes('date_disabled')) return t('schedule.errorDateDisabled');
+    if (msg.includes('date_is_pinned')) return t('schedule.errorCantDisablePinned');
+    if (msg.includes('last_enabled_date')) return t('schedule.errorCantDisableLast');
     if (msg.includes('tier_not_allowed')) return t('schedule.errorTierNotAllowed');
     if (msg.includes('past_date')) return t('schedule.errorPastDate');
     if (msg.includes('invalid_target')) return t('schedule.errorMinTarget');
@@ -794,6 +808,58 @@ export default function ScheduleTab() {
     }
   };
 
+  // Opens the in-app release-pin confirmation modal. Mirrors the
+  // manual-close pattern (styled overlay, ESC/overlay dismiss). The
+  // release_game_poll_pin RPC reverts the poll back to its prior
+  // recruitment phase (open / expanded) without committing to a
+  // different date — exactly the gap that re-pin can't cover.
+  const handleReleasePin = (poll: GamePoll) => {
+    setReleasePinPending({ poll });
+  };
+
+  const performReleasePin = async () => {
+    if (!releasePinPending || releasePinSubmitting) return;
+    setReleasePinSubmitting(true);
+    try {
+      const pollId = releasePinPending.poll.id;
+      await releasePollPin(pollId);
+      // Verify the RPC actually took effect — same defensive pattern
+      // as performManualClose. If migration 084 hasn't been applied
+      // the rpc() call will surface 'function not found' through the
+      // catch branch; here we only get false negatives when the row
+      // failed the WHERE guards (game_already_started slipped past
+      // the pre-check, etc.).
+      const fresh = getAllPolls().find(p => p.id === pollId);
+      if (!fresh || fresh.status === 'confirmed') {
+        showMsg('error', t('schedule.releasePinNoop'));
+      } else {
+        showMsg('success', t('schedule.releasePinSuccess'));
+      }
+      setReleasePinPending(null);
+    } catch (e) {
+      showMsg('error', handleRpcError(e));
+    } finally {
+      setReleasePinSubmitting(false);
+    }
+  };
+
+  // Per-date exclude/include toggle (migration 086). Fire-and-forget
+  // with a toast — the action is trivially reversible (one tap to
+  // toggle back) so we skip the confirmation modal. Realtime cache
+  // refresh re-renders the affected tile in its new state.
+  const handleToggleDateDisabled = async (dateId: string, currentlyDisabled: boolean) => {
+    try {
+      await setPollDateDisabled(dateId, !currentlyDisabled);
+      showMsg('success', t(
+        currentlyDisabled
+          ? 'schedule.includeDateSuccess'
+          : 'schedule.excludeDateSuccess',
+      ));
+    } catch (e) {
+      showMsg('error', handleRpcError(e));
+    }
+  };
+
   // Opens the in-app delete-confirmation modal. Native confirm() was
   // unreliable across browsers/embeddings, so we route through a styled
   // modal that matches the rest of the app (see SettingsScreen patterns).
@@ -960,6 +1026,8 @@ export default function ScheduleTab() {
           onVote={handleVote}
           onEdit={() => setEditPoll(poll)}
           onManualClose={(dateId) => handleManualClose(poll, dateId)}
+          onReleasePin={() => handleReleasePin(poll)}
+          onToggleDateDisabled={handleToggleDateDisabled}
           onCancel={() => setShowCancelModal({ pollId: poll.id })}
           onDelete={() => handleDeletePoll(poll)}
           isSubscribed={subscribedPollIds.has(poll.id)}
@@ -1322,6 +1390,57 @@ export default function ScheduleTab() {
           </ModalPortal>
         );
       })()}
+
+      {/* Release-pin confirmation modal — admin-only. Undoes a manual
+          pin without committing to a different date. Surfaces the
+          currently-pinned date in the body so the admin sees exactly
+          which lock they're releasing. */}
+      {releasePinPending && (() => {
+        const poll = releasePinPending.poll;
+        const pinnedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
+        const dateLabel = pinnedDate ? fmtHebrewDate(pinnedDate) : '';
+        return (
+          <ModalPortal>
+          <div className="modal-overlay" onClick={() => !releasePinSubmitting && setReleasePinPending(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">{t('schedule.releasePinConfirmTitle')}</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => setReleasePinPending(null)}
+                  disabled={releasePinSubmitting}
+                  aria-label={t('common.close')}
+                >×</button>
+              </div>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+                {t('schedule.releasePinConfirmBody', { date: dateLabel })}
+              </p>
+              <div className="actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setReleasePinPending(null)}
+                  disabled={releasePinSubmitting}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  className="btn"
+                  onClick={performReleasePin}
+                  disabled={releasePinSubmitting}
+                  style={{
+                    background: '#f97316', color: '#fff', fontWeight: 600,
+                    opacity: releasePinSubmitting ? 0.7 : 1,
+                    cursor: releasePinSubmitting ? 'wait' : 'pointer',
+                  }}
+                >
+                  {releasePinSubmitting ? '...' : t('schedule.releasePinConfirmAction')}
+                </button>
+              </div>
+            </div>
+          </div>
+          </ModalPortal>
+        );
+      })()}
     </div>
   );
 }
@@ -1337,6 +1456,14 @@ export interface PollCardProps {
   onVote: (poll: GamePoll, dateId: string, response: RsvpResponse) => void;
   onEdit: () => void;
   onManualClose: (dateId: string) => void;
+  // Release a manual pin without committing to a different date —
+  // reverts a confirmed poll back to its prior recruitment phase
+  // (open / expanded). Migration 084 RPC.
+  onReleasePin: () => void;
+  // Toggle per-date exclude (migration 086). Caller passes the
+  // current disabled state so the handler knows which toast to fire
+  // without having to read it back from the poll.
+  onToggleDateDisabled: (dateId: string, currentlyDisabled: boolean) => void;
   isSubscribed: boolean;
   onToggleSubscription: () => void;
   onCancel: () => void;
@@ -1438,6 +1565,13 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
   let label = '';
   let progress: number | null = null;
   let isSoon = false;
+  // Optional sub-line under the headline. Used for the
+  // confirmed-but-still-permanents-only case (poll pinned during the
+  // open phase): the headline talks about seats / game start, the
+  // sub-line communicates "guests can vote in X". Without this,
+  // pinning during open silently hid the open→expanded countdown
+  // (migration 086 + companion UI fix).
+  let subLabel: string | null = null;
 
   // Single-tier group: "open" and "expanded" become indistinguishable
   // (every member could already vote at t=0). Render a single neutral
@@ -1553,6 +1687,27 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
       : new Date(poll.createdAt).getTime();
     const total = target - start;
     progress = total > 0 ? Math.max(0, Math.min(1, (now - start) / total)) : 1;
+
+    // Pinned during the permanents-only window: poll is confirmed but
+    // expanded_at is still NULL. The seat-recruitment headline ("שחקן
+    // אחרון וסוגרים") doesn't tell guests / permanent_guests when
+    // they'll be eligible to vote. Surface that as a sub-line so the
+    // open→expanded clock isn't lost (this is the message that
+    // disappeared from the original v5.61-era PollTimer when a date
+    // got pinned during open phase). Suppressed in single-tier groups
+    // (no guest tier exists).
+    if (hasGuestTier && !poll.expandedAt) {
+      const expandsAt = new Date(poll.createdAt).getTime()
+        + poll.expansionDelayHours * 3600_000;
+      const expandsIn = expandsAt - now;
+      if (expandsIn > 0) {
+        subLabel = t('schedule.timer.confirmedStillPermsOnly', {
+          time: formatRemainingMs(expandsIn, t),
+        });
+      } else {
+        subLabel = t('schedule.timer.confirmedStillPermsOnlyDue');
+      }
+    }
   } else {
     return null;
   }
@@ -1571,6 +1726,14 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
       <div style={{ fontSize: 13, fontWeight: 600, color, lineHeight: 1.35 }}>
         {label}
       </div>
+      {subLabel && (
+        <div style={{
+          fontSize: 11.5, fontWeight: 500,
+          color: 'var(--text-muted)', lineHeight: 1.3,
+        }}>
+          {subLabel}
+        </div>
+      )}
       {progress !== null && (
         <div style={{
           height: 4,
@@ -2022,13 +2185,20 @@ function SharePhaseBadge({
     ? t('schedule.share.phaseExpanded')
     : t('schedule.share.phaseOpen');
   // Absolute opens-to-all timestamp — recipients see a static image, so
-  // a relative "in X hours" countdown would go stale immediately.
+  // a relative "in X hours" countdown would go stale immediately. Shown
+  // whenever the poll is still in the permanents-only window: that
+  // covers `'open'` AND a poll pinned during the open phase
+  // (`'confirmed'` with `expandedAt` still NULL — see migration 086).
+  // Suppressed once the poll has actually expanded (timestamp would be
+  // in the past).
   let opensToAllAt: string | null = null;
-  if (poll.status === 'open') {
+  const stillPermsOnly = !poll.expandedAt
+    && (poll.status === 'open' || poll.status === 'confirmed');
+  if (stillPermsOnly) {
     const t0 = new Date(poll.createdAt).getTime();
     const tExpand = t0 + (poll.expansionDelayHours * 3600_000);
     const dt = new Date(tExpand);
-    if (!isNaN(dt.getTime())) {
+    if (!isNaN(dt.getTime()) && tExpand > Date.now()) {
       opensToAllAt = dt.toLocaleString('he-IL', {
         weekday: 'short', day: 'numeric', month: 'numeric',
         hour: '2-digit', minute: '2-digit',
@@ -3356,9 +3526,11 @@ function CreatePollModal(props: CreatePollModalProps) {
               color: errors.target ? '#ef4444' : 'var(--text-muted)',
               fontWeight: errors.target ? 600 : 400,
             }}>{t('schedule.targetCount')}</div>
-            <input type="number" min={2} value={target}
-              onChange={(e) => {
-                setTarget(parseInt(e.target.value, 10) || 2);
+            <NumericInput
+              min={2}
+              value={target}
+              onChange={(n) => {
+                setTarget(n);
                 if (errors.target) setErrors(prev => ({ ...prev, target: false }));
               }}
               style={{
@@ -3375,8 +3547,8 @@ function CreatePollModal(props: CreatePollModalProps) {
           {hasGuestTier && (
             <div style={{ flex: 1, minWidth: 130 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule.expansionDelay')}</div>
-              <input type="number" min={0} value={delay}
-                onChange={(e) => setDelay(parseInt(e.target.value, 10) || 0)} style={inputBase} />
+              <NumericInput min={0} value={delay}
+                onChange={(n) => setDelay(n)} style={inputBase} />
             </div>
           )}
         </div>
@@ -3548,8 +3720,17 @@ function EditPollModal(props: EditPollModalProps) {
   // Hide the expansion-delay editor in groups with no guest tier:
   // the field controls when guest/permanent_guest players join the
   // pool, so when no such players exist there's nothing to delay.
+  // Showing the editor is keyed off the actual gate (`!expandedAt`),
+  // not poll.status — a poll can be `'confirmed'` while still in the
+  // permanents-only window (admin pinned a date during open phase),
+  // and the admin should still be able to shorten / lengthen the
+  // expansion delay until guests are unlocked. Once expanded_at is
+  // set, the field is moot (the gate has already lifted) so we
+  // hide it.
   const hasGuestTier = hasGuestTierPlayers(getAllPlayers());
-  const showExpansionDelay = poll.status === 'open' && hasGuestTier;
+  const showExpansionDelay = !poll.expandedAt
+    && (poll.status === 'open' || poll.status === 'confirmed')
+    && hasGuestTier;
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -3660,12 +3841,11 @@ function EditPollModal(props: EditPollModalProps) {
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               {t('schedule.fieldTarget')}
             </label>
-            <input
-              type="number"
+            <NumericInput
               min={2}
               max={20}
               value={target}
-              onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)}
+              onChange={(n) => setTarget(n)}
               style={inputBase}
             />
           </div>
@@ -3674,12 +3854,11 @@ function EditPollModal(props: EditPollModalProps) {
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
                 {t('schedule.fieldExpansionDelay')}
               </label>
-              <input
-                type="number"
+              <NumericInput
                 min={0}
                 max={168}
                 value={expansionDelay}
-                onChange={(e) => setExpansionDelay(parseInt(e.target.value, 10) || 0)}
+                onChange={(n) => setExpansionDelay(n)}
                 style={inputBase}
               />
             </div>
@@ -5020,10 +5199,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             {t('schedule.config.defaultTarget')}
           </div>
-          <input
-            type="number" min={2} max={12}
+          <NumericInput
+            min={2}
+            max={12}
             value={defaultTarget}
-            onChange={(e) => setDefaultTarget(parseInt(e.target.value, 10) || 0)}
+            onChange={(n) => setDefaultTarget(n)}
             onBlur={commitDefaultTarget}
             style={inputBase}
           />
@@ -5033,10 +5213,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               {t('schedule.config.defaultDelayHours')}
             </div>
-            <input
-              type="number" min={0} max={240}
+            <NumericInput
+              min={0}
+              max={240}
               value={defaultDelay}
-              onChange={(e) => setDefaultDelay(parseInt(e.target.value, 10) || 0)}
+              onChange={(n) => setDefaultDelay(n)}
               onBlur={commitDefaultDelay}
               style={inputBase}
             />

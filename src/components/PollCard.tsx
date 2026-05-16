@@ -53,7 +53,8 @@ import type { RsvpResponse, Player } from '../types';
 export default function PollCard(props: PollCardProps) {
   const {
     poll, players, currentPlayer, isAdmin, now,
-    onVote, onEdit, onManualClose, onCancel, onDelete,
+    onVote, onEdit, onManualClose, onReleasePin, onToggleDateDisabled,
+    onCancel, onDelete,
     isSubscribed, onToggleSubscription,
     onError, onSuccess, handleRpcError, navigate, t,
   } = props;
@@ -135,7 +136,10 @@ export default function PollCard(props: PollCardProps) {
   // Permission gate — same SQL semantics + error-reason discriminants
   // the server's cast_poll_vote enforces. Critical that this stays in
   // sync so the disabled-button reasoning here matches what the
-  // server actually rejects.
+  // server actually rejects. Migration 086 made the tier gate purely
+  // time-based: non-permanents are blocked only while expanded_at is
+  // NULL AND now < created_at + expansionDelayHours. Pin no longer
+  // affects this clock — that's the whole point of 086.
   const canVote = useMemo(() => {
     if (!currentPlayer) return { allowed: false, reason: 'no_player_link' as const };
     if (poll.status === 'cancelled' || poll.status === 'expired') {
@@ -144,16 +148,18 @@ export default function PollCard(props: PollCardProps) {
     if (isVotingLocked) {
       return { allowed: false, reason: 'voting_locked' as const };
     }
-    if (poll.status === 'open' && currentPlayer.type !== 'permanent') {
-      return { allowed: false, reason: 'tier_not_allowed' as const };
-    }
-    if (poll.status === 'confirmed'
-        && !poll.expandedAt
-        && currentPlayer.type !== 'permanent') {
-      return { allowed: false, reason: 'tier_not_allowed' as const };
+    if (currentPlayer.type !== 'permanent' && !poll.expandedAt) {
+      const expandsAt = new Date(poll.createdAt).getTime()
+        + poll.expansionDelayHours * 3600_000;
+      if (now < expandsAt) {
+        return { allowed: false, reason: 'tier_not_allowed' as const };
+      }
     }
     return { allowed: true as const };
-  }, [poll.status, poll.expandedAt, currentPlayer, isVotingLocked]);
+  }, [
+    poll.status, poll.expandedAt, poll.createdAt,
+    poll.expansionDelayHours, currentPlayer, isVotingLocked, now,
+  ]);
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
   const [proxyDateId, setProxyDateId] = useState<string | null>(null);
@@ -285,6 +291,9 @@ export default function PollCard(props: PollCardProps) {
   // poll is single-date, already pinned/confirmed (the locked tile
   // shows ✅ Locked instead), no yes-votes yet, or there's a tie at
   // the top (showing "Leading" on both tiles is misleading).
+  // Excluded dates (migration 086) are skipped — a frozen date can't
+  // "lead" because it can't receive new votes and the auto-close
+  // trigger ignores it.
   const leaderDateId = useMemo(() => {
     if (poll.dates.length < 2) return null;
     if (poll.confirmedDateId) return null;
@@ -292,6 +301,7 @@ export default function PollCard(props: PollCardProps) {
     let bestYes = 0;
     let tied = false;
     for (const d of poll.dates) {
+      if (d.disabledAt) continue;
       const y = dateStats.get(d.id)?.yes ?? 0;
       if (y === 0) continue;
       if (y > bestYes) { bestId = d.id; bestYes = y; tied = false; }
@@ -446,6 +456,11 @@ export default function PollCard(props: PollCardProps) {
             const isPinnedHere = poll.confirmedDateId === d.id;
             const isLockedHere = isPinnedHere && poll.status === 'confirmed' && !isConfirmedBelowTarget;
             const isLeading = leaderDateId === d.id;
+            // Migration 086: admin-excluded date. Disables RSVPs, dims
+            // the tile, replaces the manual-pick/release buttons with
+            // an "include" toggle. SQL also prevents the auto-close
+            // trigger from promoting a disabled date to confirmed.
+            const isDisabled = !!d.disabledAt;
             // Fill-pinned-first lock: when an admin manually pins a date
             // before the target was reached, all other dates freeze so
             // remaining recruitment funnels into the picked date. Lifts
@@ -456,23 +471,34 @@ export default function PollCard(props: PollCardProps) {
             const pct = poll.targetPlayerCount > 0
               ? Math.min(100, Math.round((s.yes / poll.targetPlayerCount) * 100))
               : 0;
-            const tileBorderColor = isPinnedHere
-              ? 'rgba(16, 185, 129, 0.40)'
-              : isLeading
-                ? 'rgba(99, 102, 241, 0.32)'
-                : 'var(--border)';
-            const tileBg = isPinnedHere
-              ? 'rgba(16, 185, 129, 0.06)'
-              : 'var(--surface-elevated, var(--surface))';
+            // Disabled tiles get a neutral grey treatment regardless of
+            // their leader/pin state (they can't be either in practice —
+            // SQL blocks disabling a pinned date — but the leader badge
+            // is hidden anyway because leader detection skips disabled).
+            const tileBorderColor = isDisabled
+              ? 'rgba(148, 163, 184, 0.30)'
+              : isPinnedHere
+                ? 'rgba(16, 185, 129, 0.40)'
+                : isLeading
+                  ? 'rgba(99, 102, 241, 0.32)'
+                  : 'var(--border)';
+            const tileBg = isDisabled
+              ? 'rgba(148, 163, 184, 0.05)'
+              : isPinnedHere
+                ? 'rgba(16, 185, 129, 0.06)'
+                : 'var(--surface-elevated, var(--surface))';
             // Tiles in an active state (locked or leading) get a
             // softly-coloured glow + slightly stronger drop shadow
             // so they "lift" off the page when the user scans the
-            // poll. Neutral tiles keep the original subtle shadow.
-            const tileShadow = isPinnedHere
-              ? '0 2px 6px rgba(16, 185, 129, 0.20), 0 1px 2px rgba(0, 0, 0, 0.18)'
-              : isLeading
-                ? '0 2px 6px rgba(99, 102, 241, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18)'
-                : '0 1px 2px rgba(0, 0, 0, 0.18)';
+            // poll. Disabled tiles deliberately get NO glow — they
+            // should recede visually, not draw attention.
+            const tileShadow = isDisabled
+              ? 'none'
+              : isPinnedHere
+                ? '0 2px 6px rgba(16, 185, 129, 0.20), 0 1px 2px rgba(0, 0, 0, 0.18)'
+                : isLeading
+                  ? '0 2px 6px rgba(99, 102, 241, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18)'
+                  : '0 1px 2px rgba(0, 0, 0, 0.18)';
 
             return (
               <div
@@ -484,6 +510,7 @@ export default function PollCard(props: PollCardProps) {
                   background: tileBg,
                   border: `1px solid ${tileBorderColor}`,
                   boxShadow: tileShadow,
+                  opacity: isDisabled ? 0.55 : 1,
                 }}
               >
                 {/* Tile header — date / location + STATE badges +
@@ -520,7 +547,11 @@ export default function PollCard(props: PollCardProps) {
                     display: 'flex', flexDirection: 'column',
                     minWidth: 0, flex: '1 1 auto', gap: 1,
                   }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                    <div style={{
+                      fontSize: 14, fontWeight: 600, color: 'var(--text)',
+                      textDecoration: isDisabled ? 'line-through' : 'none',
+                      textDecorationColor: isDisabled ? 'rgba(148, 163, 184, 0.80)' : undefined,
+                    }}>
                       {fmtHebrewDate(d)}
                     </div>
                     {loc && (
@@ -541,21 +572,40 @@ export default function PollCard(props: PollCardProps) {
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
-                    {isLockedHere && (
+                    {/* Disabled badge — owns the badge slot exclusively
+                        when an admin has excluded the date. Other
+                        state badges (Locked / Leading / FillPinned)
+                        are mutually exclusive with this one by
+                        construction: SQL blocks disabling the pinned
+                        date, and leader detection skips disabled
+                        dates, so isPinnedHere + isLeading are both
+                        false here. We still guard the render
+                        explicitly so a future code change can't
+                        accidentally show two conflicting badges. */}
+                    {isDisabled && (
+                      <span
+                        title={t('schedule.dateDisabledTooltip')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                          background: 'rgba(148, 163, 184, 0.12)', color: '#94a3b8',
+                          border: '1px solid rgba(148, 163, 184, 0.40)',
+                        }}>{t('schedule.dateDisabledBadge')}</span>
+                    )}
+                    {!isDisabled && isLockedHere && (
                       <span style={{
                         padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                         background: 'rgba(16, 185, 129, 0.14)', color: '#34d399',
                         border: '1px solid rgba(16, 185, 129, 0.40)',
                       }}>✅ {t('schedule.lockedDate')}</span>
                     )}
-                    {!isLockedHere && !isFillPinnedLocked && isLeading && (
+                    {!isDisabled && !isLockedHere && !isFillPinnedLocked && isLeading && (
                       <span style={{
                         padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                         background: 'rgba(99, 102, 241, 0.14)', color: '#a5b4fc',
                         border: '1px solid rgba(99, 102, 241, 0.40)',
                       }}>👑 {t('schedule.leadingDate')}</span>
                     )}
-                    {isFillPinnedLocked && (
+                    {!isDisabled && isFillPinnedLocked && (
                       <span
                         title={t('schedule.errorFillPinnedFirst')}
                         style={{
@@ -566,12 +616,15 @@ export default function PollCard(props: PollCardProps) {
                     )}
                     {/* Admin manual-pick / re-pin. Multi-date polls only,
                         hidden on the already-pinned tile, hidden once a
-                        game has been started from the poll. */}
+                        game has been started from the poll, hidden on
+                        excluded tiles (you can't pin an excluded date —
+                        admin should include it first). */}
                     {isAdmin
                       && onManualClose
                       && poll.dates.length >= 2
                       && poll.confirmedDateId !== d.id
                       && !poll.confirmedGameId
+                      && !isDisabled
                       && (
                       <button
                         onClick={() => onManualClose(d.id)}
@@ -584,6 +637,70 @@ export default function PollCard(props: PollCardProps) {
                           color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
                           cursor: 'pointer',
                         }}>📌 {t('schedule.manualPickShort')}</button>
+                    )}
+                    {/* Admin release-pin — only on the currently-pinned
+                        tile (the manual-pick chip above is hidden here
+                        so this affordance owns the same slot). Hidden
+                        once a game has been linked: the poll's date
+                        column would desync from the game row. Lives
+                        in the header next to the ✅ Locked badge so
+                        the "lock it" → "unlock it" action is visually
+                        adjacent to the lock state itself. */}
+                    {isAdmin
+                      && onReleasePin
+                      && isPinnedHere
+                      && !poll.confirmedGameId
+                      && (
+                      <button
+                        onClick={() => onReleasePin()}
+                        title={t('schedule.releasePinTooltip')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999,
+                          border: '1px dashed rgba(249, 115, 22, 0.50)',
+                          background: 'rgba(249, 115, 22, 0.08)',
+                          color: '#fb923c', fontSize: 11, fontWeight: 600,
+                          cursor: 'pointer',
+                        }}>🔓 {t('schedule.releasePinShort')}</button>
+                    )}
+                    {/* Admin exclude/include toggle (migration 086).
+                        Multi-date polls only — a single-date poll has
+                        nothing meaningful to narrow. Hidden on the
+                        pinned tile (SQL would reject; release-pin
+                        chip owns that slot) and after a game has been
+                        linked. When excluded, the same slot becomes
+                        the "include back" affordance — same button,
+                        same place, different intent.
+                        On confirmed-below-target polls excluding is
+                        still useful (the auto-close trigger now picks
+                        from only enabled dates), so we don't suppress
+                        it on `isFillPinnedLocked`. */}
+                    {isAdmin
+                      && onToggleDateDisabled
+                      && poll.dates.length >= 2
+                      && !isPinnedHere
+                      && !poll.confirmedGameId
+                      && (
+                      <button
+                        onClick={() => onToggleDateDisabled(d.id, isDisabled)}
+                        title={t(isDisabled
+                          ? 'schedule.includeDateTooltip'
+                          : 'schedule.excludeDateTooltip')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999,
+                          border: isDisabled
+                            ? '1px dashed rgba(52, 211, 153, 0.50)'
+                            : '1px dashed rgba(148, 163, 184, 0.50)',
+                          background: isDisabled
+                            ? 'rgba(52, 211, 153, 0.08)'
+                            : 'transparent',
+                          color: isDisabled ? '#34d399' : 'var(--text-muted)',
+                          fontSize: 11, fontWeight: 600,
+                          cursor: 'pointer',
+                        }}>
+                        {isDisabled
+                          ? `♻️ ${t('schedule.includeDateShort')}`
+                          : `❌ ${t('schedule.excludeDateShort')}`}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -659,13 +776,14 @@ export default function PollCard(props: PollCardProps) {
                     // disabling proactively gives instant feedback.
                     const wouldOverfill =
                       resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
-                    const disabled = !canVote.allowed || wouldOverfill || isFillPinnedLocked;
+                    const disabled = !canVote.allowed || wouldOverfill || isFillPinnedLocked || isDisabled;
                     return (
                       <button
                         key={resp}
                         disabled={disabled}
                         onClick={() => onVote(poll, d.id, resp)}
                         title={
+                          isDisabled ? t('schedule.errorDateDisabled') :
                           wouldOverfill ? t('schedule.errorSeatFull') :
                           isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
                           canVote.allowed ? '' :
@@ -689,8 +807,9 @@ export default function PollCard(props: PollCardProps) {
                   {isAdmin && (
                     <button
                       onClick={() => setProxyDateId(d.id)}
-                      disabled={isVotingLocked || isFillPinnedLocked}
+                      disabled={isVotingLocked || isFillPinnedLocked || isDisabled}
                       title={
+                        isDisabled ? t('schedule.errorDateDisabled') :
                         isVotingLocked ? t('schedule.errorVotingLocked') :
                         isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
                         t('schedule.proxy.modalTitle')}
@@ -706,8 +825,8 @@ export default function PollCard(props: PollCardProps) {
                         border: '1px solid rgba(16, 185, 129, 0.4)',
                         background: 'rgba(16, 185, 129, 0.12)',
                         color: '#34d399', fontSize: 13, fontWeight: 600,
-                        cursor: (isVotingLocked || isFillPinnedLocked) ? 'not-allowed' : 'pointer',
-                        opacity: (isVotingLocked || isFillPinnedLocked) ? 0.4 : 1,
+                        cursor: (isVotingLocked || isFillPinnedLocked || isDisabled) ? 'not-allowed' : 'pointer',
+                        opacity: (isVotingLocked || isFillPinnedLocked || isDisabled) ? 0.4 : 1,
                         lineHeight: 1,
                       }}>{t('schedule.proxy.add')}</button>
                   )}

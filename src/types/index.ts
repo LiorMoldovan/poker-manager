@@ -184,6 +184,11 @@ export interface GamePollDate {
   proposedTime?: string | null;  // 'HH:MM' or null
   location?: string | null;
   createdAt: string;
+  // Migration 086: admin per-date exclude. When set, the date is
+  // greyed out, RSVPs are blocked server-side ('date_disabled'),
+  // and the auto-close trigger ignores it. Existing votes are
+  // preserved — clearing the field brings the voter list back as-is.
+  disabledAt?: string | null;
 }
 
 export interface GamePollVote {

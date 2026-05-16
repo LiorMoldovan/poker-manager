@@ -168,6 +168,10 @@ function toGamePollDate(row: Record<string, unknown>): GamePollDate {
     proposedTime: (row.proposed_time as string | null) ?? null,
     location: (row.location as string | null) ?? null,
     createdAt: row.created_at as string,
+    // Migration 086: nullable. Pre-086 deployments simply lack this
+    // column on the row → defaults to null and the disabled-tile UI
+    // stays off, matching old behavior.
+    disabledAt: (row.disabled_at as string | null) ?? null,
   };
 }
 
@@ -1876,6 +1880,34 @@ export async function manuallyClosePollRpc(pollId: string, dateId: string): Prom
   const { error } = await supabase.rpc('manual_close_game_poll', {
     p_poll_id: pollId,
     p_date_id: dateId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+// Migration 084: release a manually-pinned poll back to its prior
+// recruitment phase (open / expanded). Clears confirmed_date_id /
+// confirmed_at and resets the notification claim slots so a future
+// pin can re-notify cleanly. Rejects polls that already have a linked
+// game (server raises 'game_already_started').
+export async function releasePollPinRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('release_game_poll_pin', {
+    p_poll_id: pollId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+// Migration 086: toggle per-date exclude. Setting `disabled=true`
+// hides the date from voting (server rejects new votes with
+// 'date_disabled' and the auto-close trigger skips it). Setting
+// `disabled=false` re-includes the date with its existing votes
+// intact. Server-side guards: admin only, not currently-pinned,
+// not the last enabled date, no linked game.
+export async function setPollDateDisabledRpc(dateId: string, disabled: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_game_poll_date_disabled', {
+    p_date_id: dateId,
+    p_disabled: disabled,
   });
   if (error) throw error;
   await refreshPollsNow();

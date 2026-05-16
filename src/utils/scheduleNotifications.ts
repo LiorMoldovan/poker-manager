@@ -1313,10 +1313,22 @@ export async function runSchedulerSweep(): Promise<void> {
   const cacheMod = await import('../database/supabaseCache');
 
   for (const poll of polls) {
-    // Lazy expansion: if expansion_delay_hours elapsed and the poll is
-    // still 'open', flip status to 'expanded'. The DB trigger will then
-    // enqueue the 'expanded' notification.
-    if (poll.status === 'open' && poll.creationNotificationsSentAt) {
+    // Lazy expansion: if `expansion_delay_hours` elapsed and the poll
+    // is still in its permanents-only window, stamp `expanded_at` via
+    // the RPC. Two cases:
+    //   1. status='open' — the classic flip 'open' → 'expanded'.
+    //      The DB trigger then enqueues the 'expanded' notification.
+    //   2. status='confirmed' with expanded_at IS NULL — admin pinned
+    //      a date during the open phase. Migration 086 widened
+    //      expand_game_poll to also fire here, stamping expanded_at
+    //      without changing the status (the 'confirmed' notification
+    //      already went out when manual_close pinned). This keeps
+    //      every reader's "open to all" derivation in sync with the
+    //      vote gate, which is now also time-based on the server.
+    const inPermsOnlyWindow =
+      (poll.status === 'open' && !!poll.creationNotificationsSentAt)
+      || (poll.status === 'confirmed' && !poll.expandedAt);
+    if (inPermsOnlyWindow) {
       const created = new Date(poll.createdAt).getTime();
       const delayMs = poll.expansionDelayHours * 60 * 60 * 1000;
       if (now - created >= delayMs) {
