@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.6.2';
+export const APP_VERSION = '6.7.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.7.0',
+    date: '2026-05-16',
+    changes: [
+      '🗳️ Poll voter toggle: colored ✓/?/✕ breakdown',
+      '📊 Stats period selector: native dropdown across all tables',
+      '🎛️ Stats: header chrome unified across 5 tables',
+      '🏆 Main stats card: 2-column control layout',
+    ],
+  },
   {
     version: '6.6.2',
     date: '2026-05-16',

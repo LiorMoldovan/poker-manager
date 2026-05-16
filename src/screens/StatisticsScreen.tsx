@@ -116,15 +116,14 @@ const StatisticsScreen = () => {
   // rounded corners, padding) but excludes the dropdown/buttons.
   const tableControlsRef = useRef<HTMLDivElement>(null);
   const podiumControlsRef = useRef<HTMLDivElement>(null);
-  // Per-table "active only" override refs. Wrap each local toggle in a
-  // div with one of these refs so we can `hideForCapture` it during the
-  // table's share screenshot — the toggle is a live UI control, not
-  // part of the data the user wants to share. The main + podium
-  // toggles sit inside their existing controls-strip refs
-  // (`tableControlsRef`, `podiumControlsRef`) so they're already hidden
-  // during share screenshots. Top 10 / rebuy / avg placement sit on
-  // the timeframe / title row, outside those strips, so they need
-  // their own dedicated refs.
+  // Per-table controls-strip refs for the top10 / rebuy / avgPlacement
+  // cards. Wraps the whole header row (period dropdown + active-only
+  // toggle) so `hideForCapture` strips the live UI controls from the
+  // shared screenshot but keeps the card chrome — same pattern as the
+  // main + podium tables (`tableControlsRef`, `podiumControlsRef`).
+  // The ref name is kept as `*ActiveToggleRef` for historical
+  // continuity, but the wrapped element is now the entire header
+  // strip, not just the toggle.
   const top10ActiveToggleRef = useRef<HTMLDivElement>(null);
   const rebuyActiveToggleRef = useRef<HTMLDivElement>(null);
   const avgPlacementActiveToggleRef = useRef<HTMLDivElement>(null);
@@ -160,7 +159,6 @@ const StatisticsScreen = () => {
   type TablePeriodPreset = 'all' | 'year' | 'half' | 'month';
   type PeriodOverrideTableId = ActiveOverrideTableId;
   const [tablePeriodOverrides, setTablePeriodOverrides] = useState<Partial<Record<PeriodOverrideTableId, TablePeriodPreset>>>({});
-  const [openPeriodDropdown, setOpenPeriodDropdown] = useState<PeriodOverrideTableId | null>(null);
   const setTablePeriodOverride = (id: PeriodOverrideTableId, preset: TablePeriodPreset | null) => {
     setTablePeriodOverrides(prev => {
       const next = { ...prev };
@@ -168,7 +166,6 @@ const StatisticsScreen = () => {
       else next[id] = preset;
       return next;
     });
-    setOpenPeriodDropdown(null);
   };
   // Compute a date filter for a fixed preset relative to today. Used
   // when a per-table period override is active. Presets always anchor
@@ -1265,12 +1262,11 @@ const StatisticsScreen = () => {
   // When the main table has a period override, it needs its own
   // stats + active-threshold pair derived from the override's games
   // (not the global ones). When no override, this collapses to the
-  // global stats / activeThreshold / totalGamesInPeriod so the table
-  // stays cheap.
+  // global stats / activeThreshold so the table stays cheap.
   const mainEffectiveContext = useMemo(() => {
     const override = tablePeriodOverrides.main;
     if (!override) {
-      return { stats, threshold: activeThreshold, totalGames: totalGamesInPeriod, isOverride: false };
+      return { stats, threshold: activeThreshold, isOverride: false };
     }
     const overrideFilter = getDateFilterForPreset(override);
     const overrideStats = getPlayerStats(overrideFilter);
@@ -1283,8 +1279,8 @@ const StatisticsScreen = () => {
       return true;
     }).length;
     const overrideThreshold = Math.ceil(overrideTotalGames * 0.33);
-    return { stats: overrideStats, threshold: overrideThreshold, totalGames: overrideTotalGames, isOverride: true };
-  }, [tablePeriodOverrides.main, stats, activeThreshold, totalGamesInPeriod]);
+    return { stats: overrideStats, threshold: overrideThreshold, isOverride: true };
+  }, [tablePeriodOverrides.main, stats, activeThreshold]);
 
   // Main stats table rows — uses 'main' effective flag.
   const mainTableSortedStats = useMemo(() => {
@@ -1526,97 +1522,47 @@ const StatisticsScreen = () => {
       : `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(year, month - 1, 1))} ${year}`;
   };
 
-  // Per-table period dropdown. Replaces the static timeframe label on
-  // each table's header row. Default = "current" (inherit global). When
-  // the user picks an explicit preset, the button gains the primary
+  // Per-table period dropdown. Native <select> on purpose — the sort
+  // and mode controls beside it use native selects too, and a custom
+  // React menu opening alongside them looked alien (different chrome,
+  // different open animation). Default = "current" (inherit global).
+  // When the user picks an explicit preset, the select gains a primary
   // accent so it's obvious at a glance the table no longer follows
   // the page-level period.
   const renderPeriodOverrideDropdown = (id: PeriodOverrideTableId) => {
     const override = tablePeriodOverrides[id];
-    const isOpen = openPeriodDropdown === id;
-    const buttonLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
-    const options: Array<{ value: TablePeriodPreset | null; label: string }> = [
-      { value: null, label: t('stats.periodCurrent') },
-      { value: 'all', label: t('stats.periodAll') },
-      { value: 'year', label: t('stats.periodYear') },
-      { value: 'half', label: t('stats.periodHalf') },
-      { value: 'month', label: t('stats.periodMonth') },
-    ];
+    const value = override ?? 'current';
+    // The "current" option label embeds the live global timeframe so a
+    // user opening the menu knows what "current" actually means today
+    // — otherwise the option reads as a generic "Current" with no hint
+    // of which period is inherited. Other options stay short.
+    const currentLabel = `${t('stats.periodCurrent')} (${getTimeframeLabel()})`;
     return (
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpenPeriodDropdown(isOpen ? null : id); }}
-          title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
-          style={{
-            padding: '0.2rem 0.5rem',
-            fontSize: '0.65rem',
-            borderRadius: '12px',
-            border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
-            background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
-            color: override ? 'var(--primary)' : 'var(--text-muted)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            maxWidth: '180px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          📅 {buttonLabel} {isOpen ? '▲' : '▼'}
-        </button>
-        {isOpen && (
-          <>
-            <div
-              onClick={() => setOpenPeriodDropdown(null)}
-              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                insetInlineStart: 0,
-                minWidth: '140px',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '0.25rem',
-                zIndex: 999,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-              }}
-            >
-              {options.map(opt => {
-                const isSelected = (opt.value === null && !override) || opt.value === override;
-                return (
-                  <button
-                    key={String(opt.value)}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTablePeriodOverride(id, opt.value); }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: isRTL ? 'right' : 'left',
-                      padding: '0.4rem 0.6rem',
-                      fontSize: '0.7rem',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                      color: isSelected ? 'var(--primary)' : 'var(--text)',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <select
+        value={value}
+        onChange={(e) => {
+          const next = e.target.value;
+          setTablePeriodOverride(id, next === 'current' ? null : (next as TablePeriodPreset));
+        }}
+        title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
+        style={{
+          padding: '0.3rem 0.4rem',
+          fontSize: '0.7rem',
+          borderRadius: '6px',
+          border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
+          background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
+          color: override ? 'var(--primary)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          fontWeight: 500,
+          maxWidth: '200px',
+        }}
+      >
+        <option value="current" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {currentLabel}</option>
+        <option value="all" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('all')}</option>
+        <option value="year" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('year')}</option>
+        <option value="half" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('half')}</option>
+        <option value="month" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('month')}</option>
+      </select>
     );
   };
 
@@ -2937,79 +2883,79 @@ const StatisticsScreen = () => {
           {viewMode === 'table' && (
             <>
               <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
-                {/* Card title — matches the other 4 tables' chrome
-                    (centered, same font weight/size). Lives ABOVE the
-                    controls strip so the title doesn't get hidden by
-                    `hideForCapture` during share screenshots — viewers
-                    of the shared image still see what the table is. */}
+                {/* 2×2 controls grid (this card only):
+                      RIGHT column (RTL-start)     LEFT column (RTL-end)
+                        [📅 period      ]            [🎮 active-toggle]
+                        [🔽 sort        ]            [📊 mode         ]
+                    Implemented as `justifyContent: space-between` with
+                    two flex-column children. The first DOM child
+                    anchors to the inline-start (physical right in RTL),
+                    the last to inline-end (physical left). Within each
+                    column, `flex-direction: column` is unaffected by
+                    `direction: rtl` — the cross-axis is what flips, so
+                    `alignItems: flex-start` lines the right column up
+                    against its right edge and `alignItems: flex-end`
+                    lines the left column up against its left edge. The
+                    outer `alignItems: flex-start` makes both columns
+                    top-align even if one row is taller than the other.
+                    `hideForCapture` still hides the whole strip during
+                    snapshotting (display:none → no layout space) so the
+                    shared image is unchanged. Scoped to this table —
+                    the other four cards keep their own arrangements. */}
+                <div ref={tableControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                  {/* Right column — time-scope controls (period above sort). */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem' }}>
+                    {renderPeriodOverrideDropdown('main')}
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
+                      style={{
+                        padding: '0.3rem 0.4rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
+                      <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
+                      <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
+                    </select>
+                  </div>
+                  {/* Left column — player-set + table-mode (active above mode). */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                    {renderActiveOverrideToggle('main')}
+                    <select
+                      value={tableMode}
+                      onChange={(e) => setTableMode(e.target.value as 'profit' | 'gainLoss' | 'avgGainLoss')}
+                      style={{
+                        padding: '0.3rem 0.4rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.modeProfit')}</option>
+                      <option value="avgGainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.avgGainLoss')}</option>
+                      <option value="gainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.gainLoss')}</option>
+                    </select>
+                  </div>
+                </div>
+                {/* Title — centered, matches the other 4 tables'
+                    chrome exactly. Games count was here as a muted
+                    suffix earlier, but no other table carries one and
+                    the period dropdown right above already tells the
+                    user which scope they're looking at — so the
+                    suffix was redundant chrome. */}
                 <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                   {t('stats.playerRanking')}
                 </div>
-                {/* Single-row controls strip with `space-between`:
-                    [sort] and [mode] anchor to the inline-start
-                    (physical right in RTL), [active-toggle] anchors
-                    to the inline-end (physical left in RTL). The 3
-                    mode buttons used to live on a separate row;
-                    collapsing them into a single <select> matches
-                    the chrome of the sort dropdown and frees the row
-                    to fit everything on mobile. */}
-                <div ref={tableControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
-                    style={{
-                      padding: '0.3rem 0.4rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
-                    <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
-                    <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
-                  </select>
-                  <select
-                    value={tableMode}
-                    onChange={(e) => setTableMode(e.target.value as 'profit' | 'gainLoss' | 'avgGainLoss')}
-                    style={{
-                      padding: '0.3rem 0.4rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.modeProfit')}</option>
-                    <option value="avgGainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.avgGainLoss')}</option>
-                    <option value="gainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.gainLoss')}</option>
-                  </select>
-                  {renderActiveOverrideToggle('main')}
-                </div>
                 <div style={{ overflowX: 'auto' }}>
-                {/* Timeframe row is plain text now — the active-only
-                    toggle moved up into the controls strip beside the
-                    sort dropdown, so the redundant
-                    " • שחקנים פעילים" suffix was dropped. */}
-                <div style={{
-                  fontSize: '0.7rem',
-                  color: 'var(--text-muted)',
-                  marginBottom: '0.5rem',
-                  paddingBottom: '0.3rem',
-                  borderBottom: '1px solid var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                  gap: '0.4rem',
-                  flexWrap: 'wrap',
-                }}>
-                  {renderPeriodOverrideDropdown('main')}
-                  <span>{' • '}{t('stats.gamesCount', { count: mainEffectiveContext.totalGames })}</span>
-                </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
@@ -3149,6 +3095,16 @@ const StatisticsScreen = () => {
               {podiumTableRows.length > 0 && (
                 <div ref={podiumRatesRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
                   <div ref={podiumControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    {/* Period dropdown is intentionally first here so
+                        it anchors to the RTL-start (visual right)
+                        edge — same physical position the time-period
+                        scope holds in the other tables' headers,
+                        keeping the "what timeframe am I looking at"
+                        affordance in a consistent place across the
+                        screen. Scoped to this table — the main /
+                        top10 / rebuy / avgPlacement cards keep their
+                        own existing ordering on purpose. */}
+                    {renderPeriodOverrideDropdown('podium')}
                     <select
                       value={podiumSort}
                       onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
@@ -3173,7 +3129,6 @@ const StatisticsScreen = () => {
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.podiumRates')}
                   </div>
-                  <div style={{ marginBottom: '0.5rem' }}>{renderPeriodOverrideDropdown('podium')}</div>
                   {/* Horizontal-scroll fallback is scoped to just the
                       <table>, not the whole card. Wrapping title +
                       footer + table together caused a phantom
@@ -3290,22 +3245,22 @@ const StatisticsScreen = () => {
               )}
 
               {/* Top 10 Single Night Wins - Filtered by period
-                  Title sits clean and centered. The toggle is on the
-                  timeframe row underneath: absolute-positioned at the
-                  physical left edge (`left: 0` works in both LTR/RTL),
-                  with the timeframe text getting paddingLeft so the
-                  two never collide. Wrapped in `top10ActiveToggleRef`
-                  for `hideForCapture` on share. */}
+                  Header chrome mirrors the podium-rates card: a flex
+                  `space-between` strip pins the period dropdown to the
+                  RTL-start (visual right) and the active-only toggle
+                  to the RTL-end (visual left), with a bottom border
+                  separating it from the centered title below. The
+                  whole strip is wrapped in `top10ActiveToggleRef` so
+                  `hideForCapture` strips the live UI from share
+                  screenshots while preserving card chrome. */}
               {top10TableData.length > 0 && (
                 <div ref={top10Ref} className="card" style={{ padding: '0.5rem', marginTop: '0.5rem' }}>
+                  <div ref={top10ActiveToggleRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    {renderPeriodOverrideDropdown('top10')}
+                    {renderActiveOverrideToggle('top10')}
+                  </div>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.top10')}
-                  </div>
-                  <div style={{ position: 'relative', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem', minHeight: '22px', paddingLeft: '72px', display: 'flex', alignItems: 'center' }}>
-                    <div ref={top10ActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
-                      {renderActiveOverrideToggle('top10')}
-                    </div>
-                    {renderPeriodOverrideDropdown('top10')}
                   </div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
@@ -3348,19 +3303,18 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
-              {/* Rebuy Stats Table — title stays clean & centered;
-                  toggle lives on the timeframe row, pinned to physical
-                  left via absolute positioning (same pattern as top 10). */}
+              {/* Rebuy Stats Table — header chrome mirrors podium /
+                  top10: period dropdown anchored RTL-start, active
+                  toggle RTL-end, bottom border, title centered below.
+                  Whole strip hidden on share via `rebuyActiveToggleRef`. */}
               {rebuyTableData.length > 0 && (
                 <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div ref={rebuyActiveToggleRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    {renderPeriodOverrideDropdown('rebuy')}
+                    {renderActiveOverrideToggle('rebuy')}
+                  </div>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     {t('stats.rebuyStats')}
-                  </div>
-                  <div style={{ position: 'relative', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem', minHeight: '22px', paddingLeft: '72px', display: 'flex', alignItems: 'center' }}>
-                    <div ref={rebuyActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
-                      {renderActiveOverrideToggle('rebuy')}
-                    </div>
-                    {renderPeriodOverrideDropdown('rebuy')}
                   </div>
                   {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
                     <div style={{
@@ -3469,18 +3423,17 @@ const StatisticsScreen = () => {
               {/* Average Placement Table — driven by the same period
                   + active-only + selected-players filters as every
                   other table on this screen. Lower avg = better
-                  finishes. Toggle pinned top-left of the title row,
-                  same chrome pattern as top10/rebuy. */}
+                  finishes. Header chrome mirrors podium / top10 /
+                  rebuy: period dropdown RTL-start, active toggle
+                  RTL-end, bottom border, title centered below. */}
               {avgPlacementTableRows.length > 0 && (
                 <div ref={avgPlacementRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
-                    {t('stats.avgPlacement')}
-                  </div>
-                  <div style={{ position: 'relative', minHeight: '22px', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', paddingLeft: '72px' }}>
-                    <div ref={avgPlacementActiveToggleRef} style={{ position: 'absolute', left: 0, top: 0 }}>
-                      {renderActiveOverrideToggle('avgPlacement')}
-                    </div>
+                  <div ref={avgPlacementActiveToggleRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
                     {renderPeriodOverrideDropdown('avgPlacement')}
+                    {renderActiveOverrideToggle('avgPlacement')}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                    {t('stats.avgPlacement')}
                   </div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>

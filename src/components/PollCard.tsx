@@ -30,7 +30,7 @@
 //   - onToggleSubscription             → "🔔" chip (member, active polls)
 //   - VoterGroups w/ highlightPlayerId → expandable voter list per tile
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import type { CSSProperties } from 'react';
 import {
   PollTimer,
@@ -860,7 +860,21 @@ export default function PollCard(props: PollCardProps) {
                     chip (the dashed-border style is reserved for
                     admin actions like 📌 pick / re-pin). Hover lifts
                     the colour from muted to text — keeps it
-                    discoverable without competing for attention. */}
+                    discoverable without competing for attention.
+                    The collapsed label spells out the response
+                    breakdown as colored chips (`(✓7 · ?1 · ✕2)`),
+                    omitting any response with zero votes so a
+                    unanimous-yes tile reads simply as `(✓5)`. The
+                    total count parenthetical (`(N)`) was dropped
+                    because the per-response chips already sum to
+                    it. Each glyph+number gets the exact same color
+                    the matching RSVP button uses on the row below
+                    — `#10b981` / `#eab308` / `#ef4444` — so the
+                    same vote means the same shade everywhere on
+                    the tile (yes-progress bar, yes-button-active
+                    tint, this label). Separator dots stay muted so
+                    the colored chips read as the figure / the
+                    structure reads as the ground. */}
                 {s.voters.length > 0 && (
                   <>
                     <button
@@ -879,9 +893,25 @@ export default function PollCard(props: PollCardProps) {
                     >
                       <span aria-hidden>{expanded ? '▲' : '▼'}</span>
                       <span>
-                        {expanded
-                          ? t('schedule.voters.hideList')
-                          : `${t('schedule.voters.showList')} (${s.voters.length})`}
+                        {expanded ? t('schedule.voters.hideList') : (() => {
+                          const chips: { key: string; color: string; text: string }[] = [];
+                          if (s.yes > 0) chips.push({ key: 'y', color: '#10b981', text: `✓${s.yes}` });
+                          if (s.maybe > 0) chips.push({ key: 'm', color: '#eab308', text: `?${s.maybe}` });
+                          if (s.no > 0) chips.push({ key: 'n', color: '#ef4444', text: `✕${s.no}` });
+                          return (
+                            <>
+                              {t('schedule.voters.showList')}
+                              {' ('}
+                              {chips.map((c, i) => (
+                                <Fragment key={c.key}>
+                                  {i > 0 && ' · '}
+                                  <span style={{ color: c.color, fontWeight: 700 }}>{c.text}</span>
+                                </Fragment>
+                              ))}
+                              {')'}
+                            </>
+                          );
+                        })()}
                       </span>
                     </button>
                     {expanded && (
