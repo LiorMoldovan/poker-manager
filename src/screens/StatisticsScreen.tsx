@@ -166,6 +166,12 @@ const StatisticsScreen = () => {
   // dropdown render) so the backdrop can dismiss any open popover
   // regardless of which table opened it.
   const [openPeriodDropdown, setOpenPeriodDropdown] = useState<PeriodOverrideTableId | null>(null);
+  // Which non-period styled-select is currently open (sort / mode /
+  // podium-sort etc.). Same single-popover-at-a-time semantics as
+  // `openPeriodDropdown`. Kept as a separate id space because the
+  // period dropdown's options are derived from the override state
+  // (with the special 'current' value) while these are flat enums.
+  const [openSelectId, setOpenSelectId] = useState<string | null>(null);
   const setTablePeriodOverride = (id: PeriodOverrideTableId, preset: TablePeriodPreset | null) => {
     setTablePeriodOverrides(prev => {
       const next = { ...prev };
@@ -1653,6 +1659,119 @@ const StatisticsScreen = () => {
     );
   };
 
+  // Generic dark-theme styled select. Same chrome as the period dropdown
+  // (trigger looks like a chip; open content is a `var(--surface)`
+  // popover with primary accent on the selected row). Drop-in
+  // replacement for any native <select> on this screen — native
+  // selects open OS chrome (iOS white wheel picker / Android system
+  // list) which clashes with the dark theme on mobile and has no
+  // styling escape hatch.
+  //
+  // The `id` must be unique across all callers on this screen — it
+  // keys into `openSelectId` so only one styled-select can be open at
+  // a time. Backdrop click dismisses; picking an option calls
+  // onChange and closes. Trigger label defaults to the matching
+  // option's label; pass `triggerLabel` if you want to display
+  // something different (e.g. a short form).
+  const renderStyledSelect = <T extends string>(args: {
+    id: string;
+    value: T;
+    options: { value: T; label: string }[];
+    onChange: (next: T) => void;
+    title?: string;
+    triggerLabel?: string;
+  }) => {
+    const { id, value, options, onChange, title, triggerLabel } = args;
+    const isOpen = openSelectId === id;
+    const selected = options.find(o => o.value === value);
+    const label = triggerLabel ?? selected?.label ?? '';
+    return (
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setOpenSelectId(isOpen ? null : id);
+          }}
+          title={title}
+          style={{
+            padding: '0.3rem 0.5rem',
+            fontSize: '0.7rem',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            maxWidth: '200px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {label} {isOpen ? '▲' : '▼'}
+        </button>
+        {isOpen && (
+          <>
+            <div
+              onClick={() => setOpenSelectId(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                insetInlineStart: 0,
+                minWidth: '160px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '0.25rem',
+                zIndex: 999,
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
+              }}
+            >
+              {options.map(opt => {
+                const isSelected = opt.value === value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onChange(opt.value);
+                      setOpenSelectId(null);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: isRTL ? 'right' : 'left',
+                      padding: '0.4rem 0.6rem',
+                      fontSize: '0.7rem',
+                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                      color: isSelected ? 'var(--primary)' : 'var(--text)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Calculate group records based on filtered stats
   // Helper to find all players tied for a record
   const findTied = <T extends PlayerStats>(
@@ -2993,44 +3112,30 @@ const StatisticsScreen = () => {
                   {/* Right column — time-scope controls (period above sort). */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem' }}>
                     {renderPeriodOverrideDropdown('main')}
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
-                      style={{
-                        padding: '0.3rem 0.4rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
-                      <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
-                      <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
-                    </select>
+                    {renderStyledSelect({
+                      id: 'main-sort',
+                      value: sortBy,
+                      onChange: (v) => setSortBy(v as 'profit' | 'games' | 'winRate'),
+                      options: [
+                        { value: 'profit',  label: t('stats.sortProfit') },
+                        { value: 'games',   label: t('stats.sortGames') },
+                        { value: 'winRate', label: t('stats.sortWinRate') },
+                      ],
+                    })}
                   </div>
                   {/* Left column — player-set + table-mode (active above mode). */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
                     {renderActiveOverrideToggle('main')}
-                    <select
-                      value={tableMode}
-                      onChange={(e) => setTableMode(e.target.value as 'profit' | 'gainLoss' | 'avgGainLoss')}
-                      style={{
-                        padding: '0.3rem 0.4rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.modeProfit')}</option>
-                      <option value="avgGainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.avgGainLoss')}</option>
-                      <option value="gainLoss" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.gainLoss')}</option>
-                    </select>
+                    {renderStyledSelect({
+                      id: 'main-mode',
+                      value: tableMode,
+                      onChange: (v) => setTableMode(v as 'profit' | 'gainLoss' | 'avgGainLoss'),
+                      options: [
+                        { value: 'profit',      label: t('stats.modeProfit') },
+                        { value: 'avgGainLoss', label: t('stats.avgGainLoss') },
+                        { value: 'gainLoss',    label: t('stats.gainLoss') },
+                      ],
+                    })}
                   </div>
                 </div>
                 {/* Title — centered, matches the other 4 tables'
@@ -3198,25 +3303,18 @@ const StatisticsScreen = () => {
                     {/* Right column — time-scope controls (period above sort). */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem' }}>
                       {renderPeriodOverrideDropdown('podium')}
-                      <select
-                        value={podiumSort}
-                        onChange={(e) => setPodiumSort(e.target.value as 'total' | 'first' | 'second' | 'third' | 'games')}
-                        style={{
-                          padding: '0.25rem 0.4rem',
-                          fontSize: '0.7rem',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border)',
-                          background: 'var(--surface)',
-                          color: 'var(--text-muted)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <option value="total" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.total')}</option>
-                        <option value="first" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.first')}</option>
-                        <option value="second" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.second')}</option>
-                        <option value="third" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.third')}</option>
-                        <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.podiumSort.games')}</option>
-                      </select>
+                      {renderStyledSelect({
+                        id: 'podium-sort',
+                        value: podiumSort,
+                        onChange: (v) => setPodiumSort(v as 'total' | 'first' | 'second' | 'third' | 'games'),
+                        options: [
+                          { value: 'total',  label: t('stats.podiumSort.total') },
+                          { value: 'first',  label: t('stats.podiumSort.first') },
+                          { value: 'second', label: t('stats.podiumSort.second') },
+                          { value: 'third',  label: t('stats.podiumSort.third') },
+                          { value: 'games',  label: t('stats.podiumSort.games') },
+                        ],
+                      })}
                     </div>
                     {/* Left column — player-set (active toggle, single item). */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>

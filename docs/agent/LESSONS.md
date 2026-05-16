@@ -5,16 +5,6 @@
 
 ---
 
-## `pg_trigger_depth()` doesn't detect cascade in AFTER-STATEMENT
-
-**Gotcha**: In BEFORE-ROW it returns 2 during cascade (works). In AFTER-STATEMENT it returns 1 during cascade (fails — early-return branch skipped, transaction aborted).
-
-**Fix**: parent-existence check, or transaction-local `set_config('app.flag', '1', true)` set by the SECURITY DEFINER RPC and read with `current_setting('app.flag', true)`.
-
-**Burned**: migration 043 (v5.34.2) — `deleteGame` silently broken for multi-player games for 5 days.
-
----
-
 ## `CREATE EXTENSION ... WITH SCHEMA X IF NOT EXISTS` does NOT relocate
 
 **Gotcha**: If the extension already exists, the `WITH SCHEMA` clause is silently discarded. No warning, no error.
@@ -112,6 +102,16 @@
 **Fix**: use `src/components/NumericInput.tsx` instead. It holds a string draft internally, lets the field be empty mid-edit, and only emits a number to its `onChange` when the draft is parseable. Snaps back to the last committed value on blur (or `0` if you allow it). Drop-in replacement: same `value` / `min` / `max` / `style` / `onBlur` props. The component's header comment documents the bug for the next person.
 
 **Burned**: hit three times in three weeks — the chip-row in v5.62.x (fixed when NumericInput was originally built), the chip-correction cell on the Settings test card in v6.3.1, and **six** more in `ScheduleTab.tsx` in v6.4.0 (create-poll target/delay, edit-poll target/delay, group-config default target/default delay). If this pattern reappears one more time, promote this lesson to `.cursor/rules/numeric-inputs.mdc` ("any new `<input type="number">` must use `NumericInput`, no exceptions").
+
+---
+
+## Native `<select>` ≠ a dark-theme custom popover on mobile
+
+**Gotcha**: Swapping a custom React popover for a native `<select>` "for consistency with sibling selects" looks fine on desktop and in dev tools, but on iOS Safari / Android Chrome the OS renders its own open chrome (iOS white wheel picker, Android system list). There's no CSS hook to style the open content of a native `<select>` — once the OS owns the menu, your dark theme stops at the trigger.
+
+**Fix**: if the surrounding UI is dark-themed and you need rich styling (selected-state accent, custom layout, scoped icons), use a custom React popover even when sibling controls are native selects. Style the closed trigger to match the siblings (same padding / border-radius / font-size) so the layout doesn't shift — only the open menu diverges, and that's the OS-vs-dark-theme escape hatch you're explicitly avoiding.
+
+**Burned**: v6.7.0 → v6.7.2 — the per-table period selector on Statistics was a custom popover (yesterday), an agent converted it to a native `<select>` "to match sort/mode chrome", looked fine on desktop, Lior hit it on mobile and got "ugly white box" everywhere. Reverted in v6.7.2.
 
 ---
 
