@@ -1311,20 +1311,30 @@ const StatisticsScreen = () => {
     for (const players of playersByGame.values()) {
       if (players.length === 0) continue;
       const sorted = [...players].sort((a, b) => b.profit - a.profit);
-      // Walk runs of equal profit and assign each member the average
-      // of their would-be positions (1-indexed). Iterative O(n).
+      // Walk runs of equal profit and assign positions. The avg
+      // column uses fractional ranking — each tied member contributes
+      // the average of their would-be positions (e.g. tied for 2nd &
+      // 3rd both contribute 2.5 to sumRank). That keeps the avg
+      // mathematically defensible across ties. Best/worst columns
+      // take INTEGER bounds of the tied range instead: a tie for
+      // 4th-5th counts as best=4, worst=5, never 4.5. Showing
+      // half-positions in best/worst reads as nonsense to users
+      // ("nobody finishes 4.5th"), and the integer bounds preserve
+      // the optimistic-best / pessimistic-worst semantic.
       let i = 0;
       while (i < sorted.length) {
         let j = i;
         while (j + 1 < sorted.length && sorted[j + 1].profit === sorted[i].profit) j++;
         const avgPos = ((i + 1) + (j + 1)) / 2;
+        const bestPos = i + 1;
+        const worstPos = j + 1;
         for (let k = i; k <= j; k++) {
           const p = sorted[k];
           const e = acc.get(p.playerName) ?? { playerName: p.playerName, games: 0, sumRank: 0, bestRank: Infinity, worstRank: -Infinity };
           e.games++;
           e.sumRank += avgPos;
-          if (avgPos < e.bestRank) e.bestRank = avgPos;
-          if (avgPos > e.worstRank) e.worstRank = avgPos;
+          if (bestPos < e.bestRank) e.bestRank = bestPos;
+          if (worstPos > e.worstRank) e.worstRank = worstPos;
           acc.set(p.playerName, e);
         }
         i = j + 1;
