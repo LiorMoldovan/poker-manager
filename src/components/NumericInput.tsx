@@ -35,6 +35,9 @@ interface Props {
   id?: string;
   name?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  /** Native tooltip text. Useful for surfacing the prior/AI-suggested
+   *  value without spending row space on a separate label. */
+  title?: string;
 }
 
 export function NumericInput({
@@ -50,6 +53,7 @@ export function NumericInput({
   id,
   name,
   inputMode,
+  title,
 }: Props) {
   const [draft, setDraft] = useState<string>(() => String(value));
   const lastCommittedRef = useRef<number>(value);
@@ -102,6 +106,7 @@ export function NumericInput({
       id={id}
       name={name}
       inputMode={inputMode}
+      title={title}
     />
   );
 }

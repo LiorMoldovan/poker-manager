@@ -4163,7 +4163,7 @@ async function runWholePhotoShot(args: {
   /** Total models in the chain — needed for the telemetry row. */
   totalModels: number;
 }): Promise<{
-  countsByColor: Map<string, number> | null;
+  countsByColor: Map<string, SalvageEntry> | null;
   errorMsg: string;
   errorCode: PhotoChipCountErrorCode;
 }> {
@@ -4215,7 +4215,8 @@ async function runWholePhotoShot(args: {
   // ambiguity.
   const exampleCounts = chips.map((c, i) => {
     const sampleN = i === 0 ? 5 : i === 1 ? 3 : 0;
-    return `    { "color": ${JSON.stringify(c.color)}, "count": ${sampleN} }`;
+    const sampleConf = i === 0 ? 95 : i === 1 ? 70 : 100;
+    return `    { "color": ${JSON.stringify(c.color)}, "count": ${sampleN}, "confidence": ${sampleConf} }`;
   }).join(',\n');
 
   parts.push({
@@ -4234,6 +4235,13 @@ Counting strategy:
 - Do NOT invent chips that aren't there.
 - You MUST include an entry for EVERY color listed above, even if the count is 0.
 
+Confidence per color (integer 0–100, REQUIRED for every entry):
+- This is YOUR self-assessed certainty for THAT specific count. Be honest — do NOT default everything to 80.
+- Use HIGH confidence (90–100) when you can see every chip edge cleanly AND you are sure of the count. Also use HIGH (95–100) when a color is clearly ABSENT from the photo (a verified zero).
+- Use MEDIUM (60–80) when the count is plausible but you had to estimate one or two edges (occlusion, glare, motion blur).
+- Use LOW (20–55) when the stack is partially hidden, very blurry, or you guessed because you could not count individual edges.
+- Different colors MUST get different confidences in the same photo unless every stack is genuinely equally clear — a constant value across all colors is treated as a hallucination signal.
+
 Output format — return ONLY a raw JSON object, no markdown fences, no prose before or after:
 {
   "counts": [
@@ -4241,7 +4249,7 @@ ${exampleCounts}
   ]
 }
 
-Replace the example numbers above with your real counts. The "color" values MUST match the user's exact color names: ${colorsList}. Case differences are tolerated. Output ONLY the JSON object — nothing else.`,
+Replace the example numbers above with your real counts AND your real confidences. The "color" values MUST match the user's exact color names: ${colorsList}. Case differences are tolerated. Output ONLY the JSON object — nothing else.`,
   });
 
   const payload = {
@@ -4266,6 +4274,12 @@ Replace the example numbers above with your real counts. The "color" values MUST
               properties: {
                 color: { type: 'STRING' },
                 count: { type: 'INTEGER' },
+                // v6.3.1 — per-color self-assessed confidence 0–100.
+                // Optional in the schema (only "color" + "count" are
+                // required) so a model that ignores it still parses,
+                // but the prompt strongly encourages providing it
+                // and we fall back to a neutral default if missing.
+                confidence: { type: 'INTEGER' },
               },
               required: ['color', 'count'],
             },
@@ -4389,9 +4403,17 @@ Replace the example numbers above with your real counts. The "color" values MUST
   const salvage = extractChipCounts(raw, validColors);
 
   if (salvage && salvage.counts.size > 0) {
+    // Telemetry `final_counts` stays `Record<string, number>` (the
+    // existing chip_count_debug schema). Flatten SalvageEntry → count
+    // for that log row; full confidence info stays in-memory for the
+    // result builder downstream.
+    const finalCountsFlat: Record<string, number> = {};
+    for (const [color, entry] of salvage.counts) {
+      finalCountsFlat[color] = entry.count;
+    }
     logAttempt('success', {
       rawResponse: raw,
-      finalCounts: Object.fromEntries(salvage.counts),
+      finalCounts: finalCountsFlat,
       salvageStrategy: salvage.strategy,
       httpStatus: response.status,
     });
@@ -4443,9 +4465,30 @@ Replace the example numbers above with your real counts. The "color" values MUST
  *  The strategy index is returned so we can log it to the telemetry
  *  table — across hundreds of attempts we'll see which strategies are
  *  actually doing the work and trim/tighten the rest. */
+/** One per-color entry from the salvager. `confidence` is the model's
+ *  self-assessed 0–100 certainty for THIS count (v6.3.1+). `null` when
+ *  the salvager can't recover it (e.g. plain-text strategy 5, or models
+ *  that ignored the field). Consumers must fall back to a neutral
+ *  default rather than treating null as 0. */
+export interface SalvageEntry {
+  count: number;
+  confidence: number | null;
+}
+
 export interface SalvageResult {
-  counts: Map<string, number>;
+  counts: Map<string, SalvageEntry>;
   strategy: number;
+}
+
+/** Clamp + round + sanity-check a candidate confidence value. Returns
+ *  `null` for anything non-numeric or out of range so callers know to
+ *  fall back. */
+function normalizeConfidence(raw: unknown): number | null {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < 0 || rounded > 100) return null;
+  return rounded;
 }
 
 export function extractChipCounts(raw: string, validColors: string[]): SalvageResult | null {
@@ -4453,7 +4496,7 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
 
   const validSet = new Set(validColors);
 
-  const tryParseObject = (text: string): Map<string, number> | null => {
+  const tryParseObject = (text: string): Map<string, SalvageEntry> | null => {
     let obj: unknown;
     try {
       obj = JSON.parse(text);
@@ -4463,16 +4506,20 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
     if (!obj || typeof obj !== 'object') return null;
     const counts = (obj as { counts?: unknown }).counts;
     if (!Array.isArray(counts)) return null;
-    const m = new Map<string, number>();
+    const m = new Map<string, SalvageEntry>();
     for (const item of counts) {
       if (!item || typeof item !== 'object') continue;
       const colorRaw = (item as { color?: unknown }).color;
       const countRaw = (item as { count?: unknown }).count;
+      const confRaw = (item as { confidence?: unknown }).confidence;
       if (typeof colorRaw !== 'string') continue;
       const color = colorRaw.trim().toLowerCase();
       const n = Number(countRaw);
       if (!Number.isFinite(n) || n < 0) continue;
-      m.set(color, Math.floor(n));
+      m.set(color, {
+        count: Math.floor(n),
+        confidence: normalizeConfidence(confRaw),
+      });
     }
     return m.size > 0 ? m : null;
   };
@@ -4500,15 +4547,20 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
 
   // Strategy 4: regex-extract "color": "X", "count": N pairs even from
   // broken/truncated JSON. Order of color/count keys doesn't matter —
-  // we run a single forward sweep so each pair is matched once.
+  // we run a single forward sweep so each pair is matched once. We
+  // intentionally do NOT try to also salvage `confidence` here: the
+  // truncated/garbled responses this strategy targets are exactly the
+  // ones where a confidence value would be meaningless. Entries from
+  // this path get `confidence: null` and fall back to the consumer's
+  // default.
   const pairRe = /"color"\s*:\s*"([^"]+)"\s*,?\s*"count"\s*:\s*(-?\d+)/gi;
-  const salvaged = new Map<string, number>();
+  const salvaged = new Map<string, SalvageEntry>();
   let pm: RegExpExecArray | null;
   while ((pm = pairRe.exec(raw)) !== null) {
     const color = pm[1].trim().toLowerCase();
     const n = parseInt(pm[2], 10);
     if (color && Number.isFinite(n) && n >= 0) {
-      salvaged.set(color, n);
+      salvaged.set(color, { count: n, confidence: null });
     }
   }
   // Also handle the reverse key order (count before color)
@@ -4517,7 +4569,7 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
     const color = pm[2].trim().toLowerCase();
     const n = parseInt(pm[1], 10);
     if (color && Number.isFinite(n) && n >= 0 && !salvaged.has(color)) {
-      salvaged.set(color, n);
+      salvaged.set(color, { count: n, confidence: null });
     }
   }
   if (salvaged.size > 0) return { counts: salvaged, strategy: 4 };
@@ -4527,7 +4579,8 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
   // color is in `validColors` so unrelated digits in prose don't
   // pollute the result. Number must immediately follow the color
   // separator (skipping at most a colon/equals/dash and whitespace).
-  const textPairs = new Map<string, number>();
+  // No confidence available from this format — consumer defaults.
+  const textPairs = new Map<string, SalvageEntry>();
   // First normalize: split on lines, also on commas/semicolons so
   // single-line lists still hit.
   const tokens = raw.split(/[\n,;]+/);
@@ -4541,7 +4594,7 @@ export function extractChipCounts(raw: string, validColors: string[]): SalvageRe
     const n = parseInt(m[2], 10);
     if (!Number.isFinite(n) || n < 0) continue;
     if (!textPairs.has(color)) {
-      textPairs.set(color, n);
+      textPairs.set(color, { count: n, confidence: null });
     }
   }
   if (textPairs.size > 0) return { counts: textPairs, strategy: 5 };
@@ -4560,7 +4613,7 @@ async function runWholePhotoWithFallback(args: {
   onProgress?: (model: string, attempt: number) => void;
   debugContext: ChipCountDebugContext;
 }): Promise<{
-  countsByColor: Map<string, number> | null;
+  countsByColor: Map<string, SalvageEntry> | null;
   modelUsed: string | null;
   attempts: number;
   errorMsg: string;
@@ -4666,13 +4719,20 @@ export async function countChipsFromPhoto(
 
   // Build PhotoChipCountStack[] from the per-color count map, preserving
   // the canonical small→high chip order so the UI rows line up.
+  //
+  // v6.3.1 — per-color confidence comes from the AI itself (new
+  // `confidence` field in the response schema). If the model omitted
+  // the field (older models, plain-text salvage, regex salvage on
+  // truncated JSON) we fall back to 60% — a neutral "we don't know"
+  // value that's high enough not to gate the auto-apply flow but low
+  // enough to signal uncertainty to the user. The old fixed 80/45
+  // heuristic was a placeholder pretending to be a signal; this
+  // replaces it with actual model self-assessment when available.
+  const FALLBACK_CONFIDENCE = 60;
   const stacks: PhotoChipCountStack[] = orderedChips.map((chip, idx) => {
-    const count = result.countsByColor!.get(chip.color.trim().toLowerCase()) ?? 0;
-    // Per-stack confidence: high (80) when LLM returned a non-zero count
-    // for this color (treating LLM agreement with itself as the only
-    // signal we have in the whole-photo path), lower (45) for zeros so
-    // the UI doesn't show a fake 95% on a missed stack.
-    const confidence = count > 0 ? 80 : 45;
+    const entry = result.countsByColor!.get(chip.color.trim().toLowerCase());
+    const count = entry?.count ?? 0;
+    const confidence = entry?.confidence ?? FALLBACK_CONFIDENCE;
     return {
       position: idx + 1,
       chipId: chip.id,
@@ -4686,7 +4746,9 @@ export async function countChipsFromPhoto(
         geometrySharedCal: null,
         finalCount: count,
         finalConfidence: confidence,
-        reasoning: `whole-photo LLM count via ${result.modelUsed}`,
+        reasoning: entry?.confidence !== null && entry?.confidence !== undefined
+          ? `whole-photo LLM count + self-assessed confidence via ${result.modelUsed}`
+          : `whole-photo LLM count via ${result.modelUsed} (no AI confidence, fallback ${FALLBACK_CONFIDENCE})`,
       },
     };
   });
@@ -4711,16 +4773,19 @@ export async function countChipsFromPhoto(
     return sum + (chip ? s.count * chip.value : 0);
   }, 0);
 
-  // Overall confidence (count-weighted, capped at 85 since whole-photo
-  // has no cross-validation signal). All zeros → 30 (something's wrong).
-  const meaningful = stacks.filter(s => s.count > 0);
+  // Overall confidence (v6.3.1): plain unweighted average across all
+  // colors. Each color is one independent assessment by the AI, so
+  // count-weighting (the old policy) blends two concerns and ends up
+  // hiding low-confidence rare colors behind high-confidence common
+  // ones. Floor 0 / cap 95 — never silently claim 100% even if the
+  // AI does, but allow honest high confidence to shine through (the
+  // old 85 cap was a placeholder that suppressed real signal).
   let overallConfidence: number;
-  if (meaningful.length === 0) {
-    overallConfidence = 30;
+  if (stacks.length === 0) {
+    overallConfidence = 0;
   } else {
-    const weightSum = meaningful.reduce((acc, s) => acc + s.count, 0);
-    const weightedConfSum = meaningful.reduce((acc, s) => acc + s.count * s.confidence, 0);
-    overallConfidence = clamp(Math.round(weightedConfSum / weightSum), 30, 85);
+    const sum = stacks.reduce((acc, s) => acc + s.confidence, 0);
+    overallConfidence = clamp(Math.round(sum / stacks.length), 0, 95);
   }
 
   return {

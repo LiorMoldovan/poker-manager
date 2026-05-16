@@ -3584,35 +3584,28 @@ const SettingsScreen = () => {
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                             ×{chip.value}
                           </span>
-                          {/* Editable count cell (v6.2.x chip correction loop).
-                              Default = AI's aggregated count for this color.
-                              User can tap to correct any wrong number; the
-                              border turns amber when the value differs from
-                              the AI's. The original AI count is preserved
-                              in the title so it's recoverable mid-edit. */}
+                          {/* Editable count cell (v6.3.x chip correction loop).
+                              Uses the shared NumericInput component, which
+                              tracks an internal string draft so the user can
+                              clear the field to empty mid-edit and re-type
+                              from scratch — a hand-rolled `<input
+                              type="number" value={n}>` would snap a cleared
+                              field back to whatever number we passed in,
+                              forcing tap-and-select-all to overwrite. The
+                              border turns amber when the committed value
+                              differs from the AI's; the original AI count
+                              is preserved in the tooltip. */}
                           {(() => {
                             const truthVal = Number.isFinite(photoTestTruth[agg.chipId])
                               ? photoTestTruth[agg.chipId]
                               : agg.aiCount;
                             const isEdited = truthVal !== agg.aiCount;
                             return (
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                min={0}
+                              <NumericInput
                                 value={truthVal}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  // Allow clearing the cell briefly — store as
-                                  // 0 so the JSON payload stays integer-shaped.
-                                  if (raw === '') {
-                                    setPhotoTestTruth(prev => ({ ...prev, [agg.chipId]: 0 }));
-                                    setPhotoTestSaveStatus(s => s === 'saved' ? 'idle' : s);
-                                    return;
-                                  }
-                                  const n = Math.max(0, Math.floor(Number(raw)));
-                                  if (!Number.isFinite(n)) return;
+                                min={0}
+                                inputMode="numeric"
+                                onChange={(n) => {
                                   setPhotoTestTruth(prev => ({ ...prev, [agg.chipId]: n }));
                                   setPhotoTestSaveStatus(s => s === 'saved' ? 'idle' : s);
                                 }}

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.3.0';
+export const APP_VERSION = '6.3.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.3.1',
+    date: '2026-05-16',
+    changes: [
+      '✏️ Count cells can be cleared to empty before retyping',
+      '🎯 AI now self-rates confidence per color (not a constant 80%)',
+      '📐 Overall confidence reflects the average, not a weighted hack',
+    ],
+  },
   {
     version: '6.3.0',
     date: '2026-05-16',
