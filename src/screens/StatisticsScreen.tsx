@@ -159,6 +159,13 @@ const StatisticsScreen = () => {
   type TablePeriodPreset = 'all' | 'year' | 'half' | 'month';
   type PeriodOverrideTableId = ActiveOverrideTableId;
   const [tablePeriodOverrides, setTablePeriodOverrides] = useState<Partial<Record<PeriodOverrideTableId, TablePeriodPreset>>>({});
+  // Which table's period dropdown is currently open. Single-popover-at-
+  // a-time gate; tapping a different table's chip auto-closes the
+  // previous one. Picking an option or tapping the backdrop also
+  // resets to null. Lives in screen state (not local to each
+  // dropdown render) so the backdrop can dismiss any open popover
+  // regardless of which table opened it.
+  const [openPeriodDropdown, setOpenPeriodDropdown] = useState<PeriodOverrideTableId | null>(null);
   const setTablePeriodOverride = (id: PeriodOverrideTableId, preset: TablePeriodPreset | null) => {
     setTablePeriodOverrides(prev => {
       const next = { ...prev };
@@ -166,6 +173,7 @@ const StatisticsScreen = () => {
       else next[id] = preset;
       return next;
     });
+    setOpenPeriodDropdown(null);
   };
   // Compute a date filter for a fixed preset relative to today. Used
   // when a per-table period override is active. Presets always anchor
@@ -1522,47 +1530,126 @@ const StatisticsScreen = () => {
       : `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(year, month - 1, 1))} ${year}`;
   };
 
-  // Per-table period dropdown. Native <select> on purpose — the sort
-  // and mode controls beside it use native selects too, and a custom
-  // React menu opening alongside them looked alien (different chrome,
-  // different open animation). Default = "current" (inherit global).
-  // When the user picks an explicit preset, the select gains a primary
-  // accent so it's obvious at a glance the table no longer follows
-  // the page-level period.
+  // Per-table period dropdown — custom React popover (NOT a native
+  // <select>). The native version was tried briefly but its OS-rendered
+  // open menu (iOS white wheel picker / Android system list) clashed
+  // hard with the dark app theme on mobile — there's no way to style
+  // the open content of a native <select>. The popover below uses
+  // `var(--surface)` chrome, primary accent on the selected row, and a
+  // matching transparent backdrop so the open state feels like part of
+  // the app rather than an OS escape hatch.
+  //
+  // The trigger is a closed-state chip styled to match the controls
+  // strip's other chip buttons (sort / mode / active-toggle): same
+  // border-radius pill, same muted-text color, primary accent when an
+  // override is active. Opens below itself anchored to `insetInlineStart`
+  // (RTL-start: right edge in Hebrew). A `position: fixed; inset: 0`
+  // backdrop dismisses any open popover when the user taps outside.
+  // Only one popover can be open at a time (the `openPeriodDropdown`
+  // state is keyed by table id) — tapping a different table's trigger
+  // auto-closes the previous one via the dispatched state update.
   const renderPeriodOverrideDropdown = (id: PeriodOverrideTableId) => {
     const override = tablePeriodOverrides[id];
-    const value = override ?? 'current';
-    // The "current" option label embeds the live global timeframe so a
-    // user opening the menu knows what "current" actually means today
-    // — otherwise the option reads as a generic "Current" with no hint
-    // of which period is inherited. Other options stay short.
-    const currentLabel = `${t('stats.periodCurrent')} (${getTimeframeLabel()})`;
+    const isOpen = openPeriodDropdown === id;
+    // The closed-state label collapses to either the override's preset
+    // name (when active) or the global timeframe (when inherited). No
+    // "Current (…)" hint needed on the chip because the live timeframe
+    // IS the label when no override is set.
+    const buttonLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
+    const options: Array<{ value: TablePeriodPreset | null; label: string }> = [
+      { value: null,    label: t('stats.periodCurrent') },
+      { value: 'all',   label: labelForPeriodPreset('all') },
+      { value: 'year',  label: labelForPeriodPreset('year') },
+      { value: 'half',  label: labelForPeriodPreset('half') },
+      { value: 'month', label: labelForPeriodPreset('month') },
+    ];
     return (
-      <select
-        value={value}
-        onChange={(e) => {
-          const next = e.target.value;
-          setTablePeriodOverride(id, next === 'current' ? null : (next as TablePeriodPreset));
-        }}
-        title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
-        style={{
-          padding: '0.3rem 0.4rem',
-          fontSize: '0.7rem',
-          borderRadius: '6px',
-          border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
-          background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
-          color: override ? 'var(--primary)' : 'var(--text-muted)',
-          cursor: 'pointer',
-          fontWeight: 500,
-          maxWidth: '200px',
-        }}
-      >
-        <option value="current" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {currentLabel}</option>
-        <option value="all" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('all')}</option>
-        <option value="year" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('year')}</option>
-        <option value="half" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('half')}</option>
-        <option value="month" style={{ background: '#1a1a2e', color: '#ffffff' }}>📅 {labelForPeriodPreset('month')}</option>
-      </select>
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setOpenPeriodDropdown(isOpen ? null : id);
+          }}
+          title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
+          style={{
+            padding: '0.3rem 0.5rem',
+            fontSize: '0.7rem',
+            borderRadius: '6px',
+            border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
+            background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
+            color: override ? 'var(--primary)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            maxWidth: '200px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          📅 {buttonLabel} {isOpen ? '▲' : '▼'}
+        </button>
+        {isOpen && (
+          <>
+            {/* Backdrop — `position: fixed; inset: 0` so a tap
+                anywhere off the popover closes it. Sits below the
+                popover (zIndex 998 vs 999) so the popover itself
+                still receives clicks. */}
+            <div
+              onClick={() => setOpenPeriodDropdown(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                insetInlineStart: 0,
+                minWidth: '160px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '0.25rem',
+                zIndex: 999,
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
+              }}
+            >
+              {options.map(opt => {
+                const isSelected = (opt.value === null && !override) || opt.value === override;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setTablePeriodOverride(id, opt.value);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: isRTL ? 'right' : 'left',
+                      padding: '0.4rem 0.6rem',
+                      fontSize: '0.7rem',
+                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                      color: isSelected ? 'var(--primary)' : 'var(--text)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    📅 {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     );
   };
 

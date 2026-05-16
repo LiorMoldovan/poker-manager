@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.7.1';
+export const APP_VERSION = '6.7.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.7.2',
+    date: '2026-05-16',
+    changes: [
+      '📅 Stats period dropdown: dark themed popover (no more OS white box on mobile)',
+    ],
+  },
   {
     version: '6.7.1',
     date: '2026-05-16',
