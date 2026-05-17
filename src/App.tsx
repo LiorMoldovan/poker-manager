@@ -19,6 +19,7 @@ import GroupSwitcher from './components/GroupSwitcher';
 import GroupWizard from './components/GroupWizard';
 import { ToastContainer, showToast } from './components/Toast';
 import { VoteReminderBanner } from './components/VoteReminderBanner';
+import { StyledSelect } from './components/StyledSelect';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
 
@@ -1170,25 +1171,20 @@ function SupabaseApp() {
               }}>
                 {t('addMember.linkLabel')}
               </label>
-              <select
+              <StyledSelect<string>
                 value={addMemberPlayerId}
-                onChange={e => setAddMemberPlayerId(e.target.value)}
-                style={{
-                  width: '100%', padding: '0.5rem 0.6rem', borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
-                  color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif',
-                  cursor: 'pointer', boxSizing: 'border-box',
-                }}
-              >
-                <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>
-                  {t('addMember.linkAsNew')}
-                </option>
-                {addMemberUnlinked.map(p => (
-                  <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>
-                    {p.name}{p.type === 'permanent' ? ' ⭐' : p.type === 'permanent_guest' ? ' 🏠' : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setAddMemberPlayerId}
+                options={[
+                  { value: '', label: t('addMember.linkAsNew') },
+                  ...addMemberUnlinked.map(p => ({
+                    value: p.id,
+                    label: `${p.name}${p.type === 'permanent' ? ' ⭐' : p.type === 'permanent_guest' ? ' 🏠' : ''}`,
+                  })),
+                ]}
+                size="md"
+                fullWidth
+                title={t('addMember.linkLabel')}
+              />
               <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem', lineHeight: 1.4 }}>
                 {addMemberPlayerId
                   ? t('addMember.linkHelpSelected')

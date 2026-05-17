@@ -17,6 +17,7 @@ import { usePermissions } from '../App';
 import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
+import { StyledSelect } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 
@@ -1027,49 +1028,31 @@ const GraphsScreen = () => {
               {timePeriod !== 'all' && timePeriod !== 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.yearLabel')}</span>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    style={{
-                      padding: '0.25rem 0.4rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '4px',
-                      border: '1px solid rgba(16,185,129,0.3)',
-                      background: 'rgba(16,185,129,0.08)',
-                      color: '#10B981',
-                      cursor: 'pointer',
-                      minWidth: '60px'
-                    }}
-                  >
-                    {getAvailableYears().map(year => (
-                      <option key={year} value={year} style={{ background: '#1a1a2e', color: '#ffffff' }}>{year}</option>
-                    ))}
-                  </select>
+                  <StyledSelect<string>
+                    value={String(selectedYear)}
+                    onChange={(next) => setSelectedYear(parseInt(next))}
+                    options={getAvailableYears().map(year => ({ value: String(year), label: String(year) }))}
+                    variant="green"
+                    size="sm"
+                    minWidth="60px"
+                    title={t('stats.yearLabel')}
+                  />
                   {timePeriod === 'month' && (
                     <>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>{t('stats.monthLabel')}</span>
-                      <select
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                        style={{
-                          padding: '0.25rem 0.4rem',
-                          fontSize: '0.7rem',
-                          borderRadius: '4px',
-                          border: '1px solid rgba(16,185,129,0.3)',
-                          background: 'rgba(16,185,129,0.08)',
-                          color: '#10B981',
-                          cursor: 'pointer',
-                          minWidth: '70px'
-                        }}
-                      >
-                        {Array.from({ length: 12 }, (_, monthIndex) => {
+                      <StyledSelect<string>
+                        value={String(selectedMonth)}
+                        onChange={(next) => setSelectedMonth(parseInt(next))}
+                        options={Array.from({ length: 12 }, (_, monthIndex) => {
                           const value = monthIndex + 1;
                           const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
-                          return (
-                            <option key={value} value={value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{label}</option>
-                          );
+                          return { value: String(value), label };
                         })}
-                      </select>
+                        variant="green"
+                        size="sm"
+                        minWidth="80px"
+                        title={t('stats.monthLabel')}
+                      />
                     </>
                   )}
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -1247,45 +1230,29 @@ const GraphsScreen = () => {
             {t('graphs.select2Players')}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <select
-              value={player1Id}
-              onChange={(e) => setPlayer1Id(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '0.5rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(16,185,129,0.4)',
-                background: 'rgba(16,185,129,0.1)',
-                color: '#10B981',
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              {comparisonViewPlayers.map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-              ))}
-            </select>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <StyledSelect<string>
+                value={player1Id}
+                onChange={setPlayer1Id}
+                options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+                variant="green"
+                size="md"
+                fullWidth
+                title={t('graphs.select2Players')}
+              />
+            </div>
             <span style={{ fontSize: '1.2rem', fontWeight: '700' }}>🆚</span>
-            <select
-              value={player2Id}
-              onChange={(e) => setPlayer2Id(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '0.5rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(16,185,129,0.4)',
-                background: 'rgba(16,185,129,0.1)',
-                color: '#10B981',
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              {comparisonViewPlayers.map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-              ))}
-            </select>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <StyledSelect<string>
+                value={player2Id}
+                onChange={setPlayer2Id}
+                options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+                variant="green"
+                size="md"
+                fullWidth
+                title={t('graphs.select2Players')}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -2195,25 +2162,15 @@ const GraphsScreen = () => {
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '0.5rem' }}>
               {t('graphs.selectPlayer')}
             </div>
-            <select
+            <StyledSelect<string>
               value={impactPlayerId}
-              onChange={(e) => setImpactPlayerId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(16,185,129,0.4)',
-                background: 'rgba(16,185,129,0.1)',
-                color: '#10B981',
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              {comparisonViewPlayers.map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-              ))}
-            </select>
+              onChange={setImpactPlayerId}
+              options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+              variant="green"
+              size="md"
+              fullWidth
+              title={t('graphs.selectPlayer')}
+            />
           </div>
 
           {/* With/Without Table */}

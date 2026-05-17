@@ -4,6 +4,7 @@ import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useTranslation } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
+import { StyledSelect } from './StyledSelect';
 
 interface GroupManagementTabProps {
   groupName: string;
@@ -432,30 +433,25 @@ export default function GroupManagementTab({
                   )}
 
                   {isMemberOwner && members.filter(x => x.userId !== currentUserId).length > 0 && (
-                    <select
+                    <StyledSelect<string>
                       value=""
-                      onChange={e => {
-                        const target = members.find(x => x.userId === e.target.value);
+                      onChange={(userId) => {
+                        const target = members.find(x => x.userId === userId);
                         if (target) {
                           setConfirmAction({ type: 'transfer', userId: target.userId, name: target.playerName || target.displayName || '' });
                         }
                       }}
-                      style={{
-                        padding: '0.25rem 0.4rem', borderRadius: '8px',
-                        border: '1px solid rgba(168,85,247,0.15)', background: 'rgba(168,85,247,0.06)',
-                        color: '#A855F7', fontSize: '0.65rem', fontFamily: 'Outfit, sans-serif',
-                        cursor: 'pointer', flexShrink: 0,
-                      }}
-                    >
-                      <option value="" style={{ background: '#1a1a2e', color: '#A855F7' }}>
-                        👑 {t('groupMgmt.transferOwnership')}
-                      </option>
-                      {members.filter(x => x.userId !== currentUserId).map(x => (
-                        <option key={x.userId} value={x.userId} style={{ background: '#1a1a2e', color: '#ffffff' }}>
-                          {x.playerName || x.displayName || x.email || '?'}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: `👑 ${t('groupMgmt.transferOwnership')}` },
+                        ...members
+                          .filter(x => x.userId !== currentUserId)
+                          .map(x => ({ value: x.userId, label: x.playerName || x.displayName || x.email || '?' })),
+                      ]}
+                      variant="purple"
+                      size="sm"
+                      title={t('groupMgmt.transferOwnership')}
+                      triggerLabel={`👑 ${t('groupMgmt.transferOwnership')}`}
+                    />
                   )}
                 </div>
               );
@@ -528,21 +524,19 @@ export default function GroupManagementTab({
           />
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             {unlinkedPlayers.length > 0 && (
-              <select
-                value={addEmailPlayer}
-                onChange={e => setAddEmailPlayer(e.target.value)}
-                style={{
-                  flex: 1, padding: '0.5rem 0.6rem', borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
-                  color: 'var(--text)', fontSize: '0.78rem', fontFamily: 'Outfit, sans-serif',
-                  cursor: 'pointer', minWidth: 0,
-                }}
-              >
-                <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('groupMgmt.linkToPlayer')}</option>
-                {unlinkedPlayers.map(p => (
-                  <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-                ))}
-              </select>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <StyledSelect<string>
+                  value={addEmailPlayer}
+                  onChange={setAddEmailPlayer}
+                  options={[
+                    { value: '', label: t('groupMgmt.linkToPlayer') },
+                    ...unlinkedPlayers.map(p => ({ value: p.id, label: p.name })),
+                  ]}
+                  size="md"
+                  fullWidth
+                  title={t('groupMgmt.linkToPlayer')}
+                />
+              </div>
             )}
             <button
               onClick={handleAddByEmail}

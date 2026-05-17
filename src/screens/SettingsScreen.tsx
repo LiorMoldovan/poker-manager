@@ -67,6 +67,7 @@ import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import TriviaReportsTab from '../components/TriviaReportsTab';
 import GroupManagementTab from '../components/GroupManagementTab';
+import { StyledSelect } from '../components/StyledSelect';
 import { NumericInput } from '../components/NumericInput';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -1696,26 +1697,32 @@ const SettingsScreen = () => {
             {canEditSettings && (
               <div style={{ marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
-                  <select
-                    value={newBlockedA}
-                    onChange={e => setNewBlockedA(e.target.value)}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
-                  >
-                    <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerA')}</option>
-                    {players.filter(p => p.type === 'permanent').map(p => (
-                      <option key={p.id} value={p.name} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={newBlockedB}
-                    onChange={e => setNewBlockedB(e.target.value)}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
-                  >
-                    <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerB')}</option>
-                    {players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => (
-                      <option key={p.id} value={p.name} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-                    ))}
-                  </select>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <StyledSelect<string>
+                      value={newBlockedA}
+                      onChange={setNewBlockedA}
+                      options={[
+                        { value: '', label: t('settings.game.playerA') },
+                        ...players.filter(p => p.type === 'permanent').map(p => ({ value: p.name, label: p.name })),
+                      ]}
+                      size="md"
+                      fullWidth
+                      title={t('settings.game.playerA')}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <StyledSelect<string>
+                      value={newBlockedB}
+                      onChange={setNewBlockedB}
+                      options={[
+                        { value: '', label: t('settings.game.playerB') },
+                        ...players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => ({ value: p.name, label: p.name })),
+                      ]}
+                      size="md"
+                      fullWidth
+                      title={t('settings.game.playerB')}
+                    />
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                   <input

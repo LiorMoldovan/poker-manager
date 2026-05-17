@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.7.3';
+export const APP_VERSION = '6.8.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.0',
+    date: '2026-05-17',
+    changes: [
+      '📊 Stats share screenshots now carry a period/games/active subtitle',
+      '📏 Main stats table: ממוצע / מש׳ headers no longer overlap',
+      '🎨 Graphs, settings & group management: dark popover selects everywhere',
+    ],
+  },
   {
     version: '6.7.3',
     date: '2026-05-16',

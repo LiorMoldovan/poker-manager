@@ -1659,6 +1659,59 @@ const StatisticsScreen = () => {
     );
   };
 
+  // Count of completed games visible to a given share-able table at
+  // its CURRENT effective period (global or per-table override). When
+  // no override is active this collapses to `totalGamesInPeriod` so
+  // we keep paying for the global memo. When an override is active it
+  // re-filters `getAllGames()` against the override's date window —
+  // the work is cheap (in-memory + a small array filter) so we don't
+  // bother memoizing per id.
+  const getEffectiveGamesCount = (id: PeriodOverrideTableId): number => {
+    const override = tablePeriodOverrides[id];
+    if (!override) return totalGamesInPeriod;
+    const filter = getDateFilterForPreset(override);
+    return getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!filter) return true;
+      const d = new Date(g.date || g.createdAt);
+      if (filter.start && d < filter.start) return false;
+      if (filter.end && d > filter.end) return false;
+      return true;
+    }).length;
+  };
+
+  // Small subtitle rendered below each share-able card's title:
+  //   📊 [period label] · N משחקים · 🎮 [active filter state]
+  // Stays visible in BOTH the live UI and the captured screenshot
+  // (not behind `hideForCapture`) so anyone receiving the shared image
+  // immediately knows what timeframe / player set the table reflects.
+  // Reflects the effective per-table override when one is active —
+  // matches what the table's data actually shows. The active-filter
+  // chip mirrors the toggle button's two states verbatim:
+  //   ON  → "🎮 פעילים" / "🎮 Active"  (same as t('stats.activeOnlyShort'))
+  //   OFF → "🎮 כולם"   / "🎮 All"     (same as t('stats.allPlayersShort'))
+  // We render it unconditionally — the recipient should know whether
+  // the table was filtered to active players, even when the answer is
+  // "no, all players are included".
+  const renderShareContextSubtitle = (id: PeriodOverrideTableId) => {
+    const override = tablePeriodOverrides[id];
+    const periodLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
+    const gamesCount = getEffectiveGamesCount(id);
+    const isActive = getEffectiveActive(id);
+    const activeLabel = isActive ? t('stats.activeOnlyShort') : t('stats.allPlayersShort');
+    return (
+      <div style={{
+        fontSize: '0.7rem',
+        color: 'var(--text-muted)',
+        textAlign: 'center',
+        marginBottom: '0.35rem',
+        fontWeight: 500,
+      }}>
+        📊 {periodLabel} · {t('stats.gamesCount', { count: gamesCount })} · 🎮 {activeLabel}
+      </div>
+    );
+  };
+
   // Generic dark-theme styled select. Same chrome as the period dropdown
   // (trigger looks like a chip; open content is a `var(--surface)`
   // popover with primary accent on the selected row). Drop-in
@@ -2744,10 +2797,14 @@ const StatisticsScreen = () => {
               {/* Top 20 Single Night Wins - ALL TIME */}
               {top20WinsAllTime.length > 0 && (
                 <div ref={top20Ref} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.top20')}
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{t('stats.allTimeLabel')}</div>
+                  {/* Subtitle styled to match the other 5 share-able cards'
+                      context lines — top20 is always all-time so there's
+                      no period/active variability to surface, just the
+                      static "📊 כל הזמנים" chip for visual consistency. */}
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.35rem', fontWeight: 500 }}>📊 {t('stats.allTimeLabel')}</div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -3138,15 +3195,12 @@ const StatisticsScreen = () => {
                     })}
                   </div>
                 </div>
-                {/* Title — centered, matches the other 4 tables'
-                    chrome exactly. Games count was here as a muted
-                    suffix earlier, but no other table carries one and
-                    the period dropdown right above already tells the
-                    user which scope they're looking at — so the
-                    suffix was redundant chrome. */}
-                <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                {/* Title — centered, matches the other 4 tables' chrome. */}
+                <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                   {t('stats.playerRanking')}
                 </div>
+                {/* Share-screenshot context: scope/games/active. */}
+                {renderShareContextSubtitle('main')}
                 <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
@@ -3155,8 +3209,18 @@ const StatisticsScreen = () => {
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.playerCol')}</th>
                       {tableMode === 'profit' ? (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '20%' }}>{t('stats.profitCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '14%' }}>{t('stats.avgCol')}</th>
+                          {/* `avg` widened from 14% → 16% and horizontal
+                              padding reduced (0.4rem → 0.3rem) on both
+                              this and `profit` because the Hebrew header
+                              "ממוצע" (5 letters) was overflowing its
+                              cell on narrow phones and visually colliding
+                              with the adjacent `מש'` header. Both columns
+                              still comfortably fit 5–6-char values like
+                              "+12,345"; reducing padding gives the text
+                              a few extra pixels of cell room without
+                              widening the body rows. */}
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '18%' }}>{t('stats.profitCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '16%' }}>{t('stats.avgCol')}</th>
                         </>
                       ) : tableMode === 'gainLoss' ? (
                         <>
@@ -3212,10 +3276,14 @@ const StatisticsScreen = () => {
                       </td>
                         {tableMode === 'profit' ? (
                           <>
-                            <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
+                            {/* Padding matches the <th> above (0.3rem 0.3rem) so
+                                the body cell's textual edges line up with the
+                                header's — otherwise the header text and value
+                                column drift when one has 0.4rem and the other 0.3rem. */}
+                            <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
                               {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
                             </td>
-                            <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
+                            <td style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
                               {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                             </td>
                           </>
@@ -3321,9 +3389,10 @@ const StatisticsScreen = () => {
                       {renderActiveOverrideToggle('podium')}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.podiumRates')}
                   </div>
+                  {renderShareContextSubtitle('podium')}
                   {/* Horizontal-scroll fallback is scoped to just the
                       <table>, not the whole card. Wrapping title +
                       footer + table together caused a phantom
@@ -3454,9 +3523,10 @@ const StatisticsScreen = () => {
                     {renderPeriodOverrideDropdown('top10')}
                     {renderActiveOverrideToggle('top10')}
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.top10')}
                   </div>
+                  {renderShareContextSubtitle('top10')}
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -3508,9 +3578,10 @@ const StatisticsScreen = () => {
                     {renderPeriodOverrideDropdown('rebuy')}
                     {renderActiveOverrideToggle('rebuy')}
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.rebuyStats')}
                   </div>
+                  {renderShareContextSubtitle('rebuy')}
                   {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
                     <div style={{
                       fontSize: '0.65rem',
@@ -3627,9 +3698,10 @@ const StatisticsScreen = () => {
                     {renderPeriodOverrideDropdown('avgPlacement')}
                     {renderActiveOverrideToggle('avgPlacement')}
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.avgPlacement')}
                   </div>
+                  {renderShareContextSubtitle('avgPlacement')}
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
