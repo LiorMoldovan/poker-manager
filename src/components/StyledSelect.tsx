@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../i18n';
 
 // Dark-theme styled select — drop-in replacement for native `<select>`.
@@ -15,6 +16,17 @@ import { useTranslation } from '../i18n';
 // blocks clicks on other triggers; the user clicks the backdrop to
 // close, then opens the next one. Acceptable for the few selects we
 // have on any given screen.
+//
+// IMPORTANT — the popover is rendered via a React portal into
+// `document.body` and positioned with `position: fixed` + the trigger's
+// bounding rect. The earlier `position: absolute` version got trapped
+// inside ancestor stacking contexts (e.g. the `position:fixed` add-
+// member banner at z-index 9999, or any modal overlay) and rendered
+// either invisibly behind the page or clipped by `overflow:hidden`
+// ancestors. Portal + fixed coords bypasses both problems entirely;
+// the popover lives at the document root and its z-index competes only
+// with Toast (10001) and modal overlays (200) — we sit at 10000 so we
+// stack above modal overlays and the bottom nav (100) but below toasts.
 //
 // Variants:
 //   default — neutral surface (`var(--surface)` / muted text); used by
@@ -51,6 +63,16 @@ interface StyledSelectProps<T extends string> {
   ariaLabel?: string;
 }
 
+// Z-index hierarchy in this app (from src/styles/index.css):
+//   100   → bottom-nav
+//   200   → modal-overlay
+//   9999  → add-member banner (App.tsx)
+//   10001 → toast-container
+// We sit at 10000 so we cover everything except toasts (so a
+// confirmation toast after picking still reads).
+const POPOVER_Z_INDEX = 10000;
+const BACKDROP_Z_INDEX = 9999;
+
 export function StyledSelect<T extends string>({
   value,
   options,
@@ -64,7 +86,39 @@ export function StyledSelect<T extends string>({
   ariaLabel,
 }: StyledSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Trigger's bounding rect captured on open + on scroll/resize so
+  // the popover follows the trigger. We snapshot in state (not just
+  // a ref) so the popover re-renders to the new coords. `null` means
+  // not-yet-measured — popover renders invisibly off-screen on first
+  // paint until useLayoutEffect lands the real rect synchronously.
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
   const { isRTL } = useTranslation();
+
+  // Position update — synchronous (`useLayoutEffect`) so the first
+  // paint with `isOpen=true` already has the right coords; no visible
+  // jump. We re-measure on scroll/resize so the popover sticks to its
+  // trigger when the user scrolls the page underneath. On scroll we
+  // also could close instead — but following is friendlier for a
+  // dropdown buried inside a long form.
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setTriggerRect(null);
+      return;
+    }
+    const measure = () => {
+      if (triggerRef.current) {
+        setTriggerRect(triggerRef.current.getBoundingClientRect());
+      }
+    };
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [isOpen]);
 
   const selected = options.find(o => o.value === value);
   const label = triggerLabel ?? selected?.label ?? '';
@@ -103,15 +157,51 @@ export function StyledSelect<T extends string>({
       ? { background: 'rgba(168,85,247,0.18)', color: '#A855F7' }
       : { background: 'rgba(99, 102, 241, 0.18)', color: 'var(--primary)' };
 
+  // Popover position — fixed coords derived from the trigger's
+  // viewport rect. Width = trigger width (tracks `fullWidth` naturally).
+  // Flips to render ABOVE the trigger if there's not enough room below.
+  // Caps height to 60% of viewport so very long player lists scroll
+  // instead of overflowing the screen.
+  let popoverStyle: React.CSSProperties | null = null;
+  if (isOpen && triggerRect) {
+    const gap = 4;
+    const viewportH = window.innerHeight;
+    const desiredMaxH = Math.min(viewportH * 0.6, 360);
+    const roomBelow = viewportH - triggerRect.bottom - gap;
+    const roomAbove = triggerRect.top - gap;
+    const openUp = roomBelow < 180 && roomAbove > roomBelow;
+    const top = openUp
+      ? Math.max(8, triggerRect.top - gap - Math.min(desiredMaxH, roomAbove))
+      : triggerRect.bottom + gap;
+    const maxHeight = openUp
+      ? Math.min(desiredMaxH, roomAbove)
+      : Math.min(desiredMaxH, roomBelow);
+    popoverStyle = {
+      position: 'fixed',
+      top,
+      left: triggerRect.left,
+      width: triggerRect.width,
+      minWidth: fullWidth ? undefined : Math.max(triggerRect.width, 160),
+      maxHeight,
+      overflowY: 'auto',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: '8px',
+      padding: '0.25rem',
+      zIndex: POPOVER_Z_INDEX,
+      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+    };
+  }
+
   return (
     <div
       style={{
-        position: 'relative',
         display: fullWidth ? 'block' : 'inline-block',
         width: fullWidth ? '100%' : undefined,
       }}
     >
       <button
+        ref={triggerRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation();
@@ -140,34 +230,19 @@ export function StyledSelect<T extends string>({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{label}</span>
         <span style={{ flexShrink: 0, fontSize: '0.65em' }}>{isOpen ? '▲' : '▼'}</span>
       </button>
-      {isOpen && (
+      {isOpen && popoverStyle && createPortal(
         <>
           {/* Full-viewport backdrop — closes the popover on outside
               click (including any non-popover scroll / nav tap). Kept
               transparent so the rest of the UI stays visually
-              uninterrupted while a select is open. */}
+              uninterrupted while a select is open. Rendered into the
+              portal alongside the popover so it sits at the document
+              root and isn't trapped in any ancestor's stacking ctx. */}
           <div
             onClick={() => setIsOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+            style={{ position: 'fixed', inset: 0, zIndex: BACKDROP_Z_INDEX }}
           />
-          <div
-            role="listbox"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 4px)',
-              insetInlineStart: 0,
-              insetInlineEnd: fullWidth ? 0 : undefined,
-              minWidth: fullWidth ? undefined : '160px',
-              maxHeight: '60vh',
-              overflowY: 'auto',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '0.25rem',
-              zIndex: 999,
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
-            }}
-          >
+          <div role="listbox" style={popoverStyle}>
             {options.map(opt => {
               const isSelected = opt.value === value;
               return (
@@ -208,7 +283,8 @@ export function StyledSelect<T extends string>({
               );
             })}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );

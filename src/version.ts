@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.0';
+export const APP_VERSION = '6.8.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.1',
+    date: '2026-05-17',
+    changes: [
+      '🔧 Dark popover dropdowns: render above all overlays (no more hidden menus)',
+    ],
+  },
   {
     version: '6.8.0',
     date: '2026-05-17',
