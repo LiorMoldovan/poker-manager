@@ -11,6 +11,7 @@ import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
+import { StyledSelect } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { hapticTap } from '../utils/haptics';
 
@@ -159,19 +160,11 @@ const StatisticsScreen = () => {
   type TablePeriodPreset = 'all' | 'year' | 'half' | 'month';
   type PeriodOverrideTableId = ActiveOverrideTableId;
   const [tablePeriodOverrides, setTablePeriodOverrides] = useState<Partial<Record<PeriodOverrideTableId, TablePeriodPreset>>>({});
-  // Which table's period dropdown is currently open. Single-popover-at-
-  // a-time gate; tapping a different table's chip auto-closes the
-  // previous one. Picking an option or tapping the backdrop also
-  // resets to null. Lives in screen state (not local to each
-  // dropdown render) so the backdrop can dismiss any open popover
-  // regardless of which table opened it.
-  const [openPeriodDropdown, setOpenPeriodDropdown] = useState<PeriodOverrideTableId | null>(null);
-  // Which non-period styled-select is currently open (sort / mode /
-  // podium-sort etc.). Same single-popover-at-a-time semantics as
-  // `openPeriodDropdown`. Kept as a separate id space because the
-  // period dropdown's options are derived from the override state
-  // (with the special 'current' value) while these are flat enums.
-  const [openSelectId, setOpenSelectId] = useState<string | null>(null);
+  // Sentinel value for the period dropdown's "inherit from global"
+  // option. `StyledSelect` is typed `T extends string` so we can't
+  // pass `null` directly — we map this string to `null` (and back)
+  // at the dropdown's value/onChange boundary.
+  const PERIOD_INHERIT_SENTINEL = '__current__';
   const setTablePeriodOverride = (id: PeriodOverrideTableId, preset: TablePeriodPreset | null) => {
     setTablePeriodOverrides(prev => {
       const next = { ...prev };
@@ -179,7 +172,6 @@ const StatisticsScreen = () => {
       else next[id] = preset;
       return next;
     });
-    setOpenPeriodDropdown(null);
   };
   // Compute a date filter for a fixed preset relative to today. Used
   // when a per-table period override is active. Presets always anchor
@@ -1551,111 +1543,39 @@ const StatisticsScreen = () => {
   // override is active. Opens below itself anchored to `insetInlineStart`
   // (RTL-start: right edge in Hebrew). A `position: fixed; inset: 0`
   // backdrop dismisses any open popover when the user taps outside.
-  // Only one popover can be open at a time (the `openPeriodDropdown`
-  // state is keyed by table id) — tapping a different table's trigger
-  // auto-closes the previous one via the dispatched state update.
+  // Thin wrapper around the shared `StyledSelect` that:
+  //   – Maps the "inherit global" option to a sentinel string at the
+  //     value/onChange boundary (StyledSelect is `T extends string`,
+  //     can't accept `null` directly).
+  //   – Switches the trigger to the `purple` variant whenever a table
+  //     has its own override active, so the chip visually signals
+  //     "this table is opting out of the global period". When no
+  //     override is set the trigger uses the `default` (neutral)
+  //     variant and the label is just the global timeframe.
+  //   – Force-prepends 📅 to the trigger label so the chip is
+  //     scannable in the stats controls strip.
   const renderPeriodOverrideDropdown = (id: PeriodOverrideTableId) => {
     const override = tablePeriodOverrides[id];
-    const isOpen = openPeriodDropdown === id;
-    // The closed-state label collapses to either the override's preset
-    // name (when active) or the global timeframe (when inherited). No
-    // "Current (…)" hint needed on the chip because the live timeframe
-    // IS the label when no override is set.
     const buttonLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
-    const options: Array<{ value: TablePeriodPreset | null; label: string }> = [
-      { value: null,    label: t('stats.periodCurrent') },
-      { value: 'all',   label: labelForPeriodPreset('all') },
-      { value: 'year',  label: labelForPeriodPreset('year') },
-      { value: 'half',  label: labelForPeriodPreset('half') },
-      { value: 'month', label: labelForPeriodPreset('month') },
+    const options: Array<{ value: string; label: string }> = [
+      { value: PERIOD_INHERIT_SENTINEL, label: t('stats.periodCurrent') },
+      { value: 'all',   label: `📅 ${labelForPeriodPreset('all')}` },
+      { value: 'year',  label: `📅 ${labelForPeriodPreset('year')}` },
+      { value: 'half',  label: `📅 ${labelForPeriodPreset('half')}` },
+      { value: 'month', label: `📅 ${labelForPeriodPreset('month')}` },
     ];
     return (
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setOpenPeriodDropdown(isOpen ? null : id);
-          }}
-          title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
-          style={{
-            padding: '0.3rem 0.5rem',
-            fontSize: '0.7rem',
-            borderRadius: '6px',
-            border: `1px solid ${override ? 'var(--primary)' : 'var(--border)'}`,
-            background: override ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
-            color: override ? 'var(--primary)' : 'var(--text-muted)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            maxWidth: '200px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          📅 {buttonLabel} {isOpen ? '▲' : '▼'}
-        </button>
-        {isOpen && (
-          <>
-            {/* Backdrop — `position: fixed; inset: 0` so a tap
-                anywhere off the popover closes it. Sits below the
-                popover (zIndex 998 vs 999) so the popover itself
-                still receives clicks. */}
-            <div
-              onClick={() => setOpenPeriodDropdown(null)}
-              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                insetInlineStart: 0,
-                minWidth: '160px',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '0.25rem',
-                zIndex: 999,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
-              }}
-            >
-              {options.map(opt => {
-                const isSelected = (opt.value === null && !override) || opt.value === override;
-                return (
-                  <button
-                    key={String(opt.value)}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      setTablePeriodOverride(id, opt.value);
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: isRTL ? 'right' : 'left',
-                      padding: '0.4rem 0.6rem',
-                      fontSize: '0.7rem',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                      color: isSelected ? 'var(--primary)' : 'var(--text)',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                  >
-                    📅 {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <StyledSelect<string>
+        value={override ?? PERIOD_INHERIT_SENTINEL}
+        onChange={(next) =>
+          setTablePeriodOverride(id, next === PERIOD_INHERIT_SENTINEL ? null : (next as TablePeriodPreset))
+        }
+        options={options}
+        title={override ? t('stats.localOverrideHint') : t('stats.tablePeriodHint')}
+        triggerLabel={`📅 ${buttonLabel}`}
+        variant={override ? 'purple' : 'default'}
+        size="sm"
+      />
     );
   };
 
@@ -1712,20 +1632,12 @@ const StatisticsScreen = () => {
     );
   };
 
-  // Generic dark-theme styled select. Same chrome as the period dropdown
-  // (trigger looks like a chip; open content is a `var(--surface)`
-  // popover with primary accent on the selected row). Drop-in
-  // replacement for any native <select> on this screen — native
-  // selects open OS chrome (iOS white wheel picker / Android system
-  // list) which clashes with the dark theme on mobile and has no
-  // styling escape hatch.
-  //
-  // The `id` must be unique across all callers on this screen — it
-  // keys into `openSelectId` so only one styled-select can be open at
-  // a time. Backdrop click dismisses; picking an option calls
-  // onChange and closes. Trigger label defaults to the matching
-  // option's label; pass `triggerLabel` if you want to display
-  // something different (e.g. a short form).
+  // Thin wrapper around the shared `StyledSelect`. v6.8.2 consolidated
+  // the previously-local popover impl onto the shared component so
+  // every dropdown in the app uses portal+fixed-coords rendering and
+  // can't get trapped in an ancestor's stacking context. `id` is no
+  // longer used (state lives inside the shared component) but kept in
+  // the arg shape so call sites don't have to change.
   const renderStyledSelect = <T extends string>(args: {
     id: string;
     value: T;
@@ -1734,94 +1646,15 @@ const StatisticsScreen = () => {
     title?: string;
     triggerLabel?: string;
   }) => {
-    const { id, value, options, onChange, title, triggerLabel } = args;
-    const isOpen = openSelectId === id;
-    const selected = options.find(o => o.value === value);
-    const label = triggerLabel ?? selected?.label ?? '';
     return (
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setOpenSelectId(isOpen ? null : id);
-          }}
-          title={title}
-          style={{
-            padding: '0.3rem 0.5rem',
-            fontSize: '0.7rem',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            background: 'var(--surface)',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            maxWidth: '200px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {label} {isOpen ? '▲' : '▼'}
-        </button>
-        {isOpen && (
-          <>
-            <div
-              onClick={() => setOpenSelectId(null)}
-              style={{ position: 'fixed', inset: 0, zIndex: 998 }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                insetInlineStart: 0,
-                minWidth: '160px',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '0.25rem',
-                zIndex: 999,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
-              }}
-            >
-              {options.map(opt => {
-                const isSelected = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      onChange(opt.value);
-                      setOpenSelectId(null);
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: isRTL ? 'right' : 'left',
-                      padding: '0.4rem 0.6rem',
-                      fontSize: '0.7rem',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                      color: isSelected ? 'var(--primary)' : 'var(--text)',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <StyledSelect<T>
+        value={args.value}
+        options={args.options}
+        onChange={args.onChange}
+        title={args.title}
+        triggerLabel={args.triggerLabel}
+        size="sm"
+      />
     );
   };
 

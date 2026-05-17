@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -236,6 +237,32 @@ const NewGameScreen = () => {
   const [periodMarkers, setPeriodMarkers] = useState<PeriodMarkers | null>(null);
   const [periodOverride, setPeriodOverride] = useState<string | null>(null); // null = auto-detect
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  // Period-dropdown popover anchors to this button's viewport rect.
+  // Stored in state so the portal'd popover re-renders to follow the
+  // trigger when the page scrolls / window resizes. See the StyledSelect
+  // component for the same pattern — both use portal + position:fixed
+  // to escape ancestor stacking contexts (modals, fixed banners) that
+  // would otherwise hide a position:absolute popover.
+  const periodTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [periodTriggerRect, setPeriodTriggerRect] = useState<DOMRect | null>(null);
+  useLayoutEffect(() => {
+    if (!showPeriodDropdown) {
+      setPeriodTriggerRect(null);
+      return;
+    }
+    const measure = () => {
+      if (periodTriggerRef.current) {
+        setPeriodTriggerRect(periodTriggerRef.current.getBoundingClientRect());
+      }
+    };
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [showPeriodDropdown]);
   const [publishedForecast, setPublishedForecast] = useState<ReturnType<typeof getPendingForecast>>(null);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
@@ -2086,8 +2113,9 @@ const NewGameScreen = () => {
               const activeValue = periodOverride || autoValue;
               const isOverridden = periodOverride !== null && periodOverride !== autoValue;
               return (
-                <div style={{ position: 'relative', flex: '1 1 0', minWidth: '0' }}>
+                <div style={{ flex: '1 1 0', minWidth: '0' }}>
                   <button
+                    ref={periodTriggerRef}
                     onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
                     style={{
                       width: '100%',
@@ -2113,24 +2141,33 @@ const NewGameScreen = () => {
                     {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>{t('newGame.manual')}</span>}
                     <span style={{ fontSize: '0.55rem', opacity: 0.5, flexShrink: 0 }}>▼</span>
                   </button>
-                  {showPeriodDropdown && (
+                  {/* Popover is portal'd to document.body and positioned
+                      with `position: fixed` so it can't get trapped in
+                      any ancestor stacking context (and so it sits
+                      above the bottom-nav and any modal/banner). Opens
+                      UPWARD by anchoring the popover's bottom to the
+                      trigger's top — preserves the original "opens
+                      above" behavior because this control lives near
+                      the bottom of the new-game form, just above the
+                      action buttons. */}
+                  {showPeriodDropdown && periodTriggerRect && createPortal(
                     <>
                       <div
                         onClick={() => setShowPeriodDropdown(false)}
-                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                        style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
                       />
                       <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: 0,
-                        right: 0,
-                        minWidth: '200px',
-                        marginBottom: '4px',
+                        position: 'fixed',
+                        left: periodTriggerRect.left,
+                        bottom: window.innerHeight - periodTriggerRect.top + 4,
+                        width: periodTriggerRect.width,
+                        minWidth: 200,
+                        maxHeight: '60vh',
                         background: 'var(--surface)',
                         border: '1px solid var(--border)',
                         borderRadius: '8px',
                         boxShadow: '0 -4px 16px rgba(0,0,0,0.3)',
-                        zIndex: 100,
+                        zIndex: 10000,
                         overflow: 'hidden',
                       }}>
                         <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: isRTL ? 'right' : 'left' }}>
@@ -2167,7 +2204,8 @@ const NewGameScreen = () => {
                           </button>
                         ))}
                       </div>
-                    </>
+                    </>,
+                    document.body,
                   )}
                 </div>
               );
