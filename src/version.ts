@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.2';
+export const APP_VERSION = '6.8.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.3',
+    date: '2026-05-18',
+    changes: [
+      '🔧 Confirmed-date banner: hide "opens to all in…" once seats are full',
+    ],
+  },
   {
     version: '6.8.2',
     date: '2026-05-17',

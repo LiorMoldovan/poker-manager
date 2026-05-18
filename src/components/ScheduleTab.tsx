@@ -1718,8 +1718,10 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
     // open→expanded clock isn't lost (this is the message that
     // disappeared from the original v5.61-era PollTimer when a date
     // got pinned during open phase). Suppressed in single-tier groups
-    // (no guest tier exists).
-    if (hasGuestTier && !poll.expandedAt) {
+    // (no guest tier exists), and also suppressed once the target is
+    // reached — at full seats the "opens to all in …" promise is
+    // moot since there's no room left for guests to grab anyway.
+    if (hasGuestTier && !poll.expandedAt && isBelowTarget) {
       const expandsAt = new Date(poll.createdAt).getTime()
         + poll.expansionDelayHours * 3600_000;
       const expandsIn = expandsAt - now;
