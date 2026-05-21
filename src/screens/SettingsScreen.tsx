@@ -2809,11 +2809,9 @@ const SettingsScreen = () => {
             {isSuperAdmin && (() => {
               const used = emailUsage?.used ?? 0;
               const limit = emailUsage?.limit ?? 200;
-              const limitSource = emailUsage?.limitSource ?? 'default';
               const remaining = emailUsage?.remaining ?? Math.max(limit - used, 0);
               const failed = emailUsage?.failed ?? 0;
               const resetDate = emailUsage?.resetDate;
-              const loggingSince = emailUsage?.loggingSince || null;
               const usedPct = Math.min(Math.round((used / limit) * 100), 100);
               const perKind = emailUsage?.perKind || {};
               const perDay = emailUsage?.perDay || [];
@@ -2821,22 +2819,6 @@ const SettingsScreen = () => {
               const avgPerDay = perDay.length > 0
                 ? Math.round(perDay.reduce((s, d) => s + d.count, 0) / perDay.length)
                 : 0;
-              const loggingSinceLoc = language === 'he' ? 'he-IL' : 'en-US';
-              const loggingSinceStr = loggingSince
-                ? new Date(loggingSince).toLocaleDateString(loggingSinceLoc, { day: 'numeric', month: 'short', year: 'numeric' })
-                : null;
-              // EmailJS-cache provenance. When `usedSource` is 'emailjs'
-              // the headline number is derived from EmailJS's own
-              // /history API — caches locally so we beat their 7-day
-              // retention. The "last synced" line tells the operator
-              // when the local cache was last refreshed against EmailJS.
-              const usedSource = emailUsage?.usedSource ?? 'self_log';
-              // Note: emailjsLastSyncedAt was used in the previous design
-              // where EmailJS API was the primary source. Since v5.43.3
-              // the self-log (with operator-supplied baseline) is the
-              // primary; the EmailJS cache is only a cross-check, so the
-              // sync timestamp surfaces in the in-sync line below
-              // instead of the source caption.
               // Sort kinds by count desc for the breakdown — most-frequent at the top.
               const kindEntries = Object.entries(perKind).sort((a, b) => b[1] - a[1]);
               // Translation key map. Falls back to the raw kind string for any
@@ -3038,41 +3020,12 @@ const SettingsScreen = () => {
                           )}
                         </div>
                       )}
-                      {/* Honesty block: the "limit" is a configured default, not a
-                          live read from EmailJS (they don't expose plan info via
-                          API), and the headline number is labelled with its
-                          actual source — EmailJS's own /history API (cached
-                          locally) when available, otherwise our self-log as
-                          fallback. Without this context the card looks
-                          fabricated to anyone who's ever clicked through to
-                          their actual EmailJS dashboard. */}
+                      {/* Link to the EmailJS dashboard — the source-of-truth
+                          confirmation. Verbose source/limit provenance was
+                          dropped in v6.8.4: the link does the job of "is this
+                          real?" without the dev-trivia caption. */}
                       {emailUsage && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.45 }}>
-                          {/* Source provenance.
-                              - baseline_plus_self_log: operator-confirmed
-                                EmailJS-dashboard reading at cycle start +
-                                every send since. Active for the partial
-                                first cycle.
-                              - self_log: pure email_usage_log count. From
-                                the second cycle onward (audit log
-                                covers the whole cycle natively). */}
-                          {usedSource === 'baseline_plus_self_log' && emailUsage.baselineApplied
-                            ? t('settings.ai.emailSourceBaseline', {
-                                baseline: emailUsage.baselineApplied.toLocaleString(),
-                                tracked: (emailUsage.used - emailUsage.baselineApplied).toLocaleString(),
-                              })
-                            : (loggingSinceStr
-                                ? t('settings.ai.emailSourceSelfLog', { date: loggingSinceStr })
-                                : t('settings.ai.emailNoLogsYet'))}
-                          {' · '}
-                          {/* Source provenance for the limit:
-                              'config'  = stored in system_config (UI-edited, the preferred path)
-                              'env'     = legacy env var fallback
-                              'default' = neither set; we used 200. Nudge with a warning color. */}
-                          {limitSource === 'default'
-                            ? <span style={{ color: '#F59E0B' }}>{t('settings.ai.emailLimitDefault')}</span>
-                            : t('settings.ai.emailLimitFromEnv')}
-                          {' · '}
                           <a
                             href="https://dashboard.emailjs.com/admin"
                             target="_blank"

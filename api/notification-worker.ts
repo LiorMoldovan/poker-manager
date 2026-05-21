@@ -537,14 +537,30 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
 
   // Per-group push/email gates from `settings`.
   const { data: settings } = await sb.from('settings')
-    .select('schedule_push_enabled, schedule_emails_enabled')
+    .select('schedule_push_enabled, schedule_emails_enabled, schedule_email_kinds')
     .eq('group_id', group_id)
     .maybeSingle();
   const pushEnabled = (settings as { schedule_push_enabled?: boolean } | null)?.schedule_push_enabled !== false;
   const emailsEnabled = (settings as { schedule_emails_enabled?: boolean } | null)?.schedule_emails_enabled === true;
+  // Per-event allowlist (migration 090). Missing column / missing key
+  // defaults to true so groups that haven't customised the filter behave
+  // exactly as before. A key explicitly set to `false` disables emails of
+  // that kind even when the master toggle is on. Lifecycle + reminder +
+  // date_excluded kinds map 1:1 to the keys; trivia/training/vote_change
+  // kinds are not in this filter (push-only by design).
+  const emailKinds = ((settings as { schedule_email_kinds?: Record<string, unknown> } | null)?.schedule_email_kinds) || {};
+  const kindAllowedByFilter =
+    kind === 'vote_change'
+    || kind === 'trivia_report_filed'
+    || kind === 'trivia_report_resolved'
+    || kind === 'training_report_filed'
+    || kind === 'training_report_resolved'
+    || kind === 'training_milestone'
+      ? true
+      : (emailKinds as Record<string, boolean | undefined>)[kind] !== false;
   // Email is also gated to the owner group at the network layer; mirror
   // here so we don't even queue email work for non-owner groups.
-  const emailAllowedForGroup = !!OWNER_GROUP_ID && group_id === OWNER_GROUP_ID && emailsEnabled;
+  const emailAllowedForGroup = !!OWNER_GROUP_ID && group_id === OWNER_GROUP_ID && emailsEnabled && kindAllowedByFilter;
   const emailOnly = !pushEnabled;
 
   // ── Poll-context kinds ──

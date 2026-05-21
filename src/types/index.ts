@@ -470,6 +470,23 @@ export interface BlockedTransferPair {
   after: string; // ISO date string — rule active for games after this date
 }
 
+// Per-event email kinds the admin can individually toggle from
+// Settings → Schedule. Mirrors the EMAIL_ALLOWLIST in
+// `src/utils/scheduleNotifications.ts` plus `date_excluded` (which uses
+// its own dispatch path but is the same shape of "an email goes out
+// when X happens"). Persisted as a JSONB object on settings under
+// `schedule_email_kinds` (migration 090). `vote_change` is push-only
+// by design (every RSVP fires; emailing each one would flood quota) so
+// it intentionally has no toggle here.
+export type ScheduleEmailKind =
+  | 'creation'        // 🃏 ערב פוקר חדש — invitation goes out
+  | 'expanded'        // 🎯 ההצבעה פתוחה לכולם — opened to all tiers
+  | 'confirmed'       // ✅ נסגר! / 🪑 חסרים שחקנים — date pinned
+  | 'target_filled'   // 🎉 המשחק מלא — seat target finally hit post-pin
+  | 'cancellation'    // ❌ ההצבעה בוטלה — admin cancelled
+  | 'reminder'        // 📣 תזכורת להצבעה — admin sent manual reminder
+  | 'date_excluded';  // ✂️ תאריך הוצא — admin removed a date
+
 export interface Settings {
   rebuyValue: number;
   chipsPerRebuy: number;
@@ -480,8 +497,16 @@ export interface Settings {
   geminiApiKey?: string;
   elevenlabsApiKey?: string;
   language?: 'he' | 'en';
-  scheduleEmailsEnabled?: boolean; // Beta-period toggle: when false, schedule notifications skip email broadcasts
+  scheduleEmailsEnabled?: boolean; // Master kill switch: when false, ALL schedule emails skip regardless of scheduleEmailKinds
   schedulePushEnabled?: boolean;   // Beta-period toggle: when false, schedule notifications skip push broadcasts (default true)
+  // Per-event email allowlist (migration 090). Layered ON TOP of the
+  // master `scheduleEmailsEnabled` toggle — both must be truthy for an
+  // email of that kind to fire. Default object has every key = true,
+  // so existing groups with the master ON keep blasting every kind.
+  // Flipping a key to false lets an admin suppress (e.g.) reminder
+  // emails while keeping invitation emails on, to manage EmailJS
+  // quota without losing the high-signal "ערב פוקר חדש" broadcast.
+  scheduleEmailKinds?: Partial<Record<ScheduleEmailKind, boolean>>;
   // Group-level defaults pre-filled in CreatePollModal (still editable per poll)
   scheduleDefaultTarget?: number;          // 2..12, default 7
   scheduleDefaultDelayHours?: number;      // 0..240, default 48

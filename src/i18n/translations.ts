@@ -1411,7 +1411,7 @@ const he = {
   'settings.ai.emailKind.training': 'דוח אימון',
   'settings.ai.emailKind.training_share': 'שיתוף אימון',
   'settings.ai.emailKind.preview': 'דוגמת מייל',
-  'settings.ai.emailKind.broadcast': 'כללי',
+  'settings.ai.emailKind.broadcast': 'עדכון משחק',
 
   // ── History ──
   'history.title': 'היסטוריית משחקים',
@@ -2051,7 +2051,15 @@ const he = {
   'schedule.config.pushEnabled': 'שלח Push לחברי הקבוצה',
   'schedule.config.pushHelper': 'נשלחת בפתיחה/סגירה/ביטול.',
   'schedule.config.emailsEnabled': 'שלח מייל לחברי הקבוצה',
-  'schedule.config.emailsHelper': 'נשלח בפתיחה/סגירה/ביטול.',
+  'schedule.config.emailsHelper': 'מתג ראשי. אפשר לבחור בדיוק אילו מיילים יישלחו.',
+  'schedule.config.emailKindsHelper': 'בחר אילו מיילים יישלחו. כיבוי כללי למעלה מבטל הכל.',
+  'schedule.config.emailKind.creation':       'פתיחת הצבעה (זימון)',
+  'schedule.config.emailKind.expanded':       'פתיחה לכולם',
+  'schedule.config.emailKind.confirmed':      'נקבע תאריך',
+  'schedule.config.emailKind.target_filled':  'המשחק מלא',
+  'schedule.config.emailKind.cancellation':   'ביטול הצבעה',
+  'schedule.config.emailKind.reminder':       'תזכורת ידנית להצבעה',
+  'schedule.config.emailKind.date_excluded':  'הוצאת תאריך מההצבעה',
   // Per-admin opt-out for vote_change pings (migration 032). The
   // helper text spells out the trade-off so admins know exactly what
   // they're losing if they mute it.
@@ -3976,7 +3984,7 @@ const en: Record<keyof typeof he, string> = {
   'settings.ai.emailKind.training': 'Training report',
   'settings.ai.emailKind.training_share': 'Shared training',
   'settings.ai.emailKind.preview': 'Preview',
-  'settings.ai.emailKind.broadcast': 'Broadcast',
+  'settings.ai.emailKind.broadcast': 'Game update',
 
   // ── History ──
   'history.title': 'Game History',
@@ -4565,7 +4573,15 @@ const en: Record<keyof typeof he, string> = {
   'schedule.config.voteChangeNotifs': '🔄 Notify me on votes',
   'schedule.config.voteChangeNotifsHelper': 'Push on every vote — new or changed.',
   'schedule.config.emailsEnabled': 'Send email to group members',
-  'schedule.config.emailsHelper': 'Sent on poll open / close / cancel.',
+  'schedule.config.emailsHelper': 'Master switch. Choose exactly which emails go out below.',
+  'schedule.config.emailKindsHelper': 'Pick which emails to send. Master OFF disables all.',
+  'schedule.config.emailKind.creation':       'Poll opened (invitation)',
+  'schedule.config.emailKind.expanded':       'Opened to all members',
+  'schedule.config.emailKind.confirmed':      'Date confirmed',
+  'schedule.config.emailKind.target_filled':  'Game is full',
+  'schedule.config.emailKind.cancellation':   'Poll cancelled',
+  'schedule.config.emailKind.reminder':       'Manual voting reminder',
+  'schedule.config.emailKind.date_excluded':  'Date removed from poll',
   'schedule.config.saved': '✓ Settings saved',
   'schedule.config.adminOnly': 'Admins only',
   'schedule.config.defaultsTitle': 'Default values for new polls',

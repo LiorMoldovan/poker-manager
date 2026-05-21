@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.5';
+export const APP_VERSION = '6.8.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.7',
+    date: '2026-05-21',
+    changes: [
+      '✉️ Pick exactly which schedule emails to send',
+      '🛡️ Auto-open poll: no catch-up blast on first enable',
+      '🔇 New poll invites: no duplicate emails from sweep race',
+      '🏷 EmailJS card: tighter labels, cleaner caption',
+    ],
+  },
+  {
+    version: '6.8.6',
+    date: '2026-05-21',
+    changes: [
+      '🔇 Player swap on full poll — no email re-blast',
+    ],
+  },
   {
     version: '6.8.5',
     date: '2026-05-21',

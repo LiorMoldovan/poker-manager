@@ -11,7 +11,7 @@
 // Reminder + vote-change notifications still fire fresh (no queue) since
 // they're not claim-gated and a missed one is acceptable noise.
 
-import type { GamePoll, GamePollDate, GamePollVote, RsvpResponse } from '../types';
+import type { GamePoll, GamePollDate, GamePollVote, RsvpResponse, ScheduleEmailKind } from '../types';
 import {
   getAllPlayers, getAllPolls,
   getPlayerEmailForNotification, getSettings,
@@ -763,6 +763,21 @@ const EMAIL_ALLOWLIST: ReadonlySet<NotificationKind> = new Set<NotificationKind>
   'reminder',
 ]);
 
+// Per-event email allowlist gate (migration 090). Returns true only when
+// BOTH the master `scheduleEmailsEnabled` toggle is on AND the per-kind
+// flag in `scheduleEmailKinds` is not explicitly false. A missing
+// per-kind flag defaults to true so groups that haven't customised the
+// filter behave exactly as before (every kind in EMAIL_ALLOWLIST sends).
+// `vote_change` isn't a ScheduleEmailKind (push-only by design) so the
+// dispatch path short-circuits via EMAIL_ALLOWLIST before calling here.
+function isEmailKindAllowed(kind: ScheduleEmailKind): boolean {
+  const settings = getSettings();
+  if (settings.scheduleEmailsEnabled !== true) return false;
+  const kinds = settings.scheduleEmailKinds;
+  if (!kinds) return true; // pre-090 cache snapshot
+  return kinds[kind] !== false;
+}
+
 async function dispatch(
   poll: GamePoll,
   kind: NotificationKind,
@@ -785,7 +800,6 @@ async function dispatch(
 
   const settings = getSettings();
   const pushEnabled = settings.schedulePushEnabled !== false;
-  const emailsEnabled = settings.scheduleEmailsEnabled === true;
 
   if (pushEnabled) {
     try {
@@ -808,8 +822,17 @@ async function dispatch(
     return;
   }
 
-  if (!emailsEnabled) {
-    console.log(`[schedule-notify/${kind}] emails disabled by group setting, skipping ${recipientNames.length} recipients`);
+  // Master + per-kind gate (migration 090). Master OFF skips every kind;
+  // master ON + this kind's per-event flag = false also skips. Default
+  // per-event is true so groups that never touch the new toggles behave
+  // exactly as before. The EMAIL_ALLOWLIST check above narrows `kind` to
+  // the lifecycle subset, all of which are valid ScheduleEmailKind values
+  // — the cast is safe but TS can't infer it from `Set.has`.
+  if (!isEmailKindAllowed(kind as ScheduleEmailKind)) {
+    const reason = settings.scheduleEmailsEnabled === true
+      ? `kind '${kind}' disabled in scheduleEmailKinds`
+      : 'master scheduleEmailsEnabled is off';
+    console.log(`[schedule-notify/${kind}] emails skipped: ${reason}, skipping ${recipientNames.length} recipients`);
     return;
   }
 
@@ -1392,9 +1415,11 @@ export async function sendDateExcludedNotifications(
     return;
   }
 
-  const settings = getSettings();
-  const pushEnabled   = settings.schedulePushEnabled !== false;
-  const emailsEnabled = settings.scheduleEmailsEnabled === true;
+  const pushEnabled  = getSettings().schedulePushEnabled !== false;
+  // Master + per-kind gate (migration 090). Email subject/body go out as
+  // empty strings when this kind is disabled so the worker drops the
+  // email leg entirely.
+  const emailAllowed = isEmailKindAllowed('date_excluded');
 
   const msg = buildDateExcludedMessage(refreshedPoll, excludedDate, remainingDates);
 
@@ -1402,8 +1427,8 @@ export async function sendDateExcludedNotifications(
   await cacheMod.enqueueNotificationRpc('date_excluded', poll.groupId, {
     push_title:    pushEnabled ? msg.pushTitle : '',
     push_body:     pushEnabled ? msg.pushBody  : '',
-    email_subject: emailsEnabled ? msg.emailSubject : '',
-    email_body:    emailsEnabled ? msg.emailBody('') : '',
+    email_subject: emailAllowed ? msg.emailSubject : '',
+    email_body:    emailAllowed ? msg.emailBody('') : '',
     recipient_player_names: recipientNames,
     url: deepLinkUrl(poll.id),
   }, poll.id);
@@ -1415,9 +1440,11 @@ export async function sendReminderNotifications(
 ): Promise<void> {
   if (recipientNames.length === 0) return;
 
-  const settings = getSettings();
-  const pushEnabled   = settings.schedulePushEnabled !== false;
-  const emailsEnabled = settings.scheduleEmailsEnabled === true;
+  const pushEnabled  = getSettings().schedulePushEnabled !== false;
+  // Master + per-kind gate (migration 090). When `reminder` is disabled
+  // in scheduleEmailKinds the email subject/body fall through as empty
+  // strings — the worker skips the email leg when those are empty.
+  const emailAllowed = isEmailKindAllowed('reminder');
 
   // Build push and email payloads using the existing helpers so the
   // copy stays consistent with the rest of the schedule notification
@@ -1438,8 +1465,8 @@ export async function sendReminderNotifications(
   await cacheMod.enqueueNotificationRpc('reminder', poll.groupId, {
     push_title:    pushEnabled ? pushTitle : '',  // empty string skips push at the worker
     push_body:     pushEnabled ? pushBody  : '',
-    email_subject: emailsEnabled ? TITLE_REMINDER : '',
-    email_body:    emailsEnabled ? emailBody : '',
+    email_subject: emailAllowed ? TITLE_REMINDER : '',
+    email_body:    emailAllowed ? emailBody : '',
     recipient_player_names: recipientNames,
     url: deepLinkUrl(poll.id),
   }, poll.id);

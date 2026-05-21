@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey, ScheduleEmailKind } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 import { isObserverMode } from '../auth/observerMode';
 
@@ -100,6 +100,23 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.schedule_emails_enabled != null) s.scheduleEmailsEnabled = row.schedule_emails_enabled === true;
   // Default push to true if column is missing/null (matches DB default)
   s.schedulePushEnabled = row.schedule_push_enabled == null ? true : row.schedule_push_enabled === true;
+  // schedule_email_kinds (migration 090) — JSONB per-event allowlist.
+  // Tolerate missing key on pre-090 deployments (older cache snapshots).
+  // Only treat explicit `false` as off so a missing key defaults to ON,
+  // matching the DB-side default of `{all true}`. Layered on top of the
+  // master toggle in scheduleNotifications.ts / notification-worker.ts.
+  if (row.schedule_email_kinds && typeof row.schedule_email_kinds === 'object') {
+    const raw = row.schedule_email_kinds as Record<string, unknown>;
+    const kinds: Partial<Record<ScheduleEmailKind, boolean>> = {};
+    const allKinds: ScheduleEmailKind[] = [
+      'creation', 'expanded', 'confirmed', 'target_filled',
+      'cancellation', 'reminder', 'date_excluded',
+    ];
+    for (const k of allKinds) {
+      if (typeof raw[k] === 'boolean') kinds[k] = raw[k] as boolean;
+    }
+    s.scheduleEmailKinds = kinds;
+  }
   // Schedule defaults — fall back to hardcoded constants when columns are
   // missing (older DB) so the UI never crashes during migration windows.
   if (row.schedule_default_target != null) s.scheduleDefaultTarget = Number(row.schedule_default_target);
@@ -333,6 +350,19 @@ function settingsToRow(s: Settings, groupId: string) {
     language: s.language || 'he',
     schedule_emails_enabled: s.scheduleEmailsEnabled ?? false,
     schedule_push_enabled: s.schedulePushEnabled ?? true,
+    // schedule_email_kinds (migration 090) — always write a complete object
+    // with all 7 keys present so the column never goes "partially defined"
+    // on disk. Missing keys in the in-memory partial fall back to true,
+    // matching the DB-side default and the "missing key = on" mapper.
+    schedule_email_kinds: {
+      creation:       s.scheduleEmailKinds?.creation       !== false,
+      expanded:       s.scheduleEmailKinds?.expanded       !== false,
+      confirmed:      s.scheduleEmailKinds?.confirmed      !== false,
+      target_filled:  s.scheduleEmailKinds?.target_filled  !== false,
+      cancellation:   s.scheduleEmailKinds?.cancellation   !== false,
+      reminder:       s.scheduleEmailKinds?.reminder       !== false,
+      date_excluded:  s.scheduleEmailKinds?.date_excluded  !== false,
+    },
     schedule_default_target: s.scheduleDefaultTarget ?? 7,
     schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',

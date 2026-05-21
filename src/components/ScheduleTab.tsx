@@ -30,7 +30,7 @@ import {
   sendDateExcludedNotifications,
 } from '../utils/scheduleNotifications';
 import { supabase } from '../database/supabaseClient';
-import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game } from '../types';
+import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game, ScheduleEmailKind } from '../types';
 import PollCard from './PollCard';
 
 // Render a modal as a direct child of <body>. This is critical for
@@ -664,7 +664,20 @@ export default function ScheduleTab() {
     const time = settings.scheduleAutoCreateTime ?? '18:00';
     const triggerTs = computePreviousScheduledTrigger(day, time, new Date(now));
     const lastFiredIso = settings.scheduleAutoCreatedAt;
-    const lastFiredTs = lastFiredIso ? Date.parse(lastFiredIso) : 0;
+
+    // First-enable guard (v6.8.4): if `scheduleAutoCreatedAt` was never
+    // persisted, treat the toggle as "just enabled" — initialize the
+    // sentinel to NOW and WAIT for the next scheduled trigger. Without
+    // this, the effect interprets the previous Sunday's anchor as a
+    // missed fire and catches up immediately, opening a poll the user
+    // didn't intend (cost Lior 22 emails on 2026-05-21 11:00 IL when
+    // the duplicate-enqueue bug was also in play).
+    if (!lastFiredIso) {
+      saveSettings({ ...getSettings(), scheduleAutoCreatedAt: new Date().toISOString() });
+      return;
+    }
+
+    const lastFiredTs = Date.parse(lastFiredIso);
     if (Number.isFinite(lastFiredTs) && lastFiredTs >= triggerTs) return;
 
     autoCreateInFlightRef.current = true;
@@ -5029,6 +5042,44 @@ interface ScheduleConfigPanelProps {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
+// Ordered list drives both the persisted shape and the UI row order so
+// the toggles read in lifecycle order: invitation → expanded → confirmed
+// → target_filled → cancellation → reminder → date_excluded.
+const EMAIL_KIND_ORDER: ScheduleEmailKind[] = [
+  'creation',
+  'expanded',
+  'confirmed',
+  'target_filled',
+  'cancellation',
+  'reminder',
+  'date_excluded',
+];
+
+// Translation key + emoji for each kind. Kept tight on purpose — the
+// helper text per row would crowd the panel; the master "✉️ שלח מייל"
+// header already establishes the section is about email control.
+const EMAIL_KIND_META: Record<ScheduleEmailKind, { emoji: string; labelKey: TranslationKey }> = {
+  creation:       { emoji: '🃏', labelKey: 'schedule.config.emailKind.creation' },
+  expanded:       { emoji: '🎯', labelKey: 'schedule.config.emailKind.expanded' },
+  confirmed:      { emoji: '✅', labelKey: 'schedule.config.emailKind.confirmed' },
+  target_filled:  { emoji: '🎉', labelKey: 'schedule.config.emailKind.target_filled' },
+  cancellation:   { emoji: '❌', labelKey: 'schedule.config.emailKind.cancellation' },
+  reminder:       { emoji: '📣', labelKey: 'schedule.config.emailKind.reminder' },
+  date_excluded:  { emoji: '✂️', labelKey: 'schedule.config.emailKind.date_excluded' },
+};
+
+// Resolve the persisted partial into a fully-defined record so the UI
+// always renders 7 toggles with concrete booleans. A missing key falls
+// back to true (the DB default), matching `isEmailKindAllowed` server
+// + client behavior — "absent ⇒ on".
+function readEmailKinds(stored: Partial<Record<ScheduleEmailKind, boolean>> | undefined): Record<ScheduleEmailKind, boolean> {
+  const out = {} as Record<ScheduleEmailKind, boolean>;
+  for (const k of EMAIL_KIND_ORDER) {
+    out[k] = stored?.[k] !== false;
+  }
+  return out;
+}
+
 function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const { onSuccess, onError, t } = props;
   const initial = getSettings();
@@ -5038,6 +5089,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const hasGuestTier = hasGuestTierPlayers(getAllPlayers());
   const [pushEnabled, setPushEnabled] = useState<boolean>(initial.schedulePushEnabled !== false);
   const [emailsEnabled, setEmailsEnabled] = useState<boolean>(initial.scheduleEmailsEnabled === true);
+  // Per-event email allowlist (migration 090). Default every key to true
+  // when the settings object lacks one — matches the DB-side default and
+  // preserves prior behavior. The setter writes the full object so the
+  // persisted JSONB column stays well-formed.
+  const [emailKinds, setEmailKinds] = useState<Record<ScheduleEmailKind, boolean>>(() => readEmailKinds(initial.scheduleEmailKinds));
   const [defaultTarget, setDefaultTarget] = useState<number>(initial.scheduleDefaultTarget ?? 7);
   const [defaultDelay, setDefaultDelay] = useState<number>(initial.scheduleDefaultDelayHours ?? 48);
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
@@ -5062,6 +5118,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       const fresh = getSettings();
       setPushEnabled(fresh.schedulePushEnabled !== false);
       setEmailsEnabled(fresh.scheduleEmailsEnabled === true);
+      setEmailKinds(readEmailKinds(fresh.scheduleEmailKinds));
       setDefaultTarget(fresh.scheduleDefaultTarget ?? 7);
       setDefaultDelay(fresh.scheduleDefaultDelayHours ?? 48);
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
@@ -5088,7 +5145,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   }, []);
 
   type Patch = Partial<Pick<Settings,
-    | 'schedulePushEnabled' | 'scheduleEmailsEnabled'
+    | 'schedulePushEnabled' | 'scheduleEmailsEnabled' | 'scheduleEmailKinds'
     | 'scheduleDefaultTarget' | 'scheduleDefaultDelayHours'
     | 'scheduleDefaultTime' | 'scheduleDefaultAllowMaybe'
     | 'scheduleAutoCreateEnabled' | 'scheduleAutoCreateDay'
@@ -5107,6 +5164,15 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const handleEmailsToggle = (checked: boolean) => {
     setEmailsEnabled(checked);
     void persist({ scheduleEmailsEnabled: checked });
+  };
+
+  // Flip one per-event email kind. Writes the FULL object back (not a
+  // partial) so the persisted JSONB column always has every key
+  // defined and the next reader doesn't have to guess defaults.
+  const handleEmailKindToggle = (kind: ScheduleEmailKind, checked: boolean) => {
+    const next = { ...emailKinds, [kind]: checked };
+    setEmailKinds(next);
+    void persist({ scheduleEmailKinds: next });
   };
 
   // Number inputs persist on blur to avoid writing on every keystroke.
@@ -5221,6 +5287,45 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
           onChange={handleEmailsToggle}
           ariaLabel={t('schedule.config.emailsEnabled')}
         />
+      </div>
+
+      {/* Per-event email allowlist (migration 090). Mirrors the visual
+          pattern of the autoCreate sub-section below — dimmed +
+          non-interactive when the master toggle is off, with a tight
+          header explaining that these are sub-controls of the master.
+          Per-row helpers are intentionally omitted; the section header
+          + the row label is enough context. */}
+      <div style={{
+        marginTop: 4, marginBottom: 4,
+        padding: '8px 10px 6px',
+        borderRadius: 8,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        opacity: emailsEnabled ? 1 : 0.5,
+        pointerEvents: emailsEnabled ? 'auto' : 'none',
+        transition: 'opacity 0.15s ease',
+      }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, lineHeight: 1.5 }}>
+          {t('schedule.config.emailKindsHelper')}
+        </div>
+        {EMAIL_KIND_ORDER.map(kind => {
+          const meta = EMAIL_KIND_META[kind];
+          return (
+            <div key={kind} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '6px 0',
+            }}>
+              <div style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>
+                {meta.emoji} {t(meta.labelKey)}
+              </div>
+              <ToggleSwitch
+                checked={emailKinds[kind]}
+                onChange={(checked) => handleEmailKindToggle(kind, checked)}
+                ariaLabel={t(meta.labelKey)}
+              />
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
