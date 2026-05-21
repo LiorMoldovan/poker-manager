@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.3';
+export const APP_VERSION = '6.8.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,25 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.5',
+    date: '2026-05-21',
+    changes: [
+      '🔇 Lower poll target silently — no email blast',
+      '🔓 Release pin: silent + auto-unlocks voting',
+      '🗂 Played-out polls archive even if pin was released',
+    ],
+  },
+  {
+    version: '6.8.4',
+    date: '2026-05-21',
+    changes: [
+      '🛡️ Completed games sealed forever — roster wipes impossible',
+      '🚫 "Reopen Chip Entry" removed — game over is game over',
+      '🔎 Audit log: every status change & delete attempt recorded',
+      '📊 Poll edits & pin releases are now silent — no spam',
+    ],
+  },
   {
     version: '6.8.3',
     date: '2026-05-18',

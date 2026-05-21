@@ -296,14 +296,22 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
       if (latestEod === 0) return false;
       return latestEod < todayStartTs;
     };
+    // `!p.confirmedGameId` gates every status — including open/expanded.
+    // Previously only the 'confirmed' branch checked the link, which let an
+    // open/expanded poll linger on Home after a game played on one of its
+    // proposed dates (admin released the pin pre-game → started game from
+    // the regular flow → poll never re-confirmed → 'expanded' poll with a
+    // matching played date stayed eligible). The auto-link effect below
+    // now writes confirmedGameId on those polls too, and this gate makes
+    // the Home card disappear the moment the link lands.
     const isEligible = (p: typeof polls[number]): boolean => {
       if (isPastDated(p)) return false;
-      if (p.status === 'confirmed') return !p.confirmedGameId;
-      return p.status === 'open' || p.status === 'expanded';
+      if (p.confirmedGameId) return false;
+      return p.status === 'open' || p.status === 'expanded' || p.status === 'confirmed';
     };
     const headline = (
       polls.find(p => p.status === 'confirmed' && !p.confirmedGameId && !isPastDated(p))
-      ?? polls.find(p => (p.status === 'open' || p.status === 'expanded') && !isPastDated(p))
+      ?? polls.find(p => (p.status === 'open' || p.status === 'expanded') && !p.confirmedGameId && !isPastDated(p))
       ?? null
     );
     const totalEligible = polls.filter(isEligible).length;
@@ -314,40 +322,62 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   }, [polls]);
 
 
-  // Self-healing link: any confirmed poll without a confirmed_game_id
-  // gets matched against completed games by start time (±6 hours). When
-  // the admin started the game from the regular New Game flow instead
-  // of the poll's "Start Scheduled Game" button, the linkage step in
-  // `startGameWithForecast` was skipped (it depends on a UI ref that
-  // wasn't set), leaving the poll orphaned and the home card stuck.
-  // Running here means: the moment the admin returns to the dashboard
-  // after completing such a game, we backfill the link, the realtime
-  // cache refreshes, and the card disappears on its own. Admin-only
-  // because `link_poll_to_game` requires admin role server-side; the
-  // RPC is idempotent (`WHERE confirmed_game_id IS NULL`) so retries
-  // and concurrent dashboard mounts are safe.
-  // The `inFlightLinksRef` set dedupes the brief window between the
-  // RPC firing and the realtime cache update — without it, a quick
-  // re-render (e.g. the user clicks something else on the dashboard)
-  // would re-trigger the same RPC for the same orphan poll multiple
-  // times. Pure local-state hygiene; the server is already idempotent.
+  // Self-healing link: any active poll without a confirmed_game_id gets
+  // matched against completed games by start time (±6 hours). Covers TWO
+  // cases:
+  //   1. 'confirmed' poll — admin started the game from the regular New
+  //      Game flow instead of the poll's "Start Scheduled Game" button.
+  //      Match against the pinned date (confirmedDateId).
+  //   2. 'open' / 'expanded' poll — admin released the pin pre-game (or
+  //      never pinned at all) and started the game directly. The poll
+  //      has no pinned date, so we match against ANY of its proposed
+  //      dates and pick the closest one to the game's start time.
+  // Either way, the moment we set confirmedGameId, the ScheduleTab
+  // archive logic (`shouldArchive` checks confirmedGameId+completed) and
+  // the Home eligibility gate above (`!p.confirmedGameId`) make the poll
+  // disappear from the active surfaces.
+  //
+  // Admin-only because `link_poll_to_game` requires admin role
+  // server-side. The RPC is idempotent (`WHERE confirmed_game_id IS NULL`)
+  // so retries and concurrent dashboard mounts are safe.
+  //
+  // The `inFlightLinksRef` set dedupes the brief window between the RPC
+  // firing and the realtime cache update — without it, a quick re-render
+  // would re-trigger the same RPC for the same orphan poll multiple times.
   const inFlightLinksRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!isAdmin) return;
-    const orphans = polls.filter(p => p.status === 'confirmed' && !p.confirmedGameId);
+    const orphans = polls.filter(p =>
+      !p.confirmedGameId
+      && (p.status === 'confirmed' || p.status === 'open' || p.status === 'expanded'),
+    );
     if (orphans.length === 0) return;
     const SIX_H_MS = 6 * 60 * 60 * 1000;
     const completedGames = allGames.filter(g => g.status === 'completed');
     for (const poll of orphans) {
       if (inFlightLinksRef.current.has(poll.id)) continue;
-      const date = poll.dates.find(d => d.id === poll.confirmedDateId);
-      if (!date?.proposedDate) continue;
-      const pollStartMs = new Date(`${date.proposedDate}T${date.proposedTime || '20:00'}`).getTime();
-      if (Number.isNaN(pollStartMs)) continue;
-      const match = completedGames.find(g => Math.abs(new Date(g.date).getTime() - pollStartMs) <= SIX_H_MS);
-      if (!match) continue;
+      // Candidate dates: the pinned date if set, else ALL proposed dates.
+      // For open/expanded polls (no pin), every proposed date is a valid
+      // anchor candidate against a completed game's start time.
+      const candidateDates = poll.confirmedDateId
+        ? poll.dates.filter(d => d.id === poll.confirmedDateId)
+        : poll.dates;
+      let bestMatch: { gameId: string; deltaMs: number } | null = null;
+      for (const d of candidateDates) {
+        if (!d.proposedDate) continue;
+        const pollStartMs = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`).getTime();
+        if (Number.isNaN(pollStartMs)) continue;
+        for (const g of completedGames) {
+          const delta = Math.abs(new Date(g.date).getTime() - pollStartMs);
+          if (delta > SIX_H_MS) continue;
+          if (!bestMatch || delta < bestMatch.deltaMs) {
+            bestMatch = { gameId: g.id, deltaMs: delta };
+          }
+        }
+      }
+      if (!bestMatch) continue;
       inFlightLinksRef.current.add(poll.id);
-      linkPollToGame(poll.id, match.id)
+      linkPollToGame(poll.id, bestMatch.gameId)
         .catch(err => {
           inFlightLinksRef.current.delete(poll.id); // allow retry on next render
           console.warn('home: auto-link orphan poll → game failed (will retry next mount)', err);

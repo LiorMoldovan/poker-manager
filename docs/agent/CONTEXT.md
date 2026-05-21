@@ -1,22 +1,52 @@
 # CONTEXT
 
 > 30-second orientation. Refresh in place. Bullets only, no paragraphs.
-> Last refreshed: 2026-05-16 (post v6.4.2 push)
+> Last refreshed: 2026-05-21 (post mig 088 — completed-game immutability + audit log)
 
 ## Now
 
-- **`origin/main`**: v6.4.2 — five commits today.
-  - **v6.3.0**: chip-count correction loop on the photo test card. New `chip_count_corrections` table (mig 085) stores photo + AI's per-color counts + Lior's truth.
-  - **v6.3.1**: hand-rolled `<input type="number">` → `NumericInput`. AI now self-rates per-color confidence (new optional `confidence: INTEGER` in the schema).
-  - **v6.4.0**: merged 2 other agents' schedule work — release-pin (mig 084), per-date exclude (mig 086), expansion-clock-through-mid-pin (mig 086). Plus 6 more NumericInput swaps in ScheduleTab.tsx.
-  - **v6.4.1**: chip-count: dropped `gemini-2.5-flash` from the fallback chain (it returned "10 for everything" — 4 of Lior's 6 test photos got hit by this). Primary `gemini-3-flash-preview` now retries once on transient 503/504/network. New `quotaExceeded` error code skips retry on 429. Prompt hardened against "default to 10" + schema example now uses varied numbers (7/14/0/17/3/0) instead of 5/3/0/0/0/0 to remove small-number bias. Vision-validated by me: I counted Lior's worst-case photo (17:10 all-10s disaster) and matched truth exactly — task IS solvable, problem was the fallback model lying.
-  - **v6.4.2**: other-agent PollCard refactor — state badges (Locked / Leading / Disabled / FillPinned) moved to a dedicated banner row so the tile header doesn't wrap to 3 lines on narrow phones.
-- v5.62.7 — earlier-today hotfix: iOS Safari vertical scroll was dead because `overflow-x: hidden` on `html,body`. Switched to `overflow-x: clip`. (See LESSONS.)
-- **Working tree**: clean except agent-memory edits.
-- **Recently-applied SQL**: 080–086 all applied. Don't re-apply. `085-chip-count-corrections.sql` (mine) and `085-schedule-exclude-date.sql` (other agent, local file `086-schedule-exclude-date.sql`) coexist in DB under different timestamped versions.
+- **`origin/main`**: v6.8.3 deployed. **Working version locally: v6.8.4** (uncommitted — awaiting Lior's push approval).
+- **v6.8.4** in flight: **three-layer fix for the recurring weekend roster wipes**.
+  - **Layer 1 — DB (mig 088, ALREADY APPLIED)**: `games.completed_at TIMESTAMPTZ` set on first `X → completed`, never cleared (backfilled 242 games). `block_completed_game_player_delete` now gates on `completed_at IS NOT NULL` not `status = 'completed'`. Immutability is time-monotonic — surviving reopen windows. New `game_audit_log` table + 3 triggers capture every STATUS_UPDATE, every GAME_PLAYER_DELETE_ATTEMPT (allowed/blocked), every REOPEN_RPC. Sandbox: 10/10 pass.
+  - **Layer 2 — client logic**: `updateGameStatus` refuses to downgrade a completed game. The silent `reopen_completed_game` RPC call from this code path is GONE. Console-warns and no-ops.
+  - **Layer 3 — UI**: "Reopen Chip Entry" button + handler + `showReopenConfirm` state + reopenChips/reopenWarning translations all DELETED from GameSummaryScreen. LiveGameScreen now redirects to `/game-summary/<id>` if loaded for a completed game (closes the stale-cache LiveGameScreen → "End Game" → updateGameStatus attack path that was the actual May 21 vector — חרדון couldn't even see the Reopen button because it's gated by `cameFromChipEntry`).
+  - The `reopen_completed_game` RPC stays server-side, sealed, super-admin-SQL-only, audit-logged. If a botched chip entry ever needs fixing → ask agent → manual SQL with audit trail.
+- **May 20 game restored**: id `8b02cfcb-…`, 8 game_players back from the 02:39 IL game-end backup, profit_sum=0.00. Status remains `completed`, completed_at now set.
+- **Recent deployed versions on main** (just before today's hotfix):
+  - v6.8.0–v6.8.3: stats period dropdowns unified across tables, share-screenshot subtitles, dark popovers, polls + new game period chip overlays. None DB-touching.
+  - v6.4.0–v6.4.2 (2026-05-16): chip-count correction loop (mig 085), NumericInput sweep, schedule release-pin (mig 084), per-date exclude (mig 086), Gemini fallback chain cleanup, PollCard refactor.
+- **Working tree** (pre-commit): `src/version.ts` (6.8.3 → 6.8.4), `supabase/088-*.sql` (new), `docs/agent/*.md` (this).
+- **Recently-applied SQL**: 080–087 + **088 (today)** all applied to live DB. Don't re-apply.
 
 ## Open follow-ups
 
+- **Awaiting Lior's push approval for v6.8.4** (mig 088 + completed_at + audit log). Migration ALREADY applied to live DB via Management API — git commit is purely for source-of-truth + Vercel deploy + version label in Settings → About.
+- **Game-wipe forensics for next time** (audit log queries Lior or I can run):
+  ```sql
+  -- Who reopened games this week
+  SELECT to_char(occurred_at AT TIME ZONE 'Asia/Jerusalem','MM-DD HH24:MI') AS at_il,
+         actor_email, game_id, notes
+  FROM game_audit_log
+  WHERE op = 'REOPEN_RPC' AND occurred_at >= now() - interval '7 days'
+  ORDER BY occurred_at DESC;
+
+  -- Every blocked DELETE attempt + who did it + why blocked
+  SELECT to_char(occurred_at AT TIME ZONE 'Asia/Jerusalem','MM-DD HH24:MI:SS') AS at_il,
+         actor_id, game_id, before_value->>'player_name' AS player,
+         before_value->>'parent_status' AS parent_status,
+         before_value->>'parent_completed_at' AS parent_completed_at,
+         notes, flags
+  FROM game_audit_log
+  WHERE op = 'GAME_PLAYER_DELETE_ATTEMPT' AND occurred_at >= now() - interval '7 days'
+  ORDER BY occurred_at DESC;
+
+  -- Every status change including reopens
+  SELECT to_char(occurred_at AT TIME ZONE 'Asia/Jerusalem','MM-DD HH24:MI:SS') AS at_il,
+         actor_id, game_id, before_value->>'status' AS from_status, after_value->>'status' AS to_status,
+         flags
+  FROM game_audit_log WHERE op = 'STATUS_UPDATE'
+  ORDER BY occurred_at DESC LIMIT 50;
+  ```
 - **Lior testing v6.4.1.** Six samples in the 16:49–17:10 window confirmed the diagnosis: 4 of 6 fell back to `gemini-2.5-flash` (all returned "10 everywhere" — fixed in v6.4.1 by dropping the model). The 2 that hit `gemini-3-flash-preview` directly: 17:04 diff=4 (good), 17:08 diff=19 (tall-stack cap at 10 — addressed by v6.4.1 prompt hardening). Awaiting next batch to confirm the retry + prompt changes actually move the needle. Diagnosis query unchanged from before.
 - **Vision sanity check is live**: agent can pull any `chip_count_corrections` photo via chunked `execute_sql` (substring photo_base64 in 120000-char chunks, regex-extract `\\"cN\\":\\"...\\"` per chunk, concat, base64-decode, Read as image). Validated against Lior's 17:10 photo — counted exactly matched truth. Use this when in doubt about whether a model is actually counting or just hallucinating.
 - **Agent's diagnosis query** when Lior is done with the batch:

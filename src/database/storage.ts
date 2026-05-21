@@ -249,33 +249,29 @@ export const updateGameStatus = (gameId: string, status: Game['status']): void =
   if (gameIndex === -1) return;
 
   const previousStatus = games[gameIndex].status;
-  const isCompletedDowngrade = previousStatus === 'completed' && status !== 'completed';
 
-  games[gameIndex].status = status;
-
-  if (isCompletedDowngrade) {
-    // Migration 077 (v5.61.0) added a DB-level guard that REJECTS any
-    // direct UPDATE downgrading games.status from "completed". The
-    // guard exists because stale-tab blanket upserts had been
-    // recurringly reverting completed→live, which then unblocked the
-    // BEFORE-DELETE guard on game_players and wiped the roster (see
-    // migration 077 comments). The ONE legitimate completed→chip_entry
-    // transition is the "Reopen Chip Entry" admin button — route it
-    // through the sanctioned RPC, which sets a transaction-local
-    // flag the trigger honors.
-    //
-    // We deliberately DO NOT call markGameLocallyWritten() here so the
-    // normal debounced GAMES upsert won't race the RPC and hit the
-    // trigger. The local cache is updated immediately so the UI
-    // navigates to the right screen; the RPC handles the server side
-    // and the realtime echo will sync everything back.
-    setItem(STORAGE_KEYS.GAMES, games);
-    supabase.rpc('reopen_completed_game', { p_game_id: gameId }).then(({ error }) => {
-      if (error) console.warn('reopen_completed_game RPC failed:', error.message);
-    });
+  // v6.8.4 — game over is game over. There is no client-side path to
+  // downgrade a completed game; the UI "Reopen Chip Entry" button was
+  // removed. If we ever reach here with a downgrade attempt, it's a
+  // bug (stale cache thinks the game is still live, NewGameScreen
+  // auto-navigates to /live-game/<completed_id>, user clicks "End Game"
+  // → navigateToChipEntry → updateGameStatus(id, 'chip_entry')). This
+  // was the recurring weekend roster-wipe vector — see
+  // supabase/088-completed-game-immutability-and-audit.sql comments.
+  // Refuse the local mutation AND don't call the server. Migration 088
+  // would block the wipe at the DB layer anyway, but we want zero
+  // chance of even reaching it from a real client. The sealed
+  // reopen_completed_game RPC is still server-side for super-admin
+  // SQL-only manual recovery (audit-logged).
+  if (previousStatus === 'completed' && status !== 'completed') {
+    console.warn(
+      '[updateGameStatus] Refused to downgrade completed game',
+      { gameId, from: previousStatus, to: status }
+    );
     return;
   }
 
+  games[gameIndex].status = status;
   markGameLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAMES, games);
 };

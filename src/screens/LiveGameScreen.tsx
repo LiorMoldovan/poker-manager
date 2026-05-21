@@ -368,6 +368,22 @@ const LiveGameScreen = () => {
       setIsLoading(false);
       return;
     }
+
+    // v6.8.4 — refuse to render LiveGameScreen for a completed game.
+    // If a stale local cache or a bookmarked URL routes the user here
+    // for a game that's already done, redirect to its summary instead.
+    // Historically this path → "End Game" button → updateGameStatus(
+    // 'chip_entry') → reopen RPC → bypass of completed-game guards →
+    // roster wipe (the May 21 incident). updateGameStatus now also
+    // refuses the downgrade, but we don't want to even render the
+    // misleading UI in the first place.
+    const game = getGame(gameId);
+    if (game?.status === 'completed') {
+      console.warn('[LiveGameScreen] Game is already completed; redirecting to summary', { gameId });
+      navigate(`/game-summary/${gameId}`, { replace: true });
+      return;
+    }
+
     const gamePlayers = getGamePlayers(gameId);
     if (gamePlayers.length === 0) {
       setGameNotFound(true);
@@ -377,13 +393,11 @@ const LiveGameScreen = () => {
     setPlayers(gamePlayers);
     const settings = getSettings();
     setRebuyValue(settings.rebuyValue);
-    
-    // Load existing shared expenses
-    const game = getGame(gameId);
+
     if (game?.sharedExpenses) {
       setSharedExpenses(game.sharedExpenses);
     }
-    
+
     setIsLoading(false);
   };
   

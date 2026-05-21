@@ -540,30 +540,45 @@ const NewGameScreen = () => {
       updateGame(game.id, { periodMarkers });
     }
 
-    // Link the new game to its originating confirmed poll. Two paths:
+    // Link the new game to its originating poll. Three paths:
     //   1. The admin clicked the poll's "Start Scheduled Game" button —
     //      `pollLinkIdRef` is set, use it directly. (Pre-existing flow.)
-    //   2. The admin started the game from the regular New Game flow
-    //      (Home dashboard or Settings) — `pollLinkIdRef` is null. We
-    //      still want the linkage, so look up any confirmed poll whose
-    //      scheduled start time is within ±6h of `game.date` and link
-    //      that one. Without this, `confirmed_game_id` stays NULL and
-    //      Home keeps showing a stale "ערב פוקר נקבע" card forever
-    //      (HomeDashboard's auto-link effect would eventually catch it
-    //      on next dashboard mount, but doing it here is immediate).
-    // The RPC is idempotent (`WHERE confirmed_game_id IS NULL`) so a
-    // double-link from path 2 + the dashboard heal is harmless.
+    //   2. The admin started the game from the regular New Game flow on
+    //      a CONFIRMED poll — `pollLinkIdRef` is null. Match against the
+    //      pinned date (confirmedDateId) within ±6h of `game.date`.
+    //   3. The admin started the game from the regular New Game flow on
+    //      an OPEN or EXPANDED poll — admin released the pin pre-game
+    //      (or never pinned). Match against ANY proposed date of any
+    //      active poll, picking the closest by absolute time delta.
+    // Without paths 2 and 3, `confirmed_game_id` stays NULL → Home keeps
+    // showing a stale "ערב פוקר נקבע" card forever AND ScheduleTab keeps
+    // the poll in the active list with future-dated alternatives still
+    // looking like options. HomeDashboard's auto-link effect would
+    // eventually catch path 2, but path 3 needs the explicit broader
+    // match. The RPC is idempotent (`WHERE confirmed_game_id IS NULL`)
+    // so a double-link from path 2/3 + the dashboard heal is harmless.
     const linkPollId = pollLinkIdRef.current ?? (() => {
       const SIX_H_MS = 6 * 60 * 60 * 1000;
       const gameMs = new Date(game.date).getTime();
-      const match = getAllPolls().find(p => {
-        if (p.status !== 'confirmed' || p.confirmedGameId) return false;
-        const d = p.dates.find(x => x.id === p.confirmedDateId);
-        if (!d?.proposedDate) return false;
-        const ms = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`).getTime();
-        return !Number.isNaN(ms) && Math.abs(ms - gameMs) <= SIX_H_MS;
-      });
-      return match?.id ?? null;
+      let bestMatch: { pollId: string; deltaMs: number } | null = null;
+      for (const p of getAllPolls()) {
+        if (p.confirmedGameId) continue;
+        if (p.status !== 'confirmed' && p.status !== 'open' && p.status !== 'expanded') continue;
+        const candidateDates = p.confirmedDateId
+          ? p.dates.filter(d => d.id === p.confirmedDateId)
+          : p.dates;
+        for (const d of candidateDates) {
+          if (!d.proposedDate) continue;
+          const ms = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`).getTime();
+          if (Number.isNaN(ms)) continue;
+          const delta = Math.abs(ms - gameMs);
+          if (delta > SIX_H_MS) continue;
+          if (!bestMatch || delta < bestMatch.deltaMs) {
+            bestMatch = { pollId: p.id, deltaMs: delta };
+          }
+        }
+      }
+      return bestMatch?.pollId ?? null;
     })();
     if (linkPollId) {
       pollLinkIdRef.current = null;

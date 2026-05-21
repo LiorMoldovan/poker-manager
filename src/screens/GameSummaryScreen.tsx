@@ -3,7 +3,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, shareComicImage } from '../utils/sharing';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, PaidSettlement, ComicScript, ComicStyleKey } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame, createNotification, getPlayerEmailForNotification, getGroupId } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGame, createNotification, getPlayerEmailForNotification, getGroupId } from '../database/storage';
 import { generateGameComic, MAX_REGENERATIONS_PER_GAME, ComicStageError } from '../utils/comicGeneration';
 import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
@@ -144,7 +144,6 @@ const GameSummaryScreen = () => {
   const [monthLabel, setMonthLabel] = useState('');
   const monthlyRef = useRef<HTMLDivElement>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
-  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [paidSettlements, setPaidSettlements] = useState<PaidSettlement[]>([]);
   const [paymentModal, setPaymentModal] = useState<{ from: string; to: string; amount: number } | null>(null);
   const [settlementToast, setSettlementToast] = useState<{ message: string; type: 'success' | 'warn' } | null>(null);
@@ -158,14 +157,6 @@ const GameSummaryScreen = () => {
       }, 500);
     }
   }, [isPayMode, settlements]);
-
-  const handleReopenChipEntry = () => {
-    if (!gameId) return;
-    updateGameStatus(gameId, 'chip_entry');
-    updateGame(gameId, { aiSummary: '', forecastComment: '', forecastAccuracy: undefined, chipGap: undefined, chipGapPerPlayer: undefined });
-    invalidateAICaches();
-    navigate(`/chip-entry/${gameId}`);
-  };
 
   const isSettlementPaid = (from: string, to: string) =>
     paidSettlements.some(p => p.from === from && p.to === to);
@@ -2643,30 +2634,10 @@ const GameSummaryScreen = () => {
         </button>
       </div>
 
-      {/* Re-open chip entry - admin only, only from game flow */}
-      {isAdmin && cameFromChipEntry && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-          {!showReopenConfirm ? (
-            <button
-              className="btn btn-sm"
-              style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.75rem' }}
-              onClick={() => setShowReopenConfirm(true)}
-            >
-              {t('summary.reopenChips')}
-            </button>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-              <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginBottom: '0.5rem' }}>
-                {t('summary.reopenWarning')}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                <button className="btn btn-sm btn-secondary" onClick={() => setShowReopenConfirm(false)}>{t('common.cancel')}</button>
-                <button className="btn btn-sm" style={{ background: '#f59e0b', color: 'white' }} onClick={handleReopenChipEntry}>{t('common.confirm')}</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* "Reopen chip entry" UI was removed in v6.8.4 — game over is game over.
+          The underlying reopen_completed_game RPC is sealed server-side and can
+          only be invoked from SQL by a super admin (audit-logged). See
+          supabase/088-completed-game-immutability-and-audit.sql. */}
 
       {/* Payment Modal */}
       {paymentModal && (
