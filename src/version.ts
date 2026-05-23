@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.8';
+export const APP_VERSION = '6.8.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.9',
+    date: '2026-05-23',
+    changes: [
+      '🔒 Email-kind toggles stick — no more silent resets',
+      '📱 Home stat labels wrap on narrow phones',
+    ],
+  },
   {
     version: '6.8.8',
     date: '2026-05-23',

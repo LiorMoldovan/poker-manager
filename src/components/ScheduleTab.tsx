@@ -5166,13 +5166,47 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     void persist({ scheduleEmailsEnabled: checked });
   };
 
-  // Flip one per-event email kind. Writes the FULL object back (not a
-  // partial) so the persisted JSONB column always has every key
-  // defined and the next reader doesn't have to guess defaults.
-  const handleEmailKindToggle = (kind: ScheduleEmailKind, checked: boolean) => {
-    const next = { ...emailKinds, [kind]: checked };
-    setEmailKinds(next);
-    void persist({ scheduleEmailKinds: next });
+  // Flip one per-event email kind via the dedicated atomic RPC
+  // (`update_schedule_email_kind`, migration 092). The RPC does a
+  // server-side `jsonb_set` on a single key, so two admins editing the
+  // panel concurrently can't lose each other's choices — the previous
+  // path used the generic settings upsert which serialised the FULL
+  // 7-key blob from local state on every save, allowing a stale cache
+  // to silently overwrite another admin's per-kind toggle (suspected
+  // cause of the May 21 IL creation-email blast Lior reported).
+  //
+  // UI is optimistic: flip the switch immediately, await the round-trip,
+  // revert + show the standard error toast on failure so the panel never
+  // lies about what's actually persisted. The realtime echo from the DB
+  // refreshes the in-memory cache for any other readers.
+  const handleEmailKindToggle = async (kind: ScheduleEmailKind, checked: boolean) => {
+    const groupId = getGroupId();
+    if (!groupId) return;
+    const prev = emailKinds[kind];
+    setEmailKinds({ ...emailKinds, [kind]: checked });
+    try {
+      const { error } = await supabase.rpc('update_schedule_email_kind', {
+        p_group_id: groupId,
+        p_kind: kind,
+        p_value: checked,
+      });
+      if (error) throw error;
+      // Also patch the in-memory Settings cache so client-side gates
+      // (scheduleNotifications.isEmailKindAllowed) see the new value
+      // before the realtime echo lands. saveSettings will trigger a
+      // debounced settings upsert, but settingsToRow no longer includes
+      // schedule_email_kinds — the RPC above is the sole writer.
+      const fresh = getSettings();
+      saveSettings({
+        ...fresh,
+        scheduleEmailKinds: { ...(fresh.scheduleEmailKinds || {}), [kind]: checked },
+      });
+      onSuccess(t('schedule.config.saved'));
+    } catch (err) {
+      console.warn('update_schedule_email_kind failed:', err);
+      setEmailKinds({ ...emailKinds, [kind]: prev });
+      onError(t('schedule.errorGeneric'));
+    }
   };
 
   // Number inputs persist on blur to avoid writing on every keystroke.

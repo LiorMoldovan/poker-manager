@@ -1,7 +1,7 @@
 # CONTEXT
 
 > 30-second orientation. Refresh in place. Bullets only, no paragraphs.
-> Last refreshed: 2026-05-23 (post mig 090 — hotfix audit-log RLS)
+> Last refreshed: 2026-05-23 (post mig 090 + operator group cleanup)
 
 ## Now
 
@@ -11,9 +11,14 @@
   - Sandbox tests for mig 088 had passed because Management API runs as superuser (bypasses RLS).
   - **Fix in mig 090**: `ALTER FUNCTION ... SECURITY DEFINER` on both audit trigger functions. Function owner is postgres; postgres owns `game_audit_log`; no FORCE RLS on the table → triggers' INSERTs now bypass RLS. `auth.uid()` still works (JWT context is session-level), so audit rows still record the real user. RLS stays enabled with SELECT/DELETE policies — direct user inserts via PostgREST still blocked.
   - **Sandbox-validated under Lior's actual JWT this time** (set `request.jwt.claim.sub` + `SET LOCAL ROLE authenticated`). Status flip succeeded, audit row written, actor_id=Lior, ROLLBACK to leave nothing persisted. See LESSONS.md "Triggers that write to RLS-protected tables MUST be SECURITY DEFINER".
-- **Two production games stuck in `status='live'`** with profits already set, victims of the v6.8.4-introduced bug (now fixed by mig 090):
+- **One production game still stuck in `status='live'`** — victim of the v6.8.4-introduced bug (now fixed by mig 090):
   - `fdb1ece2-…` — May 22 13:59 IL — ניסוי group — Lior's test (he said "dont fix, dont care").
-  - `8695cfe4-…` — May 22 13:16 IL — פוקר של שני group — noamhaba + שני — real game from another user. Owner can complete it normally now via the chip-entry flow (resubmit will succeed with mig 090 in place).
+  - The second stuck game (`8695cfe4-…` in פוקר של שבת — noamhaba + שני) was deleted alongside its group on 2026-05-23 (operator cleanup, see "Group cleanup" below). Cascade fired, `cascade_group_delete=1` flag set, audit log captured 2 `GAME_PLAYER_DELETE_ATTEMPT` rows — incidental proof that mig 090 SECURITY DEFINER triggers also work under operator-context (no JWT), not just authenticated-user.
+
+- **Group cleanup 2026-05-23**: Deleted two inactive groups via MCP (operator-context, replicating `delete_group` RPC body but skipping the `auth.uid()` check):
+  - `פוקר סייבריסטים` (`16b5b278-…`, owner sagi.melman2, 4-week-old empty group)
+  - `פוקר של שבת` (`ad394b44-…`, owner noamhaba, 1-day-old, contained the stuck `8695cfe4-…` game)
+  - Lior approved silent delete — no email sent. `api/send-email` is owner-group-locked anyway, so programmatic notification of non-owner-group users is not currently possible.
 - **Recent deployed versions on main**:
   - **v6.8.4** (2026-05-21): three-layer roster-wipe fix — mig 088 (completed_at + audit log) + updateGameStatus refuses downgrade + Reopen button removed + LiveGameScreen redirects if completed. **Mig 088 was incomplete — see v6.8.8 above.**
   - v6.8.5–v6.8.7 (2026-05-21, other agents): silent poll meta edits, player swap no-blast, per-event email allowlist, sweep race fixes.

@@ -350,19 +350,30 @@ function settingsToRow(s: Settings, groupId: string) {
     language: s.language || 'he',
     schedule_emails_enabled: s.scheduleEmailsEnabled ?? false,
     schedule_push_enabled: s.schedulePushEnabled ?? true,
-    // schedule_email_kinds (migration 090) — always write a complete object
-    // with all 7 keys present so the column never goes "partially defined"
-    // on disk. Missing keys in the in-memory partial fall back to true,
-    // matching the DB-side default and the "missing key = on" mapper.
-    schedule_email_kinds: {
-      creation:       s.scheduleEmailKinds?.creation       !== false,
-      expanded:       s.scheduleEmailKinds?.expanded       !== false,
-      confirmed:      s.scheduleEmailKinds?.confirmed      !== false,
-      target_filled:  s.scheduleEmailKinds?.target_filled  !== false,
-      cancellation:   s.scheduleEmailKinds?.cancellation   !== false,
-      reminder:       s.scheduleEmailKinds?.reminder       !== false,
-      date_excluded:  s.scheduleEmailKinds?.date_excluded  !== false,
-    },
+    // schedule_email_kinds (migration 090) is INTENTIONALLY OMITTED here.
+    //
+    // Until v6.8.7 this row used to include the full 7-key JSONB blob from
+    // the in-memory Settings snapshot. That serialised local state on every
+    // settings upsert (push toggle, default target, auto-create time, …),
+    // which meant a stale admin session — e.g. an admin who opened Settings
+    // before another admin's per-kind toggle had echoed via realtime — would
+    // silently overwrite the freshly-flipped JSONB on their next save. Two
+    // admins both editing settings concurrently could cancel each other's
+    // per-kind choices with no error, no warning, no audit trail. We
+    // suspect this caused the 19:48 IL May-21 `creation` email blast Lior
+    // received despite his recollection that `creation` was off.
+    //
+    // Migration 092 introduces `update_schedule_email_kind(group_id, kind,
+    // value)`, an atomic single-key RPC that does `jsonb_set` server-side.
+    // ScheduleTab calls that RPC directly for per-kind toggles. The generic
+    // settings upsert no longer touches the column at all, so unrelated
+    // settings writes cannot stomp it under any circumstance — even if a
+    // brand-new field is added to Settings tomorrow.
+    //
+    // Note: omitting a column from an UPSERT payload means PostgREST simply
+    // doesn't include it in the UPDATE part of the ON CONFLICT — the
+    // existing value on the row is preserved. (Verified empirically on the
+    // live DB before shipping.)
     schedule_default_target: s.scheduleDefaultTarget ?? 7,
     schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',

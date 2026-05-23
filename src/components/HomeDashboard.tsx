@@ -2042,12 +2042,35 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   // value would force the tile (and the whole grid track) wider on
   // narrow screens. Combined with text-overflow on the value/label
   // spans, this keeps every tile exactly equal in width and clips
-  // any pathological-length value with an ellipsis.
-  const clipStyle: React.CSSProperties = {
+  // any pathological-length text with an ellipsis.
+  //
+  // Value vs label clipping is intentionally different:
+  //   - Value (e.g. "₪123,456") MUST stay on one line — breaking a
+  //     currency token mid-glyph reads as a layout bug, and the
+  //     digits are short enough to fit in any reasonable tile width.
+  //   - Label (e.g. "ממוצע 3 אחרונים") is allowed to wrap to a
+  //     second line on narrow mobile widths, where 4 tiles share a
+  //     ~360 px row and a 15-char Hebrew label otherwise hits the
+  //     ellipsis. `-webkit-line-clamp: 2` keeps the wrap capped at
+  //     two lines so a pathological translation can't blow up the
+  //     card height.  `lineHeight: 1.1` keeps the second line tight
+  //     enough that single-line tiles in the same row don't look
+  //     visibly short next to wrapped neighbours (grid stretch fills
+  //     the gap with bg, no awkward dead space).
+  const valueClipStyle: React.CSSProperties = {
     maxWidth: '100%',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  };
+  const labelClipStyle: React.CSSProperties = {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    wordBreak: 'break-word',
   };
   return (
     <div style={{
@@ -2061,13 +2084,14 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
         fontSize: '0.95rem', fontWeight: 800, color: valueColor,
         fontFeatureSettings: '"tnum"',
         lineHeight: 1.1,
-        ...clipStyle,
+        ...valueClipStyle,
       }}>
         {value}
       </span>
       <span style={{
         fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.15rem', textAlign: 'center',
-        ...clipStyle,
+        lineHeight: 1.1,
+        ...labelClipStyle,
       }}>
         {label}
       </span>
