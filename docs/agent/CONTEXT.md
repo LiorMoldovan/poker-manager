@@ -1,22 +1,25 @@
 # CONTEXT
 
 > 30-second orientation. Refresh in place. Bullets only, no paragraphs.
-> Last refreshed: 2026-05-21 (post mig 088 — completed-game immutability + audit log)
+> Last refreshed: 2026-05-23 (post mig 090 — hotfix audit-log RLS)
 
 ## Now
 
-- **`origin/main`**: v6.8.3 deployed. **Working version locally: v6.8.4** (uncommitted — awaiting Lior's push approval).
-- **v6.8.4** in flight: **three-layer fix for the recurring weekend roster wipes**.
-  - **Layer 1 — DB (mig 088, ALREADY APPLIED)**: `games.completed_at TIMESTAMPTZ` set on first `X → completed`, never cleared (backfilled 242 games). `block_completed_game_player_delete` now gates on `completed_at IS NOT NULL` not `status = 'completed'`. Immutability is time-monotonic — surviving reopen windows. New `game_audit_log` table + 3 triggers capture every STATUS_UPDATE, every GAME_PLAYER_DELETE_ATTEMPT (allowed/blocked), every REOPEN_RPC. Sandbox: 10/10 pass.
-  - **Layer 2 — client logic**: `updateGameStatus` refuses to downgrade a completed game. The silent `reopen_completed_game` RPC call from this code path is GONE. Console-warns and no-ops.
-  - **Layer 3 — UI**: "Reopen Chip Entry" button + handler + `showReopenConfirm` state + reopenChips/reopenWarning translations all DELETED from GameSummaryScreen. LiveGameScreen now redirects to `/game-summary/<id>` if loaded for a completed game (closes the stale-cache LiveGameScreen → "End Game" → updateGameStatus attack path that was the actual May 21 vector — חרדון couldn't even see the Reopen button because it's gated by `cameFromChipEntry`).
-  - The `reopen_completed_game` RPC stays server-side, sealed, super-admin-SQL-only, audit-logged. If a botched chip entry ever needs fixing → ask agent → manual SQL with audit trail.
-- **May 20 game restored**: id `8b02cfcb-…`, 8 game_players back from the 02:39 IL game-end backup, profit_sum=0.00. Status remains `completed`, completed_at now set.
-- **Recent deployed versions on main** (just before today's hotfix):
+- **`origin/main`**: v6.8.7 deployed. **Working version locally: v6.8.8** (uncommitted — hotfix for v6.8.4 regression).
+- **v6.8.8** in flight: **mig 090 — audit-log RLS fix**.
+  - Lior hit "Save failed: games/upsert — new row violates row-level security policy for table game_audit_log" on first production game completion after the v6.8.4 deploy (2026-05-22). My mig 088 audit triggers (`audit_log_games_status`, `audit_log_game_player_delete`) defaulted to `SECURITY INVOKER` — they ran in the user's RLS context, no INSERT policy existed on `game_audit_log`, every INSERT failed, the whole tx rolled back including the games-status UPDATE. So games-completion was completely broken in prod after v6.8.4.
+  - Sandbox tests for mig 088 had passed because Management API runs as superuser (bypasses RLS).
+  - **Fix in mig 090**: `ALTER FUNCTION ... SECURITY DEFINER` on both audit trigger functions. Function owner is postgres; postgres owns `game_audit_log`; no FORCE RLS on the table → triggers' INSERTs now bypass RLS. `auth.uid()` still works (JWT context is session-level), so audit rows still record the real user. RLS stays enabled with SELECT/DELETE policies — direct user inserts via PostgREST still blocked.
+  - **Sandbox-validated under Lior's actual JWT this time** (set `request.jwt.claim.sub` + `SET LOCAL ROLE authenticated`). Status flip succeeded, audit row written, actor_id=Lior, ROLLBACK to leave nothing persisted. See LESSONS.md "Triggers that write to RLS-protected tables MUST be SECURITY DEFINER".
+- **Two production games stuck in `status='live'`** with profits already set, victims of the v6.8.4-introduced bug (now fixed by mig 090):
+  - `fdb1ece2-…` — May 22 13:59 IL — ניסוי group — Lior's test (he said "dont fix, dont care").
+  - `8695cfe4-…` — May 22 13:16 IL — פוקר של שני group — noamhaba + שני — real game from another user. Owner can complete it normally now via the chip-entry flow (resubmit will succeed with mig 090 in place).
+- **Recent deployed versions on main**:
+  - **v6.8.4** (2026-05-21): three-layer roster-wipe fix — mig 088 (completed_at + audit log) + updateGameStatus refuses downgrade + Reopen button removed + LiveGameScreen redirects if completed. **Mig 088 was incomplete — see v6.8.8 above.**
+  - v6.8.5–v6.8.7 (2026-05-21, other agents): silent poll meta edits, player swap no-blast, per-event email allowlist, sweep race fixes.
   - v6.8.0–v6.8.3: stats period dropdowns unified across tables, share-screenshot subtitles, dark popovers, polls + new game period chip overlays. None DB-touching.
-  - v6.4.0–v6.4.2 (2026-05-16): chip-count correction loop (mig 085), NumericInput sweep, schedule release-pin (mig 084), per-date exclude (mig 086), Gemini fallback chain cleanup, PollCard refactor.
-- **Working tree** (pre-commit): `src/version.ts` (6.8.3 → 6.8.4), `supabase/088-*.sql` (new), `docs/agent/*.md` (this).
-- **Recently-applied SQL**: 080–087 + **088 (today)** all applied to live DB. Don't re-apply.
+- **Working tree** (pre-commit): `src/version.ts` (6.8.7 → 6.8.8), `supabase/090-fix-audit-log-rls.sql` (new), `docs/agent/*.md` (this).
+- **Recently-applied SQL**: 080–088 + **090 (today)** applied to live DB. Don't re-apply. (Note: 089 from another agent also already applied — silent poll meta edits.)
 
 ## Open follow-ups
 

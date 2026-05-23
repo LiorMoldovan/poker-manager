@@ -132,3 +132,31 @@
 **Fix**: when sealing a state ("once X, never delete child rows"), gate on a **time-monotonic** column (e.g. `completed_at TIMESTAMPTZ`) that is set on first entry into the state and explicitly forbidden from being cleared. The guard reads `IF parent.completed_at IS NOT NULL THEN BLOCK`. Sanctioned reopens leave `completed_at` set — they only flip `status` for UI routing. Cascade-delete-from-parent stays exempt via `pg_trigger_depth() > 1`. UPDATE operations on child rows (the legit chip-entry-edit path) stay allowed because they don't trip a DELETE guard. The same idea applies to any "has-been-X" invariant: don't reuse the mutable state column, add a sealed timestamp.
 
 **Burned**: four weekend roster wipes (2026-05-03, 2026-05-08, 2026-05-14, 2026-05-20). Migrations 050, 051, 077 each closed a previously-observed vector but every one kept reading `games.status = 'completed'` as the invariant. The fourth incident finally exposed it: the sanctioned `reopen_completed_game` RPC flipped status to `chip_entry`, migration 050 then read `chip_entry`, and 8 game_players got DELETEd individually. Fixed for good in v6.8.4 by migration 088 — added `games.completed_at`, repointed migration 050's check, plus a comprehensive `game_audit_log` table so we never have to investigate the next incident blind.
+
+---
+
+## Triggers that write to RLS-protected tables MUST be SECURITY DEFINER (and the sandbox MUST use a real user JWT)
+
+**Gotcha**: A PL/pgSQL trigger function defaults to `SECURITY INVOKER` — meaning it executes with the privileges of whatever user fired the triggering DML. If the trigger writes to a table that has RLS enabled, the trigger's INSERT is checked against RLS policies as the invoking user. So an "internal" audit table with RLS gating only SELECT/DELETE (no INSERT policy, the common pattern for append-only audit logs) silently breaks every authenticated-user write that fires the trigger — and because the failed INSERT rolls back the whole transaction, the user-facing write fails too. The user sees a toast like "Save failed: games/upsert — new row violates row-level security policy for table game_audit_log" and has no idea why a games table write was blocked by an audit-log policy.
+
+The trap deepens during sandbox testing: the Supabase Management API (and any direct `psql` as `postgres`) runs as superuser, which bypasses RLS unconditionally. Triggers fire and writes succeed. The migration looks bulletproof in your sandbox. Then a real `authenticated`-role PostgREST request from the deployed app hits the same code path, RLS kicks in, and the trigger fails — but only in production. You have no way to discover this without sandboxing with a real-user role + JWT claim.
+
+**Fix**: For any trigger function that INSERTs into an RLS-protected table:
+1. Declare it `SECURITY DEFINER` so it runs as the function owner (typically `postgres`).
+2. Verify the function owner has write privilege on the target table AND is the table owner (or the table doesn't have `FORCE ROW LEVEL SECURITY`). Table owners bypass RLS by default unless `FORCE ROW LEVEL SECURITY` is set.
+3. Always declare `SET search_path = public, pg_temp` on SECURITY DEFINER functions (no change in privilege model, but it closes the search-path attack surface that SECURITY DEFINER opens).
+4. `auth.uid()` continues to work inside a SECURITY DEFINER function — the JWT context is session-level, not function-level — so audit rows still record the real authenticated user, not `postgres`.
+
+**Sandbox protocol for ANY new trigger/RLS change** (this is the part I keep skipping):
+```sql
+BEGIN;
+SELECT set_config('request.jwt.claim.sub', '<real-user-uuid>', true);
+SET LOCAL ROLE authenticated;
+<do the action a real user would do>;
+RESET ROLE;
+SELECT <observe the resulting state>;
+ROLLBACK;
+```
+This is the ONLY way to validate the user-context path. Running the test as `postgres` via Management API proves nothing about whether real users will be blocked by RLS. **A clean Management-API sandbox + a green tsc + green ReadLints together still don't catch this class of bug.** The role-switched sandbox is mandatory.
+
+**Burned**: v6.8.4 (mig 088 — audit log) shipped with both audit trigger functions as default `SECURITY INVOKER`. My mig 088 comment block actually asserted the opposite ("Service role / table owner bypasses RLS implicitly — the trigger functions run as the table owner (postgres)") — that assertion was flat wrong, but because every sandbox test ran as superuser, the assertion was never falsified. Lior caught it on first production game completion after the deploy (2026-05-22) — toast "Save failed: games/upsert — new row violates row-level security policy for table game_audit_log". His exact response was the one I deserved: "very fraustrating i have to find such things, you reduce the quality of the app so people will stopusing it". Fixed in v6.8.8 by migration 090 (one-line `ALTER FUNCTION ... SECURITY DEFINER` per audit trigger) + a sandbox protocol I should have followed the first time. Two production games got stuck in `status='live'` with profits already entered, because the games-status UPDATE always rolled back together with the audit-log INSERT.

@@ -1,0 +1,58 @@
+v6.8.8 - Hotfix: audit-log RLS broke game completion
+
+Production toast on game completion after v6.8.4:
+  "Save failed: games/upsert -- new row violates row-level security
+   policy for table \"game_audit_log\""
+
+Root cause (entirely my fault in mig 088):
+  audit_log_games_status and audit_log_game_player_delete were
+  declared with default SECURITY INVOKER, so triggers ran in the
+  invoking user's RLS context. game_audit_log had RLS enabled with
+  only SELECT + DELETE policies (no INSERT policy). Every authenticated
+  user write that flipped games.status fired the audit trigger, the
+  trigger's INSERT was denied by RLS, the whole transaction rolled
+  back, and the games-status UPDATE was lost with it. Mig 088 sandbox
+  tests passed because the Management API runs as superuser and
+  bypasses RLS unconditionally - a class of test that proves nothing
+  about real-user behavior.
+
+Fix (migration 090, already applied to live DB):
+  ALTER FUNCTION public.audit_log_games_status() SECURITY DEFINER;
+  ALTER FUNCTION public.audit_log_game_player_delete() SECURITY DEFINER;
+
+  Function owner is postgres, postgres owns game_audit_log, no FORCE
+  RLS on the table -> trigger INSERTs now bypass RLS. RLS stays
+  enabled with the same SELECT/DELETE policies; direct user inserts
+  via PostgREST are still blocked (no INSERT policy exists).
+  auth.uid() continues to work inside SECURITY DEFINER (JWT context
+  is session-level), so audit rows still record the real
+  authenticated user, not postgres.
+
+Sandbox validation under Lior's actual JWT (the protocol I should
+have followed for mig 088):
+  BEGIN;
+  SELECT set_config('request.jwt.claim.sub', '<lior_uuid>', true);
+  SET LOCAL ROLE authenticated;
+  UPDATE games SET status = 'completed' WHERE id = '<stuck_game>';
+  RESET ROLE;
+  SELECT new_status, completed_at, audit_rows_added, audit_actor,
+         audit_new_status;
+  ROLLBACK;
+
+Result: status='completed', completed_at auto-set, 1 audit row,
+actor_id=Lior, after_value->>'status'='completed'. ROLLBACK left
+nothing persisted (the stuck games stay stuck per Lior's instruction).
+
+Two production games stranded by this bug remain in status='live'
+with profits already entered: Lior's May 22 test (fdb1ece2-..., he
+asked me not to fix it) and a real game in another group
+(8695cfe4-..., noamhaba+שני) which the owner can now complete
+normally via the chip-entry resubmit flow.
+
+Validation: npx tsc --noEmit clean; ReadLints clean; migration 090
+applied + verified prosecdef=true on both audit functions; end-to-end
+sandbox under role=authenticated + Lior's JWT passes.
+
+Lessons logged to docs/agent/LESSONS.md:
+  "Triggers that write to RLS-protected tables MUST be SECURITY
+   DEFINER (and the sandbox MUST use a real user JWT)"

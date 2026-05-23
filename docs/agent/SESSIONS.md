@@ -5,7 +5,40 @@
 
 ---
 
-## 2026-05-21 (latest) — v6.8.4 — completed-game wipe, **PERMANENT FIX**
+## 2026-05-23 (latest) — v6.8.8 — mig 090 hotfix: audit-log RLS broke game completion
+
+**Asked**: "see the error at the bottom after completing a game, i have strong feeling its related to your last change, very fraustrating i have to find such things, you reduce the quality of the app so people will stopusing it" — screenshot showed toast on GameSummaryScreen: *"Save failed: games/upsert — new row violates row-level security policy for table \"game_audit_log\""*.
+
+**Did**:
+- **Diagnosed in two minutes**: `audit_log_games_status` and `audit_log_game_player_delete` (both from my mig 088) were declared with default `SECURITY INVOKER`, so triggers ran in the invoking user's RLS context. `game_audit_log` had RLS enabled with only SELECT + DELETE policies (no INSERT policy). Every authenticated-user write that flipped `games.status` fired the audit trigger → trigger tried to INSERT into `game_audit_log` → RLS denied → whole transaction rolled back, taking the games-status UPDATE with it. mig 088's own comments asserted "Service role / table owner bypasses RLS implicitly — the trigger functions run as the table owner (postgres)" — that assertion was textbook wrong, but my Management-API sandbox runs as superuser and bypasses RLS, so the assertion was never falsified before deploy.
+- **Confirmed forensically**: queried `pg_proc` (prosecdef=false on both functions), `pg_policies` on game_audit_log (only gal_admin_select + gal_super_admin_delete; no INSERT policy), and `pg_class` (no FORCE RLS). Found 2 production games stuck in `status='live'` with profits set: Lior's May 22 test in ניסוי group (fdb1ece2-…) and a real game in פוקר של שני group from noamhaba+שני (8695cfe4-…). Each had hit the bug — UPDATE games SET status='completed' rolled back together with the audit insert, leaving status='live' but profits already entered.
+- **Wrote and applied migration 090**: one-liner `ALTER FUNCTION public.audit_log_games_status() SECURITY DEFINER;` + same on `audit_log_game_player_delete()`. Function owner is postgres, postgres owns `game_audit_log`, no FORCE RLS on the table → trigger INSERTs now bypass RLS. RLS stays on with SELECT/DELETE policies; direct user INSERTs via PostgREST still blocked (no INSERT policy). Migration is idempotent. Verified prosecdef flipped to true on both functions.
+- **Sandbox-validated UNDER LIOR'S ACTUAL JWT** (the test I should have run for mig 088):
+  ```sql
+  BEGIN;
+  SELECT set_config('request.jwt.claim.sub', '<lior_uuid>', true);
+  SET LOCAL ROLE authenticated;
+  UPDATE games SET status = 'completed' WHERE id = '<stuck_game>';
+  RESET ROLE;
+  SELECT new_status, completed_at, audit_rows_added, audit_actor, audit_new_status;
+  ROLLBACK;
+  ```
+  Result: status='completed', completed_at auto-set, 1 audit row, actor_id=Lior's UUID, after_value->>'status'='completed'. ROLLBACK undid everything as instructed by Lior.
+- **Did NOT touch the stuck games**, per Lior's explicit instruction ("the stuck game is a test so i dont care about it … dont fix any stuck game"). The other group's stuck game can be completed normally now via the chip-entry-resubmit flow.
+
+**Learned**:
+- **PL/pgSQL trigger functions default to SECURITY INVOKER. Triggers that write to RLS-protected tables MUST be declared SECURITY DEFINER** — otherwise the trigger's INSERT runs in the invoking user's RLS context and fails when no INSERT policy exists. This is the single most important lesson from this incident. Added to LESSONS.md.
+- **Management-API sandbox testing alone is insufficient for anything touching RLS.** The Management API runs as superuser. Every RLS test against it is silently bypassed. The mandatory sandbox pattern going forward is `SELECT set_config('request.jwt.claim.sub', '<real-user-uuid>', true); SET LOCAL ROLE authenticated; <action>; ROLLBACK;` — only this catches the user-context path. I had this technique in my back pocket from earlier sessions (I used it successfully today after Lior's complaint) — I just didn't apply it to mig 088 because the prior sandbox felt comprehensive. Wasn't.
+- **When my own migration comment block makes an authoritative-sounding assertion about Postgres behavior, that's a code smell.** mig 088 confidently wrote: "Service role / table owner bypasses RLS implicitly — the trigger functions run as the table owner (postgres), which is exempt." This is the kind of paragraph I write when I'm rationalizing rather than testing. Every assertion in a SQL comment about RLS or security should be a falsifiable test. If it's not testable, it's belief, not engineering.
+
+**Next**:
+- **Push v6.8.8** (mig 090 SQL file + version bump + docs). Migration already applied to live DB; the push is purely for source-of-truth + Vercel deploy + Settings → About changelog visibility.
+- **Watch the audit log** going forward. Now that the trigger actually works, we'll see real STATUS_UPDATE rows for every game completion (only one cascade-from-games cluster from my prior sandbox in there today).
+- **Validate next real game completion** end-to-end — if Lior or someone else completes a game on prod and gets no toast + audit row appears, we're truly green.
+
+---
+
+## 2026-05-21 — v6.8.4 — completed-game wipe, **PERMANENT FIX**
 
 **Asked**: "dispite all you rpromises you failed me again, yesterday game again was deleted!" — May 20 21:00 game (Poker Night group, id `8b02cfcb-…`) showed "0 שחקנים • 0 קניות" by morning. This is the FOURTH such incident (the prior three: 2026-05-03, 2026-05-08, 2026-05-14). Lior added: "solve it permanently … add some logging that next time will help you to cover it faster and find the root cause … i have a feeling its related to hardon".
 
