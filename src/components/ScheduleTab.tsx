@@ -680,15 +680,28 @@ export default function ScheduleTab() {
     const lastFiredTs = Date.parse(lastFiredIso);
     if (Number.isFinite(lastFiredTs) && lastFiredTs >= triggerTs) return;
 
-    autoCreateInFlightRef.current = true;
-
-    // If an active poll already exists, the schedule is already
-    // satisfied — mark fired without creating a duplicate.
-    if (activePolls.length > 0) {
+    // Active-poll guard — read polls fresh from the cache rather than
+    // relying on React state. On the very first commit after mount,
+    // `polls` (and therefore `activePolls`) is still the `useState([])`
+    // default because `reload()` has only just QUEUED a `setPolls(...)`
+    // update — the commit hasn't applied yet. Without a fresh read the
+    // guard sees an empty list and fires a duplicate poll even when an
+    // open poll already exists (regression observed 2026-05-24: poll
+    // 5ae9d65e auto-fired despite an active poll d37c7e7e from May 21).
+    // `getAllPolls()` is a synchronous in-memory cache read, so it
+    // reflects the current truth at the moment the effect runs.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartTs = todayStart.getTime();
+    const hasLiveActivePoll = getAllPolls().some(
+      p => isActionablePoll(p) && !isPastDatedPoll(p, todayStartTs),
+    );
+    if (hasLiveActivePoll) {
       saveSettings({ ...getSettings(), scheduleAutoCreatedAt: new Date().toISOString() });
-      autoCreateInFlightRef.current = false;
       return;
     }
+
+    autoCreateInFlightRef.current = true;
 
     (async () => {
       try {

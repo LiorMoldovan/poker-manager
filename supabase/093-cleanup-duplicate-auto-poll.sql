@@ -1,0 +1,35 @@
+-- ============================================================
+-- Migration 093: One-off cleanup — duplicate auto-created poll
+-- Run in Supabase SQL Editor (idempotent — uses WHERE on a fixed UUID).
+--
+-- Why: On 2026-05-24 15:21:43 IL, the auto-create-poll schedule fired
+--   from Lior's ScheduleTab session and inserted poll
+--   `5ae9d65e-0269-4f89-a659-56df1f69c06a` even though an active open
+--   poll (`d37c7e7e-a841-4570-8a0f-609cf1e38b21`, created Thu 21/5)
+--   was already live and voting on the same target dates (28/5, 30/5).
+--
+--   Root cause was a single-client mount race in ScheduleTab.tsx: the
+--   `activePolls.length > 0` guard read React state that hadn't yet
+--   been hydrated by the just-queued `setPolls(getAllPolls())` call,
+--   so the effect saw `activePolls = []` on the first commit and fell
+--   through to `createPoll(...)`. The fix in the same change replaces
+--   the React-state check with a synchronous `getAllPolls()` read so
+--   the guard reflects current truth on first mount.
+--
+--   This migration removes the resulting duplicate poll. Cascades on
+--   `game_poll_dates.poll_id` and `game_poll_votes.poll_id` (defined
+--   in 022-game-scheduling.sql) automatically drop the 2 proposed
+--   dates and the 2 votes Dan Mann cast on the duplicate. Dan will
+--   need to re-vote on the original poll d37c7e7e (which already has
+--   his target dates 28/5 + 30/5 plus 29/5).
+-- ============================================================
+
+DELETE FROM game_polls WHERE id = '5ae9d65e-0269-4f89-a659-56df1f69c06a'::uuid;
+
+-- ============================================================
+-- DONE — Verify with:
+--   SELECT count(*) FROM game_polls       WHERE id = '5ae9d65e-0269-4f89-a659-56df1f69c06a'; -- 0
+--   SELECT count(*) FROM game_poll_dates  WHERE poll_id = '5ae9d65e-0269-4f89-a659-56df1f69c06a'; -- 0
+--   SELECT count(*) FROM game_poll_votes  WHERE poll_id = '5ae9d65e-0269-4f89-a659-56df1f69c06a'; -- 0
+--   SELECT id, status FROM game_polls     WHERE id = 'd37c7e7e-a841-4570-8a0f-609cf1e38b21'; -- still 'open'
+-- ============================================================
