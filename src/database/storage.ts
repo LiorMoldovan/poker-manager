@@ -6,6 +6,7 @@ import {
   getGroupId, resetCache, initSupabaseCache,
   flushSync,
   markGameLocallyWritten,
+  markGamePlayersLocallyWritten,
   fetchNotifications, getCachedNotifications, getUnreadNotificationCount,
   markNotificationRead, createNotification,
   resolvePlayerUserId, getPlayerEmailForNotification,
@@ -134,11 +135,17 @@ export const updatePlayerName = (playerId: string, newName: string): boolean => 
   
   // Update all GamePlayer entries with this playerId
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  const touchedGameIds = new Set<string>();
   gamePlayers.forEach(gp => {
     if (gp.playerId === playerId) {
       gp.playerName = newName;
+      touchedGameIds.add(gp.gameId);
     }
   });
+  // v6.8.9: mark every game whose rows changed so the scoped GAME_PLAYERS
+  // upsert in supabaseCache picks them all up. Without these markers
+  // the upsert skips the rename → name update never reaches Supabase.
+  for (const gameId of touchedGameIds) markGamePlayersLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   
   return true;
@@ -237,6 +244,12 @@ export const createGame = (playerIds: string[], location?: string, forecasts?: {
   // marker the new "only sync children for locally-touched games" guard
   // in supabaseCache.ts would skip child reconciliation for the new row.
   markGameLocallyWritten(newGame.id);
+  // v6.8.9: scope GAME_PLAYERS upsert to only this new game's rows
+  // (~7) instead of blasting the entire 1,700-row local cache. The
+  // unscoped blanket upsert was the proximate cause of the May 20 +
+  // May 31 "0 players" incidents — see supabaseCache GAME_PLAYERS
+  // case for the full history.
+  markGamePlayersLocallyWritten(newGame.id);
   setItem(STORAGE_KEYS.GAMES, games);
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   
@@ -420,6 +433,7 @@ export const addPlayerToGame = (gameId: string, playerId: string): GamePlayer | 
   };
 
   gamePlayers.push(newGamePlayer);
+  markGamePlayersLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   return newGamePlayer;
 };
@@ -455,6 +469,7 @@ export const updateGamePlayerRebuys = (gamePlayerId: string, rebuys: number): vo
   const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
   if (index !== -1) {
     gamePlayers[index].rebuys = rebuys;
+    markGamePlayersLocallyWritten(gamePlayers[index].gameId);
     setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   }
 };
@@ -464,6 +479,7 @@ export const updateGamePlayerChips = (gamePlayerId: string, chipCounts: Record<s
   const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
   if (index !== -1) {
     gamePlayers[index].chipCounts = chipCounts;
+    markGamePlayersLocallyWritten(gamePlayers[index].gameId);
     setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   }
 };
@@ -474,6 +490,7 @@ export const updateGamePlayerResults = (gamePlayerId: string, finalValue: number
   if (index !== -1) {
     gamePlayers[index].finalValue = finalValue;
     gamePlayers[index].profit = profit;
+    markGamePlayersLocallyWritten(gamePlayers[index].gameId);
     setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   }
 };
@@ -507,6 +524,7 @@ export const updateGamePlayerEntryMode = (
     } else {
       gamePlayers[index].totalChipCount = null;
     }
+    markGamePlayersLocallyWritten(gamePlayers[index].gameId);
     setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   }
 };

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.10';
+export const APP_VERSION = '6.8.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.8.11',
+    date: '2026-05-31',
+    changes: [
+      '🛡 Permanent fix for "0 players" completed games',
+      '🐛 Connection errors surface as toast, sync auto-retries',
+      '🏆 Top 10 record months on Stats screen',
+    ],
+  },
   {
     version: '6.8.10',
     date: '2026-05-24',

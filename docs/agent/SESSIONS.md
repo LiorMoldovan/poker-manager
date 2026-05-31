@@ -5,7 +5,65 @@
 
 ---
 
-## 2026-05-23 (latest) — v6.8.8 — mig 090 hotfix: audit-log RLS broke game completion
+## 2026-05-31 (latest) — v6.8.11 — permanent fix for "0 players" recurrence + mig 091
+
+**Asked**: Lior reported a THIRD "0 שחקנים • 0 קניות" completed game (May 31). His exact words: *"its not funny anymore, people stop using my app because of you"*, then *"you ask me to give approvals for things i dont have a clue if they will fix anything … i ask you to give me 100% confirmation you understand the issue and fix it, i doubt your analysis is right"*, then *"we cant keep failing and fixing, we look like clowns, restoring is not a solution i need permanent fix that wont harm the next game saving and will actually prevent it … before you progress with any commit i want you to run edge case scenarios and diff flows to try to reproduce it and give me final confirmation"*.
+
+**Did**:
+- **Diagnosed the REAL root cause** (different from what mig 088 + mig 090 fixed):
+  - mig 088 and 090 handled the "completed game gets wiped AFTER it lands" failure class. The May 20 + May 31 incidents were a **different shape**: the game-completion sync **never made it to the server**. Auto game-end backup at 02:39 IL had 7 game_players locally — proving the local cache had the roster — but the server had 0. Not a wipe; a sync-never-happened.
+  - **Mechanism**: every single change to ANY game_players row (rebuy tap, chip count edit, profit recalc, even rename) was firing a single `supabase.from('game_players').upsert(rows, { onConflict: 'id' })` with the ENTIRE local game_players array. For Poker Night, that's **1,741 rows** in one batch. On a Saturday-night mobile network, that ~2-3 MB payload + per-row trigger overhead reliably timed out / 502'd / dropped. The failure went to `logSyncError` → `console.warn` and was **never surfaced to the user**.
+  - **Why mig 088's audit log didn't catch it**: nothing was being DELETEd. The rows simply never arrived. No DELETE → no audit row → no forensic trail. The audit log was designed for the wrong failure class.
+  - **Why `check_game_zero_sum` didn't catch it**: with 0 game_players, `SUM(profit) = 0` is vacuously true. The trigger passed.
+  - **Why `flushGameCreation` made it worse**: NewGameScreen was fire-and-forget. The user navigated to LiveGameScreen with a roster that only existed locally. They played, completed, finalized — and the silent failure was carried through the entire game.
+
+- **Five-layer code fix** + **one DB migration** (mig 091):
+  - **L1 (scoping)**: added a per-game `gamePlayersLocalWriteAt` Map in `supabaseCache.ts`. Each gp mutator in `storage.ts` (createGame, addPlayerToGame, updateGamePlayerRebuys/Chips/Results/EntryMode, renamePlayer) now calls `markGamePlayersLocallyWritten(gameId)`. The GAME_PLAYERS push case filters rows to only touched gameIds → **1,741 rows → ~7 rows per flush (~250× reduction)**.
+  - **L2 (error propagation)**: GAME_PLAYERS push case now `throw`s on Supabase error (was `logSyncError + break`) and dispatches a `supabase-sync-error` CustomEvent. Markers stay set on failure so the next debounce retries automatically.
+  - **L3 (UI awaits)**: NewGameScreen `handleStartGame` now `await`s `flushGameCreation()` inside try/catch. On failure → `deleteGame(game.id)` (local removal + explicit server DELETE, no-op if games row never arrived) + Hebrew toast `שמירת המשחק נכשלה — נא לבדוק את החיבור ולנסות שוב` + early return (no navigation).
+  - **L4 (UI sequencing)**: ChipEntryScreen `handleCalculate` reworked. **First** `flushGameCompletion` syncs game_players + chipGap with status still `chip_entry`. If it fails: Hebrew toast + `setIsFinalizing(false)` + return. If it succeeds: only THEN `updateGameStatus(gameId, 'completed')` + a second `flushGameCompletion` for the status flip. If the second fails: soft info toast (`סיום המשחק יסונכרן ברקע — נתוני הסיום נשמרו`) + navigate (data is already safe). This sequencing means a network blip during chip entry never leaves the local + server in disagreement about whether the game is completed.
+  - **L5 (race protection)**: added `mergeGamePlayersPreservingLocal` to both refresh paths in `refreshGroups`. A realtime echo for unrelated games arrives mid-chip-entry → the merge preserves locally-protected gp rows for games with markers within `PRESERVE_WINDOW_MS = 15s`, so server snapshot can't clobber in-flight local edits.
+  - **L6 (DB backstop, mig 091)**: extended `check_game_zero_sum` with a 0-player guard. `IF NOT EXISTS (SELECT 1 FROM game_players WHERE game_id = NEW.id) THEN RAISE EXCEPTION 'Cannot complete game % with 0 players. The roster never reached the DB' USING ERRCODE = 'check_violation'`. Fires on both INSERT and UPDATE that lands on `status='completed'`.
+
+- **Validation under Lior's "100% confirmation, no approvals" directive**:
+  - **10-test sandbox battery**, all pass expected:
+    1. May 31 failure shape → `RAISE 23514` ✓
+    2. Valid 2-player zero-sum completion → SUCCESS ✓
+    3. Non-zero-sum still blocked → RAISE P0001 ✓
+    4. DELETE on completed game_player → `RAISE 23514` (mig 088) ✓
+    5. Downgrade completed → live → `RAISE 23514` (mig 088) ✓
+    6. chip_entry → completed with 0 players → `RAISE 23514` ✓
+    7. Direct INSERT as `completed` with 0 players → `RAISE 23514` ✓
+    8. Cascade delete still works (deleteGame path) → SUCCESS ✓
+    9. Update completed game's chip_counts (RPC reopen idempotent) → SUCCESS ✓
+    10. Audit log presence on blocked deletes → correctly absent (guard fires alphabetically before audit; only allowed deletes audit)
+  - First battery run had T4/T5 showing NO_RAISE (false positive) — turned out to be my own bug: T3's cleanup set `app.cascade_group_delete='1'` and didn't unset it, so subsequent guard triggers exited via the escape flag. Fixed the test, re-ran, all clean. Lesson re-confirmed: test cleanup that sets transaction-local flags MUST unset them.
+  - **0-player completed games across ALL groups: 0** (was 2 before today's restore — May 20 + May 31, both now have rosters).
+  - Defensive triggers all present + enabled (`tgenabled='O'`): `trg_game_zero_sum` (mig 091), `guard_completed_game_player_delete`, `guard_completed_status_downgrade`, `trg_manage_games_completed_at`, `trg_audit_games_status`, `trg_audit_game_player_delete`.
+  - **Code-trace walked** through every Saturday-night flow: new game, mid-game rebuy, chip entry, two-tab race, network blip mid-flow. Every path verified against the new throw-and-rollback semantics.
+  - `npx tsc --noEmit` exit 0, ReadLints clean on all 7 modified files.
+
+- **One-off data correction at user's request**: May 30 game's `date` shifted from `Sun 01:55 IL → Sat 21:00 IL` (Lior had to reopen-on-Sunday in the prior bug; actual game was Saturday night). `completed_at` left unchanged (audit-trail integrity — that's the timestamp of when chip-entry was actually sealed, post-midnight). Period markers untouched (still last game of May). UPDATE games SET date — single-row, no triggers, no FKs depend on date.
+
+- **Other agent's work merged in the same commit**: Top 10 Record Months card on Statistics screen (`StatisticsScreen.tsx` + 2 new translation keys in `translations.ts`). Single-player monthly profit aggregate, all-time, click-through to that player's month view. Lints clean, tsc clean.
+
+- **NO commit was made until Lior gave explicit `yes, apply` on the test report** — followed `confirm-before-risky.mdc` to the letter this time.
+
+**Learned**:
+- **A blanket batch upsert IS a destructive operation under the right network conditions.** "Sync everything every time" looks correct on a desktop dev session — small dataset, fast LAN, < 50 rows, < 100ms request. As the dataset grows to 1,741 rows and the network drops to mobile-LTE-on-the-edge, the same code path silently fails on every retry. The failure mode isn't "wrong data" but "no data" — and because the caller used fire-and-forget on the promise, no one ever noticed. Scope EVERY batch upsert to what actually changed. New lesson added to LESSONS.md.
+- **A `.catch(err => console.warn(...))` on a critical write path is a bug.** "Silent failure" is the most expensive failure mode in this codebase — every roster wipe and every "0 players" incident traces back to one. If a write is critical, `throw` the error and let the UI surface it. The only legitimate `.catch` on a sync is for cosmetic / background tasks (TTS pool, AI generation, etc.), not for the user's actual data.
+- **Forensics tell you what HAPPENED, not what DIDN'T happen.** mig 088's `game_audit_log` was designed to capture "who deleted what" — DELETE rows, status downgrades, RPC invocations. The May 31 incident was the opposite: nothing was deleted; the data never arrived. The audit log was silent because there was nothing to audit. **Add proactive telemetry for write-success rates too, not just write-attempt forensics.** A `supabase-sync-error` CustomEvent (now in place) is a step toward this — next step could be a periodic local-vs-server consistency probe.
+- **The user has the right to demand "100% confirmation, no approvals."** Lior's directive — "i ask you to give me 100% confirmation you understand the issue and fix it" — was a justified response to three weeks of "shipped the fix, didn't fix it" cycles. The right answer is to run the full reproduction battery, the cross-group health check, the code-trace walk-through, and document the residual risk all BEFORE the bump-and-push step. Then present a single test report and ask one question: "go?" Anything less is just asking the user to QA in production.
+- **Test cleanup must unset every transaction-local flag it sets.** First test battery run had two false-positive NO_RAISE results because T3's cleanup set `app.cascade_group_delete='1'` and never unset it, defanging every subsequent guard. Trivial bug, multi-minute debug. The DO-block analog of "always clean up after `set_config('x', true)` with a paired `set_config('x', '', true)`".
+
+**Next**:
+- **Watch the 2026-06-06 game** end-to-end. If chip-entry submit succeeds with no Hebrew toast and the history card lands with 7 players, the fix is production-validated. If a toast appears, the user will see it (no more silent corruption) — that's the working failure mode now.
+- **Possibly tighten `PRESERVE_WINDOW_MS = 15s`** if any real-world report surfaces a "my edits disappeared after a long pause" pattern. Currently err'd toward the shorter window; can extend to 60s or remove entirely (markers protect indefinitely while sync hasn't succeeded) with no other code changes.
+- **Optional follow-up**: add a periodic local-vs-server gp-count consistency probe so we proactively detect sync drift even when the user doesn't notice.
+
+---
+
+## 2026-05-23 — v6.8.8 — mig 090 hotfix: audit-log RLS broke game completion
 
 **Asked**: "see the error at the bottom after completing a game, i have strong feeling its related to your last change, very fraustrating i have to find such things, you reduce the quality of the app so people will stopusing it" — screenshot showed toast on GameSummaryScreen: *"Save failed: games/upsert — new row violates row-level security policy for table \"game_audit_log\""*.
 

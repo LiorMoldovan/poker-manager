@@ -25,6 +25,7 @@ import PhotoCaptureModal from '../components/PhotoCaptureModal';
 import ChipDetectionOverlay from '../components/ChipDetectionOverlay';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { ToggleSwitch } from '../components/ToggleSwitch';
+import { showToast } from '../components/Toast';
 
 // Per-stack confidence → border color helper. Used by both the
 // chip-entry inputs (left-border) and the header banner. Kept as a
@@ -1057,18 +1058,61 @@ const ChipEntryScreen = () => {
       updateGameChipGap(gameId, gapInMoney, gapPerPlayer);
     }
     
+    // v6.8.9 — flip status to 'completed' only AFTER chip-counts have
+    // successfully synced.
+    //
+    // History: this used to call updateGameStatus(gameId, 'completed')
+    // FIRST, then await flushGameCompletion(), catching any error to a
+    // console.warn that didn't block navigation. Combined with the
+    // 1,741-row blanket GAME_PLAYERS upsert (which reliably failed on
+    // Lior's mobile network), the games row's status flip persisted
+    // while the per-player chip counts never reached the DB — and the
+    // user navigated on to /game-summary believing it was saved. Two
+    // confirmed weekly incidents (May 20 + May 31 2026) ended up as
+    // "0 שחקנים • 0 קניות" in History. The auto game-end backup proved
+    // the local cache HAD the players the whole time — they just
+    // never synced.
+    //
+    // The fix is sequenced:
+    //   1. Save chip counts to local cache (already done above).
+    //   2. flushGameCompletion() — sync game_players + games (chipGap)
+    //      WITHOUT having flipped status yet. If this throws (the
+    //      previously-silent failure), local status is still
+    //      chip_entry, so the user can retry without state divergence.
+    //      The v6.8.4 block_completed_status_downgrade guard prevents
+    //      us from cleanly reverting a local 'completed' state — by
+    //      not setting it in the first place, the retry stays clean.
+    //   3. Only AFTER step 2 succeeds, flip status to 'completed' and
+    //      sync. If THAT sync fails, the game_players are already
+    //      safely on the server, so we surface a soft warning and let
+    //      the debounce retry the status flip. mig 091 ensures the
+    //      DB itself refuses any completion with 0 game_players, so
+    //      a phantom can never be created.
+    try {
+      await flushGameCompletion();
+    } catch (err) {
+      console.warn('Pre-completion sync failed (chip counts):', err);
+      showToast('שמירת נתוני הסיום נכשלה — נא לבדוק את החיבור ולנסות שוב', 'error');
+      setIsFinalizing(false);
+      return;
+    }
+
     updateGameStatus(gameId, 'completed');
     invalidateAICaches();
 
     try {
       await flushGameCompletion();
     } catch (err) {
-      console.warn('Game completion sync failed, will retry via debounce:', err);
+      // Player rows are safe on the server; only the status flip failed.
+      // The debounced sync will retry. Surface a soft warning but allow
+      // navigation — the game's data is intact.
+      console.warn('Status-flip sync failed (chip counts already saved):', err);
+      showToast('סיום המשחק יסונכרן ברקע — נתוני הסיום נשמרו', 'info');
     }
-    
+
     createGameEndBackup();
     deleteTTSPool(gameId);
-    
+
     navigate(`/game-summary/${gameId}`, {
       state: { from: 'chip-entry', autoAI: isOwner && !!getGeminiApiKey() },
     });

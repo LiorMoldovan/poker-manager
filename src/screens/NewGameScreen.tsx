@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame, getAllPolls } from '../database/storage';
+import { showToast } from '../components/Toast';
 import { forceRefreshPlayersFromDb, forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
@@ -587,7 +588,37 @@ const NewGameScreen = () => {
       });
     }
 
-    flushGameCreation().catch(err => console.warn('Game creation flush failed:', err));
+    // v6.8.9 — AWAIT the initial sync, don't fire-and-forget.
+    //
+    // History: this used to be fire-and-forget. createGame would push the
+    // new games row + 7 game_players into the local cache, schedule the
+    // Supabase sync, and immediately navigate to /live-game/:id. If the
+    // GAME_PLAYERS upsert failed (network blip, RLS, 1,741-row batch
+    // timeout — see supabaseCache GAME_PLAYERS case), the failure went
+    // to console.warn and the user was already on LiveGameScreen with a
+    // roster that only existed locally. They'd play the whole game,
+    // complete it, hit ChipEntryScreen, finalize — and end up with a
+    // games row in Supabase but ZERO game_players, because every
+    // subsequent flush kept hitting the same silent failure. Two
+    // confirmed incidents (May 20 + May 31 2026) destroyed real game
+    // history this way. Restoration from the auto game-end backup was
+    // the only recovery.
+    //
+    // The fix: await the flush BEFORE navigating. If it fails, rollback
+    // the local createGame (deleteGame issues both the local removal
+    // and an explicit supabase.from('games').delete() — the latter is a
+    // no-op if the games row never reached the server, which is the
+    // expected failure shape here) and tell the user. They re-try, the
+    // sync succeeds (mobile network blip cleared), and the game is
+    // committed atomically. No more silent partial state.
+    try {
+      await flushGameCreation();
+    } catch (err) {
+      console.warn('Game creation flush failed:', err);
+      deleteGame(game.id);
+      showToast('שמירת המשחק נכשלה — נא לבדוק את החיבור ולנסות שוב', 'error');
+      return;
+    }
 
     // TTS pool generation is now FIRE-AND-FORGET. Previously we awaited
     // it here (blocking the Start button with a "preparing the evening"

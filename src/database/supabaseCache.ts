@@ -447,6 +447,79 @@ function hasRecentLocalWrite(gameId: string): boolean {
   return Date.now() - at < PRESERVE_WINDOW_MS;
 }
 
+// ── Per-game GAME_PLAYERS write tracking (v6.8.9) ──
+//
+// History: the GAME_PLAYERS sync used to upsert EVERY game_player in
+// local memory on every flush — 1,741 rows for an established Poker
+// Night account. On a mobile network, that batch reliably failed (size
+// + 1,741 zero-sum trigger invocations); the failure was silently
+// console-logged via logSyncError; and the user navigated on with a
+// game in DB but no roster. Two consecutive weekly games (May 20 + May
+// 31) hit this path → "0 שחקנים • 0 קניות" in History. Restoration
+// from the auto game-end backup got the data back, but the underlying
+// reliability bug stayed.
+//
+// Fix: track per-gameId timestamps for any local GAME_PLAYERS write,
+// and scope the upsert in pushToSupabase to only those games. A new-
+// game flush goes from 1,741 rows to ~7. Chip-entry submit goes from
+// 1,741 rows to ~7. Smaller batch = orders-of-magnitude lower failure
+// rate, AND failures now propagate (the GAME_PLAYERS push now throws
+// on Supabase error like the GAMES push, so flushGameCompletion /
+// flushGameCreation can be properly awaited & error-handled by the
+// UI). Defense in depth: migration 091 blocks completion with 0
+// players at the DB layer.
+const gamePlayersLocalWriteAt = new Map<string, number>();
+
+/**
+ * Mark a game's game_players rows as having a pending local write.
+ * Call this from any storage.ts function that mutates the game_players
+ * array (createGame, addPlayerToGame, updateGamePlayerChips, etc.).
+ * Without this marker the scoped upsert in pushToSupabase will skip
+ * the game's rows on the next flush → silent data loss.
+ */
+export function markGamePlayersLocallyWritten(gameId: string): void {
+  gamePlayersLocalWriteAt.set(gameId, Date.now());
+}
+
+function clearGamePlayersLocalWriteMarker(gameId: string): void {
+  gamePlayersLocalWriteAt.delete(gameId);
+}
+
+function hasRecentGamePlayersLocalWrite(gameId: string): boolean {
+  const at = gamePlayersLocalWriteAt.get(gameId);
+  if (!at) return false;
+  return Date.now() - at < PRESERVE_WINDOW_MS;
+}
+
+/**
+ * Race protection for state.data.GAME_PLAYERS during realtime refresh.
+ *
+ * A realtime echo of an unrelated games-table change triggers a full
+ * refresh which would otherwise REPLACE state.data.GAME_PLAYERS with
+ * the server's view. If chip entry (or any other gp mutator) is mid-
+ * flight on the local device, the not-yet-synced rows get clobbered
+ * by the older server snapshot.
+ *
+ * This helper merges the fetched rows with locally-preserved copies
+ * for any gameId with a recent local write. Same idea as the games-
+ * row preservation block below it — extended to the gp array so the
+ * v6.8.9 scoped-upsert flow can't race the realtime refresh.
+ */
+function mergeGamePlayersPreservingLocal(fetched: GamePlayer[]): GamePlayer[] {
+  if (!state || gamePlayersLocalWriteAt.size === 0) return fetched;
+  const protectedIds = new Set<string>();
+  for (const gameId of gamePlayersLocalWriteAt.keys()) {
+    if (hasRecentGamePlayersLocalWrite(gameId)) protectedIds.add(gameId);
+  }
+  if (protectedIds.size === 0) return fetched;
+  const oldGps = (state.data.get(STORAGE_KEYS.GAME_PLAYERS) as GamePlayer[] | undefined) || [];
+  const localProtected = oldGps.filter(gp => protectedIds.has(gp.gameId));
+  if (localProtected.length === 0) return fetched;
+  const filteredFetched = fetched.filter(gp => !protectedIds.has(gp.gameId));
+  console.log(`[cache] Preserving ${localProtected.length} local game_players across ${protectedIds.size} games (pending sync within ${PRESERVE_WINDOW_MS}ms)`);
+  return [...filteredFetched, ...localProtected];
+}
+
 // ── Debounced sync ──
 
 const syncTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -597,7 +670,14 @@ async function pushToSupabase(key: string) {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'games', op: 'upsert', message: error.message },
           }));
-          break;
+          // v6.8.9: also THROW so awaiting callers (flushGameCreation /
+          // flushGameCompletion → NewGameScreen / ChipEntryScreen) can
+          // detect the failure, rollback local state, and reprompt the
+          // user. Without the throw, a silently-failing GAMES upsert
+          // would let game creation proceed to LiveGameScreen with a
+          // game that only exists locally — the same family of bugs
+          // that hid the May 31 game_players issue from us for weeks.
+          throw new Error(`games upsert failed: ${error.message}`);
         }
         // Successful upsert — clear local-write markers for synced rows
         // so subsequent realtime echoes can authoritatively refresh them.
@@ -740,21 +820,62 @@ async function pushToSupabase(key: string) {
       break;
     }
     case STORAGE_KEYS.GAME_PLAYERS: {
-      // Upsert-only sync. The previous "delete every server row whose id
-      // isn't in local" path was the proximate cause of completed-game
-      // rosters disappearing on Sunday mornings (any group member opening
-      // the app with a stale or partial cache for one game would, on the
-      // next setItem(GAME_PLAYERS, ...), shop the server roster for that
-      // game down to whatever subset they happened to be holding).
-      // Real deletes happen on `removeGamePlayer` in storage.ts via an
-      // explicit `supabase.from('game_players').delete().eq('id', id)`.
+      // Upsert-only sync, scoped per-game (v6.8.9).
+      //
+      // History:
+      //   - Pre-v5.34: "delete every server row whose id isn't in local"
+      //     wiped Sunday morning rosters. Killed by the upsert-only rewrite.
+      //   - v5.34..v6.8.8: upsert-only but BLANKET — every flush uploaded
+      //     the entire game_players array in one batch (1,741 rows for an
+      //     established Poker Night account). On mobile networks the batch
+      //     reliably timed out / 502'd / dropped mid-upload; the failure
+      //     was console-only via logSyncError; the user navigated on with
+      //     a game in DB but no roster (two confirmed incidents: May 20,
+      //     May 31). The auto game-end backup captured the missing 7
+      //     players from local cache, proving they NEVER reached the DB
+      //     — this was not a wipe.
+      //
+      // v6.8.9 fix:
+      //   - Scope the upsert to only game_ids in gamePlayersLocalWriteAt.
+      //     A new-game flush goes from 1,741 rows to ~7.
+      //   - THROW on Supabase error (not just logSyncError + break). This
+      //     propagates through flushSync → flushGameCreation /
+      //     flushGameCompletion → UI try/catch, so the user sees a toast
+      //     and the local game can be rolled back. Mirrors the dispatch
+      //     pattern the GAMES case already had — but going further by
+      //     also rejecting the promise, since silently dispatching while
+      //     the caller assumes success is exactly the failure mode that
+      //     hid the May 31 bug.
+      //   - Keep markers ON failure (don't clear), so the next debounced
+      //     sync attempt retries automatically.
+      //
+      // Real deletes still happen on `removeGamePlayer` in storage.ts via
+      // an explicit `supabase.from('game_players').delete().eq('id', id)`.
       // Cascade deletes (whole-game removal) are covered by the FK from
       // game_players.game_id → games(id) ON DELETE CASCADE.
-      const gps = (state.data.get(key) as GamePlayer[]) || [];
-      const rows = gps.map(gamePlayerToRow);
-      if (rows.length === 0) break;
+      if (gamePlayersLocalWriteAt.size === 0) break;
+      const touchedGameIds = new Set(gamePlayersLocalWriteAt.keys());
+      const allGps = (state.data.get(key) as GamePlayer[]) || [];
+      const rows = allGps
+        .filter(gp => touchedGameIds.has(gp.gameId))
+        .map(gamePlayerToRow);
+      if (rows.length === 0) {
+        // Local cache no longer has rows for the touched games — nothing
+        // to upsert. Clear markers so we don't busy-loop.
+        for (const id of touchedGameIds) clearGamePlayersLocalWriteMarker(id);
+        break;
+      }
       const { error } = await supabase.from('game_players').upsert(rows, { onConflict: 'id' });
-      if (error) logSyncError('game_players', 'upsert', error);
+      if (error) {
+        logSyncError('game_players', 'upsert', error);
+        window.dispatchEvent(new CustomEvent('supabase-sync-error', {
+          detail: { table: 'game_players', op: 'upsert', message: error.message },
+        }));
+        // Keep markers so the next flush retries.
+        throw new Error(`game_players upsert failed: ${error.message}`);
+      }
+      // Success — clear markers for synced games.
+      for (const id of touchedGameIds) clearGamePlayersLocalWriteMarker(id);
       break;
     }
     case STORAGE_KEYS.CHIP_VALUES: {
@@ -1469,7 +1590,7 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
         fetchByGameIds('game_players', gameIds),
         fetchByGameIds('shared_expenses', gameIds),
       ]);
-      state.data.set(STORAGE_KEYS.GAME_PLAYERS, gpRows.map(r => toGamePlayer(r)));
+      state.data.set(STORAGE_KEYS.GAME_PLAYERS, mergeGamePlayersPreservingLocal(gpRows.map(r => toGamePlayer(r))));
       const seByGame = new Map<string, SharedExpense[]>();
       for (const row of seRows) {
         const id = row.game_id as string;
@@ -1617,7 +1738,7 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
     }
 
     state.data.set(STORAGE_KEYS.GAMES, games);
-    state.data.set(STORAGE_KEYS.GAME_PLAYERS, gpRows.map(r => toGamePlayer(r)));
+    state.data.set(STORAGE_KEYS.GAME_PLAYERS, mergeGamePlayersPreservingLocal(gpRows.map(r => toGamePlayer(r))));
   }
 
   if (groups.has('settings')) {

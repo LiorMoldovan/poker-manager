@@ -102,6 +102,7 @@ const StatisticsScreen = () => {
   const [isSharingTop10, setIsSharingTop10] = useState(false);
   const [isSharingPodiumRates, setIsSharingPodiumRates] = useState(false);
   const [isSharingAvgPlacement, setIsSharingAvgPlacement] = useState(false);
+  const [isSharingBestMonths, setIsSharingBestMonths] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const top10Ref = useRef<HTMLDivElement>(null);
@@ -110,6 +111,7 @@ const StatisticsScreen = () => {
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
   const podiumRatesRef = useRef<HTMLDivElement>(null);
   const avgPlacementRef = useRef<HTMLDivElement>(null);
+  const bestMonthsRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
   // Refs for the interactive controls strips inside two of the
   // share-able cards. Hidden via `hideForCapture` during the
@@ -283,6 +285,16 @@ const StatisticsScreen = () => {
       await shareFiles(files, t('stats.top20'));
     } catch (e) { console.error('Error sharing top 20:', e); }
     finally { setIsSharingTop20(false); }
+  };
+
+  const handleShareBestMonths = async () => {
+    if (!bestMonthsRef.current) return;
+    setIsSharingBestMonths(true);
+    try {
+      const files = await captureAndSplit(bestMonthsRef.current, 'poker-best-months');
+      await shareFiles(files, t('stats.bestMonths'));
+    } catch (e) { console.error('Error sharing best months:', e); }
+    finally { setIsSharingBestMonths(false); }
   };
 
   const handleShareTop10 = async () => {
@@ -631,6 +643,64 @@ const StatisticsScreen = () => {
     return allResults
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
+  }, [players, selectedTypes]);
+
+  // Top 10 best months ever for a single player. Aggregates each player's
+  // total profit across every completed game in a calendar month, then
+  // ranks (player, month) pairs by that summed profit. All-time, no
+  // period/active-only filtering — companion to top20WinsAllTime which
+  // ranks single-night wins. Only positive aggregates surface (a "best
+  // month" with negative profit isn't a record, it's a worst month).
+  const top10BestMonthsAllTime = useMemo(() => {
+    if (players.length === 0) return [];
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    const validPlayerIds = new Set(
+      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
+    );
+    const gameById = new Map(allGames.map(g => [g.id, g]));
+
+    // key = `${playerId}__${YYYY-MM}` → aggregate
+    const buckets = new Map<string, {
+      playerId: string;
+      playerName: string;
+      year: number;
+      month: number; // 1-12
+      profit: number;
+      gamesCount: number;
+    }>();
+
+    for (const gp of allGamePlayers) {
+      if (!validPlayerIds.has(gp.playerId)) continue;
+      const game = gameById.get(gp.gameId);
+      if (!game) continue;
+      const gameDate = new Date(game.date || game.createdAt);
+      if (Number.isNaN(gameDate.getTime())) continue;
+      const year = gameDate.getFullYear();
+      const month = gameDate.getMonth() + 1;
+      const key = `${gp.playerId}__${year}-${String(month).padStart(2, '0')}`;
+      const currentPlayer = players.find(p => p.id === gp.playerId);
+      const playerName = currentPlayer?.name || gp.playerName;
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.profit += gp.profit;
+        existing.gamesCount += 1;
+      } else {
+        buckets.set(key, {
+          playerId: gp.playerId,
+          playerName,
+          year,
+          month,
+          profit: gp.profit,
+          gamesCount: 1,
+        });
+      }
+    }
+
+    return Array.from(buckets.values())
+      .filter(b => b.profit > 0)
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 10);
   }, [players, selectedTypes]);
 
   // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
@@ -2675,6 +2745,70 @@ const StatisticsScreen = () => {
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
                     {isSharingTop20 ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* Top 10 Best Months Ever - ALL TIME, single-player monthly aggregate */}
+              {top10BestMonthsAllTime.length > 0 && (
+                <div ref={bestMonthsRef} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.bestMonths')}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.35rem', fontWeight: 500 }}>📊 {t('stats.allTimeLabel')}</div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.profitCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.avgCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.monthCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.gamesCol')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {top10BestMonthsAllTime.map((entry, idx) => {
+                        const isMe = identityName && entry.playerName === identityName;
+                        const monthLabel = `${HEBREW_MONTH_NAMES[entry.month - 1]} ${entry.year}`;
+                        const avg = entry.gamesCount > 0 ? entry.profit / entry.gamesCount : 0;
+                        return (
+                        <tr
+                          key={`${entry.playerId}-${entry.year}-${entry.month}`}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                          onClick={() => {
+                            // Drill into that player's month: switch to the
+                            // table view, set period=month, and scope by year
+                            // & month. The user can then read off the games
+                            // and per-game profits from the main stats table.
+                            setViewMode('table');
+                            setTimePeriod('month');
+                            setSelectedYear(entry.year);
+                            setSelectedMonth(entry.month);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>{'\u200E'}+{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontSize: '0.65rem' }}>{'\u200E'}+{formatCurrency(avg)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{monthLabel}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{entry.gamesCount}</td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {top10BestMonthsAllTime.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareBestMonths}
+                    disabled={isSharingBestMonths}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingBestMonths ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}

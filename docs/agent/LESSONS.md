@@ -163,6 +163,16 @@ This is the ONLY way to validate the user-context path. Running the test as `pos
 
 ---
 
+## A blanket batch upsert is a destructive operation under bad network
+
+**Gotcha**: A sync function that uploads "all local rows for the table on every change" looks reasonable in dev — small dataset, fast LAN, sub-100ms request, atomic per-statement. As the dataset grows to thousands of rows and the runtime network drops to mobile-LTE-on-the-edge, the same code path **reliably fails** on every retry. The failure mode isn't "wrong data", it's "no data" — and if the caller does `.catch(err => console.warn(...))` and continues, no one ever notices. Worse: PostgreSQL upserts are statement-atomic, so one constraint/trigger error in a batch of N kills the entire write of N rows. Your "harmless 1-row chip-count update" becomes a 1,741-row payload that times out.
+
+**Fix**: scope every batch upsert to ONLY what actually changed. Maintain a per-id "locally written" marker map; clear markers on successful sync; filter the upsert payload through the marker set. Combine with three other invariants: (a) the sync function MUST `throw` on Supabase error (never `console.warn + break` for critical writes), (b) the UI MUST `await` the flush and handle the rejection (rollback local state + Hebrew toast), (c) at the DB layer, add a check_violation guard for the worst-case shape (e.g. "completion with 0 player rows") so even a silent client can't corrupt server state. Defense-in-depth or it doesn't count.
+
+**Burned**: three weekend "0 players • 0 buy-ins" incidents (2026-05-07, 2026-05-20, 2026-05-31) across two months. Each one looked like a delete bug, prompted a DB-layer guard (mig 088 immutability, mig 090 audit RLS) — but the actual mechanism was simpler and dumber: every gp mutator was uploading 1,741 rows in one POST, and Lior's Saturday-night mobile cell connection couldn't carry that payload. The auto game-end backup at 02:39 IL had 7 game_players locally → server had 0. Not a wipe, just a sync-never-happened. Fixed in v6.8.11 (this lesson): scoped upserts (~7 rows), throw-on-failure, await + rollback in UI, mig 091 as the DB backstop.
+
+---
+
 ## Group-shared JSONB columns lose updates when clients serialize the whole blob
 
 **Gotcha**: A `JSONB` settings column written by every admin's full-row upsert (e.g. `settingsToRow`'s `schedule_email_kinds: { …all 7 keys… }`) silently reverts another admin's flipped key whenever the second writer's local cache hasn't echoed via realtime. The bug is invisible — no error, no audit row, no console warning — and any unrelated settings save (push toggle, default target, auto-create time) is enough to trigger it because the JSONB is always carried along for the ride.
