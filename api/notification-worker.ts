@@ -701,6 +701,10 @@ async function postSendEmailFor(name: string, email: string, plan: DispatchPlan)
       kind: 'broadcast',
       message: emailGreeting(name) + plan.message.emailBody,
       senderName: 'Poker Manager',
+      // Forwarded so the super-admin "Recent sends" audit card can show the
+      // recipient's player name instead of the masked email. The `message`
+      // above is stored verbatim as the email body for the same card.
+      playerName: name,
     }),
   });
   const text = await res.text().catch(() => '');

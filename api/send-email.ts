@@ -38,6 +38,8 @@ async function logEmailSend(
   httpStatus: number,
   errorMessage: string | null,
   templateId: string | null,
+  recipientPlayerName: string | null,
+  emailBody: string | null,
 ): Promise<void> {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/rpc/log_email_send`, {
@@ -56,6 +58,13 @@ async function logEmailSend(
         p_http_status: httpStatus,
         p_error_message: errorMessage?.slice(0, 500) ?? null,
         p_template_id: templateId,
+        // Audit context for the super-admin "Recent sends" card: WHO the
+        // mail went to (player name) and WHAT they got (body). Only
+        // message-based emails (broadcast/notifications) carry a body —
+        // settlement emails are rendered by EmailJS from a template, so
+        // the literal body never reaches this function (stored as null).
+        p_recipient_player_name: recipientPlayerName,
+        p_email_body: emailBody ? emailBody.slice(0, 4000) : null,
       }),
     });
   } catch (err) {
@@ -309,19 +318,33 @@ export default async function handler(req: Request): Promise<Response> {
 
     const safeKind = typeof kind === 'string' && kind ? kind : (isBroadcast ? 'broadcast' : 'settlement');
 
+    // Audit-log enrichment (super-admin "Recent sends" card):
+    //   * recipientPlayerName — the player this mail was addressed to.
+    //     Present for settlement emails (body.playerName) and worker
+    //     notification dispatches (which now forward the recipient's name).
+    //   * emailBody — only message-based emails (broadcast/notifications)
+    //     carry the literal body; settlement bodies are rendered by EmailJS
+    //     from a template and never reach us, so they stay null.
+    const recipientPlayerName = typeof body.playerName === 'string' && body.playerName.trim()
+      ? body.playerName.trim()
+      : null;
+    const emailBody = isBroadcast && typeof body.message === 'string' && body.message.trim()
+      ? body.message
+      : null;
+
     if (!res.ok) {
       const errText = await res.text();
       // MUST await: Vercel Edge runtime tears the worker down as soon as the
       // Response is returned, so a fire-and-forget fetch to Supabase has no
       // chance to complete. The dashboard would silently stay at 0.
       // The added latency is one Supabase REST hop (~50-100ms) — acceptable.
-      await logEmailSend(authHeader, groupId, to, safeKind, subject, false, res.status, errText?.slice(0, 500) || null, usedTemplateId);
+      await logEmailSend(authHeader, groupId, to, safeKind, subject, false, res.status, errText?.slice(0, 500) || null, usedTemplateId, recipientPlayerName, emailBody);
       return new Response(JSON.stringify({ error: { message: `EmailJS: ${errText || res.status}` } }), {
         status: 502, headers: JSON_HEADERS,
       });
     }
 
-    await logEmailSend(authHeader, groupId, to, safeKind, subject, true, res.status, null, usedTemplateId);
+    await logEmailSend(authHeader, groupId, to, safeKind, subject, true, res.status, null, usedTemplateId, recipientPlayerName, emailBody);
 
     // ─── Quota threshold push alert ───────────────────────────────────
     // After every successful send, check if we just crossed an alert

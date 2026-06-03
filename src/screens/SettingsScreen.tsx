@@ -4,6 +4,7 @@ import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits, PhotoChipCountResult } from '../types';
 import { cleanNumber } from '../utils/calculations';
+import { buildWazeUrl } from '../utils/waze';
 import { 
   getAllPlayers, 
   addPlayer, 
@@ -93,6 +94,12 @@ const SettingsScreen = () => {
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>('male');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [newLocation, setNewLocation] = useState('');
+  // Per-location address inputs: keyed by location name, holds the
+  // in-progress draft so we only persist on blur/Enter (not per
+  // keystroke). Falls back to the saved address when no draft exists.
+  const [locationAddressDrafts, setLocationAddressDrafts] = useState<Record<string, string>>({});
+  // Same draft pattern for the free-text arrival-details textarea.
+  const [locationNotesDrafts, setLocationNotesDrafts] = useState<Record<string, string>>({});
   const [newBlockedA, setNewBlockedA] = useState('');
   const [newBlockedB, setNewBlockedB] = useState('');
   const [newBlockedDate, setNewBlockedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -125,6 +132,8 @@ const SettingsScreen = () => {
   // setInterval polling, per the project's no-cache rule.
   const [emailUsage, setEmailUsage] = useState<EmailUsageResponse | null>(null);
   const [showEmailRecent, setShowEmailRecent] = useState(false);
+  // Index of the recent-send row whose email body is expanded (null = none).
+  const [expandedEmailIdx, setExpandedEmailIdx] = useState<number | null>(null);
   // EmailJS quota config editor (super-admin). Lets the operator seed
   // the baseline + cap + reset day from the UI instead of dealing with
   // env vars. Persisted to `system_config` via SECURITY DEFINER RPCs.
@@ -756,6 +765,53 @@ const SettingsScreen = () => {
     showSaved();
   };
 
+  // Migration 094. Set/clear the exact address behind a location NAME.
+  // Empty address removes the key so a name with no address shows no
+  // Waze affordance anywhere. Record<string,string> doesn't fit the
+  // handleSettingsChange signature, hence the dedicated setter.
+  const handleLocationAddressChange = (locationName: string, address: string) => {
+    const current = { ...(settings.locationAddresses ?? {}) };
+    const trimmed = address.trim();
+    if (trimmed) current[locationName] = trimmed;
+    else delete current[locationName];
+    const newSettings: Settings = { ...settings, locationAddresses: current };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    showSaved();
+  };
+
+  // Migration 095. Set/clear free-text arrival details for a location
+  // NAME. Empty clears the key. Same pattern as the address setter.
+  const handleLocationNotesChange = (locationName: string, notes: string) => {
+    const current = { ...(settings.locationNotes ?? {}) };
+    const trimmed = notes.trim();
+    if (trimmed) current[locationName] = trimmed;
+    else delete current[locationName];
+    const newSettings: Settings = { ...settings, locationNotes: current };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    showSaved();
+  };
+
+  // Remove a location and any address / notes bound to it in one save,
+  // so a deleted name never leaves orphaned detail entries behind.
+  const handleRemoveLocation = (locationName: string) => {
+    const nextLocations = (settings.locations ?? []).filter(l => l !== locationName);
+    const nextAddresses = { ...(settings.locationAddresses ?? {}) };
+    delete nextAddresses[locationName];
+    const nextNotes = { ...(settings.locationNotes ?? {}) };
+    delete nextNotes[locationName];
+    const newSettings: Settings = {
+      ...settings,
+      locations: nextLocations,
+      locationAddresses: nextAddresses,
+      locationNotes: nextNotes,
+    };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    showSaved();
+  };
+
   const showSaved = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -798,10 +854,18 @@ const SettingsScreen = () => {
       return;
     }
     
-    const success = updatePlayerName(editingPlayer.id, trimmedName);
-    if (!success) {
-      setError(t('settings.players.duplicateEdit'));
-      return;
+    // Only run the rename when the name actually changed. updatePlayerName
+    // re-stamps the player's name onto every game_players row across all
+    // their historical games and re-syncs each one — touching legacy games
+    // whose profits don't sum to exactly zero, which the zero-sum trigger
+    // rejects. Calling it on an unchanged name (e.g. when the user only
+    // flips the player's type) caused a spurious "Zero-sum violation" toast.
+    if (trimmedName !== editingPlayer.name) {
+      const success = updatePlayerName(editingPlayer.id, trimmedName);
+      if (!success) {
+        setError(t('settings.players.duplicateEdit'));
+        return;
+      }
     }
     
     if (editPlayerType !== editingPlayer.type) {
@@ -1592,36 +1656,105 @@ const SettingsScreen = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
               <label className="label" style={{ margin: 0 }}>{t('settings.game.locations')}</label>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {(settings.locations ?? []).length === 0 && (
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                   {t('settings.game.noLocations')}
                 </span>
               )}
-              {(settings.locations ?? []).map(loc => (
-                <div key={loc} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.3rem',
-                  padding: '0.3rem 0.6rem', borderRadius: '8px',
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                  fontSize: '0.8rem', color: 'var(--text)',
-                  transition: 'all 0.15s ease',
-                }}>
-                  <span>{loc}</span>
-                  {canEditSettings && (
-                    <button
-                      onClick={() => {
-                        const current = settings.locations ?? [];
-                        handleSettingsChange('locations', current.filter(l => l !== loc));
-                      }}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: 'var(--text-muted)', fontSize: '0.7rem', padding: '0 0.1rem',
-                        lineHeight: 1,
-                      }}
-                    >✕</button>
-                  )}
-                </div>
-              ))}
+              {(settings.locations ?? []).map(loc => {
+                const savedAddress = settings.locationAddresses?.[loc] ?? '';
+                const draft = locationAddressDrafts[loc];
+                const addressValue = draft !== undefined ? draft : savedAddress;
+                const wazeUrl = buildWazeUrl(savedAddress);
+                const savedNotes = settings.locationNotes?.[loc] ?? '';
+                const notesDraft = locationNotesDrafts[loc];
+                const notesValue = notesDraft !== undefined ? notesDraft : savedNotes;
+                return (
+                  <div key={loc} style={{
+                    display: 'flex', flexDirection: 'column', gap: '0.4rem',
+                    padding: '0.5rem 0.6rem', borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 600, flex: 1 }}>{loc}</span>
+                      {wazeUrl && (
+                        <a
+                          href={wazeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                            padding: '0.2rem 0.5rem', borderRadius: '7px', textDecoration: 'none',
+                            fontSize: '0.72rem', fontWeight: 600,
+                            background: 'rgba(51,204,255,0.12)', color: '#33CCFF',
+                            border: '1px solid rgba(51,204,255,0.3)',
+                          }}
+                        >🧭 {t('settings.game.openInWaze')}</a>
+                      )}
+                      {canEditSettings && (
+                        <button
+                          onClick={() => handleRemoveLocation(loc)}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'var(--text-muted)', fontSize: '0.8rem', padding: '0 0.1rem',
+                            lineHeight: 1,
+                          }}
+                        >✕</button>
+                      )}
+                    </div>
+                    {canEditSettings ? (
+                      <input
+                        type="text"
+                        className="input"
+                        value={addressValue}
+                        placeholder={t('settings.game.locationAddressPlaceholder')}
+                        style={{ fontSize: '0.8rem', width: '100%' }}
+                        onChange={e => setLocationAddressDrafts(prev => ({ ...prev, [loc]: e.target.value }))}
+                        onBlur={() => {
+                          if (draft !== undefined && draft.trim() !== savedAddress) {
+                            handleLocationAddressChange(loc, draft);
+                          }
+                          setLocationAddressDrafts(prev => {
+                            const next = { ...prev };
+                            delete next[loc];
+                            return next;
+                          });
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      />
+                    ) : (
+                      savedAddress && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{savedAddress}</span>
+                      )
+                    )}
+                    {canEditSettings ? (
+                      <textarea
+                        className="input"
+                        value={notesValue}
+                        placeholder={t('settings.game.locationNotesPlaceholder')}
+                        rows={2}
+                        style={{ fontSize: '0.8rem', width: '100%', resize: 'vertical', lineHeight: 1.4 }}
+                        onChange={e => setLocationNotesDrafts(prev => ({ ...prev, [loc]: e.target.value }))}
+                        onBlur={() => {
+                          if (notesDraft !== undefined && notesDraft.trim() !== savedNotes) {
+                            handleLocationNotesChange(loc, notesDraft);
+                          }
+                          setLocationNotesDrafts(prev => {
+                            const next = { ...prev };
+                            delete next[loc];
+                            return next;
+                          });
+                        }}
+                      />
+                    ) : (
+                      savedNotes && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'pre-line' }}>{savedNotes}</span>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {canEditSettings && (
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
@@ -3119,19 +3252,52 @@ const SettingsScreen = () => {
                               const d = new Date(entry.sent_at);
                               const dateStr = d.toLocaleDateString(usageLoc, { day: 'numeric', month: 'short' });
                               const timeStr = d.toLocaleTimeString(usageLoc, { hour: '2-digit', minute: '2-digit' });
+                              // Show the player name when we captured it; older
+                              // rows (pre-096) and recipient-less broadcasts fall
+                              // back to the masked email so nothing looks empty.
+                              const hasName = !!(entry.recipient_player_name && entry.recipient_player_name.trim());
+                              const who = hasName ? entry.recipient_player_name!.trim() : entry.recipient;
+                              const body = entry.body && entry.body.trim() ? entry.body.trim() : null;
+                              const isExpanded = expandedEmailIdx === i;
                               return (
                                 <div key={`${entry.sent_at}-${i}`} style={{
-                                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                  padding: '0.3rem 0',
                                   borderBottom: i < recent.length - 1 ? '1px solid var(--border)' : 'none',
-                                  fontSize: '0.65rem',
                                 }}>
-                                  <span style={{ minWidth: '70px', color: 'var(--text-muted)' }}>{dateStr} {timeStr}</span>
-                                  <span style={{ minWidth: '85px', color: 'var(--text)' }}>{kindLabel(entry.kind)}</span>
-                                  <span style={{ flex: 1, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'ltr', textAlign: isRTL ? 'right' : 'left' }}>{entry.recipient}</span>
-                                  <span style={{ color: entry.success ? '#10B981' : '#EF4444', fontWeight: 700 }}>
-                                    {entry.success ? '✓' : '✗'}
-                                  </span>
+                                  <div
+                                    onClick={() => setExpandedEmailIdx(isExpanded ? null : i)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                      padding: '0.3rem 0', fontSize: '0.65rem', cursor: 'pointer',
+                                    }}
+                                  >
+                                    <span style={{ minWidth: '70px', color: 'var(--text-muted)' }}>{dateStr} {timeStr}</span>
+                                    <span style={{ minWidth: '85px', color: 'var(--text)' }}>{kindLabel(entry.kind)}</span>
+                                    <span style={{ flex: 1, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: hasName ? undefined : 'ltr', textAlign: isRTL ? 'right' : 'left' }}>{who}</span>
+                                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                                    <span style={{ color: entry.success ? '#10B981' : '#EF4444', fontWeight: 700 }}>
+                                      {entry.success ? '✓' : '✗'}
+                                    </span>
+                                  </div>
+                                  {isExpanded && (
+                                    <div style={{
+                                      padding: '0.5rem 0.6rem 0.7rem',
+                                      fontSize: '0.65rem', color: 'var(--text-muted)',
+                                    }}>
+                                      {hasName && (
+                                        <div style={{ marginBottom: '0.35rem', direction: 'ltr', textAlign: isRTL ? 'right' : 'left' }}>
+                                          <span style={{ color: 'var(--text-muted)' }}>✉️ </span>{entry.recipient}
+                                        </div>
+                                      )}
+                                      {entry.subject && (
+                                        <div style={{ marginBottom: '0.35rem', color: 'var(--text)', fontWeight: 600 }}>{entry.subject}</div>
+                                      )}
+                                      {body ? (
+                                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}>{body}</div>
+                                      ) : (
+                                        <div style={{ fontStyle: 'italic', opacity: 0.7 }}>{t('settings.ai.emailNoBody')}</div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}

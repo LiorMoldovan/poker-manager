@@ -94,6 +94,15 @@ function toSettings(row: Record<string, unknown>): Settings {
     locations: (row.locations as string[]) || [],
     blockedTransfers: (row.blocked_transfers as Settings['blockedTransfers']) || [],
   };
+  // location_addresses (migration 094) — name→address map. Tolerate the
+  // key being missing on older cache snapshots / pre-094 reads.
+  if (row.location_addresses && typeof row.location_addresses === 'object') {
+    s.locationAddresses = row.location_addresses as Record<string, string>;
+  }
+  // location_notes (migration 095) — name→free-text arrival details map.
+  if (row.location_notes && typeof row.location_notes === 'object') {
+    s.locationNotes = row.location_notes as Record<string, string>;
+  }
   if (row.gemini_api_key) s.geminiApiKey = row.gemini_api_key as string;
   if (row.elevenlabs_api_key) s.elevenlabsApiKey = row.elevenlabs_api_key as string;
   if (row.language) s.language = row.language as 'he' | 'en';
@@ -344,6 +353,13 @@ function settingsToRow(s: Settings, groupId: string) {
     min_transfer: s.minTransfer,
     game_night_days: s.gameNightDays,
     locations: s.locations,
+    // location_addresses (migration 094). Send '{}' rather than null so
+    // the column always holds a valid object; PostgREST on-conflict only
+    // touches it when present, matching the locations/blocked_transfers
+    // pattern above.
+    location_addresses: s.locationAddresses ?? {},
+    // location_notes (migration 095) — same pattern as addresses above.
+    location_notes: s.locationNotes ?? {},
     blocked_transfers: s.blockedTransfers,
     gemini_api_key: s.geminiApiKey || null,
     elevenlabs_api_key: s.elevenlabsApiKey || null,

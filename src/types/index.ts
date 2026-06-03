@@ -493,6 +493,16 @@ export interface Settings {
   minTransfer: number;
   gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
   locations?: string[];
+  // Optional exact street address per location NAME (migration 094).
+  // Keyed by the same string stored in `locations` / `games.location`.
+  // A name absent from the map has no known address → no Waze link.
+  // Kept separate from `locations` so the string[] shape stays intact.
+  locationAddresses?: Record<string, string>;
+  // Optional free-text ARRIVAL DETAILS per location name (migration 095):
+  // floor, apartment, door/key code, parking hints, etc. Multi-line.
+  // Separate from the address so the Waze query stays clean. Keyed by
+  // the same location NAME as `locations` / `locationAddresses`.
+  locationNotes?: Record<string, string>;
   blockedTransfers?: BlockedTransferPair[];
   geminiApiKey?: string;
   elevenlabsApiKey?: string;

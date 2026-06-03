@@ -45,8 +45,9 @@ import {
   shareBtn,
 } from './ScheduleTab';
 import type { PollCardProps, DateStat } from './ScheduleTab';
-import { getAllPolls, setPollVotingLock } from '../database/storage';
+import { getAllPolls, setPollVotingLock, getSettings } from '../database/storage';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
+import { buildWazeUrl } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
 import type { RsvpResponse, Player } from '../types';
 
@@ -179,6 +180,21 @@ export default function PollCard(props: PollCardProps) {
       return next;
     });
   };
+
+  // Per-date "show arrival details" toggle (Settings → location notes).
+  // Default collapsed, same pattern as the voters toggle.
+  const [expandedDetailDates, setExpandedDetailDates] = useState<Set<string>>(() => new Set());
+  const toggleDetailsExpanded = (dateId: string) => {
+    setExpandedDetailDates(prev => {
+      const next = new Set(prev);
+      if (next.has(dateId)) next.delete(dateId); else next.add(dateId);
+      return next;
+    });
+  };
+  // Saved address / notes maps for the group's locations (migrations
+  // 094/095). Read once per render; cheap synchronous cache lookup.
+  const locationAddresses = getSettings().locationAddresses;
+  const locationNotes = getSettings().locationNotes;
 
   // Share chooser modal — only opens for the ambiguous confirmed-
   // below-target state (recruit-more vs announce-locked).
@@ -468,6 +484,14 @@ export default function PollCard(props: PollCardProps) {
             // (`isConfirmedBelowTarget` flips to false).
             const isFillPinnedLocked = isConfirmedBelowTarget && !isPinnedHere;
             const expanded = expandedVoterDates.has(d.id);
+            // Waze link + arrival details for this tile's location. Only
+            // surfaced on the pinned/confirmed date (the chosen night) to
+            // avoid cluttering every candidate row of an open multi-date
+            // poll. Details collapse by default behind a chevron toggle.
+            const tileWazeUrl = loc ? buildWazeUrl(locationAddresses?.[loc]) : null;
+            const tileNotes = loc ? (locationNotes?.[loc] ?? '').trim() : '';
+            const tileDetailsOpen = expandedDetailDates.has(d.id);
+            const showArrivalInfo = isPinnedHere && (!!tileWazeUrl || !!tileNotes);
             const pct = poll.targetPlayerCount > 0
               ? Math.min(100, Math.round((s.yes / poll.targetPlayerCount) * 100))
               : 0;
@@ -721,6 +745,56 @@ export default function PollCard(props: PollCardProps) {
                           background: 'rgba(250, 204, 21, 0.12)', color: '#facc15',
                           border: '1px solid rgba(250, 204, 21, 0.40)',
                         }}>{t('schedule.fillPinnedFirstBadge')}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Arrival info row (pinned/confirmed tile only): Waze
+                    deep-link pill + a collapsible free-text details block
+                    (floor / apartment / door code). Mirrors the Home
+                    dashboard treatment so members get navigation + entry
+                    info wherever they look at the confirmed game. */}
+                {showArrivalInfo && (
+                  <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      {tileWazeUrl && (
+                        <a
+                          href={tileWazeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={t('home.schedule.navigateWaze')}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 999, textDecoration: 'none',
+                            fontSize: 11, fontWeight: 700,
+                            background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
+                            border: '1px solid rgba(51,204,255,0.35)',
+                          }}
+                        >🧭 {t('home.schedule.navigateWaze')}</a>
+                      )}
+                      {tileNotes && (
+                        <button
+                          type="button"
+                          onClick={() => toggleDetailsExpanded(d.id)}
+                          title={t('home.schedule.arrivalDetailsToggle')}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 999, cursor: 'pointer',
+                            fontSize: 11, fontWeight: 600,
+                            background: 'rgba(148,163,184,0.10)', color: 'var(--text-muted)',
+                            border: '1px solid rgba(148,163,184,0.30)',
+                          }}
+                        >🔑 {t('home.schedule.arrivalDetails')} {tileDetailsOpen ? '▴' : '▾'}</button>
+                      )}
+                    </div>
+                    {tileNotes && tileDetailsOpen && (
+                      <div style={{
+                        fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
+                        whiteSpace: 'pre-line', wordBreak: 'break-word',
+                        padding: '6px 10px', borderRadius: 8,
+                        background: 'rgba(148,163,184,0.06)',
+                        border: '1px solid rgba(148,163,184,0.18)',
+                      }}>{tileNotes}</div>
                     )}
                   </div>
                 )}

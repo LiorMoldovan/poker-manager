@@ -505,8 +505,16 @@ export async function proxySendBroadcastEmail(payload: {
 export interface EmailUsageEntry {
   sent_at: string;
   recipient: string;
+  // The recipient's player name, when known at send time. Null for older
+  // rows (logged before migration 096) and for broadcasts with no single
+  // addressee — the UI falls back to the masked `recipient` in that case.
+  recipient_player_name?: string | null;
   kind: string;
   subject: string | null;
+  // The email body the recipient received. Only message-based emails
+  // (notifications/broadcasts) carry one; settlement emails are rendered by
+  // EmailJS from a template, so their body is null. Null for pre-096 rows.
+  body?: string | null;
   success: boolean;
   http_status: number | null;
   group_id: string | null;

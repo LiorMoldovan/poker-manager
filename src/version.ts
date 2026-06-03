@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.8.11';
+export const APP_VERSION = '6.9.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.9.0',
+    date: '2026-06-03',
+    changes: [
+      '📍 Save an exact address per location',
+      '🧭 Tap a game location to navigate with Waze',
+      '🔑 Arrival details per location (floor, code)',
+      '🔍 Recent sends: recipient name + body (super admin)',
+    ],
+  },
   {
     version: '6.8.11',
     date: '2026-05-31',

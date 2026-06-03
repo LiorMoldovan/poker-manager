@@ -26,6 +26,7 @@ import { computeNextScheduledTrigger } from './ScheduleTab';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
+import { wazeUrlForLocation } from '../utils/waze';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
@@ -988,6 +989,11 @@ interface ScheduleCardProps extends SectionProps {
 }
 
 function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
+  // Arrival details (floor / code / etc.) are collapsed by default to
+  // keep the card compact — tapping the 📍 location name toggles them.
+  // The Waze pill stays a separate tap target (navigation), so the two
+  // actions don't fight over the same click.
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   // Small "+N more open polls" badge wedged into the bottom of the
   // card body. Rendered as a blue pill chip so it reads as a distinct
   // call-to-action regardless of the card's own accent (amber missing-
@@ -1207,6 +1213,16 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
     const effectiveIcon = filled ? '🎯' : opts.icon;
     const effectiveAwaiting = filled ? false : opts.awaitingViewer;
 
+    // When the location NAME has a saved street address (Settings →
+    // locations), turn the 📍 chip into a Waze deep-link. Tapping it
+    // opens navigation instead of the card's schedule route, so we
+    // stopPropagation on the anchor. No address → plain text as before.
+    const homeSettings = getSettings();
+    const locationWazeUrl = wazeUrlForLocation(location, homeSettings.locationAddresses);
+    // Arrival details (free text) for this location, if any. Drives both
+    // the chevron toggle on the name and the collapsible body block.
+    const locationDetails = location ? (homeSettings.locationNotes?.[location] ?? '').trim() : '';
+    const hasLocationDetails = locationDetails.length > 0;
     const subtitle = dateLabel ? (
       <>
         {effectiveAwaiting && (
@@ -1219,9 +1235,45 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
           {dateLabel}
         </span>
         {location && (
-          <span style={{ whiteSpace: 'nowrap' }}>
-            <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
-            📍 {location}
+          <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.3rem', rowGap: '0.25rem', verticalAlign: 'middle' }}>
+            <span style={{ whiteSpace: 'nowrap' }}>
+              <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
+              📍 {location}
+            </span>
+            {/* Waze deep-link pill — explicit tap target that navigates. */}
+            {locationWazeUrl && (
+              <a
+                href={locationWazeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title={t('home.schedule.navigateWaze')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.15rem', whiteSpace: 'nowrap',
+                  padding: '0.05rem 0.4rem', borderRadius: '6px', textDecoration: 'none',
+                  fontSize: '0.66rem', fontWeight: 700, lineHeight: 1.6,
+                  background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
+                  border: '1px solid rgba(51,204,255,0.35)',
+                }}
+              >🧭 {t('home.schedule.navigateWaze')}</a>
+            )}
+            {/* Arrival-details pill — explicit labelled toggle (not a bare
+                chevron on the name, which read as decorative). Expands the
+                🔑 details block in the card body below. */}
+            {hasLocationDetails && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setDetailsExpanded(v => !v); }}
+                title={t('home.schedule.arrivalDetailsToggle')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.15rem', whiteSpace: 'nowrap',
+                  padding: '0.05rem 0.4rem', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '0.66rem', fontWeight: 600, lineHeight: 1.6,
+                  background: 'rgba(148,163,184,0.12)', color: 'var(--text-muted)',
+                  border: '1px solid rgba(148,163,184,0.30)',
+                }}
+              >🔑 {t('home.schedule.arrivalDetails')} {detailsExpanded ? '▴' : '▾'}</button>
+            )}
           </span>
         )}
       </>
@@ -1299,14 +1351,34 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
       );
     }
 
+    // Arrival details (Settings → locations → free text): floor,
+    // apartment, door code, etc. Collapsed by default — only rendered
+    // once the viewer taps the 📍 location name to expand. Preserves
+    // the admin's line breaks (whiteSpace: pre-line).
+    const locationDetailsBody = (hasLocationDetails && detailsExpanded) ? (
+      <div style={{
+        fontSize: '0.7rem',
+        color: 'var(--text-muted)',
+        paddingTop: '0.4rem',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        lineHeight: 1.5,
+        wordBreak: 'break-word',
+        whiteSpace: 'pre-line',
+      }}>
+        <span style={{ fontWeight: 600, opacity: 0.85 }}>🔑 {t('home.schedule.arrivalDetails')}:</span>{'\n'}
+        {locationDetails}
+      </div>
+    ) : null;
+
     // Append the "+N more open polls" footer when present. We wrap
     // both nodes in a fragment so the existing comingBody (attendees
     // list or empty-state fallback) keeps its own borderTop and the
     // footer adds its own — they read as two stacked footnotes
     // rather than a single visual block.
-    const finalBody = (comingBody || extraPollsFooter) ? (
+    const finalBody = (comingBody || locationDetailsBody || extraPollsFooter) ? (
       <>
         {comingBody}
+        {locationDetailsBody}
         {extraPollsFooter}
       </>
     ) : null;
@@ -1318,6 +1390,12 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
         icon={effectiveIcon}
         title={t(effectiveTitleKey)}
         subtitle={subtitle}
+        // Multi-segment subtitle (date · location + Waze/details pills).
+        // Clamp=0 switches the container to flex-wrap so the location
+        // segment drops to its own line on narrow screens instead of
+        // being silently clipped by the -webkit-box overflow. (See the
+        // subtitleClamp prop docs.)
+        subtitleClamp={0}
         accessory={accessory}
         accent={accent}
         body={finalBody}
@@ -2140,16 +2218,24 @@ function LastGameCard({ order, step, t, gameDate, gamePlayers, playerName, daysS
   const profitColor = myProfit === null ? 'inherit'
     : myProfit > 0 ? WIN_COLOR : myProfit < 0 ? LOSS_COLOR : 'inherit';
 
-  // My finishing place when I participated. Sorted desc by profit so
-  // place 1 = winner. We skip place 1 because the "winner: …" segment
-  // already says it. Multi-player games only — a 1-player roster is a
-  // data anomaly we don't dignify with a place label.
+  // My finishing place when I participated. We skip place 1 because the
+  // "winner: …" segment already says it. Multi-player games only — a
+  // 1-player roster is a data anomaly we don't dignify with a place label.
+  //
+  // Ranking uses standard competition ranking: my place = 1 + the number
+  // of players who finished with a STRICTLY higher profit. This handles
+  // ties correctly (two players on the same profit share a place) instead
+  // of the old sort-index rank, which gave tied players arbitrary
+  // sequential places. We also surface the total field size ("2 of 7") and
+  // a 🥈/🥉 medal so a strong finish reads clearly at a glance — "מקום 2"
+  // alone gave no sense of whether that was 2-of-3 or 2-of-9.
   let myPlaceText: string | null = null;
+  let myPlaceMedal = '';
   if (myProfit !== null && playerName && gamePlayers.length >= 2) {
-    const sorted = [...gamePlayers].sort((a, b) => b.profit - a.profit);
-    const place = sorted.findIndex(p => p.playerName === playerName) + 1;
+    const place = 1 + gamePlayers.filter(p => p.profit > myProfit!).length;
     if (place >= 2) {
-      myPlaceText = t('home.lastGame.myPlace', { place });
+      myPlaceMedal = place === 2 ? '🥈' : place === 3 ? '🥉' : '';
+      myPlaceText = t('home.lastGame.myPlace', { place, total: gamePlayers.length });
     }
   }
 
@@ -2224,7 +2310,7 @@ function LastGameCard({ order, step, t, gameDate, gamePlayers, playerName, daysS
       {myPlaceText && (
         <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
           {sep}
-          {myPlaceText}
+          {myPlaceMedal ? `${myPlaceMedal} ` : ''}{myPlaceText}
         </span>
       )}
       {profitText && (
@@ -3431,10 +3517,14 @@ function buildPersonalFactsList(
   //    AND you finished above them) and require beats > mineAbove —
   //    otherwise an opponent you actually dominate (e.g. 113-64) gets
   //    crowned just because you share lots of games with them. Sample
-  //    gates: ≥ 5 shared games AND ≥ 4 beats so a single rough night
-  //    doesn't crown a nemesis. Rank by net deficit (beats - mineAbove),
-  //    tiebreak by absolute beats. If nobody is net-negative against
-  //    you, skip the card — you simply don't have a nemesis right now.
+  //    gate scales with the group's activity: the opponent must share
+  //    at least 15% of all completed games with you (floored at 10 so
+  //    new/small groups still behave), so a thin slice of the group's
+  //    history (e.g. 4 of 7) never crowns a nemesis. Plus ≥ 4 beats so
+  //    a single rough night doesn't either. Rank by net deficit (beats
+  //    - mineAbove), tiebreak by absolute beats. If nobody is
+  //    net-negative against you, skip the card — no nemesis right now.
+  const minSharedForNemesis = Math.max(10, Math.round(completedGameIds.size * 0.15));
   const beatsBy = new Map<string, { beats: number; mineAbove: number; sharedGames: number }>();
   for (const [, inner] of profitsByGameByPlayer) {
     const myProfit = inner.get(playerName);
@@ -3449,7 +3539,7 @@ function buildPersonalFactsList(
     }
   }
   const topNemesis = [...beatsBy.entries()]
-    .filter(([, v]) => v.sharedGames >= 5 && v.beats >= 4 && v.beats > v.mineAbove)
+    .filter(([, v]) => v.sharedGames >= minSharedForNemesis && v.beats >= 4 && v.beats > v.mineAbove)
     .sort((a, b) => {
       const deficitA = a[1].beats - a[1].mineAbove;
       const deficitB = b[1].beats - b[1].mineAbove;
