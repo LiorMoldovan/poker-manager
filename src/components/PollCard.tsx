@@ -757,21 +757,6 @@ export default function PollCard(props: PollCardProps) {
                 {showArrivalInfo && (
                   <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                      {tileWazeUrl && (
-                        <a
-                          href={tileWazeUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={t('home.schedule.navigateWaze')}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 999, textDecoration: 'none',
-                            fontSize: 11, fontWeight: 700,
-                            background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
-                            border: '1px solid rgba(51,204,255,0.35)',
-                          }}
-                        >🧭 {t('home.schedule.navigateWaze')}</a>
-                      )}
                       {tileNotes && (
                         <button
                           type="button"
@@ -785,6 +770,21 @@ export default function PollCard(props: PollCardProps) {
                             border: '1px solid rgba(148,163,184,0.30)',
                           }}
                         >🔑 {t('home.schedule.arrivalDetails')} {tileDetailsOpen ? '▴' : '▾'}</button>
+                      )}
+                      {tileWazeUrl && (
+                        <a
+                          href={tileWazeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={t('home.schedule.navigateWaze')}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 999, textDecoration: 'none',
+                            fontSize: 11, fontWeight: 700,
+                            background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
+                            border: '1px solid rgba(51,204,255,0.35)',
+                          }}
+                        >🧭 {t('home.schedule.wazeShort')}</a>
                       )}
                     </div>
                     {tileNotes && tileDetailsOpen && (

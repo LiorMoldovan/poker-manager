@@ -698,6 +698,10 @@ interface HomeCardProps {
   // so each child segment becomes its own flex item with a
   // guaranteed wrap point between them.
   subtitleClamp?: number;
+  // Opt-in (clamp=0 only): add vertical gap between wrapped subtitle
+  // lines so a 2-line wrap isn't cramped. Used by the game-night card
+  // whose date + location segments stack on narrow screens.
+  subtitleRowGap?: boolean;
 }
 
 function HomeCard({
@@ -713,6 +717,7 @@ function HomeCard({
   onClick,
   as = 'div',
   subtitleClamp = 2,
+  subtitleRowGap = false,
 }: HomeCardProps) {
   const accentStyle: React.CSSProperties = (() => {
     switch (accent) {
@@ -846,6 +851,8 @@ function HomeCard({
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignItems: 'baseline',
+                // Vertical breathing room between wrapped lines (opt-in).
+                ...(subtitleRowGap ? { rowGap: '0.35rem' } : {}),
               }),
             }}>
               {subtitle}
@@ -1240,23 +1247,6 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
               <span style={{ marginInline: '0.4rem', opacity: 0.6 }}>·</span>
               📍 {location}
             </span>
-            {/* Waze deep-link pill — explicit tap target that navigates. */}
-            {locationWazeUrl && (
-              <a
-                href={locationWazeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                title={t('home.schedule.navigateWaze')}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.15rem', whiteSpace: 'nowrap',
-                  padding: '0.05rem 0.4rem', borderRadius: '6px', textDecoration: 'none',
-                  fontSize: '0.66rem', fontWeight: 700, lineHeight: 1.6,
-                  background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
-                  border: '1px solid rgba(51,204,255,0.35)',
-                }}
-              >🧭 {t('home.schedule.navigateWaze')}</a>
-            )}
             {/* Arrival-details pill — explicit labelled toggle (not a bare
                 chevron on the name, which read as decorative). Expands the
                 🔑 details block in the card body below. */}
@@ -1273,6 +1263,23 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
                   border: '1px solid rgba(148,163,184,0.30)',
                 }}
               >🔑 {t('home.schedule.arrivalDetails')} {detailsExpanded ? '▴' : '▾'}</button>
+            )}
+            {/* Waze deep-link pill — explicit tap target that navigates. */}
+            {locationWazeUrl && (
+              <a
+                href={locationWazeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title={t('home.schedule.navigateWaze')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.15rem', whiteSpace: 'nowrap',
+                  padding: '0.05rem 0.4rem', borderRadius: '6px', textDecoration: 'none',
+                  fontSize: '0.66rem', fontWeight: 700, lineHeight: 1.6,
+                  background: 'rgba(51,204,255,0.14)', color: '#33CCFF',
+                  border: '1px solid rgba(51,204,255,0.35)',
+                }}
+              >🧭 {t('home.schedule.wazeShort')}</a>
             )}
           </span>
         )}
@@ -1363,10 +1370,19 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
         borderTop: '1px solid rgba(255,255,255,0.06)',
         lineHeight: 1.5,
         wordBreak: 'break-word',
-        whiteSpace: 'pre-line',
+        textAlign: 'start',
+        // 🔑 sits in its own gutter column so the label AND every detail
+        // line share one start edge (aligned under "פרטים", not under
+        // the emoji).
+        display: 'flex',
+        gap: '0.3rem',
+        alignItems: 'flex-start',
       }}>
-        <span style={{ fontWeight: 600, opacity: 0.85 }}>🔑 {t('home.schedule.arrivalDetails')}:</span>{'\n'}
-        {locationDetails}
+        <span aria-hidden style={{ flexShrink: 0 }}>🔑</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, opacity: 0.85, marginBottom: '0.15rem' }}>{t('home.schedule.arrivalDetails')}:</div>
+          <div style={{ whiteSpace: 'pre-line' }}>{locationDetails}</div>
+        </div>
       </div>
     ) : null;
 
@@ -1396,6 +1412,7 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
         // being silently clipped by the -webkit-box overflow. (See the
         // subtitleClamp prop docs.)
         subtitleClamp={0}
+        subtitleRowGap
         accessory={accessory}
         accent={accent}
         body={finalBody}
