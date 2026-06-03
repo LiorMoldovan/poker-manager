@@ -4,7 +4,7 @@ import { forceRefreshPlayersFromDb } from '../database/supabaseCache';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits, PhotoChipCountResult } from '../types';
 import { cleanNumber } from '../utils/calculations';
-import { buildWazeUrl } from '../utils/waze';
+import { buildWazeUrl, openWaze } from '../utils/waze';
 import { 
   getAllPlayers, 
   addPlayer, 
@@ -1683,6 +1683,7 @@ const SettingsScreen = () => {
                           href={wazeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={e => { e.preventDefault(); openWaze(savedAddress); }}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
                             padding: '0.2rem 0.5rem', borderRadius: '7px', textDecoration: 'none',

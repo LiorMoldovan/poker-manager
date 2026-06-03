@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.9.1';
+export const APP_VERSION = '6.9.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.9.2',
+    date: '2026-06-03',
+    changes: [
+      '🧭 Waze opens the app, not the web page',
+      '📱 Reliable navigation from the home-screen app',
+    ],
+  },
   {
     version: '6.9.1',
     date: '2026-06-03',

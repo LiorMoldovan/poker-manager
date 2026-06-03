@@ -26,7 +26,7 @@ import { computeNextScheduledTrigger } from './ScheduleTab';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
-import { wazeUrlForLocation } from '../utils/waze';
+import { wazeUrlForLocation, openWaze } from '../utils/waze';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
@@ -1226,6 +1226,7 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
     // stopPropagation on the anchor. No address → plain text as before.
     const homeSettings = getSettings();
     const locationWazeUrl = wazeUrlForLocation(location, homeSettings.locationAddresses);
+    const locationAddress = location ? (homeSettings.locationAddresses?.[location] ?? '') : '';
     // Arrival details (free text) for this location, if any. Drives both
     // the chevron toggle on the name and the collapsible body block.
     const locationDetails = location ? (homeSettings.locationNotes?.[location] ?? '').trim() : '';
@@ -1270,7 +1271,7 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
                 href={locationWazeUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); e.preventDefault(); openWaze(locationAddress); }}
                 title={t('home.schedule.navigateWaze')}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.15rem', whiteSpace: 'nowrap',

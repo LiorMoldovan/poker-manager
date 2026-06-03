@@ -47,7 +47,7 @@ import {
 import type { PollCardProps, DateStat } from './ScheduleTab';
 import { getAllPolls, setPollVotingLock, getSettings } from '../database/storage';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
-import { buildWazeUrl } from '../utils/waze';
+import { buildWazeUrl, openWaze } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
 import type { RsvpResponse, Player } from '../types';
 
@@ -776,6 +776,7 @@ export default function PollCard(props: PollCardProps) {
                           href={tileWazeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={e => { e.stopPropagation(); e.preventDefault(); openWaze(locationAddresses?.[loc || '']); }}
                           title={t('home.schedule.navigateWaze')}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
