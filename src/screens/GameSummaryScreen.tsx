@@ -1315,6 +1315,9 @@ const GameSummaryScreen = () => {
           `${loser.playerName} ${lg('חוזר', 'חוזרת')} הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. הערב לא היה ${lg('שלו', 'שלה')}`,
           `ו${loser.playerName} ${lg('שילם', 'שילמה')} את החשבון הערב. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}. ${cleanNumber(Math.abs(loser.profit))} שקל מינוס. אבל מה זה כסף בין חברים`,
+          `${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל הפעם, אבל הקלפים מתחלפים. הקאמבק מחכה בפעם הבאה`,
+          `מינוס ${cleanNumber(Math.abs(loser.profit))} שקל ל${loser.playerName}, אבל ערב אחד לא קובע. עוד נראה ${lg('אותו', 'אותה')} למעלה`,
+          `${loser.playerName} ${lg('סיים', 'סיימה')} מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, אבל זה חלק מהמשחק. בפעם הבאה התור ${lg('שלו', 'שלה')}`,
         ];
         const potMessage = `סך הכל ${formatRebuysHebrew(totalRebuysOnly)} קניות חוזרות הערב.`;
 

@@ -527,6 +527,66 @@ const buildTonightRosterImpactLines = (tonightNames: string[]): string => {
 };
 
 /**
+ * Targeted retry for players the main forecast call skipped (or returned a
+ * too-short/empty sentence for). Those players would otherwise fall back to a
+ * canned template line, which reads as "the old static forecast" next to the
+ * rich AI sentences the rest of the table got. The locked prediction numbers
+ * are NOT touched here — we only ask the model for fresh highlight+sentence
+ * text for the named players, using the exact same per-player data card the
+ * main prompt used. Returns the parsed entries (best-effort); on any failure
+ * it returns [] so the caller keeps the existing fallback behaviour.
+ */
+const retryMissingForecastText = async (
+  missingNames: string[],
+  playerCardByName: Map<string, string>,
+  apiKey: string,
+): Promise<{ name: string; highlight: string; sentence: string }[]> => {
+  const cards = missingNames
+    .map(n => playerCardByName.get(n))
+    .filter((c): c is string => !!c)
+    .join('\n\n');
+  if (!cards) return [];
+
+  const prompt = `אתה כתב פוקר. כתוב טקסט טרי לשחקנים הבאים בלבד, על סמך הכרטיסים. החזר JSON תקין בלבד בפורמט: {"players":[{"name":"שם","highlight":"כותרת","sentence":"משפט"}]}
+
+📊 כרטיסי שחקנים:
+${cards}
+
+לכל שחקן:
+• highlight — כותרת קצרה (3-6 מילים), העובדה הכי מעניינת
+• sentence — משפט אחד בעברית (20-40 מילים) עם 2-3 מספרים אמיתיים מהכרטיס
+• הטון חייב להתאים לכיוון ולעוצמה של החיזוי הנעול (🔒): חיובי → בטוח/חוגג, שלילי → אתגר/עקיצה חברית או עידוד לקאמבק, בלי השפלה
+• אסור להזכיר את מספר החיזוי במשפט; אסור "הערב/היום/הלילה" או תאריך — השתמש ב"הפעם", "במשחק הקרוב"
+• שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים
+עברית תקנית: מספר מתאים במין לשם העצם (שלושה משחקים, חמש קניות). פעלים ותארים לפי מין השם בכרטיס (זכר/נקבה). שמור על שם השחקן מדויק.`;
+
+  try {
+    const { text } = await callWithFallback({
+      prompt,
+      apiKey,
+      temperature: 0.8,
+      maxOutputTokens: 4096,
+      topK: 40,
+      topP: 0.95,
+      responseMimeType: 'application/json',
+      label: 'Forecast-retry',
+    });
+    let jsonText = text;
+    if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
+    else if (text.includes('```')) jsonText = text.split('```')[1].split('```')[0];
+    const parsed = JSON.parse(jsonText.trim());
+    const arr = Array.isArray(parsed) ? parsed : parsed.players;
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((e: any) => e && typeof e.name === 'string')
+      .map((e: any) => ({ name: e.name, highlight: e.highlight || '', sentence: e.sentence || '' }));
+  } catch (e) {
+    console.warn('⚠️ Forecast retry for skipped players failed:', e);
+    return [];
+  }
+};
+
+/**
  * Generate AI-powered forecasts for selected players only
  */
 export const generateAIForecasts = async (
@@ -1388,6 +1448,9 @@ export const generateAIForecasts = async (
   // ========== BUILD STAT CARDS ==========
   // Shuffle player order in the prompt to avoid AI bias toward first-listed players
   const shuffledPlayers = [...playersWithYearStats].sort(() => Math.random() - 0.5);
+  // Per-player data card, also stashed by name so a targeted retry can
+  // rebuild a focused prompt for just the players the AI skipped.
+  const playerCardByName = new Map<string, string>();
   const playerDataText = shuffledPlayers.map(p => {
     const lastGame = p.gameHistory[0];
     const isNewPlayer = p.gamesPlayed === 0 || p.gameHistory.length === 0;
@@ -1468,7 +1531,9 @@ export const generateAIForecasts = async (
 
     console.log(`🔍 ${p.name}: angle=${angle?.angle}, suggestion=${suggestion >= 0 ? '+' : ''}${suggestion}`);
 
-    return lines.join('\n');
+    const card = lines.join('\n');
+    playerCardByName.set(p.name, card);
+    return card;
   }).join('\n\n');
 
   // Build period context for the prompt
@@ -1498,7 +1563,7 @@ export const generateAIForecasts = async (
   const rosterImpactText = buildTonightRosterImpactLines(players.map(p => p.name));
   const traitBlock = buildTraitBlock(players.map(p => p.name));
 
-  const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה, מרגשת ומעודדת לפני ערב פוקר בין חברים. כל שחקן צריך לסיים לקרוא ולהרגיש מורם, מוערך וגאה להגיע — גם אם החיזוי שלו שלילי.
+  const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
 💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 🎯 הערב הזה: ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${periodContextText ? `\n${periodContextText}` : ''}
@@ -1551,12 +1616,11 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • העדיפויות: סיפורי ערב ← רצפים ← קרבות דירוג ← תוצאה אחרונה ← אחוז נצחונות ← ותק
 • שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים!
 
-התאמת טון — תמיד מעודד ומרים:
-• המטרה העליונה: אנרגיה חיובית לכל שחקן. גם מי שצפוי להפסיד צריך להרגיש שמחכים לו, שיש לו סיכוי להפתיע, ושכיף שהוא בא
-• חיזוי חיובי → חגיגי, מלא ביטחון, בונה ציפייה (לא מוגזם לחיזוי קטן)
-• חיזוי שלילי → מעודד ומאתגר בכיף: "הערב לתיקון", "הקאמבק מתחיל כאן", אמונה שהוא יכול להפוך את הקערה — בלי ללעוג, בלי ייאוש ובלי זלזול
-• הומור תמיד טוב-לב וחברי. אסור ציניות פוגענית, עקיצה משפילה או טון מתנשא
-• חובה: highlight ו-sentence חייבים להרגיש באותו כיוון כמו החיזוי הנעול — אסור להבטיח ניצחון כשהחיזוי שלילי (זה רק "סיכוי לקאמבק", לא הבטחה); אסור כותרת קודרת כשהחיזוי חיובי חזק
+התאמת טון — גוון בין עידוד להומור:
+• המטרה: כל שחקן נהנה לקרוא. גוון בין השחקנים — לפעמים עידוד וביטחון, לפעמים עקיצה חברית והומור — כדי שלא ירגיש מונוטוני
+• חיזוי חיובי → חוגג, בטוח, בונה ציפייה (לא מוגזם לחיזוי קטן)
+• חיזוי שלילי → בחר לפי השחקן: או אתגר/עקיצה משועשעת ("הקלפים חייבים לו טובה"), או עידוד לקאמבק ("הערב הזדמנות לתיקון") — תמיד בכיף, בלי אכזריות, השפלה או טון מתנשא
+• חובה: highlight ו-sentence חייבים להרגיש באותו כיוון כמו החיזוי הנעול — אסור להבטיח ניצחון כשהחיזוי שלילי; אסור כותרת על "הצלחה" או "גלים" כשהחיזוי שלילי; אסור כותרת קודרת כשהחיזוי חיובי חזק
 • אם מזכירים ניצחון/הפסד במשחק האחרון — זה עובדה מהעבר; חייב מילת גישור (אבל/עדיין/הערב/החיזוי) כשהכיוון לערב שונה מהעבר
 
 🚫 איסורים (הפרה = פסילה!):
@@ -1683,6 +1747,29 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       } catch (parseError) {
         console.error('❌ JSON parse error, trying next model');
         continue; // Try next model
+      }
+
+      // ===== AUTO-RETRY FOR SKIPPED PLAYERS =====
+      // If the model omitted players or gave them an empty/too-short sentence,
+      // those players would fall back to a canned template line (reads as the
+      // "old static forecast" next to everyone else's AI text). Fetch fresh
+      // text for just those players before the merge/fact-check runs. Numbers
+      // are locked separately, so this never affects predictions or zero-sum.
+      const needsText = (e?: { sentence?: string }) =>
+        !e || !e.sentence || e.sentence.trim().length < 12;
+      const missingNames = players
+        .filter(p => needsText(aiOutput.find(a => a.name === p.name)))
+        .map(p => p.name);
+      if (missingNames.length > 0) {
+        console.log(`🔁 ${missingNames.length} player(s) missing AI text, retrying:`, missingNames.join(', '));
+        const supplements = await retryMissingForecastText(missingNames, playerCardByName, apiKey);
+        for (const s of supplements) {
+          if (needsText(s)) continue;
+          const idx = aiOutput.findIndex(a => a.name === s.name);
+          if (idx >= 0) aiOutput[idx] = s;
+          else aiOutput.push(s);
+        }
+        if (supplements.length > 0) console.log(`✅ Retry filled ${supplements.filter(s => !needsText(s)).length} player(s)`);
       }
 
       let forecasts: ForecastResult[] = players.map(p => {

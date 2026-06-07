@@ -107,12 +107,33 @@ function fixNamePronunciation(text: string): string {
   return r;
 }
 
+// Feminine nouns that take the feminine number form. TTS engines (and the
+// legacy digit→word pass) default to the masculine form, so "5 קניות" comes
+// out "חמישה קניות" instead of "חמש קניות". We spell these counts out in the
+// correct gender BEFORE the engine reads them, so Gemini doesn't have to guess
+// and the legacy masculine pass never touches them.
+const FEMININE_COUNTED_NOUNS = 'קניות|קנייה|פעמים|פעם|דקות|דקה|שעות|שעה|ידיים|נקודות|נקודה|שניות|שנייה|מחציות';
+
+function fixFeminineCounts(text: string): string {
+  // JS \b is ASCII-only and never fires next to Hebrew letters, so the noun
+  // boundary is a negative lookahead for another Hebrew letter instead.
+  const re = new RegExp(`(\\d+)(\\s+ה?)(${FEMININE_COUNTED_NOUNS})(?![\\u0590-\\u05FF])`, 'g');
+  return text.replace(re, (m, numStr, sep, noun) => {
+    const n = parseInt(numStr, 10);
+    if (isNaN(n) || n > 9999) return m;
+    return `${numberToHebrewTTS(n, true)}${sep}${noun}`;
+  });
+}
+
 // Fix common Hebrew grammar/pronunciation issues for TTS
 function fixHebrewForTTS(text: string): string {
   let r = text;
 
   // Player names whose default Hebrew reading is the wrong word
   r = fixNamePronunciation(r);
+
+  // Feminine-counted numbers → feminine form (before any masculine digit pass)
+  r = fixFeminineCounts(r);
 
   // Construct form: "שתיים" directly before a Hebrew word → "שתי"
   r = r.replace(/שתיים(?=\s+[\u0590-\u05FF])/g, 'שתי');
@@ -156,7 +177,12 @@ function fixHebrewForTTS(text: string): string {
 
 // Preprocess text for legacy TTS engines (Cloud TTS / Browser SpeechSynthesis)
 export const prepareTTSText = (text: string): string => {
-  let result = text;
+  // 1) Feminine-counted nouns first (needs digits intact) → feminine words.
+  // 2) Convert remaining digits with the masculine default (shekel/percent/
+  //    games/wins/losses are masculine).
+  // 3) Grammar/name/construct fixes last, so the "שניים→שני before a noun"
+  //    fix lands on numbers produced by step 2.
+  let result = fixFeminineCounts(text);
   result = result.replace(/\d+/g, (match) => {
     const num = parseInt(match, 10);
     if (isNaN(num) || num > 9999) return match;
