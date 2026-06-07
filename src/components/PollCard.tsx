@@ -427,14 +427,31 @@ export default function PollCard(props: PollCardProps) {
         </div>
       )}
 
-      {/* Who opened the poll — auto-schedule vs. a named admin. Small muted
-          line so it reads as metadata, not a call to action. */}
+      {/* Who opened the poll — auto-schedule vs. a named admin — plus when
+          (applies to both). Small muted line so it reads as metadata, not a
+          call to action. The timestamp mirrors fmtHebrewDate's
+          "weekday · d/m · HH:MM" rhythm and renders in the viewer's local
+          time. */}
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, opacity: 0.85 }}>
         {poll.createdSource === 'auto'
           ? t('schedule.openedByAuto')
           : poll.createdByName
             ? t('schedule.openedByAdmin', { name: poll.createdByName })
             : t('schedule.openedByAdminGeneric')}
+        {(() => {
+          try {
+            const dt = new Date(poll.createdAt);
+            if (Number.isNaN(dt.getTime())) return '';
+            const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
+            const day = dt.getDate();
+            const mon = dt.getMonth() + 1;
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mm = String(dt.getMinutes()).padStart(2, '0');
+            return ` · ${wd} · ${day}/${mon} · ${hh}:${mm}`;
+          } catch {
+            return '';
+          }
+        })()}
       </div>
 
       {/* Cancelled reason — surfaced before the tiles so members
