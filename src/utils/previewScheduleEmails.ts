@@ -57,6 +57,8 @@ function makeSyntheticPoll(): { poll: GamePoll; pinned: GamePollDate; sampleVote
     id: 'preview-poll',
     groupId: 'preview-group',
     createdBy: 'preview-user',
+    createdSource: 'admin',
+    createdByName: null,
     createdAt: new Date(now.getTime() - 2 * 3600_000).toISOString(),
     status: 'open',
     targetPlayerCount: 7,

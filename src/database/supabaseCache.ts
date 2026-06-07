@@ -243,6 +243,8 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     confirmedNotificationsSentAt: (row.confirmed_notifications_sent_at as string | null) ?? null,
     cancellationNotificationsSentAt: (row.cancellation_notifications_sent_at as string | null) ?? null,
     targetFilledNotificationsSentAt: (row.target_filled_notifications_sent_at as string | null) ?? null,
+    createdSource: (row.created_source as 'admin' | 'auto') ?? 'admin',
+    createdByName: (row.created_by_name as string | null) ?? null,
     dates: [],
     votes: [],
   };
@@ -1952,6 +1954,7 @@ export interface CreatePollRpcInput {
   defaultLocation?: string | null;
   allowMaybe?: boolean;
   note?: string | null;
+  source?: 'admin' | 'auto';
 }
 
 export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll> {
@@ -1969,6 +1972,7 @@ export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll
     p_default_location: input.defaultLocation || null,
     p_allow_maybe: input.allowMaybe ?? true,
     p_note: input.note || null,
+    p_source: input.source ?? 'admin',
   });
   if (error) throw error;
   const newId = data as string;

@@ -427,6 +427,16 @@ export default function PollCard(props: PollCardProps) {
         </div>
       )}
 
+      {/* Who opened the poll — auto-schedule vs. a named admin. Small muted
+          line so it reads as metadata, not a call to action. */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, opacity: 0.85 }}>
+        {poll.createdSource === 'auto'
+          ? t('schedule.openedByAuto')
+          : poll.createdByName
+            ? t('schedule.openedByAdmin', { name: poll.createdByName })
+            : t('schedule.openedByAdminGeneric')}
+      </div>
+
       {/* Cancelled reason — surfaced before the tiles so members
           immediately see why a previously-active poll was killed. */}
       {poll.status === 'cancelled' && poll.cancellationReason && (

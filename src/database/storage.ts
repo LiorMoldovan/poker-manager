@@ -1641,6 +1641,7 @@ export const createPoll = (input: CreatePollInput): Promise<GamePoll> =>
     defaultLocation: input.defaultLocation ?? null,
     allowMaybe: input.allowMaybe,
     note: input.note ?? null,
+    source: input.source ?? 'admin',
   });
 
 export const castVote = (

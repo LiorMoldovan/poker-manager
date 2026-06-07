@@ -719,6 +719,7 @@ export default function ScheduleTab() {
           defaultLocation: null,
           allowMaybe: fresh.scheduleDefaultAllowMaybe !== false,
           note: null,
+          source: 'auto',
         });
         // Notification dispatch: trg_enqueue_poll_notification fires on the
         // INSERT and the worker drains the queue. No client-side fan-out.

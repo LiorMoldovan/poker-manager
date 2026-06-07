@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.12.0';
+export const APP_VERSION = '6.13.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.13.0',
+    date: '2026-06-07',
+    changes: [
+      '⏰ Auto-poll now opens exactly on time',
+      '🪧 Poll shows who opened it, or auto',
+    ],
+  },
   {
     version: '6.12.0',
     date: '2026-06-07',

@@ -242,6 +242,11 @@ export interface GamePoll {
   // sent (or preemptively claimed for the at-target confirmed flow) the
   // follow-up notification. Reset to NULL on re-pin.
   targetFilledNotificationsSentAt?: string | null;
+  // Migration 098: how the poll was opened. 'admin' = a person opened it
+  // (createdByName holds their snapshotted display name); 'auto' = the weekly
+  // auto-schedule opened it (client OR server cron), createdByName is null.
+  createdSource: 'admin' | 'auto';
+  createdByName?: string | null;
   // Embedded children (populated by cache layer)
   dates: GamePollDate[];
   votes: GamePollVote[];
@@ -260,6 +265,9 @@ export interface CreatePollInput {
   defaultLocation?: string | null;
   allowMaybe?: boolean;           // default true
   note?: string | null;
+  // 'admin' (default) when a person opens the poll; 'auto' when the
+  // client-side weekly auto-schedule opens it. Threaded to create_game_poll.
+  source?: 'admin' | 'auto';
 }
 
 export interface AppNotification {
