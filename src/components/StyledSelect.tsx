@@ -166,6 +166,7 @@ export function StyledSelect<T extends string>({
   if (isOpen && triggerRect) {
     const gap = 4;
     const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
     const desiredMaxH = Math.min(viewportH * 0.6, 360);
     const roomBelow = viewportH - triggerRect.bottom - gap;
     const roomAbove = triggerRect.top - gap;
@@ -176,10 +177,24 @@ export function StyledSelect<T extends string>({
     const maxHeight = openUp
       ? Math.min(desiredMaxH, roomAbove)
       : Math.min(desiredMaxH, roomBelow);
+    // Effective rendered width = the menu's actual box width. `width` is
+    // the trigger width but `minWidth` (160 for non-fullWidth) can win, so
+    // the rendered box is max(triggerWidth, 160). We need this real width
+    // to anchor the correct edge below.
+    const effectiveWidth = fullWidth ? triggerRect.width : Math.max(triggerRect.width, 160);
+    // RTL: anchor the menu's RIGHT edge to the trigger's right edge so it
+    // drops straight down from the control. Left-anchoring (the old
+    // behaviour) made the menu overhang to the right whenever minWidth
+    // exceeded the trigger width (e.g. after picking a short label like
+    // "כל הזמנים"), which read as "not aligned right". LTR keeps the
+    // left-edge anchor. Then clamp into the viewport (8px margins) so a
+    // wide menu next to a screen edge never renders half off-screen.
+    let left = isRTL ? triggerRect.right - effectiveWidth : triggerRect.left;
+    left = Math.max(8, Math.min(left, viewportW - effectiveWidth - 8));
     popoverStyle = {
       position: 'fixed',
       top,
-      left: triggerRect.left,
+      left,
       width: triggerRect.width,
       minWidth: fullWidth ? undefined : Math.max(triggerRect.width, 160),
       maxHeight,

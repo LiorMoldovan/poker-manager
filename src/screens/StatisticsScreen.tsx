@@ -62,6 +62,10 @@ const StatisticsScreen = () => {
   const [recordsSubTab, setRecordsSubTab] = useState<RecordsSubTab>('global');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss' | 'avgGainLoss'>('profit');
+  // Show/hide the tiny "gap to player above" sub-number under each
+  // profit value (only renders in profit mode + profit sort anyway).
+  // Defaults on; user can toggle it off for a cleaner ranking view.
+  const [showProfitGap, setShowProfitGap] = useState(true);
   // Local sort key for the Podium-Rate table (independent of the
   // main player table's `sortBy`). Defaults to 'total' to match
   // the table's headline metric (the 🏆 column).
@@ -967,68 +971,6 @@ const StatisticsScreen = () => {
   // Minimum games threshold = 33% of total games in period
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
 
-  // Calculate previous rankings (before the last game in period) for movement indicator
-  // This must use the SAME filters as the current view (player type, active filter)
-  const previousRankings = useMemo(() => {
-    const dateFilter = getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    if (allGames.length < 2) return new Map<string, number>();
-    
-    // Get the last game ID to exclude
-    const lastGameId = allGames[0].id;
-    const allGamePlayers = getAllGamePlayers();
-    
-    // Calculate stats excluding the last game (same as current but without last game)
-    const playerStatsMap = new Map<string, { profit: number; games: number }>();
-    
-    for (const gp of allGamePlayers) {
-      if (gp.gameId === lastGameId) continue; // Skip last game
-      const game = allGames.find(g => g.id === gp.gameId);
-      if (!game) continue;
-      
-      const current = playerStatsMap.get(gp.playerId) || { profit: 0, games: 0 };
-      playerStatsMap.set(gp.playerId, {
-        profit: current.profit + gp.profit,
-        games: current.games + 1
-      });
-    }
-    
-    // Calculate previous active threshold (games - 1 since we exclude last game)
-    const prevTotalGames = allGames.length - 1;
-    const prevActiveThreshold = Math.ceil(prevTotalGames * 0.33);
-    
-    // Filter by same criteria as current view
-    const filteredPrevStats = [...playerStatsMap.entries()]
-      .filter(([playerId, data]) => {
-        // Apply player type filter
-        const playerType = getPlayerType(playerId);
-        if (!selectedTypes.has(playerType)) return false;
-        
-        // Apply active filter if enabled
-        if (filterActiveOnly && data.games < prevActiveThreshold) return false;
-        
-        return true;
-      });
-    
-    // Sort by profit to get rankings
-    const sorted = filteredPrevStats.sort((a, b) => b[1].profit - a[1].profit);
-    
-    const rankMap = new Map<string, number>();
-    sorted.forEach(([playerId], index) => {
-      rankMap.set(playerId, index + 1);
-    });
-    
-    return rankMap;
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, stats, selectedTypes, filterActiveOnly, getPlayerType]);
-
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
     filterActiveOnly ? stats.filter(s => s.gamesPlayed >= activeThreshold) : stats,
@@ -1382,6 +1324,79 @@ const StatisticsScreen = () => {
       }
     });
   }, [tableActiveOverrides.main, filterActiveOnly, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold, mainEffectiveContext, sortBy]);
+
+  // Previous rankings — the standings as they were BEFORE the most recent
+  // game night, used to draw the ↑/↓ movement arrows on the main table.
+  // Declared AFTER mainTableSortedStats because it re-ranks that exact set.
+  //
+  // CRITICAL: this must mirror the main table's *effective* context, NOT
+  // the global period. The main table can carry a per-table period
+  // override (tablePeriodOverrides.main); if we computed "previous" over
+  // the global period while the table shows a different one, the arrows
+  // compare two unrelated rankings and are meaningless (e.g. all-time
+  // current rank vs first-half-2026 previous rank). So we:
+  //   1. pick the same date filter the table is using (override or global),
+  //   2. find the most-recent completed game IN THAT period,
+  //   3. re-rank EXACTLY the players currently shown (mainTableSortedStats)
+  //      by their pre-last-game numbers, using the active sort metric.
+  // Re-ranking the displayed set (instead of re-filtering from scratch)
+  // also guarantees the movement reflects only ordering changes from the
+  // last game — never active-threshold membership churn between the two
+  // snapshots (the period game count differs by one, which used to flip
+  // boundary players in/out and shift everyone's rank).
+  const previousRankings = useMemo(() => {
+    const override = tablePeriodOverrides.main;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
+    const periodGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Need at least two games for "before the last game" to be meaningful.
+    if (periodGames.length < 2) return new Map<string, number>();
+
+    const lastGameId = periodGames[0].id;
+    const periodGameIds = new Set(periodGames.map(g => g.id));
+
+    // Accumulate profit / games / wins per player over the period,
+    // EXCLUDING the last game. Win = profit > 0 (matches storage.ts).
+    const acc = new Map<string, { profit: number; games: number; wins: number }>();
+    for (const gp of getAllGamePlayers()) {
+      if (gp.gameId === lastGameId) continue;
+      if (!periodGameIds.has(gp.gameId)) continue;
+      const cur = acc.get(gp.playerId) || { profit: 0, games: 0, wins: 0 };
+      cur.profit += gp.profit;
+      cur.games += 1;
+      if (gp.profit > 0) cur.wins += 1;
+      acc.set(gp.playerId, cur);
+    }
+
+    // Rank the exact displayed players by the SAME metric the table is
+    // sorted by, using their pre-last-game numbers.
+    const ranked = mainTableSortedStats.map(s => {
+      const a = acc.get(s.playerId) || { profit: 0, games: 0, wins: 0 };
+      return {
+        playerId: s.playerId,
+        profit: a.profit,
+        games: a.games,
+        winRate: a.games > 0 ? (a.wins / a.games) * 100 : 0,
+      };
+    }).sort((x, y) => {
+      switch (sortBy) {
+        case 'games':   return y.games - x.games;
+        case 'winRate': return y.winRate - x.winRate;
+        default:        return y.profit - x.profit;
+      }
+    });
+
+    const rankMap = new Map<string, number>();
+    ranked.forEach((p, index) => rankMap.set(p.playerId, index + 1));
+    return rankMap;
+  }, [tablePeriodOverrides.main, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, mainTableSortedStats, sortBy]);
 
   // Podium-rate rows — uses 'podium' effective flag plus user's sort.
   // Replaces the old `sortedPodiumRows`: tie-break chain is unchanged.
@@ -3149,7 +3164,40 @@ const StatisticsScreen = () => {
                   </div>
                   {/* Left column — player-set + table-mode (active above mode). */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                    {renderActiveOverrideToggle('main')}
+                    {/* Active-only + gap toggles share ONE row (no extra row
+                        added). `flex-wrap` only drops the gap chip below on
+                        screens too narrow to fit both — a mobile safety net,
+                        not the normal case. */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {renderActiveOverrideToggle('main')}
+                      {/* Gap toggle — only relevant when the gap sub-number
+                          actually renders (profit mode + profit sort). Hidden
+                          otherwise to avoid a dead control. Styled to match the
+                          active-only toggle chip. */}
+                      {tableMode === 'profit' && sortBy === 'profit' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowProfitGap(v => !v); }}
+                          title={t('stats.gapHint')}
+                          style={{
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.65rem',
+                            borderRadius: '12px',
+                            border: `1px solid ${showProfitGap ? 'var(--primary)' : 'var(--border)'}`,
+                            background: showProfitGap ? 'rgba(99, 102, 241, 0.12)' : 'var(--surface)',
+                            color: showProfitGap ? 'var(--primary)' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            fontWeight: 500,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          ▾ {t('stats.gapShort')}
+                        </button>
+                      )}
+                    </div>
                     {renderStyledSelect({
                       id: 'main-mode',
                       value: tableMode,
@@ -3172,7 +3220,14 @@ const StatisticsScreen = () => {
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '32px', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.rankCol')}</th>
+                      {/* 48px (was 32px): in fixed table-layout the <th>
+                          width wins, and 32px couldn't hold rank-number +
+                          medal emoji + movement arrow together. In RTL the
+                          overflow spilled left and the arrow ended up
+                          overlapping the player-name column, so it read as
+                          "half hidden". 48px fits the worst case (medal +
+                          two-digit movement) with no overlap. */}
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '48px', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.rankCol')}</th>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.playerCol')}</th>
                       {tableMode === 'profit' ? (
                         <>
@@ -3224,14 +3279,15 @@ const StatisticsScreen = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = isMe ? ME_BG : ''}
                       >
-                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px', textAlign: isRTL ? 'right' : 'left' }}>
+                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '48px', textAlign: isRTL ? 'right' : 'left' }}>
                           {currentRank}
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                             sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                           {movement !== 0 && (
                             <span style={{ 
-                              fontSize: '0.6rem', 
-                              marginLeft: '2px',
+                              fontSize: '0.7rem', 
+                              fontWeight: 600,
+                              marginInlineStart: '3px',
                               color: movement > 0 ? 'var(--success)' : 'var(--danger)'
                             }}>
                               {movement > 0 ? '↑' : '↓'}{Math.abs(movement) > 1 ? Math.abs(movement) : ''}
@@ -3249,6 +3305,22 @@ const StatisticsScreen = () => {
                                 column drift when one has 0.4rem and the other 0.3rem. */}
                             <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
                               {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
+                              {/* Gap to the player directly above (rolling).
+                                  Only meaningful when the table is sorted by
+                                  profit — the spread between win% / games-played
+                                  ranks isn't a shekel value. Rendered as a tiny
+                                  muted sub-line inside the existing profit cell
+                                  so it adds zero horizontal width on mobile.
+                                  Hidden for #1 and for exact-profit ties (gap 0). */}
+                              {showProfitGap && sortBy === 'profit' && index > 0 && (() => {
+                                const gap = mainTableSortedStats[index - 1].totalProfit - player.totalProfit;
+                                if (gap <= 0) return null;
+                                return (
+                                  <div style={{ fontSize: '0.6rem', fontWeight: 400, color: 'var(--text-muted)', marginTop: '1px' }}>
+                                    {'\u200E'}▾{cleanNumber(gap)}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
                               {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}

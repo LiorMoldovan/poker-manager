@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.9.2';
+export const APP_VERSION = '6.10.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.10.0',
+    date: '2026-06-07',
+    changes: [
+      '📊 Profit gap to the player above',
+      '🎛 Toggle to show/hide the gap',
+      '🐛 Accurate rank-movement arrows',
+      '📐 Fixed dropdown alignment in RTL',
+      '🔧 Clearer rank-movement arrow',
+    ],
+  },
   {
     version: '6.9.2',
     date: '2026-06-03',
