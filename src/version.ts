@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.10.0';
+export const APP_VERSION = '6.11.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.11.0',
+    date: '2026-06-07',
+    changes: [
+      '💪 More encouraging pre-game write-ups',
+      '🔤 Correct Hebrew gender for numbers',
+      '🗣 Better pronunciation of player names',
+    ],
+  },
   {
     version: '6.10.0',
     date: '2026-06-07',

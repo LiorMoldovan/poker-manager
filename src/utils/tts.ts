@@ -86,9 +86,33 @@ export const numberToHebrewTTS = (n: number, feminine = false): string => {
   return String(abs);
 };
 
+// Player-name pronunciation overrides for TTS.
+// Hebrew without nikud is ambiguous, so engines fall back to the most common
+// reading of a token — which for some surnames is the wrong word. Each entry
+// respells the name phonetically (mater lectionis, not nikud, so it works on
+// every engine incl. the browser voice). Add a new line per name as they're
+// reported. Matching is whole-word only: the name must NOT be glued to another
+// Hebrew letter (so prefixes like "לסגל" / common words aren't touched).
+const NAME_PRONUNCIATION: Array<{ name: string; say: string }> = [
+  // "סגל" defaults to "segel" (staff). The player is Segal → "se-GAL".
+  { name: 'סגל', say: 'סגאל' },
+];
+
+function fixNamePronunciation(text: string): string {
+  let r = text;
+  for (const { name, say } of NAME_PRONUNCIATION) {
+    const re = new RegExp(`(^|[^\\u0590-\\u05FF])${name}(?=$|[^\\u0590-\\u05FF])`, 'g');
+    r = r.replace(re, `$1${say}`);
+  }
+  return r;
+}
+
 // Fix common Hebrew grammar/pronunciation issues for TTS
 function fixHebrewForTTS(text: string): string {
   let r = text;
+
+  // Player names whose default Hebrew reading is the wrong word
+  r = fixNamePronunciation(r);
 
   // Construct form: "שתיים" directly before a Hebrew word → "שתי"
   r = r.replace(/שתיים(?=\s+[\u0590-\u05FF])/g, 'שתי');
