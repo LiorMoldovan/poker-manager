@@ -73,9 +73,19 @@
       // blank screen forever.
       (function () {
         var RECOVERY_KEY = '__poker_pwa_recovery_attempts';
-        var WATCHDOG_MS = 6000;
+        var WATCHDOG_MS = 15000;
         var STATUS_OVERLAY_MS = 2500;
         var MAX_ATTEMPTS = 3;
+        // Extra grace re-checks the watchdog will do *while the page is
+        // still loading* before it gives up and reloads. This is the fix
+        // for the "slow cold start traps the user" loop: a large JS bundle
+        // on a slow mobile connection can take longer than WATCHDOG_MS to
+        // download+parse. Reloading mid-download aborts the in-flight
+        // request, so the retry restarts from zero and trips the timer
+        // again — guaranteeing failure. Instead we wait as long as the
+        // browser is still actively loading.
+        var MAX_WATCHDOG_CHECKS = 4;
+        var watchdogChecks = 0;
 
         function getAttempts() {
           try { return parseInt(sessionStorage.getItem(RECOVERY_KEY) || '0', 10) || 0; }
@@ -171,15 +181,26 @@
         // as React commits its first render.
         window.__pokerLoadingOverlayTimer = setTimeout(showLoadingOverlay, STATUS_OVERLAY_MS);
 
-        // Trigger 2: hard watchdog at 6s. If the root is still empty,
-        // the React tree never mounted. Cleared from main.tsx as soon
-        // as React commits its first render.
-        window.__pokerBootWatchdog = setTimeout(function () {
+        // Trigger 2: hard watchdog. If the root is still empty AND the
+        // browser has finished loading (readyState 'complete'), the React
+        // tree genuinely failed to mount → recover. But if the page is
+        // STILL loading (e.g. a big bundle is mid-download on a slow
+        // link), do NOT reload — that would abort the in-flight request
+        // and restart the download from zero, trapping the user in a
+        // reload loop. Instead grant more time, up to MAX_WATCHDOG_CHECKS.
+        // Cleared from main.tsx as soon as React commits its first render.
+        function bootCheck() {
           var root = document.getElementById('root');
-          if (root && root.children.length === 0) {
-            recover('watchdog-timeout');
+          if (!root || root.children.length > 0) return; // mounted — all good
+          if (document.readyState !== 'complete' && watchdogChecks < MAX_WATCHDOG_CHECKS) {
+            watchdogChecks++;
+            console.warn('PWA boot watchdog: still loading, granting more time (' + watchdogChecks + '/' + MAX_WATCHDOG_CHECKS + ').');
+            window.__pokerBootWatchdog = setTimeout(bootCheck, WATCHDOG_MS);
+            return;
           }
-        }, WATCHDOG_MS);
+          recover('watchdog-timeout');
+        }
+        window.__pokerBootWatchdog = setTimeout(bootCheck, WATCHDOG_MS);
 
         // Expose a manual recovery hook for support / debugging.
         window.__pokerPwaRecover = function () {

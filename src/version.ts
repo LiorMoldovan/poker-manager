@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.14.1';
+export const APP_VERSION = '6.14.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.14.2',
+    date: '2026-06-08',
+    changes: [
+      '🩹 Fix rare "loading stuck" screen on slow connections',
+    ],
+  },
   {
     version: '6.14.1',
     date: '2026-06-08',
