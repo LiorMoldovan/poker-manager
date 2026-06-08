@@ -5465,14 +5465,16 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         {t('schedule.config.defaultsHelper')}
       </div>
 
-      {/* Two-column grid, top-aligned. Every field is label-on-top so the
-          number inputs, the time picker, and the (taller, help-texted)
-          maybe-hold field all line up cleanly instead of staggering in a
-          flex-wrap row. */}
+      {/* Fixed two-column grid. Always two columns (even on narrow phones,
+          where auto-fit would otherwise collapse to one) so the four fields
+          lay out as a tidy 2×2 instead of a tall stack. Cells are bottom-
+          aligned so the inputs line up across a row even when one label
+          wraps to two lines (e.g. the long maybe-hold label vs. the short
+          expansion-delay one). */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-        gap: 12, alignItems: 'start', marginBottom: 12,
+        gridTemplateColumns: '1fr 1fr',
+        gap: 12, alignItems: 'end', marginBottom: 12,
       }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
