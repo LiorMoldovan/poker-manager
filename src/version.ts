@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.13.1';
+export const APP_VERSION = '6.14.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.14.0',
+    date: '2026-06-08',
+    changes: [
+      '🪑 A regular\'s "maybe" holds their seat from guests',
+      '⚙️ Set the maybe-hold time per poll and as default',
+      '📈 Global stats now show weekly and monthly growth',
+      '✨ Cleaner schedule settings layout',
+    ],
+  },
   {
     version: '6.13.1',
     date: '2026-06-07',

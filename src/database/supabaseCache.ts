@@ -130,6 +130,7 @@ function toSettings(row: Record<string, unknown>): Settings {
   // missing (older DB) so the UI never crashes during migration windows.
   if (row.schedule_default_target != null) s.scheduleDefaultTarget = Number(row.schedule_default_target);
   if (row.schedule_default_delay_hours != null) s.scheduleDefaultDelayHours = Number(row.schedule_default_delay_hours);
+  if (row.schedule_default_maybe_hold_hours != null) s.scheduleDefaultMaybeHoldHours = Number(row.schedule_default_maybe_hold_hours);
   if (row.schedule_default_time != null) s.scheduleDefaultTime = String(row.schedule_default_time);
   if (row.schedule_default_allow_maybe != null) s.scheduleDefaultAllowMaybe = row.schedule_default_allow_maybe === true;
   // Auto-create-poll schedule (migration 050). All columns NOT NULL with
@@ -228,6 +229,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     status: row.status as GamePollStatus,
     targetPlayerCount: Number(row.target_player_count),
     expansionDelayHours: Number(row.expansion_delay_hours),
+    maybeHoldHours: row.maybe_hold_hours != null ? Number(row.maybe_hold_hours) : 48,
     expandedAt: (row.expanded_at as string | null) ?? null,
     confirmedDateId: (row.confirmed_date_id as string | null) ?? null,
     confirmedAt: (row.confirmed_at as string | null) ?? null,
@@ -394,6 +396,7 @@ function settingsToRow(s: Settings, groupId: string) {
     // live DB before shipping.)
     schedule_default_target: s.scheduleDefaultTarget ?? 7,
     schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
+    schedule_default_maybe_hold_hours: s.scheduleDefaultMaybeHoldHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',
     schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
     schedule_auto_create_enabled: s.scheduleAutoCreateEnabled ?? false,
@@ -1951,6 +1954,7 @@ export interface CreatePollRpcInput {
   dates: { proposedDate: string; proposedTime?: string | null; location?: string | null }[];
   targetPlayerCount?: number;
   expansionDelayHours?: number;
+  maybeHoldHours?: number;
   defaultLocation?: string | null;
   allowMaybe?: boolean;
   note?: string | null;
@@ -1973,6 +1977,7 @@ export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll
     p_allow_maybe: input.allowMaybe ?? true,
     p_note: input.note || null,
     p_source: input.source ?? 'admin',
+    p_maybe_hold_hours: input.maybeHoldHours ?? 48,
   });
   if (error) throw error;
   const newId = data as string;
@@ -2150,6 +2155,7 @@ export async function updatePollExpansionDelayRpc(pollId: string, hours: number)
 export interface PollMetaPatch {
   target: number;
   expansionDelay: number;
+  maybeHoldHours: number;
   note: string | null;
   defaultLocation: string | null;
   allowMaybe: boolean;
@@ -2165,6 +2171,7 @@ export async function updatePollMetaRpc(pollId: string, patch: PollMetaPatch): P
     p_note: patch.note ?? '',
     p_default_location: patch.defaultLocation ?? '',
     p_allow_maybe: patch.allowMaybe,
+    p_maybe_hold_hours: patch.maybeHoldHours,
   });
   if (error) throw error;
   await refreshPollsNow();

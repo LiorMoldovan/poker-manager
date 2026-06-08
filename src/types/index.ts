@@ -212,6 +212,10 @@ export interface GamePoll {
   status: GamePollStatus;
   targetPlayerCount: number;
   expansionDelayHours: number;
+  // Migration 101: grace window (hours, measured from expandedAt) during
+  // which a PERMANENT player's 'maybe' reserves a seat against guests. After
+  // it elapses the held seat releases to guests. Default 48.
+  maybeHoldHours: number;
   expandedAt?: string | null;
   confirmedDateId?: string | null;
   confirmedAt?: string | null;
@@ -262,6 +266,7 @@ export interface CreatePollInput {
   dates: CreatePollDateInput[];   // 2-5
   targetPlayerCount?: number;     // default 8
   expansionDelayHours?: number;   // default 48
+  maybeHoldHours?: number;        // default 48 — permanent-maybe seat hold (migration 101)
   defaultLocation?: string | null;
   allowMaybe?: boolean;           // default true
   note?: string | null;
@@ -528,6 +533,7 @@ export interface Settings {
   // Group-level defaults pre-filled in CreatePollModal (still editable per poll)
   scheduleDefaultTarget?: number;          // 2..12, default 7
   scheduleDefaultDelayHours?: number;      // 0..240, default 48
+  scheduleDefaultMaybeHoldHours?: number;  // 0..240, default 48 — permanent-maybe seat hold (migration 101)
   scheduleDefaultTime?: string;            // 'HH:MM' 24h, default '21:00'
   scheduleDefaultAllowMaybe?: boolean;     // default true
   // Auto-create-poll schedule. When enabled, ScheduleTab auto-opens a new

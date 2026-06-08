@@ -1638,6 +1638,7 @@ export const createPoll = (input: CreatePollInput): Promise<GamePoll> =>
     })),
     targetPlayerCount: input.targetPlayerCount,
     expansionDelayHours: input.expansionDelayHours,
+    maybeHoldHours: input.maybeHoldHours,
     defaultLocation: input.defaultLocation ?? null,
     allowMaybe: input.allowMaybe,
     note: input.note ?? null,

@@ -251,6 +251,12 @@ const SettingsScreen = () => {
     total_users: number;
     total_games: number;
     total_players: number;
+    // Migration 100: growth vs the daily snapshot ~7d / ~30d ago. 0 until
+    // history accumulates. Absent on stale cached responses → default to 0.
+    players_delta_7d?: number;
+    players_delta_30d?: number;
+    users_delta_7d?: number;
+    users_delta_30d?: number;
     total_active_users_7d: number;
     total_training_players: number;
     groups: GlobalGroup[];
@@ -4515,6 +4521,52 @@ const SettingsScreen = () => {
                               <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{s.label}</div>
                             </div>
                           ))}
+                        </div>
+
+                        {/* Growth row (migration 100): change in players &
+                            registered users vs ~7d / ~30d ago. Lets the super
+                            admin glance the trend, not just the current total.
+                            Reads 0 until daily snapshots accumulate. */}
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between',
+                          gap: '0.4rem', marginTop: '0.55rem',
+                          paddingTop: '0.45rem', borderTop: '1px solid rgba(99,102,241,0.12)',
+                          flexWrap: 'wrap',
+                        }}>
+                          {[
+                            {
+                              label: language === 'he' ? '📈 שינוי שחקנים' : '📈 Players change',
+                              d7: globalStats.players_delta_7d ?? 0,
+                              d30: globalStats.players_delta_30d ?? 0,
+                            },
+                            {
+                              label: language === 'he' ? '📈 שינוי משתמשים' : '📈 Users change',
+                              d7: globalStats.users_delta_7d ?? 0,
+                              d30: globalStats.users_delta_30d ?? 0,
+                            },
+                          ].map(m => {
+                            const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+                            const col = (n: number) => (n > 0 ? '#10B981' : n < 0 ? '#ef4444' : 'var(--text-muted)');
+                            return (
+                              <div key={m.label} style={{
+                                flex: 1, minWidth: 0, textAlign: 'center',
+                                padding: '0.3rem 0.2rem', borderRadius: '8px',
+                                background: 'rgba(255,255,255,0.04)',
+                              }}>
+                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
+                                  {m.label}
+                                </div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 700, lineHeight: 1 }}>
+                                  <span style={{ color: col(m.d7) }}>{fmt(m.d7)}</span>
+                                  <span style={{ color: 'var(--text-muted)', margin: '0 0.25rem', fontWeight: 400 }}>·</span>
+                                  <span style={{ color: col(m.d30) }}>{fmt(m.d30)}</span>
+                                </div>
+                                <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginTop: '0.12rem' }}>
+                                  {language === 'he' ? '7 ימים · 30 ימים' : '7d · 30d'}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Engagement pulse — only the two signals

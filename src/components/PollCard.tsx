@@ -134,6 +134,34 @@ export default function PollCard(props: PollCardProps) {
   // Migration 039 admin-toggleable soft lock.
   const isVotingLocked = !!poll.votingLockedAt;
 
+  // Migration 101 — permanent-maybe seat hold. Once the poll has opened to
+  // guests (expandedAt set), every PERMANENT who voted 'maybe' reserves a
+  // seat against guests for `maybeHoldHours` (from expansion). While the
+  // window is live, a guest can take a seat only if yes + held < target.
+  // Mirrors cast_poll_vote's server check so the disabled-button reasoning
+  // matches what the server rejects ('seat_held'). Permanents-only groups
+  // never reach this (no guest tier → no expansion).
+  const holdsActive = !!poll.expandedAt
+    && now < new Date(poll.expandedAt).getTime() + (poll.maybeHoldHours ?? 48) * 3600_000;
+  const holdReleaseAt = poll.expandedAt
+    ? new Date(poll.expandedAt).getTime() + (poll.maybeHoldHours ?? 48) * 3600_000
+    : null;
+  const viewerIsGuest = !!currentPlayer && currentPlayer.type !== 'permanent';
+  // Per-date count of permanent players currently holding a seat via 'maybe'.
+  const heldByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!holdsActive) return m;
+    for (const d of poll.dates) {
+      let held = 0;
+      for (const v of poll.votes) {
+        if (v.dateId !== d.id || v.response !== 'maybe') continue;
+        if (playerById.get(v.playerId)?.type === 'permanent') held++;
+      }
+      m.set(d.id, held);
+    }
+    return m;
+  }, [holdsActive, poll.dates, poll.votes, playerById]);
+
   // Permission gate — same SQL semantics + error-reason discriminants
   // the server's cast_poll_vote enforces. Critical that this stays in
   // sync so the disabled-button reasoning here matches what the
@@ -870,6 +898,33 @@ export default function PollCard(props: PollCardProps) {
                   </span>
                 </div>
 
+                {/* Permanent-maybe seat hold (migration 101): while the hold
+                    window is live, surface how many seats are reserved for
+                    regulars and when they release, so guests understand why
+                    a "not full yet" poll won't let them grab a seat. */}
+                {(() => {
+                  const held = heldByDate.get(d.id) ?? 0;
+                  if (!hasGuestTier || !holdsActive || held <= 0) return null;
+                  let until = '';
+                  if (holdReleaseAt) {
+                    const dt = new Date(holdReleaseAt);
+                    const day = dt.getDate();
+                    const mon = dt.getMonth() + 1;
+                    const hh = String(dt.getHours()).padStart(2, '0');
+                    const mm = String(dt.getMinutes()).padStart(2, '0');
+                    until = ` · ${t('schedule.heldUntil')} ${day}/${mon} ${hh}:${mm}`;
+                  }
+                  return (
+                    <div style={{
+                      fontSize: 11, color: '#eab308', marginBottom: 8,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <span aria-hidden>🔒</span>
+                      <span>{t('schedule.heldSeats', { count: held })}{until}</span>
+                    </div>
+                  );
+                })()}
+
                 {/* RSVP buttons + admin proxy.
                     Active vote is rendered with a bolder coloured border + a
                     soft ~12% tint of the response colour. The admin proxy
@@ -893,12 +948,19 @@ export default function PollCard(props: PollCardProps) {
                       maybe: t('schedule.rsvpMaybe'),
                       no: t('schedule.rsvpNo'),
                     };
-                    // Per-date seat-cap on yes upgrades. SQL is the
-                    // source of truth (migration 037 raises 'seat_full');
-                    // disabling proactively gives instant feedback.
+                    // Per-date seat-cap on yes upgrades. SQL is the source
+                    // of truth; disabling proactively gives instant feedback.
+                    // For a guest viewer during the permanent-maybe hold
+                    // window, held seats also count against the cap
+                    // (migration 101 raises 'seat_held'); permanents are
+                    // never blocked by holds.
+                    const held = viewerIsGuest ? (heldByDate.get(d.id) ?? 0) : 0;
                     const wouldOverfill =
                       resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
-                    const disabled = !canVote.allowed || wouldOverfill || isFillPinnedLocked || isDisabled;
+                    const wouldHitHold =
+                      resp === 'yes' && !active && !wouldOverfill
+                      && s.yes + held >= poll.targetPlayerCount;
+                    const disabled = !canVote.allowed || wouldOverfill || wouldHitHold || isFillPinnedLocked || isDisabled;
                     return (
                       <button
                         key={resp}
@@ -907,6 +969,7 @@ export default function PollCard(props: PollCardProps) {
                         title={
                           isDisabled ? t('schedule.errorDateDisabled') :
                           wouldOverfill ? t('schedule.errorSeatFull') :
+                          wouldHitHold ? t('schedule.errorSeatHeld') :
                           isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
                           canVote.allowed ? '' :
                           canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :

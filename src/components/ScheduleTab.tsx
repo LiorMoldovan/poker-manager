@@ -564,6 +564,7 @@ export default function ScheduleTab() {
     // match the more specific one first.
     if (msg.includes('voting_locked')) return t('schedule.errorVotingLocked');
     if (msg.includes('poll_locked')) return t('schedule.errorPollLocked');
+    if (msg.includes('seat_held')) return t('schedule.errorSeatHeld');
     if (msg.includes('seat_full')) return t('schedule.errorSeatFull');
     if (msg.includes('no_player_link')) return t('schedule.errorNoPlayerLink');
     // Migration 086 — per-date exclude error reasons. `date_disabled`
@@ -716,6 +717,7 @@ export default function ScheduleTab() {
           ),
           targetPlayerCount: fresh.scheduleDefaultTarget ?? 7,
           expansionDelayHours: fresh.scheduleDefaultDelayHours ?? 48,
+          maybeHoldHours: fresh.scheduleDefaultMaybeHoldHours ?? 48,
           defaultLocation: null,
           allowMaybe: fresh.scheduleDefaultAllowMaybe !== false,
           note: null,
@@ -3402,6 +3404,7 @@ function CreatePollModal(props: CreatePollModalProps) {
   const defaultTime = settings.scheduleDefaultTime || DEFAULT_GAME_TIME;
   const [target, setTarget] = useState(settings.scheduleDefaultTarget ?? 7);
   const [delay, setDelay] = useState(settings.scheduleDefaultDelayHours ?? 48);
+  const [maybeHold, setMaybeHold] = useState(settings.scheduleDefaultMaybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(settings.scheduleDefaultAllowMaybe !== false);
   const [defaultLocation, setDefaultLocation] = useState('');
   const [note, setNote] = useState('');
@@ -3529,6 +3532,7 @@ function CreatePollModal(props: CreatePollModalProps) {
         })),
         targetPlayerCount: target,
         expansionDelayHours: delay,
+        maybeHoldHours: maybeHold,
         defaultLocation: defaultLocation || null,
         allowMaybe,
         note: note || null,
@@ -3637,6 +3641,16 @@ function CreatePollModal(props: CreatePollModalProps) {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule.expansionDelay')}</div>
               <NumericInput min={0} value={delay}
                 onChange={(n) => setDelay(n)} style={inputBase} />
+            </div>
+          )}
+          {hasGuestTier && (
+            <div style={{ flex: 1, minWidth: 130 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule.maybeHold')}</div>
+              <NumericInput min={0} value={maybeHold}
+                onChange={(n) => setMaybeHold(n)} style={inputBase} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.4 }}>
+                {t('schedule.maybeHoldHelp')}
+              </div>
             </div>
           )}
         </div>
@@ -3797,6 +3811,7 @@ function EditPollModal(props: EditPollModalProps) {
   const [defaultLocation, setDefaultLocation] = useState(poll.defaultLocation || '');
   const [target, setTarget] = useState(poll.targetPlayerCount);
   const [expansionDelay, setExpansionDelay] = useState(poll.expansionDelayHours);
+  const [maybeHold, setMaybeHold] = useState(poll.maybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(poll.allowMaybe);
   const [submitting, setSubmitting] = useState(false);
 
@@ -3819,6 +3834,12 @@ function EditPollModal(props: EditPollModalProps) {
   const showExpansionDelay = !poll.expandedAt
     && (poll.status === 'open' || poll.status === 'confirmed')
     && hasGuestTier;
+  // The maybe-hold window runs from expansion, so unlike the expansion
+  // delay it stays adjustable AFTER the poll has expanded — shortening it
+  // can release held seats immediately, lengthening extends them. Show it
+  // on any active poll in a group that has a guest tier.
+  const showMaybeHold = hasGuestTier
+    && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed');
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -3830,11 +3851,16 @@ function EditPollModal(props: EditPollModalProps) {
       onError(t('schedule.errorGeneric'));
       return;
     }
+    if (!Number.isFinite(maybeHold) || maybeHold < 0) {
+      onError(t('schedule.errorGeneric'));
+      return;
+    }
     setSubmitting(true);
     try {
       await updatePollMeta(poll.id, {
         target: Math.floor(target),
         expansionDelay: Math.floor(expansionDelay),
+        maybeHoldHours: Math.floor(maybeHold),
         note: note.trim() || null,
         defaultLocation: defaultLocation.trim() || null,
         allowMaybe,
@@ -3923,9 +3949,11 @@ function EditPollModal(props: EditPollModalProps) {
           </div>
         </div>
 
-        {/* Target + expansion delay row */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 140px', minWidth: 140 }}>
+        {/* Target + expansion delay + maybe-hold row. Narrow flex basis so
+            all three numeric fields share a single line; the maybe-hold
+            explainer moves to the label's tooltip to keep the row compact. */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 90px', minWidth: 80 }}>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               {t('schedule.fieldTarget')}
             </label>
@@ -3938,7 +3966,7 @@ function EditPollModal(props: EditPollModalProps) {
             />
           </div>
           {showExpansionDelay && (
-            <div style={{ flex: '1 1 140px', minWidth: 140 }}>
+            <div style={{ flex: '1 1 90px', minWidth: 80 }}>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
                 {t('schedule.fieldExpansionDelay')}
               </label>
@@ -3947,6 +3975,23 @@ function EditPollModal(props: EditPollModalProps) {
                 max={168}
                 value={expansionDelay}
                 onChange={(n) => setExpansionDelay(n)}
+                style={inputBase}
+              />
+            </div>
+          )}
+          {showMaybeHold && (
+            <div style={{ flex: '1 1 90px', minWidth: 80 }}>
+              <label
+                title={t('schedule.maybeHoldHelp')}
+                style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}
+              >
+                {t('schedule.maybeHold')}
+              </label>
+              <NumericInput
+                min={0}
+                max={240}
+                value={maybeHold}
+                onChange={(n) => setMaybeHold(n)}
                 style={inputBase}
               />
             </div>
@@ -5110,6 +5155,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [emailKinds, setEmailKinds] = useState<Record<ScheduleEmailKind, boolean>>(() => readEmailKinds(initial.scheduleEmailKinds));
   const [defaultTarget, setDefaultTarget] = useState<number>(initial.scheduleDefaultTarget ?? 7);
   const [defaultDelay, setDefaultDelay] = useState<number>(initial.scheduleDefaultDelayHours ?? 48);
+  const [defaultMaybeHold, setDefaultMaybeHold] = useState<number>(initial.scheduleDefaultMaybeHoldHours ?? 48);
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
   const [defaultAllowMaybe, setDefaultAllowMaybe] = useState<boolean>(initial.scheduleDefaultAllowMaybe !== false);
   // Auto-create-poll schedule (migration 050). Default off; the day +
@@ -5135,6 +5181,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       setEmailKinds(readEmailKinds(fresh.scheduleEmailKinds));
       setDefaultTarget(fresh.scheduleDefaultTarget ?? 7);
       setDefaultDelay(fresh.scheduleDefaultDelayHours ?? 48);
+      setDefaultMaybeHold(fresh.scheduleDefaultMaybeHoldHours ?? 48);
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
       setDefaultAllowMaybe(fresh.scheduleDefaultAllowMaybe !== false);
       setAutoCreateEnabled(fresh.scheduleAutoCreateEnabled === true);
@@ -5161,6 +5208,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   type Patch = Partial<Pick<Settings,
     | 'schedulePushEnabled' | 'scheduleEmailsEnabled' | 'scheduleEmailKinds'
     | 'scheduleDefaultTarget' | 'scheduleDefaultDelayHours'
+    | 'scheduleDefaultMaybeHoldHours'
     | 'scheduleDefaultTime' | 'scheduleDefaultAllowMaybe'
     | 'scheduleAutoCreateEnabled' | 'scheduleAutoCreateDay'
     | 'scheduleAutoCreateTime'
@@ -5244,6 +5292,15 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     const persisted = getSettings().scheduleDefaultDelayHours ?? 48;
     if (clamped !== persisted) {
       void persist({ scheduleDefaultDelayHours: clamped });
+    }
+  };
+
+  const commitDefaultMaybeHold = () => {
+    const clamped = Math.max(0, Math.min(240, defaultMaybeHold || 0));
+    if (clamped !== defaultMaybeHold) setDefaultMaybeHold(clamped);
+    const persisted = getSettings().scheduleDefaultMaybeHoldHours ?? 48;
+    if (clamped !== persisted) {
+      void persist({ scheduleDefaultMaybeHoldHours: clamped });
     }
   };
 
@@ -5408,44 +5465,78 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         {t('schedule.config.defaultsHelper')}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <div style={{ flex: 1, minWidth: 130 }}>
+      {/* Two-column grid, top-aligned. Every field is label-on-top so the
+          number inputs, the time picker, and the (taller, help-texted)
+          maybe-hold field all line up cleanly instead of staggering in a
+          flex-wrap row. */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: 12, alignItems: 'start', marginBottom: 12,
+      }}>
+        <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             {t('schedule.config.defaultTarget')}
           </div>
-          <NumericInput
-            min={2}
-            max={12}
-            value={defaultTarget}
-            onChange={(n) => setDefaultTarget(n)}
-            onBlur={commitDefaultTarget}
-            style={inputBase}
-          />
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <NumericInput
+              min={2}
+              max={12}
+              value={defaultTarget}
+              onChange={(n) => setDefaultTarget(n)}
+              onBlur={commitDefaultTarget}
+              style={compactInput}
+            />
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+            {t('schedule.config.defaultTime')}
+          </div>
+          {/* Wrapper keeps the LTR HH:MM picker aligned to the cell's start
+              edge (right, in RTL) so it stacks under its right-aligned label
+              like the compact number inputs in the other cells. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Time24Picker value={defaultTime} onChange={handleDefaultTime} />
+          </div>
         </div>
         {hasGuestTier && (
-          <div style={{ flex: 1, minWidth: 130 }}>
+          <div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               {t('schedule.config.defaultDelayHours')}
             </div>
-            <NumericInput
-              min={0}
-              max={240}
-              value={defaultDelay}
-              onChange={(n) => setDefaultDelay(n)}
-              onBlur={commitDefaultDelay}
-              style={inputBase}
-            />
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <NumericInput
+                min={0}
+                max={240}
+                value={defaultDelay}
+                onChange={(n) => setDefaultDelay(n)}
+                onBlur={commitDefaultDelay}
+                style={compactInput}
+              />
+            </div>
           </div>
         )}
-        <div style={{
-          flex: 1, minWidth: 130,
-          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-        }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {t('schedule.config.defaultTime')}
+        {hasGuestTier && (
+          <div>
+            <div
+              title={t('schedule.maybeHoldHelp')}
+              style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}
+            >
+              {t('schedule.config.defaultMaybeHoldHours')}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <NumericInput
+                min={0}
+                max={240}
+                value={defaultMaybeHold}
+                onChange={(n) => setDefaultMaybeHold(n)}
+                onBlur={commitDefaultMaybeHold}
+                style={compactInput}
+              />
+            </div>
           </div>
-          <Time24Picker value={defaultTime} onChange={handleDefaultTime} />
-        </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text)' }}>
@@ -5628,6 +5719,10 @@ const inputBase: React.CSSProperties = {
   padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border)',
   background: 'var(--surface)', color: 'var(--text)', fontSize: 13, width: '100%',
 };
+
+// Narrow variant for 1–3 digit numeric fields (target, delay, maybe-hold) so
+// they don't render as oversized full-width boxes in the config grid.
+const compactInput: React.CSSProperties = { ...inputBase, width: 90 };
 
 // Soft / light-green outlined button — matches the existing pill style
 // used elsewhere in the app (e.g. the Schedule tab pill in the settings nav).

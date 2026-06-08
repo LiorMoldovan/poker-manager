@@ -63,6 +63,7 @@ function makeSyntheticPoll(): { poll: GamePoll; pinned: GamePollDate; sampleVote
     status: 'open',
     targetPlayerCount: 7,
     expansionDelayHours: 48,
+    maybeHoldHours: 48,
     expandedAt: null,
     confirmedDateId: 'date-thu',
     confirmedAt: now.toISOString(),
