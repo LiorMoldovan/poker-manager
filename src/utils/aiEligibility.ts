@@ -1,5 +1,6 @@
 import { getGroupId } from '../database/supabaseCache';
 import { getSettings } from '../database/storage';
+import { hasLocalGeminiKey } from './localApiKey';
 
 // Whether the AI call path is available for the current group.
 //
@@ -40,6 +41,11 @@ function isCurrentGroupOwner(): boolean {
 // either the group has its own key OR the group is the platform-owner
 // group and may use the env-var fallback.
 export function isGeminiEnabledForCurrentGroup(): boolean {
+  // A device-local personal key makes AI viable even when the group has no
+  // shared key and isn't the platform-owner group — the proxy will forward
+  // the personal key. Without this check the eligibility gate would block
+  // the call before the personal key ever reaches the request body.
+  if (hasLocalGeminiKey()) return true;
   const groupKey = getSettings()?.geminiApiKey;
   if (groupKey && groupKey.trim()) return true;
   return isCurrentGroupOwner();

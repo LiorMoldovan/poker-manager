@@ -1491,7 +1491,8 @@ const GameSummaryScreen = () => {
             {new Date(gameDate).toLocaleDateString(isRTL ? 'he-IL' : 'en-US', { 
               weekday: 'long', 
               month: 'short', 
-              day: 'numeric' 
+              day: 'numeric',
+              year: 'numeric'
             })}
           </p>
         </div>

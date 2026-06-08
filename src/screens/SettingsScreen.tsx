@@ -33,6 +33,7 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
+import { getLocalGeminiKey, saveLocalGeminiKey } from '../utils/localApiKey';
 // v5.62.2 — chip-count feedback loop fully retired. The
 // `chip_count_feedback` table + `chip-count-feedback-photos` bucket
 // stay in Supabase as harmless legacy; the dashboard card, the
@@ -124,6 +125,12 @@ const SettingsScreen = () => {
   
   // Gemini AI state
   const [geminiKey, setGeminiKey] = useState<string>('');
+  // Device-local personal Gemini key (non-owner admins). Lives only in
+  // this browser's localStorage — never synced to the group settings, so
+  // it can't collide with the owner's group key. Draft mirrors what's
+  // currently stored on the device.
+  const [personalKeyDraft, setPersonalKeyDraft] = useState<string>(() => getLocalGeminiKey() || '');
+  const [personalKeySaved, setPersonalKeySaved] = useState<boolean>(false);
   // ElevenLabs TTS state (used by AI tab model tests)
   const [elKey, setElKey] = useState<string>('');
   const [elUsageLive, setElUsageLive] = useState<{ used: number; limit: number; remaining: number; resetDate: string } | null>(null);
@@ -2607,6 +2614,92 @@ const SettingsScreen = () => {
 
         return (
           <>
+            {/* Personal (device-local) Gemini key — for non-owner admins
+                who want AI to run on their own quota without touching the
+                owner-managed group key. Stored only in this browser's
+                localStorage, never synced to Supabase, so it can't collide
+                with the group key. Takes priority over the group key on
+                this device only. Hidden from the owner (who manages the
+                group key directly below). */}
+            {!isOwner && (
+              <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem', borderInlineStart: '3px solid #818cf8' }}>
+                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('settings.ai.personalKeyTitle')}</h2>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: 1.55 }}>
+                  {t('settings.ai.personalKeyHelp')}
+                </p>
+                <div style={{ display: 'flex', gap: '0.4rem', direction: 'ltr' }}>
+                  <input
+                    type="password"
+                    value={personalKeyDraft}
+                    onChange={e => { setPersonalKeyDraft(e.target.value); setPersonalKeySaved(false); }}
+                    placeholder={t('settings.ai.geminiPlaceholder')}
+                    style={{
+                      flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                      background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      saveLocalGeminiKey(personalKeyDraft);
+                      setPersonalKeySaved(true);
+                      setTimeout(() => setPersonalKeySaved(false), 2000);
+                    }}
+                    style={{
+                      padding: '0.5rem 0.75rem', borderRadius: '6px',
+                      border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                      color: '#10B981', fontSize: '0.75rem',
+                      cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                    }}
+                  >
+                    {personalKeySaved ? t('settings.ai.personalKeySaved') : t('common.save')}
+                  </button>
+                  {!!personalKeyDraft && (
+                    <button
+                      onClick={() => {
+                        setPersonalKeyDraft('');
+                        saveLocalGeminiKey('');
+                        setPersonalKeySaved(false);
+                      }}
+                      style={{
+                        padding: '0.5rem 0.75rem', borderRadius: '6px',
+                        border: '1px solid var(--border)', background: 'transparent',
+                        color: 'var(--text-muted)', fontSize: '0.75rem',
+                        cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                      }}
+                    >
+                      {t('settings.ai.personalKeyClear')}
+                    </button>
+                  )}
+                </div>
+                {!!getLocalGeminiKey() && (
+                  <div style={{ fontSize: '0.7rem', color: '#10B981', marginTop: '0.5rem', textAlign: isRTL ? 'right' : 'left' }}>
+                    {t('settings.ai.personalKeyActive')}
+                  </div>
+                )}
+
+                {/* How-to guide — same steps as the owner's group-key
+                    guide, so a non-owner admin can create their own key
+                    without leaving the page. */}
+                <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.4rem' }}>
+                    {t('settings.ai.personalKeyGuideTitle')}
+                  </div>
+                  <ol style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, paddingInlineStart: '1.2rem', lineHeight: 1.8 }}>
+                    <li>
+                      {t('settings.ai.personalKeyStep1Pre')}
+                      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#818cf8' }}>
+                        {t('settings.ai.personalKeyStep1Link')}
+                      </a>
+                    </li>
+                    <li>{t('settings.ai.personalKeyStep2')}</li>
+                    <li>{t('settings.ai.personalKeyStep3')}</li>
+                    <li>{t('settings.ai.personalKeyStep4')}</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
             {/* Owner-only block — everything in the Services tab EXCEPT
                 the Photo Chip Counting Test Card is gated on isOwner.
                 The test card sits outside this wrapper so non-owner

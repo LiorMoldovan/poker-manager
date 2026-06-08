@@ -4,6 +4,7 @@ import { getGroupId } from '../database/supabaseCache';
 import { isObserverMode } from '../auth/observerMode';
 import { isEmailEnabledForCurrentGroup, notifyEmailDisabled } from './emailEligibility';
 import { markAIProxyAvailable, markAIProxyUnavailable, isAIProxyKnownUnavailable } from './aiEligibility';
+import { getLocalGeminiKey } from './localApiKey';
 
 // Synthetic 403 returned for any AI / TTS / push / email side-effect
 // proxy invoked while a super admin is observing a group via
@@ -108,7 +109,10 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 function getGroupGeminiKey(): string | undefined {
-  return getSettings()?.geminiApiKey || undefined;
+  // Device-local personal key wins over the shared group key. It never
+  // touches the DB, so this is a priority chain, not a conflict — the
+  // request still carries exactly one key.
+  return getLocalGeminiKey() || getSettings()?.geminiApiKey || undefined;
 }
 
 function getGroupElevenLabsKey(): string | undefined {

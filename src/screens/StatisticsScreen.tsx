@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, hideForCapture, shareFiles } from '../utils/sharing';
-import { PlayerStats, Player, PlayerType } from '../types';
+import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
@@ -98,6 +98,14 @@ const StatisticsScreen = () => {
     playerId: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for all player games
+  // Modal: per-game rebuy breakdown behind a multi-game aggregate record
+  // (most rebuys / avg rebuys). Each row is tappable to that game.
+  const [rebuyBreakdown, setRebuyBreakdown] = useState<{
+    title: string;
+    playerName: string;
+    summary: string;
+    games: Array<{ date: string; rebuys: number; gameId: string }>;
+  } | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [isSharingTop20, setIsSharingTop20] = useState(false);
   const [isSharingPodium, setIsSharingPodium] = useState(false);
@@ -107,6 +115,7 @@ const StatisticsScreen = () => {
   const [isSharingPodiumRates, setIsSharingPodiumRates] = useState(false);
   const [isSharingAvgPlacement, setIsSharingAvgPlacement] = useState(false);
   const [isSharingBestMonths, setIsSharingBestMonths] = useState(false);
+  const [isSharingOtherRecords, setIsSharingOtherRecords] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const top10Ref = useRef<HTMLDivElement>(null);
@@ -117,6 +126,7 @@ const StatisticsScreen = () => {
   const avgPlacementRef = useRef<HTMLDivElement>(null);
   const bestMonthsRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
+  const otherRecordsRef = useRef<HTMLDivElement>(null);
   // Refs for the interactive controls strips inside two of the
   // share-able cards. Hidden via `hideForCapture` during the
   // screenshot so the snapshot keeps the card chrome (background,
@@ -375,6 +385,16 @@ const StatisticsScreen = () => {
       await shareFiles(files, t('stats.hallOfFame'));
     } catch (e) { console.error('Error sharing hall of fame:', e); }
     finally { setIsSharingHallOfFame(false); }
+  };
+
+  const handleShareOtherRecords = async () => {
+    if (!otherRecordsRef.current) return;
+    setIsSharingOtherRecords(true);
+    try {
+      const files = await captureAndSplit(otherRecordsRef.current, 'poker-records');
+      await shareFiles(files, t('stats.otherRecords'));
+    } catch (e) { console.error('Error sharing other records:', e); }
+    finally { setIsSharingOtherRecords(false); }
   };
 
   const handleShareChronicle = async () => {
@@ -1148,6 +1168,93 @@ const StatisticsScreen = () => {
     return { totalGames, gamesWithoutRebuys };
   }, [tablePeriodOverrides.rebuy, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
+  // Rebuy RECORDS for the "Additional Records" card.
+  //  · Counts REBUYS ONLY — each player's `rebuys` field minus the
+  //    initial buy-in of 1 (so a player who only bought in = 0 rebuys).
+  //  · Considers ONLY games that actually have rebuy data recorded
+  //    (≥1 player with rebuys > 1). Legacy nights from before rebuy
+  //    tracking are excluded so averages/lows aren't skewed toward 0.
+  //  · Per-player records respect the same active/selection filter as
+  //    the rest of the records view (via `filteredStats`); the night
+  //    records are game-level (all players that night).
+  const rebuyRecords = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const periodGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    const allGamePlayers = getAllGamePlayers();
+    const byGame = new Map<string, GamePlayer[]>();
+    for (const gp of allGamePlayers) {
+      const arr = byGame.get(gp.gameId);
+      if (arr) arr.push(gp);
+      else byGame.set(gp.gameId, [gp]);
+    }
+    const allowedIds = new Set(filteredStats.map(s => s.playerId));
+
+    type PlayerAgg = { playerId: string; playerName: string; totalRebuys: number; validGames: number; maxSingle: number; maxSingleGameId: string };
+    type Night = { gameId: string; date: string; totalRebuys: number; playerCount: number };
+    type BreakdownEntry = { gameId: string; date: string; rebuys: number };
+    const playerAgg = new Map<string, PlayerAgg>();
+    const nights: Night[] = [];
+    // Per-player, per-game rebuy breakdown — one entry per "valid game"
+    // (a game with rebuy data the player took part in), so the popup's
+    // rows reconcile exactly with the aggregate: sum = total, count =
+    // validGames, sum/count = avg, max = maxSingle.
+    const breakdownByPlayer = new Map<string, BreakdownEntry[]>();
+
+    for (const game of periodGames) {
+      const gps = byGame.get(game.id);
+      if (!gps || gps.length === 0) continue;
+      // A game "has rebuy data" iff at least one player rebought.
+      if (!gps.some(gp => gp.rebuys > 1)) continue;
+      const gameDate = game.date || game.createdAt;
+      let nightTotal = 0;
+      for (const gp of gps) {
+        const rb = Math.max(0, gp.rebuys - 1);
+        nightTotal += rb;
+        if (!allowedIds.has(gp.playerId)) continue;
+        const breakdown = breakdownByPlayer.get(gp.playerId);
+        if (breakdown) breakdown.push({ gameId: game.id, date: gameDate, rebuys: rb });
+        else breakdownByPlayer.set(gp.playerId, [{ gameId: game.id, date: gameDate, rebuys: rb }]);
+        const existing = playerAgg.get(gp.playerId);
+        if (existing) {
+          existing.totalRebuys += rb;
+          existing.validGames += 1;
+          if (rb > existing.maxSingle) {
+            existing.maxSingle = rb;
+            existing.maxSingleGameId = game.id;
+          }
+        } else {
+          const nm = players.find(p => p.id === gp.playerId)?.name || gp.playerName;
+          playerAgg.set(gp.playerId, { playerId: gp.playerId, playerName: nm, totalRebuys: rb, validGames: 1, maxSingle: rb, maxSingleGameId: game.id });
+        }
+      }
+      nights.push({ gameId: game.id, date: gameDate, totalRebuys: nightTotal, playerCount: gps.length });
+    }
+
+    const playerArr = Array.from(playerAgg.values());
+    const topBy = <T,>(arr: T[], val: (x: T) => number, desc = true): T | null =>
+      arr.length === 0 ? null : [...arr].sort((a, b) => desc ? val(b) - val(a) : val(a) - val(b))[0];
+
+    const topAvgRaw = topBy(playerArr.filter(p => p.validGames >= 3 && p.totalRebuys > 0), p => p.totalRebuys / p.validGames);
+
+    return {
+      hasData: nights.length > 0,
+      mostRebuys: topBy(playerArr.filter(p => p.totalRebuys > 0), p => p.totalRebuys),
+      topAvg: topAvgRaw ? { ...topAvgRaw, avg: topAvgRaw.totalRebuys / topAvgRaw.validGames } : null,
+      maxSingle: topBy(playerArr.filter(p => p.maxSingle > 0), p => p.maxSingle),
+      busiestNight: topBy(nights, n => n.totalRebuys, true),
+      quietestNight: topBy(nights, n => n.totalRebuys, false),
+      breakdownByPlayer,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
   // Per-player place-finish rates (1st/2nd/3rd) for the current time
   // period:
   //  · Place is awarded only when the top finisher actually won
@@ -1918,33 +2025,39 @@ const StatisticsScreen = () => {
     const canShowDetails = recordType && recordTitle;
     
     return (
-      <div style={{ ...style }}>
+      <div style={{ minWidth: 0, ...style }}>
         <div 
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
+            justifyContent: 'center',
             gap: '0.3rem',
+            flexWrap: 'wrap',
+            minWidth: 0,
             cursor: canShowDetails ? 'pointer' : 'default'
           }}
           onClick={canShowDetails ? () => showRecordDetails(recordTitle, players[0], recordType) : undefined}
         >
-          <span style={{ fontWeight: '700', ...(identityName && players[0].playerName === identityName ? meNameStyle : {}) }}>{players[0].playerName}</span>
+          <span style={{ fontWeight: '700', whiteSpace: 'nowrap', ...(identityName && players[0].playerName === identityName ? meNameStyle : {}) }}>{players[0].playerName}</span>
           {hasTies && (
             <span 
               style={{ 
                 fontSize: '0.6rem', 
                 color: 'var(--text-muted)',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                flexShrink: 0
               }}
               onClick={(e) => { e.stopPropagation(); toggleRecordExpand(recordKey); }}
             >
               (+{players.length - 1})
             </span>
           )}
-          {renderValue(players[0])}
-          {canShowDetails && (
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
-          )}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span>{renderValue(players[0])}</span>
+            {canShowDetails && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+            )}
+          </span>
         </div>
         {isExpanded && hasTies && (
           <div style={{ 
@@ -1975,6 +2088,91 @@ const StatisticsScreen = () => {
         )}
       </div>
     );
+  };
+
+  // Rebuy counts can be fractional (half-rebuys = 0.5). Show whole
+  // numbers cleanly and halves with a single decimal.
+  const fmtRebuys = (n: number): string => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+  // Single-line row for the rebuy records (mirrors the one-line layout
+  // used by the other record rows). `isPlayer` rows highlight the
+  // current user's name; night rows pass a date as the leader.
+  const renderRebuyRow = (
+    key: string,
+    label: string,
+    leaderName: string,
+    isPlayer: boolean,
+    valueNode: React.ReactNode,
+    gameId?: string,
+    onClick?: () => void,
+  ) => {
+    const highlight = isPlayer && !!identityName && leaderName === identityName;
+    // The row becomes tappable when it maps to a destination:
+    //   · `gameId`  → a single game's details (single-game records).
+    //   · `onClick` → a custom action, e.g. a breakdown popup for
+    //                 multi-game aggregates (most/avg rebuys) that have
+    //                 no single relevant game.
+    // A chevron signals the affordance in both cases.
+    const clickable = !!gameId || !!onClick;
+    const activate = () => {
+      hapticTap();
+      if (gameId) {
+        navigate(`/game/${gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } });
+      } else {
+        onClick?.();
+      }
+    };
+    return (
+      <div
+        key={key}
+        onClick={clickable ? activate : undefined}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem', ...(clickable ? { cursor: 'pointer' } : {}) }}
+      >
+        {/* Single line. Values are kept short (just the number) so the
+            label fits; ellipsis is only a last-resort guard against an
+            unusually long name. */}
+        <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+          <span style={{ fontWeight: 700, whiteSpace: 'nowrap', ...(highlight ? meNameStyle : {}) }}>{leaderName}</span>
+          <span style={{ fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>{valueNode}</span>
+          {clickable && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>❯</span>}
+        </div>
+      </div>
+    );
+  };
+
+  // Night-based rebuy records: rebuy count + player count on one line,
+  // tappable to open that game's details. The count+chevron stay together
+  // on the right; the label ellipsis's only as a last-resort guard.
+  const renderNightRebuyRow = (key: string, label: string, gameId: string, detail: string) => (
+    <div
+      key={key}
+      onClick={() => { hapticTap(); navigate(`/game/${gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } }); }}
+      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem', cursor: 'pointer' }}
+    >
+      <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+        <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{detail}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>❯</span>
+      </div>
+    </div>
+  );
+
+  // Opens the rebuy-breakdown popup for a multi-game aggregate record.
+  // Pulls the record-holder's per-game rebuy list (computed in
+  // `rebuyRecords`) and sorts it most-rebuys-first so the games that
+  // built the total/average lead — 0-rebuy valid games sink to the
+  // bottom but stay included so the average reconciles.
+  const openRebuyBreakdown = (label: string, playerId: string, playerName: string, summary: string) => {
+    hapticTap();
+    const list = [...(rebuyRecords.breakdownByPlayer.get(playerId) || [])]
+      .sort((a, b) => b.rebuys - a.rebuys || new Date(b.date).getTime() - new Date(a.date).getTime());
+    setRebuyBreakdown({
+      title: label,
+      playerName,
+      summary,
+      games: list.map(e => ({ date: e.date, rebuys: e.rebuys, gameId: e.gameId })),
+    });
   };
 
   const records = getRecords();
@@ -3022,8 +3220,16 @@ const StatisticsScreen = () => {
               )}
 
               {/* Other Records */}
-              <div className="card">
+              <div ref={otherRecordsRef} className="card">
                 <h2 className="card-title mb-2">{t('stats.otherRecords')}</h2>
+                {/* Filter-context line — rendered (not hidden for capture)
+                    so the shared image carries the timeframe + player set
+                    the records reflect. Records use the global period +
+                    active-only filter, so these globals describe them
+                    exactly. */}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.5rem', fontWeight: 500 }}>
+                  📊 {getTimeframeLabel()} · {t('stats.gamesCount', { count: totalGamesInPeriod })} · 🎮 {filterActiveOnly ? t('stats.activeOnlyShort') : t('stats.allPlayersShort')}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>{t('stats.mostGames')}</span>
@@ -3084,34 +3290,51 @@ const StatisticsScreen = () => {
                       )}
                     </div>
                   )}
-                  {records.rebuyKings[0]?.totalRebuys > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.buyinKing')}</span>
-                      {renderRecord(
-                        'rebuyKing',
-                        records.rebuyKings.filter(p => p.totalRebuys > 0),
-                        (p) => <span style={{ fontWeight: '600' }}>{t('stats.parenTotal', { n: p.totalRebuys })}</span>,
-                        undefined,
-                        'all',
-                        t('stats.recordBuyins')
-                      )}
-                  </div>
+                  {/* Rebuy records — count REBUYS ONLY (excl. the initial
+                      buy-in) and only games that actually recorded rebuys.
+                      Labelled "קניות חוזרות" to distinguish from total buy-ins. */}
+                  {rebuyRecords.mostRebuys && (
+                    renderRebuyRow('mostRebuys', t('stats.mostRebuys'), rebuyRecords.mostRebuys.playerName, true,
+                      t('stats.rebuyCountVal', { n: fmtRebuys(rebuyRecords.mostRebuys.totalRebuys) }), undefined,
+                      () => openRebuyBreakdown(t('stats.mostRebuys'), rebuyRecords.mostRebuys!.playerId, rebuyRecords.mostRebuys!.playerName,
+                        t('stats.rebuyCountVal', { n: fmtRebuys(rebuyRecords.mostRebuys!.totalRebuys) })))
                   )}
-                  {records.avgBuyinKings[0]?.avgRebuysPerGame > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.avgBuyinKing')}</span>
-                      {renderRecord(
-                        'avgBuyinKing',
-                        records.avgBuyinKings.filter(p => p.avgRebuysPerGame > 0),
-                        (p) => <span style={{ fontWeight: '600' }}>{t('stats.parenAvg', { n: p.avgRebuysPerGame.toFixed(1) })}</span>,
-                        undefined,
-                        'all',
-                        t('stats.recordAvgBuyins')
-                      )}
-                  </div>
+                  {rebuyRecords.topAvg && (
+                    renderRebuyRow('avgRebuys', t('stats.avgRebuysPerGame'), rebuyRecords.topAvg.playerName, true,
+                      t('stats.rebuyAvgVal', { n: rebuyRecords.topAvg.avg.toFixed(1) }), undefined,
+                      () => openRebuyBreakdown(t('stats.avgRebuysPerGame'), rebuyRecords.topAvg!.playerId, rebuyRecords.topAvg!.playerName,
+                        t('stats.rebuyAvgVal', { n: rebuyRecords.topAvg!.avg.toFixed(1) })))
+                  )}
+                  {rebuyRecords.maxSingle && rebuyRecords.maxSingle.maxSingle > 0 && (
+                    renderRebuyRow('maxSingleRebuy', t('stats.maxRebuysSingleGame'), rebuyRecords.maxSingle.playerName, true,
+                      t('stats.rebuyCountVal', { n: fmtRebuys(rebuyRecords.maxSingle.maxSingle) }), rebuyRecords.maxSingle.maxSingleGameId)
+                  )}
+                  {rebuyRecords.busiestNight && (
+                    renderNightRebuyRow('busiestNight', t('stats.busiestNight'), rebuyRecords.busiestNight.gameId,
+                      t('stats.nightRebuysVal', { n: fmtRebuys(rebuyRecords.busiestNight.totalRebuys), players: rebuyRecords.busiestNight.playerCount }))
+                  )}
+                  {rebuyRecords.quietestNight && rebuyRecords.busiestNight && rebuyRecords.quietestNight.gameId !== rebuyRecords.busiestNight.gameId && (
+                    renderNightRebuyRow('quietestNight', t('stats.quietestNight'), rebuyRecords.quietestNight.gameId,
+                      t('stats.nightRebuysVal', { n: fmtRebuys(rebuyRecords.quietestNight.totalRebuys), players: rebuyRecords.quietestNight.playerCount }))
+                  )}
+                  {rebuyRecords.hasData && (
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem', opacity: 0.8 }}>
+                      {t('stats.rebuyNote')}
+                    </div>
                   )}
                 </div>
               </div>
+              {rebuyRecords.hasData && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareOtherRecords}
+                    disabled={isSharingOtherRecords}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingOtherRecords ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
                 </>
               )}
             </>
@@ -3617,8 +3840,11 @@ const StatisticsScreen = () => {
                     {renderPeriodOverrideDropdown('rebuy')}
                     {renderActiveOverrideToggle('rebuy')}
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.2rem' }}>
                     {t('stats.rebuyStats')}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem', opacity: 0.8 }}>
+                    {t('stats.buyinNote')}
                   </div>
                   {renderShareContextSubtitle('rebuy')}
                   {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
@@ -3642,6 +3868,7 @@ const StatisticsScreen = () => {
                         <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyAvg')}>{t('stats.rebuyAvg')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyTotal')}>{t('stats.rebuyTotal')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyOnlyCol')}>{t('stats.rebuyOnlyCol')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyMax')}>{t('stats.rebuyMax')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
                       </tr>
@@ -3680,6 +3907,13 @@ const StatisticsScreen = () => {
                               color: 'var(--text-muted)'
                             }}>
                               {cleanNumber(player.totalBuyins)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {cleanNumber(Math.max(0, player.totalBuyins - player.gamesPlayed))}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
@@ -4856,6 +5090,75 @@ const StatisticsScreen = () => {
             </div>
             
             {playerAllGames.games.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                {t('common.noData')}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Rebuy Breakdown Modal — per-game rebuys behind a multi-game
+          aggregate record (most/avg rebuys). Each row taps through to
+          that game's details. */}
+      {rebuyBreakdown && (
+        <div
+          className="modal-overlay"
+          onClick={() => setRebuyBreakdown(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--card)', borderRadius: '12px', padding: '1rem', maxWidth: '400px', width: '100%', maxHeight: '70vh', overflow: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>{rebuyBreakdown.title}</h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {rebuyBreakdown.playerName} · {rebuyBreakdown.summary}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRebuyBreakdown(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              {t('stats.gamesCount', { count: rebuyBreakdown.games.length })}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '60vh', overflowY: 'auto' }}>
+              {rebuyBreakdown.games.map((game, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setRebuyBreakdown(null);
+                    navigate(`/game/${game.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } });
+                    window.scrollTo(0, 0);
+                  }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'var(--surface)', borderRadius: '6px', borderInlineEnd: `3px solid ${game.rebuys > 0 ? 'var(--accent, #6366f1)' : 'var(--border)'}`, cursor: 'pointer', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+                      {new Date(game.date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+                  </div>
+                  <span style={{ fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                    {t('stats.rebuyCountVal', { n: fmtRebuys(game.rebuys) })}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {rebuyBreakdown.games.length === 0 && (
               <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
                 {t('common.noData')}
               </div>

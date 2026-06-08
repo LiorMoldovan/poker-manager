@@ -14,6 +14,7 @@ import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
 import { proxyGeminiGenerate, proxyGeminiGenerateWithSignal, proxyGeminiModels, pollinationsImage } from './apiProxy';
 import { isGeminiEnabledForCurrentGroup } from './aiEligibility';
+import { getLocalGeminiKey } from './localApiKey';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 import { logChipCountAttempt, type ChipCountDebugContext, type ChipCountDebugOutcome } from './chipCountDebug';
@@ -292,6 +293,9 @@ export const isOnline = (): boolean => navigator.onLine;
 //     group that hadn't set its own key — the bug this comment was
 //     written to remember not to reintroduce.)
 export const getGeminiApiKey = (): string | null => {
+  // Device-local personal key takes priority over the shared group key.
+  const local = getLocalGeminiKey();
+  if (local) return local;
   const key = getSettings()?.geminiApiKey;
   if (key && key.trim()) return key;
   return isGeminiEnabledForCurrentGroup() ? 'server-managed' : null;
