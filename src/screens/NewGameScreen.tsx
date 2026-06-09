@@ -14,6 +14,7 @@ import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplay
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
+import { canUserGenerateAI } from '../utils/aiEligibility';
 import { withAITiming } from '../utils/aiTiming';
 import { PeriodMarkers } from '../types';
 import { HomeDashboard } from '../components/HomeDashboard';
@@ -181,6 +182,8 @@ const NewGameScreen = () => {
   const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
   const { role, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
+  // Owner, or a non-owner admin who set a personal device key, may trigger AI.
+  const canUseAI = canUserGenerateAI(isOwner, isAdmin);
   const isMember = role === 'member' && !isSuperAdmin;
   // ── Screen mode ──
   // The same component powers two routes:
@@ -631,7 +634,7 @@ const NewGameScreen = () => {
     // model name once it lands. The promise survives this component's
     // unmount because it's plain async work — no setState, no React refs.
     const apiKey = getGeminiApiKey();
-    const willGenerateTTS = !!apiKey && isOwner;
+    const willGenerateTTS = !!apiKey && canUseAI;
     if (willGenerateTTS) {
       const gameId = game.id;
       const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
@@ -2142,7 +2145,7 @@ const NewGameScreen = () => {
       </div>
 
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
-        {isOwner && (
+        {canUseAI && (
             <button 
               className="btn btn-secondary"
               onClick={() => handleShowForecast()}

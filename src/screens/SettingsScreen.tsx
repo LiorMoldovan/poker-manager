@@ -6331,6 +6331,26 @@ const SettingsScreen = () => {
                           </div>
                         </div>
 
+                        {/* Row 2: actual last-login time (+ session length).
+                            Shown only when collapsed — the expanded panel below
+                            details the same data, so we avoid duplicating it. */}
+                        {!isExpanded && (() => {
+                          const le = user.latestEntry;
+                          const lastDate = new Date(le.lastActive || le.timestamp);
+                          const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                          const dur = Math.round(le.sessionDuration || 0);
+                          return (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: '0.6rem',
+                              marginTop: '0.3rem', fontSize: '0.62rem', color: 'var(--text-muted)',
+                            }}>
+                              <span>🕐 {language === 'he' ? 'כניסה אחרונה' : 'Last login'}: {lastStr}</span>
+                              {dur >= 1 && (
+                                <span>⏱️ {dur} {language === 'he' ? 'דק׳' : 'min'}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Expanded: activity details */}

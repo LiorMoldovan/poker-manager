@@ -15,6 +15,7 @@ import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraph
 import { cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
+import { canUserGenerateAI } from '../utils/aiEligibility';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { StyledSelect } from '../components/StyledSelect';
@@ -129,6 +130,8 @@ const GraphsScreen = () => {
 
   // AI Graph Insights state
   const { role, isOwner, isSuperAdmin } = usePermissions();
+  // Owner, or a non-owner admin who set a personal device key, may trigger AI.
+  const canUseAI = canUserGenerateAI(isOwner, role === 'admin' || isSuperAdmin || isOwner);
   const [insightsText, setInsightsText] = useState<string>('');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -324,9 +327,10 @@ const GraphsScreen = () => {
     });
   }, [allGames, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
-  // Auto-generate insights for owner only when cache is empty for this period
+  // Auto-generate insights when cache is empty for this period (owner, or
+  // a non-owner admin who set a personal device key).
   useEffect(() => {
-    if (!isOwner) return;
+    if (!canUseAI) return;
     if (insightsGenRef.current || insightsLoading) return;
     if (!getGeminiApiKey()) return;
     if (filteredGames.length === 0) return;
@@ -389,7 +393,7 @@ const GraphsScreen = () => {
         setInsightsLoading(false);
       }
     })();
-  }, [isOwner, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
+  }, [canUseAI, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
 
   const handleGenerateInsights = useCallback(async () => {
     if (insightsLoading) return;
@@ -1335,7 +1339,7 @@ const GraphsScreen = () => {
                 The friendly <AIKeyMissingNotice/> renders just below
                 instead, so the screen still explains what they're
                 missing and how to enable it. */}
-            {isOwner && !insightsLoading && filteredGames.length > 0 && getGeminiApiKey() && (
+            {canUseAI && !insightsLoading && filteredGames.length > 0 && getGeminiApiKey() && (
               <button
                 onClick={handleGenerateInsights}
                 style={{

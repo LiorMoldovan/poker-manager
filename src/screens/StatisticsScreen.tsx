@@ -7,6 +7,7 @@ import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSetti
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
 import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName, getGeminiApiKey } from '../utils/geminiAI';
+import { canUserGenerateAI } from '../utils/aiEligibility';
 import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
 import AIProgressBar from '../components/AIProgressBar';
@@ -38,7 +39,9 @@ const getNameFontSize = (name: string, baseRem: number): string => {
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { playerName: identityName, isOwner } = usePermissions();
+  const { playerName: identityName, isOwner, role, isSuperAdmin } = usePermissions();
+  // Owner, or a non-owner admin who set a personal device key, may trigger AI.
+  const canUseAI = canUserGenerateAI(isOwner, role === 'admin' || isSuperAdmin || isOwner);
   const { t, isRTL, language } = useTranslation();
   const locationState = location.state as { 
     viewMode?: ViewMode;
@@ -4474,7 +4477,7 @@ const StatisticsScreen = () => {
             // would 403 immediately, so don't bother firing — render the
             // friendly notice instead (see the keyMissing branch below).
             const hasAIKey = !!getGeminiApiKey();
-            const canGenerateAI = isOwner && hasAIKey;
+            const canGenerateAI = canUseAI && hasAIKey;
             const cached = getChronicleProfiles(periodKey);
             // Only auto-generate if there are games newer than the cached chronicle
             const hasNewData = latestGameDate && (!cached || latestGameDate.getTime() > new Date(cached.generatedAt).getTime());
@@ -4765,9 +4768,9 @@ const StatisticsScreen = () => {
                         no-key (config), wins over "just not generated
                         yet" (waiting). */}
                     {!hasAiStories && totalPeriodGames > 0 && (() => {
-                      // a) Localhost dev / undeployed env — owner-only
-                      //    state because only owner can trigger gen.
-                      if (isOwner && chronicleProxyDown) {
+                      // a) Localhost dev / undeployed env — only those who
+                      //    can trigger gen (owner or personal-key admin).
+                      if (canUseAI && chronicleProxyDown) {
                         return <AIKeyMissingNotice feature="generic" reason="proxyUnavailable" />;
                       }
                       // b) No Gemini key configured for this group.

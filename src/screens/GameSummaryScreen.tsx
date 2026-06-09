@@ -10,6 +10,7 @@ import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
+import { canUserGenerateAI } from '../utils/aiEligibility';
 import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
 import AIProgressBar from '../components/AIProgressBar';
@@ -59,6 +60,8 @@ const GameSummaryScreen = () => {
   const cameFromChipEntry = locationState?.from === 'chip-entry';
   const { role, playerName: identityName, isOwner, isSuperAdmin } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
+  // Owner, or a non-owner admin who set a personal device key, may trigger AI.
+  const canUseAI = canUserGenerateAI(isOwner, isAdmin);
   const highlightName = cameFromChipEntry ? null : identityName;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -543,7 +546,7 @@ const GameSummaryScreen = () => {
       // Use cached comment if available, otherwise generate and cache
       if (game.forecastComment) {
         setForecastComment(game.forecastComment);
-      } else if (isOwner && getGeminiApiKey()) {
+      } else if (canUseAI && getGeminiApiKey()) {
         setIsLoadingComment(true);
         try {
           const comment = await withAITiming('forecast_comparison', () => generateForecastComparison(game.forecasts!, sortedPlayers));
@@ -1989,7 +1992,7 @@ const GameSummaryScreen = () => {
               <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? t('summary.nightSummary') : t('summary.highlights')}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
-            {!collapsedSections.aiSummary && isOwner && aiSummary && (
+            {!collapsedSections.aiSummary && canUseAI && aiSummary && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -2000,7 +2003,7 @@ const GameSummaryScreen = () => {
                 </span>
               </div>
             )}
-            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && !aiKeyMissing && !aiProxyDown && (
+            {!collapsedSections.aiSummary && canUseAI && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && !aiKeyMissing && !aiProxyDown && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -2122,7 +2125,7 @@ const GameSummaryScreen = () => {
       {/* Visible to everyone when a comic exists, or to the owner (with completed game)
           so they can generate one. Live/chip-entry games hide the section entirely.
           PARKED via COMIC_FEATURE_ENABLED until output quality is acceptable. */}
-      {COMIC_FEATURE_ENABLED && (comicUrl || (isOwner && comicVibe && players.length > 0)) && (
+      {COMIC_FEATURE_ENABLED && (comicUrl || (canUseAI && comicVibe && players.length > 0)) && (
         <div style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button
@@ -2135,8 +2138,8 @@ const GameSummaryScreen = () => {
 
             {!collapsedSections.comic && (
               <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
-                {/* Owner action row — varies by state */}
-                {isOwner && !isGeneratingComic && !aiProxyDown && (
+                {/* Owner / personal-key admin action row — varies by state */}
+                {canUseAI && !isGeneratingComic && !aiProxyDown && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
                     {!comicUrl && getGeminiApiKey() && (
                       <span
@@ -2162,14 +2165,14 @@ const GameSummaryScreen = () => {
                 {/* No-API-key hint (admin only) — clickable card that
                     routes to Settings → Services. Member view skipped
                     because comic generation is owner-only anyway. */}
-                {isOwner && !comicUrl && !aiProxyDown && !getGeminiApiKey() && (
+                {canUseAI && !comicUrl && !aiProxyDown && !getGeminiApiKey() && (
                   <AIKeyMissingNotice feature="comic" accent="#A855F7" style={{ marginBottom: '0.5rem' }} />
                 )}
 
                 {/* Proxy unreachable in this environment — same situation
                     as the summary block above; one notice covers the
                     whole AI surface. */}
-                {isOwner && !comicUrl && aiProxyDown && (
+                {canUseAI && !comicUrl && aiProxyDown && (
                   <AIKeyMissingNotice feature="comic" reason="proxyUnavailable" style={{ marginBottom: '0.5rem' }} />
                 )}
 

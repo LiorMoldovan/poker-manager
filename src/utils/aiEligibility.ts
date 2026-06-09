@@ -51,6 +51,28 @@ export function isGeminiEnabledForCurrentGroup(): boolean {
   return isCurrentGroupOwner();
 }
 
+// Whether the current user may TRIGGER AI generation (forecast, game
+// summary, chronicle, graph insights, comic, live-game TTS pool).
+//
+//   · The owner always may — they manage the group key / platform path.
+//   · A non-owner admin may ONLY when they've set a personal *device*
+//     key (v6.15.0). That key lives in this browser's localStorage and
+//     bills the admin's own quota, so this never lets a non-owner admin
+//     silently spend the owner-managed group key. Without it the v6.15.0
+//     personal-key feature was inert — admins could save a key but every
+//     "generate" affordance stayed owner-only and hidden.
+//   · Members never generate.
+//
+// Callers pass their resolved role flags from `usePermissions()`; the
+// personal-key check reads localStorage here. Because the owner branch
+// short-circuits to `true`, swapping an `isOwner` gate for this helper
+// can only ADD the admin-with-personal-key case — it never removes
+// anything the owner could already see.
+export function canUserGenerateAI(isOwner: boolean, isAdmin: boolean): boolean {
+  if (isOwner) return true;
+  return isAdmin && hasLocalGeminiKey();
+}
+
 // True iff this group can call the ElevenLabs proxy successfully.
 // Same shape as `isGeminiEnabledForCurrentGroup`.
 export function isElevenLabsEnabledForCurrentGroup(): boolean {

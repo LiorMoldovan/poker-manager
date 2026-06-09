@@ -18,7 +18,7 @@ import {
 import { calculateChipTotal, calculateProfitLoss, cleanNumber, formatCurrency } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
-import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
+import { isGeminiEnabledForCurrentGroup, canUserGenerateAI } from '../utils/aiEligibility';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation, translateChipColor } from '../i18n';
 import PhotoCaptureModal from '../components/PhotoCaptureModal';
@@ -454,6 +454,8 @@ const ChipEntryScreen = () => {
   const navigate = useNavigate();
   const { role, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
+  // Owner, or a non-owner admin who set a personal device key, may trigger AI.
+  const canUseAI = canUserGenerateAI(isOwner, isAdmin);
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
@@ -1114,7 +1116,7 @@ const ChipEntryScreen = () => {
     deleteTTSPool(gameId);
 
     navigate(`/game-summary/${gameId}`, {
-      state: { from: 'chip-entry', autoAI: isOwner && !!getGeminiApiKey() },
+      state: { from: 'chip-entry', autoAI: canUseAI && !!getGeminiApiKey() },
     });
   };
 

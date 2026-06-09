@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.15.0';
+export const APP_VERSION = '6.16.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.16.0',
+    date: '2026-06-09',
+    changes: [
+      '🤖 Personal Gemini key now unlocks AI for admins',
+      '🕐 Activity list shows last-login time',
+    ],
+  },
   {
     version: '6.15.0',
     date: '2026-06-08',
