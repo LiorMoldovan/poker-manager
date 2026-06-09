@@ -31,7 +31,7 @@ import {
   savePlayerTraits,
   getGroupPushSubscribers,
 } from '../database/storage';
-import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult, API_CONFIGS } from '../utils/geminiAI';
 import { isGeminiEnabledForCurrentGroup } from '../utils/aiEligibility';
 import { getLocalGeminiKey, saveLocalGeminiKey } from '../utils/localApiKey';
 // v5.62.2 — chip-count feedback loop fully retired. The
@@ -131,6 +131,8 @@ const SettingsScreen = () => {
   // currently stored on the device.
   const [personalKeyDraft, setPersonalKeyDraft] = useState<string>(() => getLocalGeminiKey() || '');
   const [personalKeySaved, setPersonalKeySaved] = useState<boolean>(false);
+  const [personalKeyTesting, setPersonalKeyTesting] = useState<boolean>(false);
+  const [personalKeyTestResult, setPersonalKeyTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   // ElevenLabs TTS state (used by AI tab model tests)
   const [elKey, setElKey] = useState<string>('');
   const [elUsageLive, setElUsageLive] = useState<{ used: number; limit: number; remaining: number; resetDate: string } | null>(null);
@@ -2631,7 +2633,7 @@ const SettingsScreen = () => {
                   <input
                     type="password"
                     value={personalKeyDraft}
-                    onChange={e => { setPersonalKeyDraft(e.target.value); setPersonalKeySaved(false); }}
+                    onChange={e => { setPersonalKeyDraft(e.target.value); setPersonalKeySaved(false); setPersonalKeyTestResult(null); }}
                     placeholder={t('settings.ai.geminiPlaceholder')}
                     style={{
                       flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
@@ -2660,6 +2662,7 @@ const SettingsScreen = () => {
                         setPersonalKeyDraft('');
                         saveLocalGeminiKey('');
                         setPersonalKeySaved(false);
+                        setPersonalKeyTestResult(null);
                       }}
                       style={{
                         padding: '0.5rem 0.75rem', borderRadius: '6px',
@@ -2672,6 +2675,68 @@ const SettingsScreen = () => {
                     </button>
                   )}
                 </div>
+                {/* Real key test — saving alone never validates, so a non-owner
+                    admin needs a way to confirm Google actually accepts the key
+                    before relying on it. Mirrors the forecast's model order
+                    (API_CONFIGS) so "test passes" ⇔ "forecast will work". */}
+                {!!personalKeyDraft.trim() && (
+                  <button
+                    onClick={async () => {
+                      // Persist the draft first so the proxy's local-key lookup
+                      // tests exactly what's in the box (not a stale value).
+                      saveLocalGeminiKey(personalKeyDraft.trim());
+                      setPersonalKeySaved(true);
+                      setTimeout(() => setPersonalKeySaved(false), 2000);
+                      setPersonalKeyTesting(true);
+                      setPersonalKeyTestResult(null);
+                      let ok = false;
+                      let lastErr = '';
+                      for (const cfg of API_CONFIGS) {
+                        try {
+                          const res = await proxyGeminiGenerate(cfg.version, cfg.model, personalKeyDraft.trim(), {
+                            contents: [{ parts: [{ text: 'בדיקת מפתח: השב במילה אחת — תקין' }] }],
+                            generationConfig: { temperature: 0, maxOutputTokens: 16 },
+                          });
+                          if (res.ok) { ok = true; break; }
+                          const data = await res.json().catch(() => ({} as { error?: { message?: string } }));
+                          lastErr = data?.error?.message || `HTTP ${res.status}`;
+                          // Model unavailable for this key → try the next model.
+                          // Auth/key errors apply to every model → stop early.
+                          if (res.status === 404) continue;
+                          if (res.status === 400 || res.status === 401 || res.status === 403) break;
+                        } catch (err) {
+                          lastErr = err instanceof Error ? err.message : String(err);
+                        }
+                      }
+                      setPersonalKeyTestResult(
+                        ok
+                          ? { ok: true, message: t('settings.ai.personalKeyTestOk') }
+                          : { ok: false, message: `${t('settings.ai.personalKeyTestFail')}${lastErr ? ` — ${lastErr}` : ''}` },
+                      );
+                      setPersonalKeyTesting(false);
+                    }}
+                    disabled={personalKeyTesting}
+                    style={{
+                      marginTop: '0.6rem', padding: '0.45rem 0.75rem', borderRadius: '6px',
+                      border: '1px solid rgba(129,140,248,0.4)', background: 'rgba(129,140,248,0.12)',
+                      color: '#818cf8', fontSize: '0.75rem',
+                      cursor: personalKeyTesting ? 'default' : 'pointer', fontFamily: 'Outfit, sans-serif',
+                      opacity: personalKeyTesting ? 0.7 : 1,
+                    }}
+                  >
+                    {personalKeyTesting ? t('settings.ai.personalKeyTesting') : t('settings.ai.personalKeyTest')}
+                  </button>
+                )}
+                {personalKeyTestResult && (
+                  <div style={{
+                    fontSize: '0.72rem', marginTop: '0.5rem', lineHeight: 1.5,
+                    color: personalKeyTestResult.ok ? '#10B981' : '#ef4444',
+                    textAlign: isRTL ? 'right' : 'left',
+                    wordBreak: 'break-word',
+                  }}>
+                    {personalKeyTestResult.message}
+                  </div>
+                )}
                 {!!getLocalGeminiKey() && (
                   <div style={{ fontSize: '0.7rem', color: '#10B981', marginTop: '0.5rem', textAlign: isRTL ? 'right' : 'left' }}>
                     {t('settings.ai.personalKeyActive')}

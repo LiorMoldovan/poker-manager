@@ -1742,7 +1742,17 @@ const NewGameScreen = () => {
           // The <AIKeyMissingNotice/> beneath the forecast button row
           // already explains why "AI" was unavailable; surfacing a red
           // error on top of that would be redundant noise.
-          setAiError(null);
+          //
+          // BUT: if a key IS configured (personal device key or group key)
+          // and the server still said "no key", the key reached the server
+          // empty / was rejected at the gate. Staying silent here is what
+          // made a mis-saved personal key look like "the app ignores my
+          // key" — so surface a clear pointer to the Settings key test.
+          if (getGeminiApiKey()) {
+            setAiError(t('forecast.keyRejected'));
+          } else {
+            setAiError(null);
+          }
           setCachedForecasts(generateForecasts());
         } else if (err.message === 'AI_PROXY_UNAVAILABLE' || err.message?.includes('aiProxyUnavailable')) {
           // Localhost dev / undeployed env — same UX shape as NO_API_KEY:
@@ -1750,6 +1760,13 @@ const NewGameScreen = () => {
           // proxy-unavailable notice in the modal tell the story.
           setAiError(null);
           setAiProxyDown(true);
+          setCachedForecasts(generateForecasts());
+        } else if (err.message?.startsWith('FORECAST_FAILED:')) {
+          // Every model rejected the key (invalid / API disabled / restricted).
+          // Show the real Google reason + the "test your key" pointer, and
+          // fall back to the static forecast so the night still has one.
+          const reason = err.message.replace('FORECAST_FAILED:', '').trim();
+          setAiError(`${t('forecast.keyRejected')}${reason ? ` (${reason})` : ''}`);
           setCachedForecasts(generateForecasts());
         } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
           // Start countdown timer for rate limit

@@ -1648,6 +1648,13 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
   
   // Try each model until one works
   let forecastFallbackFrom: string | undefined;
+  // Track the most informative failure so the "all models failed" throw
+  // can tell a real key/auth problem (400/401/403 — every model hits it,
+  // retrying won't help) apart from a transient rate limit (429 — a 60s
+  // countdown retry is the right UX). Without this split a bad/restricted
+  // key surfaces as a misleading "rate limit, try again later" countdown.
+  let lastForecastError = '';
+  let lastForecastStatus = 0;
   for (const config of API_CONFIGS) {
     console.log(`   Trying: ${config.version}/${config.model}...`);
     
@@ -1697,12 +1704,17 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           const rlHeaders = readRateLimitHeaders(response);
           recordRateLimit(config.model, rlHeaders, errorMsg);
           if (!forecastFallbackFrom) forecastFallbackFrom = config.model;
+          lastForecastError = errorMsg;
+          lastForecastStatus = 429;
           continue;
         }
         if (response.status === 404) {
           if (!forecastFallbackFrom) forecastFallbackFrom = config.model;
+          if (!lastForecastError) { lastForecastError = errorMsg; lastForecastStatus = 404; }
           continue;
         }
+        lastForecastError = errorMsg;
+        lastForecastStatus = response.status;
         throw new Error(`API_ERROR: ${response.status} - ${errorMsg}`);
       }
       
@@ -2170,6 +2182,12 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
   
   // All models failed
   console.error('❌ All AI models failed');
+  // A clear key/auth error hits every model identically — surface the real
+  // Google reason (invalid key, API disabled, referrer/IP restriction) so
+  // the caller shows it instead of a pointless rate-limit countdown.
+  if (lastForecastError && (lastForecastStatus === 400 || lastForecastStatus === 401 || lastForecastStatus === 403)) {
+    throw new Error(`FORECAST_FAILED: ${lastForecastError}`);
+  }
   throw new Error('All AI models are rate limited or unavailable. Try again in a few minutes.');
 };
 
