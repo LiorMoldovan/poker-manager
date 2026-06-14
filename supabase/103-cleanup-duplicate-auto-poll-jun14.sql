@@ -1,0 +1,35 @@
+-- ============================================================
+-- Migration 103: One-off cleanup — duplicate auto-created poll (14/6)
+-- Run in Supabase SQL Editor (idempotent — uses WHERE on a fixed UUID).
+--
+-- Why: On 2026-06-14 the Sunday 09:20 auto-schedule fired TWICE for group
+--   d1998bed ("Poker Night"):
+--     * 853a8998-9994-43be-8977-89ff050492c7 @ 09:20:00.04 — the SERVER cron
+--       (fn_sweep_auto_create_polls, migration 097/098).
+--     * 83f40dc7-2d8b-447e-bd4d-0df62e4030e3 @ 09:20:17.80 — the CLIENT
+--       useEffect in ScheduleTab.tsx (migration 050), which fired ~17s later
+--       because its cache hadn't yet received the realtime echo of the
+--       server's sentinel stamp OR the server's new poll, so both client-side
+--       skip guards missed.
+--
+--   Root cause: a dual-writer race. The server cron and the client effect
+--   share one sentinel (schedule_auto_created_at) but realtime is
+--   eventually-consistent, not a lock. The accompanying code change retires
+--   the client path entirely so the server cron is the sole writer — this
+--   race cannot recur once that ships.
+--
+--   Both polls proposed identical dates (18/19/20 June, 21:00). The CLIENT
+--   poll (83f40dc7) accrued all 9 real votes; the SERVER poll (853a8998) has
+--   0 votes. We delete the empty one. Cascades on game_poll_dates.poll_id and
+--   game_poll_votes.poll_id (defined in 022-game-scheduling.sql) drop its 3
+--   proposed dates and 0 votes automatically.
+-- ============================================================
+
+DELETE FROM game_polls WHERE id = '853a8998-9994-43be-8977-89ff050492c7'::uuid;
+
+-- ============================================================
+-- DONE — Verify with:
+--   SELECT count(*) FROM game_polls      WHERE id = '853a8998-9994-43be-8977-89ff050492c7'; -- 0
+--   SELECT count(*) FROM game_poll_dates WHERE poll_id = '853a8998-9994-43be-8977-89ff050492c7'; -- 0
+--   SELECT id, status FROM game_polls    WHERE id = '83f40dc7-2d8b-447e-bd4d-0df62e4030e3'; -- still 'open'
+-- ============================================================

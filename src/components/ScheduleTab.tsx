@@ -149,70 +149,16 @@ const nextGameNightAfter = (anchorIso: string, gameNightDays: number[] | undefin
   return formatIso(d);
 };
 
-// Build the list of upcoming game-night dates for the auto-create-poll
-// flow (migration 050). One row per unique configured game-night day,
-// starting from the next occurrence (today included) and walking forward
-// through the upcoming week. Falls back to a single date when no
-// game-night days are configured. Each weekday appears once per 7-day
-// window, so the result naturally caps at gameNightDays.length entries.
-const buildAutoPollDates = (
-  gameNightDays: number[] | undefined,
-  time: string,
-): Array<{ proposedDate: string; proposedTime: string; location: string | null }> => {
-  const firstIso = nextGameNightIso(gameNightDays);
-  const days = gameNightDays && gameNightDays.length ? gameNightDays : null;
-  const result: Array<{ proposedDate: string; proposedTime: string; location: string | null }> = [
-    { proposedDate: firstIso, proposedTime: time, location: null },
-  ];
-  if (!days) return result;
-  let cursor = firstIso;
-  for (let i = 1; i < days.length; i++) {
-    cursor = nextGameNightAfter(cursor, days);
-    result.push({ proposedDate: cursor, proposedTime: time, location: null });
-  }
-  return result;
-};
-
 // Vote is treated as "changed" when voted_at - created_at exceeds this
 // threshold. Same tolerance used by VoterGroups for the "✎ עודכן" badge.
 // Matches the SQL-level reasoning in 029-schedule-vote-history.sql.
 const VOTE_CHANGE_DETECTION_MS = 5_000;
 
-// Auto-create-poll schedule helper: walk backwards from `now` to find the
-// most recent (day-of-week, HH:MM) occurrence at-or-before `now`. Used to
-// decide whether the weekly auto-create trigger has fired since the last
-// recorded `scheduleAutoCreatedAt`.
-//
-// Day-of-week semantics: 0=Sunday..6=Saturday (matches `Date#getDay()`).
-// Returns a millisecond timestamp.
-const computePreviousScheduledTrigger = (
-  day: number, time: string, now: Date
-): number => {
-  const [hStr = '18', mStr = '00'] = (time || '18:00').split(':');
-  const h = Math.max(0, Math.min(23, parseInt(hStr, 10) || 0));
-  const m = Math.max(0, Math.min(59, parseInt(mStr, 10) || 0));
-  const candidate = new Date(now);
-  candidate.setHours(h, m, 0, 0);
-  // Walk backwards at most 7 days until we land on the right weekday
-  // AND the candidate is at-or-before `now`. Hard-cap iterations as a
-  // belt-and-braces guard against weird locale/DST math.
-  for (let i = 0; i < 8; i++) {
-    if (candidate.getDay() === day && candidate.getTime() <= now.getTime()) {
-      return candidate.getTime();
-    }
-    candidate.setDate(candidate.getDate() - 1);
-  }
-  // Fallback: just return the original anchor (will compare false against
-  // every recent timestamp and effectively disable the trigger).
-  return candidate.getTime();
-};
-
-// Forward-walking sibling of computePreviousScheduledTrigger: returns the
-// NEXT (day-of-week, HH:MM) occurrence strictly after `now`. Used by the
-// "no active poll, next one auto-opens at…" teaser in the empty state.
-// If today matches the weekday but the time has already passed, this
-// rolls forward to the same weekday next week (correct — the auto-create
-// effect already fired for today's anchor).
+// Returns the NEXT (day-of-week, HH:MM) occurrence strictly after `now`.
+// Used by the "no active poll, next one auto-opens at…" teaser in the
+// empty state. If today matches the weekday but the time has already
+// passed, this rolls forward to the same weekday next week (correct —
+// the server cron already fired for today's anchor).
 //
 // Exported so the home dashboard's ScheduleCard empty-state can reuse
 // the exact same anchor computation. Single source of truth = home card
@@ -642,99 +588,22 @@ export default function ScheduleTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polls, dayBucket, completedGameIds]);
 
-  // ── Auto-create-poll schedule (migration 050) ──
-  // When the toggle is on and "now" is at-or-after the most recent
-  // (day, time) trigger AND we haven't already fired for that
-  // occurrence AND no active poll exists, open a new poll using the
-  // group's existing default-poll values.
+  // ── Auto-create-poll schedule ──
+  // The auto-create trigger lives SERVER-side in pg_cron
+  // (fn_sweep_auto_create_polls, migrations 097/098). It runs every minute,
+  // reads live DB state under a FOR UPDATE row lock, and is the SOLE writer
+  // of auto-opened polls.
   //
-  // Edge case: with multiple admins online simultaneously, both clients
-  // can read the same outdated `scheduleAutoCreatedAt` and both fire,
-  // resulting in two polls. Accepted for the initial implementation —
-  // the timestamp is set immediately on each fire so subsequent
-  // re-renders / re-mounts on the same client never re-trigger. A
-  // future server RPC could make this atomic.
-  const autoCreateInFlightRef = useRef(false);
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (autoCreateInFlightRef.current) return;
-    const settings = getSettings();
-    if (settings.scheduleAutoCreateEnabled !== true) return;
-
-    const day = settings.scheduleAutoCreateDay ?? 0;
-    const time = settings.scheduleAutoCreateTime ?? '18:00';
-    const triggerTs = computePreviousScheduledTrigger(day, time, new Date(now));
-    const lastFiredIso = settings.scheduleAutoCreatedAt;
-
-    // First-enable guard (v6.8.4): if `scheduleAutoCreatedAt` was never
-    // persisted, treat the toggle as "just enabled" — initialize the
-    // sentinel to NOW and WAIT for the next scheduled trigger. Without
-    // this, the effect interprets the previous Sunday's anchor as a
-    // missed fire and catches up immediately, opening a poll the user
-    // didn't intend (cost Lior 22 emails on 2026-05-21 11:00 IL when
-    // the duplicate-enqueue bug was also in play).
-    if (!lastFiredIso) {
-      saveSettings({ ...getSettings(), scheduleAutoCreatedAt: new Date().toISOString() });
-      return;
-    }
-
-    const lastFiredTs = Date.parse(lastFiredIso);
-    if (Number.isFinite(lastFiredTs) && lastFiredTs >= triggerTs) return;
-
-    // Active-poll guard — read polls fresh from the cache rather than
-    // relying on React state. On the very first commit after mount,
-    // `polls` (and therefore `activePolls`) is still the `useState([])`
-    // default because `reload()` has only just QUEUED a `setPolls(...)`
-    // update — the commit hasn't applied yet. Without a fresh read the
-    // guard sees an empty list and fires a duplicate poll even when an
-    // open poll already exists (regression observed 2026-05-24: poll
-    // 5ae9d65e auto-fired despite an active poll d37c7e7e from May 21).
-    // `getAllPolls()` is a synchronous in-memory cache read, so it
-    // reflects the current truth at the moment the effect runs.
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartTs = todayStart.getTime();
-    const hasLiveActivePoll = getAllPolls().some(
-      p => isActionablePoll(p) && !isPastDatedPoll(p, todayStartTs),
-    );
-    if (hasLiveActivePoll) {
-      saveSettings({ ...getSettings(), scheduleAutoCreatedAt: new Date().toISOString() });
-      return;
-    }
-
-    autoCreateInFlightRef.current = true;
-
-    (async () => {
-      try {
-        // Persist the timestamp BEFORE the create so a second admin's
-        // device that re-renders mid-flight doesn't also fire.
-        saveSettings({ ...getSettings(), scheduleAutoCreatedAt: new Date().toISOString() });
-        const fresh = getSettings();
-        const newPoll = await createPoll({
-          dates: buildAutoPollDates(
-            fresh.gameNightDays,
-            fresh.scheduleDefaultTime || '21:00',
-          ),
-          targetPlayerCount: fresh.scheduleDefaultTarget ?? 7,
-          expansionDelayHours: fresh.scheduleDefaultDelayHours ?? 48,
-          maybeHoldHours: fresh.scheduleDefaultMaybeHoldHours ?? 48,
-          defaultLocation: null,
-          allowMaybe: fresh.scheduleDefaultAllowMaybe !== false,
-          note: null,
-          source: 'auto',
-        });
-        // Notification dispatch: trg_enqueue_poll_notification fires on the
-        // INSERT and the worker drains the queue. No client-side fan-out.
-        void newPoll;
-        showMsg('success', t('schedule.autoCreated'));
-      } catch (err) {
-        console.warn('auto-create poll failed:', err);
-      } finally {
-        autoCreateInFlightRef.current = false;
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, activePolls.length, polls, dayBucket, now]);
+  // The old client-side useEffect (migration 050) was retired in v6.x: it
+  // shared the `schedule_auto_created_at` sentinel with the cron but gated
+  // on the client's eventually-consistent cache. When an admin had this
+  // screen open at the configured minute, the client's cache hadn't yet
+  // received the realtime echo of either the cron's sentinel stamp OR its
+  // new poll, so both skip guards missed and the client opened a SECOND
+  // identical poll (~17s after the cron's). That's a dual-writer race
+  // realtime can't close — realtime is eventually-consistent, not a lock.
+  // The cron alone is race-free, so the client path is gone entirely.
+  // First-enable sentinel init is also handled server-side by the cron.
 
   // ── Vote handler ──
   const handleVote = async (poll: GamePoll, dateId: string, response: RsvpResponse) => {

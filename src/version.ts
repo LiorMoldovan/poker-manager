@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.17.1';
+export const APP_VERSION = '6.17.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.17.2',
+    date: '2026-06-14',
+    changes: [
+      '🗓 Auto-schedule no longer opens the poll twice',
+      '🛡 Server cron is now the only poll opener',
+    ],
+  },
   {
     version: '6.17.1',
     date: '2026-06-10',
