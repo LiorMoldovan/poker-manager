@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.17.2';
+export const APP_VERSION = '6.18.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.18.0',
+    date: '2026-06-15',
+    changes: [
+      '🎟 Guests invited only when a seat is free',
+      '🛡 A regular\'s "maybe" holds a seat first',
+      '🤫 Dropped the "reserved for regulars" note',
+      '🔔 New-vote push differs from a vote change',
+    ],
+  },
   {
     version: '6.17.2',
     date: '2026-06-14',

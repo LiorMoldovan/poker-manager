@@ -463,7 +463,7 @@ function buildVoteChangeMessage(
   const dateLabel = formatHebrewDateTime(dateRow.proposed_date, dateRow.proposed_time);
   const text = `${player.name} ${verb}: ${responseLabel[response] || response} — ${dateLabel}`;
   return {
-    pushTitle: '🗳 שינוי בהצבעה',
+    pushTitle: isNew ? '🗳 הצבעה חדשה' : '🗳 שינוי בהצבעה',
     pushBody: text,
     emailSubject: `🗳 ${player.name} ${verb}`,
     emailBody:

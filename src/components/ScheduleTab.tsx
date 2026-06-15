@@ -650,6 +650,11 @@ export default function ScheduleTab() {
           }
         }
       }
+      // A vote can free a seat for guests (e.g. a regular's 'maybe' → 'no',
+      // migration 104), which may now let the poll open to guests. Re-run the
+      // sweep so expand_game_poll is re-evaluated immediately instead of
+      // waiting for the next tab mount.
+      runSchedulerSweep().catch(err => console.warn('runSchedulerSweep failed:', err));
     } catch (e) {
       showMsg('error', handleRpcError(e));
     }
@@ -3703,12 +3708,13 @@ function EditPollModal(props: EditPollModalProps) {
   const showExpansionDelay = !poll.expandedAt
     && (poll.status === 'open' || poll.status === 'confirmed')
     && hasGuestTier;
-  // The maybe-hold window runs from expansion, so unlike the expansion
-  // delay it stays adjustable AFTER the poll has expanded — shortening it
-  // can release held seats immediately, lengthening extends them. Show it
-  // on any active poll in a group that has a guest tier.
-  const showMaybeHold = hasGuestTier
-    && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed');
+  // The maybe-hold window now gates opening to guests (migration 104) and is
+  // measured from creation, so it only matters BEFORE the poll opens to
+  // guests. Once expanded_at is set the door is already open and the window
+  // is moot — hide it, same as the expansion delay.
+  const showMaybeHold = !poll.expandedAt
+    && (poll.status === 'open' || poll.status === 'confirmed')
+    && hasGuestTier;
 
   const handleSubmit = async () => {
     if (submitting) return;

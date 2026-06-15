@@ -134,24 +134,25 @@ export default function PollCard(props: PollCardProps) {
   // Migration 039 admin-toggleable soft lock.
   const isVotingLocked = !!poll.votingLockedAt;
 
-  // Migration 101 — permanent-maybe seat hold. Once the poll has opened to
-  // guests (expandedAt set), every PERMANENT who voted 'maybe' reserves a
-  // seat against guests for `maybeHoldHours` (from expansion). While the
-  // window is live, a guest can take a seat only if yes + held < target.
-  // Mirrors cast_poll_vote's server check so the disabled-button reasoning
-  // matches what the server rejects ('seat_held'). Permanents-only groups
-  // never reach this (no guest tier → no expansion).
-  const holdsActive = !!poll.expandedAt
-    && now < new Date(poll.expandedAt).getTime() + (poll.maybeHoldHours ?? 48) * 3600_000;
-  const holdReleaseAt = poll.expandedAt
-    ? new Date(poll.expandedAt).getTime() + (poll.maybeHoldHours ?? 48) * 3600_000
-    : null;
+  // Migration 104 — permanent-maybe seat hold (guest cap). A PERMANENT who
+  // voted 'maybe' reserves a seat against guests until the cap
+  // (createdAt + expansionDelayHours + maybeHoldHours). While the hold is
+  // live, a guest can take a seat only if yes + held < target. Mirrors
+  // cast_poll_vote's server check so the disabled-button reasoning matches
+  // what the server rejects ('seat_held'). The clock runs from creation (not
+  // expansion) because a fully-held poll deliberately doesn't expand yet, so
+  // an expansion-based clock would never release. Permanents-only groups
+  // never reach this (no guest tier → the cap never gates anyone).
+  const holdsActive = now < new Date(poll.createdAt).getTime()
+    + (poll.expansionDelayHours + (poll.maybeHoldHours ?? 48)) * 3600_000;
   const viewerIsGuest = !!currentPlayer && currentPlayer.type !== 'permanent';
   // Per-date count of permanent players currently holding a seat via 'maybe'.
+  // Disabled dates never hold seats (their votes don't count toward target).
   const heldByDate = useMemo(() => {
     const m = new Map<string, number>();
     if (!holdsActive) return m;
     for (const d of poll.dates) {
+      if (d.disabledAt) { m.set(d.id, 0); continue; }
       let held = 0;
       for (const v of poll.votes) {
         if (v.dateId !== d.id || v.response !== 'maybe') continue;
@@ -178,8 +179,11 @@ export default function PollCard(props: PollCardProps) {
       return { allowed: false, reason: 'voting_locked' as const };
     }
     if (currentPlayer.type !== 'permanent' && !poll.expandedAt) {
+      // Cap = createdAt + expansionDelay + maybeHold (migration 104). Guests
+      // stay blocked until the poll actually opens to them (expandedAt set,
+      // which only happens once a seat is genuinely free) or the cap passes.
       const expandsAt = new Date(poll.createdAt).getTime()
-        + poll.expansionDelayHours * 3600_000;
+        + (poll.expansionDelayHours + (poll.maybeHoldHours ?? 48)) * 3600_000;
       if (now < expandsAt) {
         return { allowed: false, reason: 'tier_not_allowed' as const };
       }
@@ -187,7 +191,8 @@ export default function PollCard(props: PollCardProps) {
     return { allowed: true as const };
   }, [
     poll.status, poll.expandedAt, poll.createdAt,
-    poll.expansionDelayHours, currentPlayer, isVotingLocked, now,
+    poll.expansionDelayHours, poll.maybeHoldHours,
+    currentPlayer, isVotingLocked, now,
   ]);
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
@@ -897,33 +902,6 @@ export default function PollCard(props: PollCardProps) {
                     {s.yes}/{poll.targetPlayerCount}
                   </span>
                 </div>
-
-                {/* Permanent-maybe seat hold (migration 101): while the hold
-                    window is live, surface how many seats are reserved for
-                    regulars and when they release, so guests understand why
-                    a "not full yet" poll won't let them grab a seat. */}
-                {(() => {
-                  const held = heldByDate.get(d.id) ?? 0;
-                  if (!hasGuestTier || !holdsActive || held <= 0) return null;
-                  let until = '';
-                  if (holdReleaseAt) {
-                    const dt = new Date(holdReleaseAt);
-                    const day = dt.getDate();
-                    const mon = dt.getMonth() + 1;
-                    const hh = String(dt.getHours()).padStart(2, '0');
-                    const mm = String(dt.getMinutes()).padStart(2, '0');
-                    until = ` · ${t('schedule.heldUntil')} ${day}/${mon} ${hh}:${mm}`;
-                  }
-                  return (
-                    <div style={{
-                      fontSize: 11, color: '#eab308', marginBottom: 8,
-                      display: 'flex', alignItems: 'center', gap: 4,
-                    }}>
-                      <span aria-hidden>🔒</span>
-                      <span>{t('schedule.heldSeats', { count: held })}{until}</span>
-                    </div>
-                  );
-                })()}
 
                 {/* RSVP buttons + admin proxy.
                     Active vote is rendered with a bolder coloured border + a
