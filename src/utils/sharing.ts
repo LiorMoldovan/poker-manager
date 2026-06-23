@@ -1,5 +1,5 @@
 import { GamePlayer, Settlement, SkippedTransfer, ChipValue } from '../types';
-import { cleanNumber } from './calculations';
+import { cleanNumber, formatChips } from './calculations';
 
 // Calculate total chips for a player. Migration 080 — branch on
 // entryMode so quick-total players (chip_counts = {}) report their
@@ -57,8 +57,7 @@ export const generateGameSummary = (
       ? `\u200E+${cleanNumber(player.profit)}` 
       : `-${cleanNumber(Math.abs(player.profit))}`;
     
-    const chips = chipValues ? Math.round(getTotalChipsForPlayer(player, chipValues) / 1000) : 0;
-    const chipsText = chipValues ? `${chips}k` : '';
+    const chipsText = chipValues ? formatChips(getTotalChipsForPlayer(player, chipValues)) : '';
     
     summary += `${LTR}│ ${player.playerName}${medal}\n`;
     summary += `${LTR}│    ${profitText} • ${chipsText} chips • ${player.rebuys} buyins\n`;

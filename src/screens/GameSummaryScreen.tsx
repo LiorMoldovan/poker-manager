@@ -7,7 +7,7 @@ import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, ge
 import { generateGameComic, MAX_REGENERATIONS_PER_GAME, ComicStageError } from '../utils/comicGeneration';
 import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
-import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf, formatChips } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import { canUserGenerateAI } from '../utils/aiEligibility';
@@ -1531,7 +1531,7 @@ const GameSummaryScreen = () => {
                       {index === 2 && player.profit > 0 && ' 🥉'}
                     </td>
                     <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem', color: '#94a3b8' }}>
-                      {(getTotalChips(player) / 1000).toFixed(0)}k
+                      {formatChips(getTotalChips(player))}
                     </td>
                     <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem', color: '#94a3b8' }}>
                       {player.rebuys}

@@ -352,6 +352,20 @@ export const formatCurrency = (amount: number): string => {
   return `\u200E${sign}${cleanNumber(Math.abs(amount))}`;
 };
 
+// Adaptive chip-count display. The naive `Math.round(value / 1000) + 'k'`
+// collapses small stacks misleadingly: 400 → "0k", 500 → "1k". That reads
+// fine for groups whose chips run in the tens of thousands, but it's wrong
+// for low-denomination games where a 200-chip buy-in matters. So scale the
+// precision to the magnitude: raw count below 1k, one decimal between 1k
+// and 10k (4,600 → "4.6k", 2,000 → "2k"), whole k above that (46,000 → "46k").
+export const formatChips = (value: number): string => {
+  if (!value || value <= 0) return '0';
+  if (value < 1000) return Math.round(value).toString();
+  const k = value / 1000;
+  if (value < 10000) return `${Math.round(k * 10) / 10}k`;
+  return `${Math.round(k)}k`;
+};
+
 export const formatHebrewHalf = (half: number, year: number): string => {
   return `חציון ${half === 1 ? 'ראשון' : 'שני'} ${year}`;
 };

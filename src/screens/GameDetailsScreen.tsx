@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement, formatChips } from '../utils/calculations';
 import { getComboHistory, ComboHistory } from '../utils/comboHistory';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useTranslation } from '../i18n';
@@ -67,13 +67,6 @@ const GameDetailsScreen = () => {
     // Fallback to finalValue (legacy rows; in money, not chips, but
     // preserves today's behavior for those edge cases).
     return player.finalValue;
-  };
-
-  // Format chips for display
-  const formatChips = (value: number): string => {
-    if (value <= 0) return '0';
-    if (value >= 1000) return `${Math.round(value / 1000)}k`;
-    return Math.round(value).toString();
   };
 
   const loadData = useCallback(() => {
