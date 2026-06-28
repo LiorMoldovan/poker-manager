@@ -76,7 +76,7 @@ CREATE TABLE game_players (
   game_id     UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   player_id   UUID NOT NULL REFERENCES players(id),
   player_name TEXT NOT NULL,
-  rebuys      INTEGER NOT NULL DEFAULT 1 CHECK (rebuys >= 0),
+  rebuys      NUMERIC NOT NULL DEFAULT 1 CHECK (rebuys >= 0), -- numeric since mig 105 (half buy-ins, e.g. 3.5)
   chip_counts JSONB DEFAULT '{}'::jsonb,
   final_value NUMERIC NOT NULL DEFAULT 0,
   profit      NUMERIC NOT NULL DEFAULT 0,
