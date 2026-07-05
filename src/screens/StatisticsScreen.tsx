@@ -2097,6 +2097,15 @@ const StatisticsScreen = () => {
   // numbers cleanly and halves with a single decimal.
   const fmtRebuys = (n: number): string => Number.isInteger(n) ? String(n) : n.toFixed(1);
 
+  // Buy-in table cells: like cleanNumber (LRM guard + locale grouping)
+  // but half-aware — buy-ins are multiples of 0.5, so a half-buy-in
+  // must show as "9.5", not round up to "10". Never negative here.
+  const fmtBuyinsCell = (n: number): string => {
+    const whole = Math.trunc(n);
+    const hasHalf = Math.abs(n - whole) >= 0.05;
+    return `\u200E${whole.toLocaleString('en-US')}${hasHalf ? '.5' : ''}`;
+  };
+
   // Single-line row for the rebuy records (mirrors the one-line layout
   // used by the other record rows). `isPlayer` rows highlight the
   // current user's name; night rows pass a date as the leader.
@@ -3909,20 +3918,20 @@ const StatisticsScreen = () => {
                               padding: '0.3rem 0.2rem',
                               color: 'var(--text-muted)'
                             }}>
-                              {cleanNumber(player.totalBuyins)}
+                              {fmtBuyinsCell(player.totalBuyins)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem',
                               color: 'var(--text-muted)'
                             }}>
-                              {cleanNumber(Math.max(0, player.totalBuyins - player.gamesPlayed))}
+                              {fmtBuyinsCell(Math.max(0, player.totalBuyins - player.gamesPlayed))}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem'
                             }}>
-                              {cleanNumber(player.maxBuyinsInGame)}
+                              {fmtBuyinsCell(player.maxBuyinsInGame)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
