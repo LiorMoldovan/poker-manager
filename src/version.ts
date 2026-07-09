@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.18.3';
+export const APP_VERSION = '6.19.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.19.0',
+    date: '2026-07-09',
+    changes: [
+      '📊 Buy-in avg & max count rebuys only',
+      '📅 Pick first or second half per table',
+      '📅 Dropdown hides the current period',
+    ],
+  },
   {
     version: '6.18.3',
     date: '2026-07-05',

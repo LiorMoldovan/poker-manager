@@ -176,7 +176,10 @@ const StatisticsScreen = () => {
   // (mirrors the global period). When the user picks an explicit
   // preset, that table sticks to it even if the global period changes.
   // Same id space as `tableActiveOverrides`.
-  type TablePeriodPreset = 'all' | 'year' | 'half' | 'month';
+  // `half` = relative "this half" (kept for backward compat). `h1`/`h2`
+  // are explicit first/second half of the CURRENT year, so both halves
+  // are always pickable from the per-table dropdown regardless of today.
+  type TablePeriodPreset = 'all' | 'year' | 'half' | 'h1' | 'h2' | 'month';
   type PeriodOverrideTableId = ActiveOverrideTableId;
   const [tablePeriodOverrides, setTablePeriodOverrides] = useState<Partial<Record<PeriodOverrideTableId, TablePeriodPreset>>>({});
   // Sentinel value for the period dropdown's "inherit from global"
@@ -209,6 +212,8 @@ const StatisticsScreen = () => {
       if (month <= 6) return { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
       return { start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) };
     }
+    if (preset === 'h1') return { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
+    if (preset === 'h2') return { start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) };
     // month
     const m = month - 1;
     const lastDay = new Date(year, m + 1, 0).getDate();
@@ -1718,6 +1723,8 @@ const StatisticsScreen = () => {
       const halfNum = month <= 6 ? 1 : 2;
       return language === 'he' ? formatHebrewHalf(halfNum, year) : `H${halfNum} ${year}`;
     }
+    if (preset === 'h1') return language === 'he' ? formatHebrewHalf(1, year) : `H1 ${year}`;
+    if (preset === 'h2') return language === 'he' ? formatHebrewHalf(2, year) : `H2 ${year}`;
     return language === 'he'
       ? `${HEBREW_MONTH_NAMES[month - 1]} ${year}`
       : `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(year, month - 1, 1))} ${year}`;
@@ -1752,13 +1759,35 @@ const StatisticsScreen = () => {
   const renderPeriodOverrideDropdown = (id: PeriodOverrideTableId) => {
     const override = tablePeriodOverrides[id];
     const buttonLabel = override ? labelForPeriodPreset(override) : getTimeframeLabel();
+    const currentValue = override ?? PERIOD_INHERIT_SENTINEL;
+    // Hide whatever period is currently EFFECTIVE for this table — it's
+    // already active, so only the OTHER options are actionable. When an
+    // override is set we hide that preset. When the table inherits the
+    // global period we hide both the "inherit" row AND the preset that
+    // maps to the global period (only if it lands in the current
+    // year/month, since these presets are anchored to today).
+    const hidden = new Set<string>([currentValue]);
+    if (!override) {
+      const now = new Date();
+      const curYear = now.getFullYear();
+      const curMonth = now.getMonth() + 1;
+      const globalPreset: TablePeriodPreset | null =
+        timePeriod === 'all' ? 'all'
+        : timePeriod === 'year' ? (selectedYear === curYear ? 'year' : null)
+        : timePeriod === 'h1' ? (selectedYear === curYear ? 'h1' : null)
+        : timePeriod === 'h2' ? (selectedYear === curYear ? 'h2' : null)
+        : timePeriod === 'month' ? (selectedYear === curYear && selectedMonth === curMonth ? 'month' : null)
+        : null;
+      if (globalPreset) hidden.add(globalPreset);
+    }
     const options: Array<{ value: string; label: string }> = [
       { value: PERIOD_INHERIT_SENTINEL, label: t('stats.periodCurrent') },
       { value: 'all',   label: `📅 ${labelForPeriodPreset('all')}` },
       { value: 'year',  label: `📅 ${labelForPeriodPreset('year')}` },
-      { value: 'half',  label: `📅 ${labelForPeriodPreset('half')}` },
+      { value: 'h1',    label: `📅 ${labelForPeriodPreset('h1')}` },
+      { value: 'h2',    label: `📅 ${labelForPeriodPreset('h2')}` },
       { value: 'month', label: `📅 ${labelForPeriodPreset('month')}` },
-    ];
+    ].filter(o => !hidden.has(o.value));
     return (
       <StyledSelect<string>
         value={override ?? PERIOD_INHERIT_SENTINEL}
@@ -3887,7 +3916,12 @@ const StatisticsScreen = () => {
                     </thead>
                     <tbody>
                       {rebuyTableData.map((player, index) => {
-                        const avgBuyins = player.totalBuyins / player.gamesPlayed;
+                        // Avg + Max count REBUYS only (exclude the mandatory
+                        // first buy-in of each game), matching the "חוזרות"
+                        // column. The "סה"כ" column keeps the first buy-in.
+                        const totalRebuysOnly = Math.max(0, player.totalBuyins - player.gamesPlayed);
+                        const avgRebuys = player.gamesPlayed > 0 ? totalRebuysOnly / player.gamesPlayed : 0;
+                        const maxRebuysInGame = Math.max(0, player.maxBuyinsInGame - 1);
                         const isMe = identityName && player.playerName === identityName;
                         return (
                           <tr 
@@ -3911,7 +3945,7 @@ const StatisticsScreen = () => {
                               padding: '0.3rem 0.2rem',
                               fontWeight: '600'
                             }}>
-                              {avgBuyins.toFixed(1)}
+                              {avgRebuys.toFixed(1)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
@@ -3931,7 +3965,7 @@ const StatisticsScreen = () => {
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem'
                             }}>
-                              {fmtBuyinsCell(player.maxBuyinsInGame)}
+                              {fmtBuyinsCell(maxRebuysInGame)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
