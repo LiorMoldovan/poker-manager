@@ -752,12 +752,15 @@ const GameSummaryScreen = () => {
       // --- Build combined entries ---
 
       if (periodBestWins.length > 0) {
+        // PERSONAL best-in-period, NOT a group record. Label must say
+        // "אישי" so the AI never upgrades it into a group/period record
+        // (e.g. a player's best H2 win is not "the H2 win record").
         const parts = periodBestWins.map(w => `${w.name} (\u200E+${cleanNumber(w.profit)})`);
-        bank.push({ emoji: '🏆', label: `שיא נצחון ב${pLabel}`, detail: parts.join(', '), priority: 2 });
+        bank.push({ emoji: '🏆', label: `שיא אישי — נצחון ב${pLabel}`, detail: parts.join(', '), priority: 2 });
       }
       if (periodWorstLosses.length > 0) {
         const parts = periodWorstLosses.map(w => `${w.name} (${formatCurrency(w.profit)})`);
-        bank.push({ emoji: '📉', label: `שיא הפסד ב${pLabel}`, detail: parts.join(', '), priority: 3 });
+        bank.push({ emoji: '📉', label: `שיא אישי — הפסד ב${pLabel}`, detail: parts.join(', '), priority: 3 });
       }
       if (streaks.length > 0) {
         streaks.sort((a, b) => b.streak - a.streak);
@@ -1101,6 +1104,74 @@ const GameSummaryScreen = () => {
             }
           } else if (newRank > 0 && oldRank > 0 && newRank > oldRank) {
             aiRankingShifts.push(`${stat.playerName} ירד ממקום ${oldRank} למקום ${newRank}`);
+          }
+        }
+      } catch {}
+
+      // Full-year (season) + all-time rank passes caused by tonight, and
+      // long ACTIVE streaks — computed on the FULL tables, not just the
+      // half. Overtaking a rival in the season/all-time standings, or
+      // riding a long streak, are the milestones players care about most,
+      // yet the half-year logic above misses them: a season/all-time pass
+      // never registers in a half-only table, and a 10-game streak that
+      // spans the half boundary shows as ~3 (below the display threshold)
+      // and gets dropped. We only report passes for players who played
+      // tonight (the pass was caused by tonight's result).
+      try {
+        const allPlayersForTable = getAllPlayers();
+        const isRealPlayer = (pid: string) => {
+          const pl = allPlayersForTable.find(p => p.id === pid);
+          return !!pl && (pl.type === 'permanent' || pl.type === 'permanent_guest' || pl.type === 'guest');
+        };
+        const detectBigPasses = (
+          statsArr: { playerId: string; playerName: string; totalProfit: number; gamesPlayed: number }[],
+          gamesInWindow: number,
+          tableLabel: string,
+        ): string[] => {
+          const threshold = Math.max(1, Math.ceil(gamesInWindow * 0.33));
+          const eligible = statsArr.filter(s => isRealPlayer(s.playerId) && (s.gamesPlayed >= threshold || tonightPlayerIds.has(s.playerId)));
+          const after = [...eligible].sort((a, b) => b.totalProfit - a.totalProfit);
+          const before = eligible
+            .map(s => {
+              const tp = sortedPlayers.find(p => p.playerId === s.playerId);
+              return { playerId: s.playerId, playerName: s.playerName, totalProfit: s.totalProfit - (tp ? tp.profit : 0) };
+            })
+            .sort((a, b) => b.totalProfit - a.totalProfit);
+          const out: string[] = [];
+          for (const tp of sortedPlayers) {
+            const newRank = after.findIndex(s => s.playerId === tp.playerId) + 1;
+            const oldRank = before.findIndex(s => s.playerId === tp.playerId) + 1;
+            if (newRank > 0 && oldRank > 0 && newRank < oldRank) {
+              const passed = before.slice(newRank - 1, oldRank - 1).filter(s => s.playerId !== tp.playerId).map(s => s.playerName);
+              if (passed.length > 0) {
+                out.push(`${tp.playerName} עקף את ${passed.join(' ואת ')} ב${tableLabel} (ממקום ${oldRank} למקום ${newRank})`);
+              }
+            }
+          }
+          return out;
+        };
+
+        const yearStartForPass = new Date(periodYear, 0, 1);
+        const yearEndForPass = new Date(periodYear, 11, 31, 23, 59, 59);
+        const yearStatsForPass = getPlayerStats({ start: yearStartForPass, end: yearEndForPass });
+        const yearGamesCount = cachedAllGames.filter(g => {
+          if (g.status !== 'completed') return false;
+          const gd = new Date(g.date || g.createdAt);
+          return gd >= yearStartForPass && gd <= yearEndForPass;
+        }).length;
+        const allTimeStatsForPass = getPlayerStats();
+        const allGamesCount = cachedAllGames.filter(g => g.status === 'completed').length;
+
+        aiRankingShifts.push(...detectBigPasses(yearStatsForPass, yearGamesCount, `טבלת ${periodYear}`));
+        aiRankingShifts.push(...detectBigPasses(allTimeStatsForPass, allGamesCount, 'טבלת כל הזמנים'));
+
+        for (const tp of sortedPlayers) {
+          const st = allTimeStatsForPass.find(s => s.playerId === tp.playerId);
+          if (!st) continue;
+          if (st.currentStreak >= 5) {
+            aiStreaks.push(`${tp.playerName} — רצף פעיל של ${st.currentStreak} נצחונות (כל הזמנים)`);
+          } else if (st.currentStreak <= -5) {
+            aiStreaks.push(`${tp.playerName} — רצף פעיל של ${Math.abs(st.currentStreak)} הפסדים (כל הזמנים)`);
           }
         }
       } catch {}

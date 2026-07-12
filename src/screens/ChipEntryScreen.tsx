@@ -1009,6 +1009,18 @@ const ChipEntryScreen = () => {
 
   const allPlayersCounted = completedPlayers.size === players.length;
 
+  // Chip reconciliation verdict for the bottom-bar banner: did the
+  // counter tally MORE (עודף) or FEWER (חסר) chips than the expected
+  // pot? "Short" is only a real shortage once everyone is counted —
+  // before that the total is naturally below expected (not everyone
+  // entered yet), so we must NOT cry "חסר" mid-count. "Over" is always
+  // worth flagging (an over-count can't be explained by incompleteness).
+  const chipReconcileDelta = totalChipPoints - expectedChipPoints;
+  const isChipCountOver = chipReconcileDelta > 0;
+  const showChipReconcile = totalChipPoints > 0 && (allPlayersCounted || isChipCountOver);
+  const chipReconcileMoney = formatCurrency(Math.abs(chipReconcileDelta) * valuePerChip);
+  const chipReconcileChips = Math.abs(chipReconcileDelta).toLocaleString();
+
   const handleCalculate = async () => {
     if (!gameId || isFinalizing) return;
 
@@ -2193,6 +2205,35 @@ const ChipEntryScreen = () => {
         boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
         borderTop: `3px solid ${getProgressColor(progressPercentage)}`
       }}>
+        {/* Reconciliation verdict — the headline that tells the person
+            counting, in plain words, whether the tally came out OVER
+            (עודף) or UNDER (חסר) the expected pot, with the exact chip
+            and money gap. Shown once everyone is counted, or the moment
+            the running total exceeds expected (always a red flag). */}
+        {showChipReconcile && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.4rem',
+            padding: '0.55rem 0.6rem',
+            marginBottom: '0.5rem',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            fontWeight: 700,
+            textAlign: 'center',
+            lineHeight: 1.35,
+            background: isBalanced ? 'rgba(34,197,94,0.15)' : isChipCountOver ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+            border: `1px solid ${isBalanced ? 'rgba(34,197,94,0.45)' : isChipCountOver ? 'rgba(239,68,68,0.45)' : 'rgba(245,158,11,0.45)'}`,
+            color: isBalanced ? '#22c55e' : isChipCountOver ? '#ef4444' : '#f59e0b',
+          }}>
+            {isBalanced
+              ? t('chips.reconcileBalanced')
+              : isChipCountOver
+                ? t('chips.reconcileOver', { chips: chipReconcileChips, money: chipReconcileMoney })
+                : t('chips.reconcileUnder', { chips: chipReconcileChips, money: chipReconcileMoney })}
+          </div>
+        )}
         {/* Progress bar — explicitly LTR so the fill grows from
             left to right (universal convention) regardless of the
             ambient RTL direction. Without this, the inner fill

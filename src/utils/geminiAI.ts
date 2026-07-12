@@ -606,10 +606,15 @@ export const generateAIForecasts = async (
     throw new Error('NO_API_KEY');
   }
 
-  // Calculate ALL-TIME RECORDS for the group
-  const allTimeRecords: string[] = [];
+  // Standout stats AMONG TONIGHT'S PLAYERS ONLY — these are NOT group
+  // records. The true group-wide all-time rank is fed per-player below
+  // (via globalRankings → "דירוג כללי"). Labeling these as absolute
+  // "records" would contradict that and could crown a non-leader (e.g.
+  // when the real all-time leader isn't playing tonight), so every line
+  // is explicitly scoped to "מבין משתתפי הערב".
+  const participantHighlights: string[] = [];
   
-  // Find record holders among tonight's players
+  // Find the standouts among tonight's players
   const sortedByTotalProfit = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
   const sortedByBestWin = [...players].sort((a, b) => b.bestWin - a.bestWin);
   const sortedByWorstLoss = [...players].sort((a, b) => a.worstLoss - b.worstLoss);
@@ -617,49 +622,43 @@ export const generateAIForecasts = async (
   const sortedByGames = [...players].sort((a, b) => b.gamesPlayed - a.gamesPlayed);
   const sortedByAvg = [...players].filter(p => p.gamesPlayed >= 3).sort((a, b) => b.avgProfit - a.avgProfit);
   
-  // Highest all-time profit
   if (sortedByTotalProfit[0]?.totalProfit > 0) {
-    allTimeRecords.push(`🥇 All-Time Profit Leader: ${sortedByTotalProfit[0].name} with \u200E+${sortedByTotalProfit[0].totalProfit} total`);
+    participantHighlights.push(`🥇 הכי רווחי מבין משתתפי הערב: ${sortedByTotalProfit[0].name} (סה"כ \u200E+${sortedByTotalProfit[0].totalProfit})`);
   }
   
-  // Biggest single-night win
   if (sortedByBestWin[0]?.bestWin > 0) {
-    allTimeRecords.push(`💰 Biggest Single-Night Win: ${sortedByBestWin[0].name} once won \u200E+${sortedByBestWin[0].bestWin}`);
+    participantHighlights.push(`💰 הניצחון הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByBestWin[0].name} (\u200E+${sortedByBestWin[0].bestWin})`);
   }
   
-  // Biggest single-night loss
   if (sortedByWorstLoss[0]?.worstLoss < 0) {
-    allTimeRecords.push(`📉 Biggest Single-Night Loss: ${sortedByWorstLoss[0].name} once lost ${sortedByWorstLoss[0].worstLoss}`);
+    participantHighlights.push(`📉 ההפסד הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByWorstLoss[0].name} (${sortedByWorstLoss[0].worstLoss})`);
   }
   
-  // Highest win rate (min 5 games)
   if (sortedByWinRate.length > 0) {
-    allTimeRecords.push(`🎯 Best Win Rate: ${sortedByWinRate[0].name} wins ${Math.round(sortedByWinRate[0].winPercentage)}% of games (${sortedByWinRate[0].winCount}/${sortedByWinRate[0].gamesPlayed})`);
+    participantHighlights.push(`🎯 אחוז הנצחון הגבוה ביותר מבין המשתתפים: ${sortedByWinRate[0].name} — ${Math.round(sortedByWinRate[0].winPercentage)}% (${sortedByWinRate[0].winCount}/${sortedByWinRate[0].gamesPlayed})`);
   }
   
-  // Most games played
   if (sortedByGames[0]?.gamesPlayed > 0) {
-    allTimeRecords.push(`🎮 Most Games Played: ${sortedByGames[0].name} with ${sortedByGames[0].gamesPlayed} games`);
+    participantHighlights.push(`🎮 הכי הרבה משחקים מבין המשתתפים: ${sortedByGames[0].name} (${sortedByGames[0].gamesPlayed})`);
   }
   
-  // Best average (min 3 games)
   if (sortedByAvg.length > 0 && sortedByAvg[0].avgProfit > 0) {
-    allTimeRecords.push(`📊 Best Average: ${sortedByAvg[0].name} averages \u200E+${Math.round(sortedByAvg[0].avgProfit)} per game`);
+    participantHighlights.push(`📊 הממוצע הגבוה ביותר מבין המשתתפים: ${sortedByAvg[0].name} (\u200E+${Math.round(sortedByAvg[0].avgProfit)} למשחק)`);
   }
   
-  // Longest current winning streak
+  // Longest current winning streak (active streak — a fact, not a record)
   const longestWinStreak = players.reduce((max, p) => p.currentStreak > max.streak ? { name: p.name, streak: p.currentStreak } : max, { name: '', streak: 0 });
   if (longestWinStreak.streak >= 2) {
-    allTimeRecords.push(`🔥 Current Hot Streak: ${longestWinStreak.name} is on a ${longestWinStreak.streak}-game winning streak`);
+    participantHighlights.push(`🔥 הרצף החם ביותר כרגע: ${longestWinStreak.name} — ${longestWinStreak.streak} נצחונות ברצף`);
   }
   
   // Longest current losing streak
   const longestLoseStreak = players.reduce((max, p) => p.currentStreak < max.streak ? { name: p.name, streak: p.currentStreak } : max, { name: '', streak: 0 });
   if (longestLoseStreak.streak <= -2) {
-    allTimeRecords.push(`❄️ Cold Streak: ${longestLoseStreak.name} is on a ${Math.abs(longestLoseStreak.streak)}-game losing streak`);
+    participantHighlights.push(`❄️ הרצף הקר ביותר כרגע: ${longestLoseStreak.name} — ${Math.abs(longestLoseStreak.streak)} הפסדים ברצף`);
   }
   
-  const allTimeRecordsText = allTimeRecords.length > 0 ? allTimeRecords.join('\n') : '';
+  const participantHighlightsText = participantHighlights.length > 0 ? participantHighlights.join('\n') : '';
 
   // ========== CALCULATE MILESTONES (via shared engine) ==========
   const milestonePlayersForPrompt = players.map(p => ({
@@ -1574,7 +1573,7 @@ export const generateAIForecasts = async (
 
 📊 כרטיסי שחקנים (${players.length} שחקנים):
 ${playerDataText}
-${allTimeRecordsText ? `\n🏅 שיאי הקבוצה (השחקנים המשתתפים בלבד):\n${allTimeRecordsText}` : ''}
+${participantHighlightsText ? `\n🏅 מצטייני הערב (סטטיסטיקות מבין המשתתפים בלבד — לא שיאי קבוצה; הדירוג הכללי האמיתי מופיע בכרטיס כל שחקן):\n${participantHighlightsText}` : ''}
 ${storylinesText ? `\n📖 סיפורי הערב - יריבויות, נקמות, קשרים מעניינים:\n${storylinesText}` : ''}
 ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${milestonesText}` : ''}
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
@@ -1642,6 +1641,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 
 כללי כתיבה:
 • דירוגים: רק מטבלת התקופה (⭐). מקום 1 = הכי טוב
+• "מצטייני הערב" (🏅) = הכי טובים מבין משתתפי הערב בלבד — לא שיאי קבוצה. אל תכתיר אף אחד כ"שיא הקבוצה", "המוביל של כל הזמנים" או "השיא ההיסטורי" על סמך הרשימה הזו. הדירוג הכללי האמיתי הוא רק מה שכתוב "דירוג כללי (כל הזמנים)" בכרטיס השחקן
 • "מוביל" = מקום 1 | "רודף" = מנסה לעלות | "שומר" = מגן על הדירוג
 • highlight ו-sentence עקביים, כל highlight שונה, כל משפט במבנה שונה, גיוון מלא!`;
 
@@ -2571,7 +2571,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 - עברית טבעית וזורמת. הזכר את כל ${tonight.length} השחקנים בשמם
 - 2-3 פסקאות קצרות (שורה ריקה ביניהן), כל פסקה 2-4 משפטים. סה״כ 60-120 מילים${periodEndingLines.length > 0 ? ` (+ פסקאות תקופתיות נוספות)` : ''}
 - שלב עובדות (רצפים, שיאים, דירוגים) בצורה טבעית בתוך הסיפור — לא כרשימה
-- שיאים ורגעים היסטוריים הם הדבר הכי חשוב: כניסה ל-Top 20, שיא אישי, שיא קבוצתי — אלה רגעים נדירים שהשחקנים מתרגשים מהם. אם מופיעים באירועים מיוחדים — חגוג אותם, תן להם מקום מרכזי בסיפור
+- שיאים ורגעים היסטוריים הם הדבר הכי חשוב וחובה לתת להם מקום מרכזי: שיא קבוצתי, שיא אישי, כניסה ל-Top 20, עקיפה בטבלת השנה או בטבלת כל-הזמנים (למשל "עלה למקום הראשון של השנה" או "עקף את X בטבלת כל הזמנים"), ורצף פעיל ארוך של נצחונות או הפסדים. אם מופיעים ב"שיאים", ב"שינויים בטבלה" או ב"רצפים בולטים" — אל תשמיט אותם, אלה הרגעים שהשחקנים הכי מתרגשים מהם. הקפד להבחין: שיא אישי = הכי טוב של השחקן עצמו; שיא קבוצתי = הכי טוב אי-פעם בקבוצה. לעולם אל תתאר שיא אישי כאילו הוא שיא של כל הקבוצה
 - אם יש מידע על הרכב חוזר (🔄) — שלב אותו: ציין שזה הרכב שכבר שיחק יחד, האם הדפוסים המשיכו או נשברו
 - "${periodLabel}" = שם התקופה (מחצית של שנה). אם מזכירים → "בתקופת ${periodLabel}" או "במחצית"
 - סיים עם פאנץ׳ליין, עקיצה, או הצצה לשבוע הבא
