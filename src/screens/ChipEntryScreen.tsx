@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, ChipValue, PhotoChipCountResult } from '../types';
 import { 
@@ -504,6 +504,20 @@ const ChipEntryScreen = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
   const [showUncountedWarning, setShowUncountedWarning] = useState(false);
+  // The fixed bottom bar's height is dynamic — the reconciliation
+  // verdict, the uncounted-players warning, and the multi-line
+  // Hebrew wrap on narrow phones all change it. Rather than pad the
+  // scroll content with a magic pixel constant (which under-shot the
+  // moment the always-on verdict banner was added and let the bar
+  // cover the last player card on mobile), we measure the bar and
+  // pad the content to exactly its height. Initialised to a sane
+  // default so the first paint isn't clipped before the observer runs.
+  const bottomBarRef = useRef<HTMLDivElement | null>(null);
+  // Default sized to the tallest common bar (verdict banner + progress
+  // + stats + Calculate button) so even the pre-measure first frame
+  // over-reserves rather than clips. The layout effect corrects it to
+  // the exact height before paint.
+  const [bottomBarHeight, setBottomBarHeight] = useState(220);
   // v5.60.3: surface the chip-gap adjustment before finalizing.
   // Until now the gap was applied silently — players could end up
   // with a profit different from what the chip math implied, with
@@ -812,6 +826,27 @@ const ChipEntryScreen = () => {
 
   const selectedPlayer = players.find(p => p.id === selectedPlayerId);
   const completedPlayersCount = completedPlayers.size;
+
+  // Keep the scroll-content bottom padding in lockstep with the fixed
+  // bar's real height. ResizeObserver fires on every reflow (verdict
+  // banner appearing, warning toggling, Hebrew text wrapping to a new
+  // line on narrow screens, orientation change), so content is never
+  // hidden behind the bar and there's never a dead gap either.
+  // MUST stay above the `if (isLoading)` / `if (gameNotFound)` early
+  // returns — this is a hook, and calling it conditionally violates the
+  // Rules of Hooks and crashes the screen. Re-runs on the loading→loaded
+  // transition so it can attach once the bar element actually mounts.
+  // useLayoutEffect (not useEffect) so the initial measurement lands
+  // BEFORE the browser paints — no one-frame clip of the last row.
+  useLayoutEffect(() => {
+    const el = bottomBarRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setBottomBarHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLoading, gameNotFound]);
 
   // Loading state
   if (isLoading) {
@@ -1159,7 +1194,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '115px' }}>
+    <div className="fade-in" style={{ paddingBottom: `${bottomBarHeight + 16}px` }}>
       <div className="page-header">
         <h1 className="page-title">{t('chips.title')}</h1>
         {/* State-aware subtitle: tells the admin at a glance which
@@ -2220,7 +2255,7 @@ const ChipEntryScreen = () => {
       )}
 
       {/* Fixed Bottom Bar */}
-      <div style={{ 
+      <div ref={bottomBarRef} style={{ 
         position: 'fixed',
         bottom: 0,
         left: 0,
@@ -2239,25 +2274,14 @@ const ChipEntryScreen = () => {
             red "check your count" warning once everyone is counted. */}
         {showChipReconcile && (
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.4rem',
-            padding: '0.55rem 0.6rem',
-            marginBottom: '0.5rem',
-            borderRadius: '8px',
-            fontSize: '0.9rem',
+            marginBottom: '0.35rem',
+            fontSize: '0.8rem',
             fontWeight: 700,
             textAlign: 'center',
-            lineHeight: 1.35,
-            background: chipReconcileState === 'balanced' ? 'rgba(34,197,94,0.15)'
-              : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? 'rgba(245,158,11,0.15)'
-              : chipReconcileState === 'counting' ? 'rgba(96,165,250,0.15)'
-              : 'rgba(239,68,68,0.15)',
-            border: `1px solid ${chipReconcileState === 'balanced' ? 'rgba(34,197,94,0.45)'
-              : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? 'rgba(245,158,11,0.45)'
-              : chipReconcileState === 'counting' ? 'rgba(96,165,250,0.45)'
-              : 'rgba(239,68,68,0.45)'}`,
+            lineHeight: 1.25,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             color: chipReconcileState === 'balanced' ? '#22c55e'
               : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? '#f59e0b'
               : chipReconcileState === 'counting' ? '#60a5fa'
