@@ -4149,11 +4149,31 @@ function buildPersonalFactsList(
         curRun = 0;
       }
     }
-    if (bestRun >= 5) {
+    // `bestRun` already accounts for the current run, so `curRun` can at
+    // most equal it — when they're equal, the ongoing streak IS the
+    // all-time record and we surface a single "record in the making"
+    // fact instead of two lines showing the same number. Otherwise the
+    // record (all-time best) and the current active run are distinct
+    // pieces of info, so we show both.
+    const currentIsRecord = curRun >= bestRun;
+    if (currentIsRecord && curRun >= 5) {
       facts.push({
-        icon: '🚪',
-        text: t('home.aboutYou.longestAttendanceStreak', { count: bestRun }),
+        icon: '🔥',
+        text: t('home.aboutYou.currentAttendanceStreakRecord', { count: curRun }),
       });
+    } else {
+      if (bestRun >= 5) {
+        facts.push({
+          icon: '🚪',
+          text: t('home.aboutYou.longestAttendanceStreak', { count: bestRun }),
+        });
+      }
+      if (curRun >= 3 && curRun < bestRun) {
+        facts.push({
+          icon: '🔥',
+          text: t('home.aboutYou.currentAttendanceStreak', { count: curRun }),
+        });
+      }
     }
     if (orderedGameIds.length >= 25) {
       const recent = orderedGameIds.slice(-25);

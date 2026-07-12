@@ -1010,16 +1010,42 @@ const ChipEntryScreen = () => {
   const allPlayersCounted = completedPlayers.size === players.length;
 
   // Chip reconciliation verdict for the bottom-bar banner: did the
-  // counter tally MORE (עודף) or FEWER (חסר) chips than the expected
-  // pot? "Short" is only a real shortage once everyone is counted —
-  // before that the total is naturally below expected (not everyone
-  // entered yet), so we must NOT cry "חסר" mid-count. "Over" is always
-  // worth flagging (an over-count can't be explained by incompleteness).
+  // counter tally MORE (עודף) or FEWER (חסר) chips than the expected pot?
   const chipReconcileDelta = totalChipPoints - expectedChipPoints;
   const isChipCountOver = chipReconcileDelta > 0;
-  const showChipReconcile = totalChipPoints > 0 && (allPlayersCounted || isChipCountOver);
-  const chipReconcileMoney = formatCurrency(Math.abs(chipReconcileDelta) * valuePerChip);
+  const chipReconcileMoneyValue = Math.abs(chipReconcileDelta) * valuePerChip;
+  const chipReconcileMoney = formatCurrency(chipReconcileMoneyValue);
   const chipReconcileChips = Math.abs(chipReconcileDelta).toLocaleString();
+  // A tiny gap (one small chip / rounding slack) is normal — don't alarm
+  // over it. "Minor" mirrors the per-player banner tolerance: 2% of the
+  // pot OR the value of a single smallest chip, whichever is larger.
+  // Anything above that is a real discrepancy worth re-counting, so the
+  // three states read cleanly: balanced (green) / negligible (amber) /
+  // real gap (red).
+  const smallestChipMoney = chipValues.reduce(
+    (min, c) => (c.value > 0 && c.value < min ? c.value : min),
+    Number.POSITIVE_INFINITY,
+  );
+  const chipReconcileTolerance = Math.max(
+    totalBuyIns * 0.02,
+    Number.isFinite(smallestChipMoney) ? smallestChipMoney * valuePerChip : 0,
+  );
+  const isChipGapMinor = chipReconcileDelta !== 0 && chipReconcileMoneyValue <= chipReconcileTolerance;
+  // The verdict is always visible once any chips are entered, so the
+  // counter always sees where the tally stands. The nuance is a LARGE
+  // shortage: mid-count that's expected (not everyone entered yet) so we
+  // show a calm "still counting — X to go" instead of alarming "חסר".
+  // Once everyone IS counted and it's still short, THAT is the real
+  // "check your count" warning. Resulting states:
+  //   balanced (green) · minor gap (amber) · over (red) ·
+  //   still-counting shortage (blue/info) · completed shortage (red)
+  const showChipReconcile = totalChipPoints > 0;
+  const chipReconcileState: 'balanced' | 'minorOver' | 'minorUnder' | 'over' | 'counting' | 'under' =
+    isBalanced ? 'balanced'
+    : isChipGapMinor ? (isChipCountOver ? 'minorOver' : 'minorUnder')
+    : isChipCountOver ? 'over'
+    : !allPlayersCounted ? 'counting'
+    : 'under';
 
   const handleCalculate = async () => {
     if (!gameId || isFinalizing) return;
@@ -2206,10 +2232,11 @@ const ChipEntryScreen = () => {
         borderTop: `3px solid ${getProgressColor(progressPercentage)}`
       }}>
         {/* Reconciliation verdict — the headline that tells the person
-            counting, in plain words, whether the tally came out OVER
-            (עודף) or UNDER (חסר) the expected pot, with the exact chip
-            and money gap. Shown once everyone is counted, or the moment
-            the running total exceeds expected (always a red flag). */}
+            counting, in plain words, where the tally stands vs the
+            expected pot, with the exact chip and money gap. Always shown
+            once any chips are entered; a big shortage mid-count reads as
+            a calm "still counting — X to go" and only escalates to the
+            red "check your count" warning once everyone is counted. */}
         {showChipReconcile && (
           <div style={{
             display: 'flex',
@@ -2223,15 +2250,30 @@ const ChipEntryScreen = () => {
             fontWeight: 700,
             textAlign: 'center',
             lineHeight: 1.35,
-            background: isBalanced ? 'rgba(34,197,94,0.15)' : isChipCountOver ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
-            border: `1px solid ${isBalanced ? 'rgba(34,197,94,0.45)' : isChipCountOver ? 'rgba(239,68,68,0.45)' : 'rgba(245,158,11,0.45)'}`,
-            color: isBalanced ? '#22c55e' : isChipCountOver ? '#ef4444' : '#f59e0b',
+            background: chipReconcileState === 'balanced' ? 'rgba(34,197,94,0.15)'
+              : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? 'rgba(245,158,11,0.15)'
+              : chipReconcileState === 'counting' ? 'rgba(96,165,250,0.15)'
+              : 'rgba(239,68,68,0.15)',
+            border: `1px solid ${chipReconcileState === 'balanced' ? 'rgba(34,197,94,0.45)'
+              : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? 'rgba(245,158,11,0.45)'
+              : chipReconcileState === 'counting' ? 'rgba(96,165,250,0.45)'
+              : 'rgba(239,68,68,0.45)'}`,
+            color: chipReconcileState === 'balanced' ? '#22c55e'
+              : chipReconcileState === 'minorOver' || chipReconcileState === 'minorUnder' ? '#f59e0b'
+              : chipReconcileState === 'counting' ? '#60a5fa'
+              : '#ef4444',
           }}>
-            {isBalanced
+            {chipReconcileState === 'balanced'
               ? t('chips.reconcileBalanced')
-              : isChipCountOver
-                ? t('chips.reconcileOver', { chips: chipReconcileChips, money: chipReconcileMoney })
-                : t('chips.reconcileUnder', { chips: chipReconcileChips, money: chipReconcileMoney })}
+              : chipReconcileState === 'minorOver'
+                ? t('chips.reconcileOverMinor', { chips: chipReconcileChips, money: chipReconcileMoney })
+                : chipReconcileState === 'minorUnder'
+                  ? t('chips.reconcileUnderMinor', { chips: chipReconcileChips, money: chipReconcileMoney })
+                  : chipReconcileState === 'over'
+                    ? t('chips.reconcileOver', { chips: chipReconcileChips, money: chipReconcileMoney })
+                    : chipReconcileState === 'counting'
+                      ? t('chips.reconcileCounting', { chips: chipReconcileChips, money: chipReconcileMoney })
+                      : t('chips.reconcileUnder', { chips: chipReconcileChips, money: chipReconcileMoney })}
           </div>
         )}
         {/* Progress bar — explicitly LTR so the fill grows from
