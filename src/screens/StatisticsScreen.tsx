@@ -1263,6 +1263,54 @@ const StatisticsScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
+  // Attendance-streak RECORDS for the player-records view. Maps each
+  // eligible player (via `filteredStats`) to two values:
+  //   · longest — best run of consecutive completed games attended
+  //               (resets on every miss), within the active period.
+  //   · current — the trailing run ending at the LAST game of the
+  //               period (0 if they missed the most recent one).
+  // Walks the period's completed games chronologically per player,
+  // mirroring the "did you know about yourself" attendance logic on
+  // the home screen. Keyed by playerId so a rename never splits a run.
+  const attendanceStreakRecords = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const periodGames = getAllGames()
+      .filter(g => {
+        if (g.status !== 'completed') return false;
+        if (!dateFilter) return true;
+        const gameDate = new Date(g.date || g.createdAt);
+        if (dateFilter.start && gameDate < dateFilter.start) return false;
+        if (dateFilter.end && gameDate > dateFilter.end) return false;
+        return true;
+      })
+      .sort((a, b) =>
+        new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime());
+
+    const attendeesByGame = new Map<string, Set<string>>();
+    for (const gp of getAllGamePlayers()) {
+      const set = attendeesByGame.get(gp.gameId);
+      if (set) set.add(gp.playerId);
+      else attendeesByGame.set(gp.gameId, new Set([gp.playerId]));
+    }
+
+    const map = new Map<string, { longest: number; current: number }>();
+    for (const s of filteredStats) {
+      let cur = 0;
+      let best = 0;
+      for (const g of periodGames) {
+        if (attendeesByGame.get(g.id)?.has(s.playerId)) {
+          cur += 1;
+          if (cur > best) best = cur;
+        } else {
+          cur = 0;
+        }
+      }
+      map.set(s.playerId, { longest: best, current: cur });
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
   // Per-player place-finish rates (1st/2nd/3rd) for the current time
   // period:
   //  · Place is awarded only when the top finisher actually won
@@ -1913,6 +1961,14 @@ const StatisticsScreen = () => {
     const mostDedicatedPlayers = findTied(filteredStats, s => s.gamesPlayed, true);
     const longestWinStreakPlayers = findTied(filteredStats, s => s.longestWinStreak, true);
     const longestLossStreakPlayers = findTied(filteredStats, s => s.longestLossStreak, true);
+
+    // Attendance-streak leaders (values sourced from `attendanceStreakRecords`).
+    const longestAttendancePlayers = findTied(filteredStats, s => attendanceStreakRecords.get(s.playerId)?.longest ?? 0, true);
+    const currentAttendancePlayers = findTied(
+      filteredStats.filter(s => (attendanceStreakRecords.get(s.playerId)?.current ?? 0) >= 1),
+      s => attendanceStreakRecords.get(s.playerId)?.current ?? 0,
+      true,
+    );
     
     // Additional records
     const highestAvgProfits = findTied(filteredStats, s => s.avgProfit, true);
@@ -1934,6 +1990,8 @@ const StatisticsScreen = () => {
       mostDedicatedPlayers,
       longestWinStreakPlayers,
       longestLossStreakPlayers,
+      longestAttendancePlayers,
+      currentAttendancePlayers,
       highestAvgProfits,
       lowestAvgProfits,
       mostWinsPlayers,
@@ -2031,6 +2089,38 @@ const StatisticsScreen = () => {
         }
       }
       filteredGames = bestStreak.reverse();
+    } else if (recordType === 'longestAttendance' || recordType === 'currentAttendance') {
+      // Attendance streaks need the FULL group-game sequence to detect
+      // misses (a group game the player skipped resets the run), so we
+      // can't derive them from the attended-only `playerGames`. Walk
+      // every period group game chronologically, collect the attended
+      // runs, then pick either the longest run or the trailing (current)
+      // run and surface just those attended games.
+      const attendedGameIds = new Set(
+        allGamePlayers.filter(gp => gp.playerId === player.playerId).map(gp => gp.gameId),
+      );
+      const chrono = [...allGames].sort(
+        (a, b) => new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime(),
+      );
+      const runs: string[][] = [];
+      let run: string[] = [];
+      for (const g of chrono) {
+        if (attendedGameIds.has(g.id)) {
+          run.push(g.id);
+        } else {
+          if (run.length) runs.push(run);
+          run = [];
+        }
+      }
+      // `run` now holds the trailing streak that ends at the last group
+      // game (empty if the player missed the most recent one).
+      const trailingRun = run;
+      if (trailingRun.length) runs.push(trailingRun);
+      const chosenIds = recordType === 'currentAttendance'
+        ? trailingRun
+        : runs.reduce((best, r) => (r.length > best.length ? r : best), [] as string[]);
+      const chosenSet = new Set(chosenIds);
+      filteredGames = playerGames.filter(g => chosenSet.has(g.gameId));
     }
 
     setRecordDetails({
@@ -3225,6 +3315,44 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
+              {/* Attendance Streak Records — longest run ever (record)
+                  and the current ongoing run. Card shows only when the
+                  top record is meaningful (≥ 3 games), and the current
+                  tile only when someone is actively on a ≥ 2 run. */}
+              {records.longestAttendancePlayers.length > 0 &&
+                (attendanceStreakRecords.get(records.longestAttendancePlayers[0].playerId)?.longest ?? 0) >= 3 && (
+                <div className="card">
+                  <h2 className="card-title mb-2">{t('stats.attendanceStreakRecords')}</h2>
+                  <div className="grid grid-2">
+                    <div style={{ padding: '0.75rem', background: 'rgba(96, 165, 250, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.longestAttendanceRecord')}</div>
+                      {renderRecord(
+                        'longestAttendance',
+                        records.longestAttendancePlayers,
+                        (p) => <div style={{ color: '#60a5fa', fontWeight: '700' }}>{t('stats.attendanceGamesVal', { n: attendanceStreakRecords.get(p.playerId)?.longest ?? 0 })}</div>,
+                        undefined,
+                        'longestAttendance',
+                        t('stats.recordLongestAttendance'),
+                      )}
+                    </div>
+                    {records.currentAttendancePlayers.length > 0 &&
+                      (attendanceStreakRecords.get(records.currentAttendancePlayers[0].playerId)?.current ?? 0) >= 2 && (
+                      <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.currentAttendanceRecord')}</div>
+                        {renderRecord(
+                          'currentAttendance',
+                          records.currentAttendancePlayers,
+                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{t('stats.attendanceGamesVal', { n: attendanceStreakRecords.get(p.playerId)?.current ?? 0 })}</div>,
+                          undefined,
+                          'currentAttendance',
+                          t('stats.recordCurrentAttendance'),
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Average Performance Records */}
               {(records.highestAvgProfits.length > 0 || records.lowestAvgProfits.length > 0) && (
                 <div className="card">
@@ -4162,6 +4290,8 @@ const StatisticsScreen = () => {
 
                   {sortedStats.map((player, index) => {
                     const isMe = identityName && player.playerName === identityName;
+                    const attLongest = attendanceStreakRecords.get(player.playerId)?.longest ?? 0;
+                    const attCurrent = attendanceStreakRecords.get(player.playerId)?.current ?? 0;
                     return (
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}), animation: index < 10 ? 'contentFadeIn 0.25s ease-out backwards' : undefined, animationDelay: index < 10 ? `${index * 0.05}s` : undefined }}>
               <div className="card-header">
@@ -4333,6 +4463,31 @@ const StatisticsScreen = () => {
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.longestLossStreak')}</div>
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.longestLossStreak > 0 ? t('stats.nLosses', { n: player.longestLossStreak }) : '-'}{player.longestLossStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendance Row — longest run ever (record) + current
+                  ongoing run, both drilling into the streak's games. */}
+              <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: attLongest > 0 ? 'pointer' : 'default', background: 'rgba(96, 165, 250, 0.1)' }}
+                  onClick={() => attLongest > 0 && showPlayerStatDetails(player, 'longestAttendance', t('stats.recordLongestAttendance'))}
+                >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.longestAttendanceRecord')}</div>
+                  <div className="stat-value" style={{ color: attLongest > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
+                    {attLongest > 0 ? t('stats.attendanceGamesVal', { n: attLongest }) : '-'}{attLongest > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                  </div>
+                </div>
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: attCurrent > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
+                  onClick={() => attCurrent > 0 && showPlayerStatDetails(player, 'currentAttendance', t('stats.recordCurrentAttendance'))}
+                >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.currentAttendanceRecord')}</div>
+                  <div className="stat-value" style={{ color: attCurrent > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {attCurrent > 0 ? t('stats.attendanceGamesVal', { n: attCurrent }) : '-'}{attCurrent > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
