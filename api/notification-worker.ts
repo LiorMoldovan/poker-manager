@@ -95,6 +95,11 @@ interface DispatchPlan {
   // can still fire if pushOnly is also false. Both flags being true =
   // the job is a no-op (planForJob returns null in that case).
   emailOnly: boolean;
+  // Set on an AT-TARGET 'confirmed' job: the message we're about to send
+  // already says the table is full, so any queued 'target_filled' for
+  // this poll would repeat it. Mirrors the browser worker's
+  // preemptTargetFilledJobRpc call (src/utils/notificationWorker.ts).
+  preemptTargetFilledPollId?: string;
 }
 
 // ─── Service-role Supabase client (RLS bypassed) ───────────────────────────
@@ -369,6 +374,15 @@ function buildExpandedMessage(ctx: PollCtx): BuiltMessage {
   };
 }
 
+// A pin can land in one of two states, and they are genuinely different
+// news: the date is set AND the table is full ("נסגר"), or the date is
+// set but seats are still open ("נבחר תאריך — חסרים שחקנים"). Until
+// migration 110 this builder ignored the distinction and always sent the
+// "נסגר — ניפגש" copy, byte-identical to buildTargetFilledMessage below
+// except for the title. That's what made the confirmed/target_filled
+// pair read as the same message twice. The below-target branch mirrors
+// the client's buildConfirmedBelowTargetYesMessage, minus the
+// gender-aware conjugation the server deliberately trades away.
 function buildConfirmedMessage(ctx: PollCtx): BuiltMessage | null {
   const dateRow = ctx.dates.find(d => d.id === ctx.poll.confirmed_date_id);
   if (!dateRow) return null;
@@ -383,6 +397,29 @@ function buildConfirmedMessage(ctx: PollCtx): BuiltMessage | null {
   else confirmedLine = `${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.`;
   const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
   const cta = `\n\n${I}👉 לפרטים: ${emailVoteLink(ctx.poll.share_slug || ctx.poll.id)}`;
+
+  const missing = Math.max(0, ctx.poll.target_player_count - yesCount);
+  if (missing > 0) {
+    const seatsPhrase = missing === 1
+      ? 'נשאר עוד מקום אחרון'
+      : `נשארו עוד ${missing} מקומות`;
+    const subject = '✅ התאריך נבחר — עוד לא סגור';
+    return {
+      pushTitle: subject,
+      pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''} · ${seatsPhrase}`,
+      emailSubject: subject,
+      emailBody:
+        'נבחר תאריך לערב הפוקר 🎯\n\n' +
+        `${I}📅 ${dateVerbose}\n` +
+        locLine +
+        `${I}👥 ${confirmedLine}\n` +
+        `🪑 ${seatsPhrase}\n\n` +
+        'אם יש אורח שמתאים לו להצטרף — עדכנו 🤝' +
+        cta,
+      url: deepLinkUrl(ctx.poll.id),
+    };
+  }
+
   return {
     pushTitle: '✅ המשחק נסגר!',
     pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''}`,
@@ -545,8 +582,8 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
   // Per-event allowlist (migration 090). Missing column / missing key
   // defaults to true so groups that haven't customised the filter behave
   // exactly as before. A key explicitly set to `false` disables emails of
-  // that kind even when the master toggle is on. Lifecycle + reminder +
-  // date_excluded kinds map 1:1 to the keys; trivia/training/vote_change
+  // that kind even when the master toggle is on. Lifecycle + reminder
+  // kinds map 1:1 to the keys; trivia/training/vote_change/date_excluded
   // kinds are not in this filter (push-only by design).
   const emailKinds = ((settings as { schedule_email_kinds?: Record<string, unknown> } | null)?.schedule_email_kinds) || {};
   const kindAllowedByFilter =
@@ -574,6 +611,7 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     let message: BuiltMessage | null = null;
     let recipientPlayerNames: string[] = [];
     let pushOnly = false;
+    let preemptTargetFilledPollId: string | undefined;
 
     if (kind === 'creation') {
       message = buildCreationMessage(ctx);
@@ -584,6 +622,14 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     } else if (kind === 'confirmed') {
       message = buildConfirmedMessage(ctx);
       recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
+      // At-target pin: buildConfirmedMessage just produced the "נסגר —
+      // ניפגש" copy, so a follow-up 'target_filled' would say the same
+      // thing again. The 500ms confirmed_at debounce inside
+      // fn_enqueue_target_filled_on_vote can't catch this — on poll
+      // edb1d40b the two enqueues landed a full second apart.
+      if (recipientPlayerNames.length >= ctx.poll.target_player_count) {
+        preemptTargetFilledPollId = poll_id;
+      }
     } else if (kind === 'target_filled') {
       message = buildTargetFilledMessage(ctx);
       recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
@@ -623,6 +669,7 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
       groupId: group_id,
       pushOnly: !emailAllowedForGroup || pushOnly,
       emailOnly,
+      preemptTargetFilledPollId,
     };
   }
 
@@ -657,15 +704,21 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     ? (payload.recipient_player_names as string[])
     : [];
   // Reminders go to email if the group has it on. Training kinds are
-  // push-only by convention (we retired training emails in v5.43).
-  const trainingKind = kind === 'training_report_filed'
+  // push-only by convention (we retired training emails in v5.43), and
+  // so is date_excluded: dropping one date while the poll stays open is
+  // low-signal news that doesn't earn a slot against the monthly email
+  // quota. Forcing it here rather than relying on empty payload fields
+  // is deliberate — buildFromPayload falls back to the push title when
+  // email_subject is blank, so a blank subject would still send.
+  const pushOnlyKind = kind === 'training_report_filed'
     || kind === 'training_report_resolved'
-    || kind === 'training_milestone';
+    || kind === 'training_milestone'
+    || kind === 'date_excluded';
   return {
     message,
     recipientPlayerNames: recipientNames,
     groupId: group_id,
-    pushOnly: trainingKind || !emailAllowedForGroup,
+    pushOnly: pushOnlyKind || !emailAllowedForGroup,
     emailOnly,
   };
 }
@@ -879,6 +932,20 @@ async function claimJob(): Promise<Job | null> {
   return row as Job;
 }
 
+// Retire a queued 'target_filled' whose news we just delivered inside an
+// at-target 'confirmed'. Uses the worker-secret RPC twin (migration 110)
+// because the user-facing preempt_target_filled_job gates on auth.uid(),
+// which is NULL under the service role.
+async function preemptTargetFilled(pollId: string): Promise<void> {
+  const sb = db();
+  const secret = process.env.WORKER_INTERNAL_SECRET || '';
+  const { error } = await sb.rpc('preempt_target_filled_job_internal', {
+    p_secret: secret,
+    p_poll_id: pollId,
+  });
+  if (error) console.warn('[notification-worker] preempt error:', error.message);
+}
+
 async function completeJob(jobId: string, success: boolean, errorMessage: string | null): Promise<void> {
   const sb = db();
   const secret = process.env.WORKER_INTERNAL_SECRET || '';
@@ -933,6 +1000,17 @@ export default async function handler(req: Request): Promise<Response> {
         // poll deleted, etc. Mark done so the queue doesn't keep retrying.
         await completeJob(job.id, true, null);
         continue;
+      }
+      // BEFORE dispatch, deliberately. Dispatching first loses the race:
+      // on poll edb1d40b the 'target_filled' row was enqueued one second
+      // after 'confirmed' and a browser worker claimed it while this
+      // worker was still fanning out 8 emails. Preempting up front also
+      // stamps target_filled_notifications_sent_at, which makes
+      // enqueue_poll_notification a no-op — so the duplicate row is
+      // never even created. A failed dispatch below flips the job back to
+      // 'pending' and the next attempt re-preempts idempotently.
+      if (plan.preemptTargetFilledPollId) {
+        await preemptTargetFilled(plan.preemptTargetFilledPollId);
       }
       const r = await dispatch(plan);
       if (r.pushOk) stats.pushOk += 1;

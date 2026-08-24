@@ -69,7 +69,7 @@ import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import TriviaReportsTab from '../components/TriviaReportsTab';
 import GroupManagementTab from '../components/GroupManagementTab';
-import { StyledSelect } from '../components/StyledSelect';
+import { StyledSelect, StyledSelectOption } from '../components/StyledSelect';
 import { NumericInput } from '../components/NumericInput';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -849,6 +849,23 @@ const SettingsScreen = () => {
     setNewPlayerGender('male');
     setShowAddPlayer(false);
     setError('');
+  };
+
+  // Blocked-transfer pair pickers: permanents flat at the top, regular guests
+  // behind one collapsible header. Plain `guest` players are left out — there
+  // are dozens of one-off names and they'd bury the everyday picks.
+  // `exclude` drops the name already chosen in the other half of the pair.
+  const blockedTransferPlayerOptions = (exclude?: string): StyledSelectOption<string>[] => {
+    const order: PlayerType[] = ['permanent', 'permanent_guest'];
+    return order.flatMap(type =>
+      players
+        .filter(p => (p.type || 'permanent') === type && p.name !== exclude)
+        .map(p => ({
+          value: p.name,
+          label: p.name,
+          group: type === 'permanent' ? undefined : t('settings.players.groupPermanentGuest'),
+        }))
+    );
   };
 
   const openEditPlayer = (player: Player) => {
@@ -1852,7 +1869,7 @@ const SettingsScreen = () => {
                       onChange={setNewBlockedA}
                       options={[
                         { value: '', label: t('settings.game.playerA') },
-                        ...players.filter(p => p.type === 'permanent').map(p => ({ value: p.name, label: p.name })),
+                        ...blockedTransferPlayerOptions(),
                       ]}
                       size="md"
                       fullWidth
@@ -1865,7 +1882,7 @@ const SettingsScreen = () => {
                       onChange={setNewBlockedB}
                       options={[
                         { value: '', label: t('settings.game.playerB') },
-                        ...players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => ({ value: p.name, label: p.name })),
+                        ...blockedTransferPlayerOptions(newBlockedA),
                       ]}
                       size="md"
                       fullWidth

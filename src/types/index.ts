@@ -485,20 +485,19 @@ export interface BlockedTransferPair {
 
 // Per-event email kinds the admin can individually toggle from
 // Settings → Schedule. Mirrors the EMAIL_ALLOWLIST in
-// `src/utils/scheduleNotifications.ts` plus `date_excluded` (which uses
-// its own dispatch path but is the same shape of "an email goes out
-// when X happens"). Persisted as a JSONB object on settings under
-// `schedule_email_kinds` (migration 090). `vote_change` is push-only
-// by design (every RSVP fires; emailing each one would flood quota) so
-// it intentionally has no toggle here.
+// `src/utils/scheduleNotifications.ts`. Persisted as a JSONB object on
+// settings under `schedule_email_kinds` (migration 090).
+// Push-only events have no toggle here: `vote_change` because every RSVP
+// fires it and emailing each one would flood the quota, `date_excluded`
+// because dropping one date out of several is low-signal news that the
+// push already covers (email leg retired in v6.9.x).
 export type ScheduleEmailKind =
   | 'creation'        // 🃏 ערב פוקר חדש — invitation goes out
   | 'expanded'        // 🎯 ההצבעה פתוחה לכולם — opened to all tiers
   | 'confirmed'       // ✅ נסגר! / 🪑 חסרים שחקנים — date pinned
   | 'target_filled'   // 🎉 המשחק מלא — seat target finally hit post-pin
   | 'cancellation'    // ❌ ההצבעה בוטלה — admin cancelled
-  | 'reminder'        // 📣 תזכורת להצבעה — admin sent manual reminder
-  | 'date_excluded';  // ✂️ תאריך הוצא — admin removed a date
+  | 'reminder';       // 📣 תזכורת להצבעה — admin sent manual reminder
 
 export interface Settings {
   rebuyValue: number;

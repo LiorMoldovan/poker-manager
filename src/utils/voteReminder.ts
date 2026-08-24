@@ -2,11 +2,19 @@
 //
 // A user has a "pending vote" when:
 //   * They have a linked Player record.
-//   * There's at least one active poll (status: 'open' | 'expanded') where:
-//       - Tier rule: 'open' polls only invite permanents; 'expanded' polls
-//         invite all tiers (permanent / permanent_guest / guest).
-//       - The user has NOT cast a vote on any of the poll's dates yet.
+//   * There's at least one poll still collecting votes where:
+//       - Tier rule: permanents always qualify; other tiers join once the
+//         poll has opened to them (`expandedAt`).
+//       - The user has NOT cast a vote on any date they can still vote on.
 //   * If the user qualifies for multiple polls, the most urgent one wins.
+//
+// "Still collecting votes" includes a poll whose date is already PICKED but
+// hasn't filled its seats. Since migration 106 a pick funnels voting to the
+// chosen date rather than freezing it, so a picked-but-short poll is the
+// phase where a nudge matters most — those last seats are exactly what the
+// admin is chasing. Only the picked date counts there: the server rejects
+// votes on every other date, so a stale 'no' on a rival date is not an
+// answer to "are you coming on the 29th?".
 //
 // "Urgent" means either:
 //   * Time is short — < SOON_HOURS until the next phase boundary
@@ -35,6 +43,10 @@ export interface PendingVoteInfo {
   // X" vs "starts in X"). Currently we don't differentiate copy further but
   // the field is here for future polishing.
   deadlineKind: 'expansion' | 'gameDate';
+  // True when a date is already picked and we're chasing the remaining
+  // seats. The banner swaps its calm body copy for this case — "dates have
+  // been proposed" is wrong once the night is chosen.
+  pickedDate: boolean;
 }
 
 const SOON_HOURS = 6;
@@ -56,10 +68,13 @@ const earliestUpcomingDateMs = (poll: GamePoll, now: number): number => {
   return best;
 };
 
-const bestYesCount = (poll: GamePoll): number => {
+// Highest yes-count among the dates that can still receive a vote. Scoped
+// to `votableDateIds` so a picked poll measures the picked date only — the
+// rival date's tally is frozen history and must not mask a seat shortage.
+const bestYesCount = (poll: GamePoll, votableDateIds: string[]): number => {
   const counts = new Map<string, number>();
   for (const v of poll.votes) {
-    if (v.response === 'yes') {
+    if (v.response === 'yes' && votableDateIds.includes(v.dateId)) {
       counts.set(v.dateId, (counts.get(v.dateId) ?? 0) + 1);
     }
   }
@@ -68,10 +83,14 @@ const bestYesCount = (poll: GamePoll): number => {
   return max;
 };
 
+// Permanents can always vote. Other tiers wait for the poll to open to
+// them, which the server marks with `expandedAt` — migration 086 stamps it
+// even when the poll was pinned during the permanents-only window, so this
+// reads correctly for a 'confirmed' poll too. The status check covers
+// legacy rows that flipped to 'expanded' before `expandedAt` existed.
 const isPlayerEligible = (player: Player, poll: GamePoll): boolean => {
-  if (poll.status === 'open') return player.type === 'permanent';
-  if (poll.status === 'expanded') return true;
-  return false;
+  if (player.type === 'permanent') return true;
+  return poll.status === 'expanded' || !!poll.expandedAt;
 };
 
 export function findPendingVote(
@@ -84,13 +103,35 @@ export function findPendingVote(
   const candidates: PendingVoteInfo[] = [];
 
   for (const poll of polls) {
-    if (poll.status !== 'open' && poll.status !== 'expanded') continue;
+    // A picked poll still recruiting: the date is set, the seats are not
+    // full, and no game has been started off it yet.
+    const isRecruitingPick = poll.status === 'confirmed'
+      && !!poll.confirmedDateId
+      && !poll.confirmedGameId;
+    if (poll.status !== 'open' && poll.status !== 'expanded' && !isRecruitingPick) continue;
+    // An admin froze voting — pointing someone at a button the server will
+    // reject is worse than staying quiet.
+    if (poll.votingLockedAt) continue;
     if (!isPlayerEligible(currentPlayer, poll)) continue;
+
+    // The dates a vote would actually be accepted on. Excluded dates never
+    // qualify, and once one is picked it's the only one.
+    const votableDateIds = isRecruitingPick
+      ? [poll.confirmedDateId as string]
+      : poll.dates.filter(d => !d.disabledAt).map(d => d.id);
+    if (votableDateIds.length === 0) continue;
+
     // Already responded? Skip — we don't want to badger users who voted no
     // either; they've made their choice and can revisit on their own.
-    if (poll.votes.some(v => v.playerId === currentPlayer.id)) continue;
+    if (poll.votes.some(v =>
+      v.playerId === currentPlayer.id && votableDateIds.includes(v.dateId)
+    )) continue;
 
-    const spotsLeft = Math.max(0, poll.targetPlayerCount - bestYesCount(poll));
+    const spotsLeft = Math.max(0, poll.targetPlayerCount - bestYesCount(poll, votableDateIds));
+    // The picked night is already full — nobody is waiting on this viewer.
+    // (Open / expanded polls keep nudging at 0 spots: the admin hasn't
+    // committed to a date yet, so another yes still shapes the outcome.)
+    if (isRecruitingPick && spotsLeft === 0) continue;
 
     let msUntilDeadline = Infinity;
     let deadlineKind: PendingVoteInfo['deadlineKind'] = 'expansion';
@@ -98,6 +139,11 @@ export function findPendingVote(
       const expansionDue = new Date(poll.createdAt).getTime() + poll.expansionDelayHours * HOUR_MS;
       msUntilDeadline = expansionDue - now;
       deadlineKind = 'expansion';
+    } else if (isRecruitingPick) {
+      const picked = poll.dates.find(d => d.id === poll.confirmedDateId);
+      const ts = picked ? dateRowMs(picked.proposedDate, picked.proposedTime) : 0;
+      msUntilDeadline = ts > now ? ts - now : Infinity;
+      deadlineKind = 'gameDate';
     } else {
       const earliest = earliestUpcomingDateMs(poll, now);
       msUntilDeadline = earliest === Infinity ? Infinity : earliest - now;
@@ -112,7 +158,10 @@ export function findPendingVote(
     else if (timeCritical) urgency = 'time';
     else if (fewSpots) urgency = 'spots';
 
-    candidates.push({ poll, urgency, spotsLeft, msUntilDeadline, deadlineKind });
+    candidates.push({
+      poll, urgency, spotsLeft, msUntilDeadline, deadlineKind,
+      pickedDate: isRecruitingPick,
+    });
   }
 
   if (candidates.length === 0) return null;

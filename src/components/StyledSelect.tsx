@@ -42,9 +42,19 @@ import { useTranslation } from '../i18n';
 type Variant = 'default' | 'green' | 'purple';
 type Size = 'sm' | 'md';
 
+// An option with no `group` renders flat at the top of the list. Options
+// that carry one are collected under a collapsible header (first-appearance
+// order), so a long list can lead with the entries that matter — e.g. the
+// permanent players — and tuck guests behind one tap.
+export interface StyledSelectOption<T extends string> {
+  value: T;
+  label: string;
+  group?: string;
+}
+
 interface StyledSelectProps<T extends string> {
   value: T;
-  options: { value: T; label: string }[];
+  options: StyledSelectOption<T>[];
   onChange: (next: T) => void;
   title?: string;
   // Override the auto-derived trigger label (defaults to the selected
@@ -93,7 +103,25 @@ export function StyledSelect<T extends string>({
   // not-yet-measured — popover renders invisibly off-screen on first
   // paint until useLayoutEffect lands the real rect synchronously.
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const { isRTL } = useTranslation();
+
+  const ungroupedOptions = options.filter(o => !o.group);
+  // First-appearance order, so callers control group order by option order.
+  const groupNames: string[] = [];
+  for (const o of options) {
+    if (o.group && !groupNames.includes(o.group)) groupNames.push(o.group);
+  }
+
+  // Re-open always starts collapsed, except the group holding the current
+  // selection — otherwise picking a guest and reopening would hide the very
+  // row that's active.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const selectedGroup = options.find(o => o.value === value)?.group;
+    setExpandedGroups(selectedGroup ? new Set([selectedGroup]) : new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Position update — synchronous (`useLayoutEffect`) so the first
   // paint with `isOpen=true` already has the right coords; no visible
@@ -208,6 +236,46 @@ export function StyledSelect<T extends string>({
     };
   }
 
+  const renderOption = (opt: StyledSelectOption<T>) => {
+    const isSelected = opt.value === value;
+    return (
+      <button
+        key={opt.value}
+        type="button"
+        role="option"
+        aria-selected={isSelected}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onChange(opt.value);
+          setIsOpen(false);
+        }}
+        style={{
+          display: 'block',
+          width: '100%',
+          textAlign: isRTL ? 'right' : 'left',
+          padding: '0.4rem 0.6rem',
+          fontSize: size === 'sm' ? '0.7rem' : '0.85rem',
+          background: isSelected ? selectedRowColors.background : 'transparent',
+          color: isSelected ? selectedRowColors.color : 'var(--text)',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontWeight: isSelected ? 600 : 400,
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => {
+          if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)';
+        }}
+        onMouseLeave={e => {
+          if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+        }}
+      >
+        {opt.label}
+      </button>
+    );
+  };
+
   return (
     <div
       style={{
@@ -258,43 +326,48 @@ export function StyledSelect<T extends string>({
             style={{ position: 'fixed', inset: 0, zIndex: BACKDROP_Z_INDEX }}
           />
           <div role="listbox" style={popoverStyle}>
-            {options.map(opt => {
-              const isSelected = opt.value === value;
+            {ungroupedOptions.map(renderOption)}
+            {groupNames.map(group => {
+              const groupOptions = options.filter(o => o.group === group);
+              const isExpanded = expandedGroups.has(group);
               return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onChange(opt.value);
-                    setIsOpen(false);
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: isRTL ? 'right' : 'left',
-                    padding: '0.4rem 0.6rem',
-                    fontSize: size === 'sm' ? '0.7rem' : '0.85rem',
-                    background: isSelected ? selectedRowColors.background : 'transparent',
-                    color: isSelected ? selectedRowColors.color : 'var(--text)',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: isSelected ? 600 : 400,
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)';
-                  }}
-                  onMouseLeave={e => {
-                    if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                  }}
-                >
-                  {opt.label}
-                </button>
+                <div key={group}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setExpandedGroups(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group)) next.delete(group);
+                        else next.add(group);
+                        return next;
+                      });
+                    }}
+                    aria-expanded={isExpanded}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      width: '100%',
+                      textAlign: isRTL ? 'right' : 'left',
+                      padding: '0.4rem 0.6rem',
+                      marginTop: '0.15rem',
+                      fontSize: size === 'sm' ? '0.65rem' : '0.75rem',
+                      background: 'rgba(255,255,255,0.04)',
+                      color: 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>{group} ({groupOptions.length})</span>
+                    <span style={{ fontSize: '0.65em' }}>{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {isExpanded && groupOptions.map(renderOption)}
+                </div>
               );
             })}
           </div>

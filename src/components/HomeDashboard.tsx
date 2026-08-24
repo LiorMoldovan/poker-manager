@@ -1163,8 +1163,9 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
     // the game is happening regardless of whether THIS viewer
     // weighed in.
     //
-    // The confirmed branch passes false here — by definition it's
-    // already showing the celebratory header.
+    // The confirmed branch passes true as well, but only for the
+    // nudge-suppression half: its header is already the celebratory
+    // one, so the title/icon swap is a no-op there.
     elevateWhenFilled: boolean;
   }): React.ReactElement => {
     let dateLabel = '';
@@ -1423,13 +1424,33 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
   };
 
   if (isConfirmed) {
+    // Picking a date funnels voting to it rather than freezing it, so a
+    // picked poll that hasn't filled its seats is still recruiting and this
+    // viewer may be the missing yes. Only a vote on the PICKED date counts
+    // — the others are frozen and the server rejects them.
+    //
+    // `elevateWhenFilled` handles the "stop nudging" half: once the picked
+    // date reaches its target it drops the awaiting prefix. The header and
+    // icon it swaps in when filled are the celebratory ones we already
+    // pass here, so enabling it changes nothing else on this branch.
+    const hasMyVoteOnPicked = myPlayerId !== null
+      && !!poll.confirmedDateId
+      && poll.votes.some(v => v.playerId === myPlayerId && v.dateId === poll.confirmedDateId);
+    const stillRecruiting = !poll.confirmedGameId && !poll.votingLockedAt;
+    // Don't nudge a viewer the server would still turn away: a poll pinned
+    // during the permanents-only window keeps guests out until `expandedAt`
+    // is stamped, and a CTA they can't act on is worse than silence.
+    const viewerType = myPlayerId
+      ? (getAllPlayers().find(p => p.id === myPlayerId)?.type ?? null)
+      : null;
+    const viewerCanVoteNow = viewerType === 'permanent' || !!poll.expandedAt;
     return renderRichDateCard({
       dateId: poll.confirmedDateId,
-      awaitingViewer: false,
+      awaitingViewer: myPlayerId !== null && !hasMyVoteOnPicked && stillRecruiting && viewerCanVoteNow,
       emptyFallback: false,
       titleKey: 'home.schedule.confirmedTitle',
       icon: '🎯',
-      elevateWhenFilled: false,
+      elevateWhenFilled: true,
     });
   }
 

@@ -15,6 +15,7 @@ import {
   getGroupId,
   getPlayerStats, getAllGames,
 } from '../database/storage';
+import { suggestHosts } from '../utils/hostRotation';
 import { forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { formatHebrewHalf } from '../utils/calculations';
 import { useTranslation } from '../i18n';
@@ -512,6 +513,8 @@ export default function ScheduleTab() {
     if (msg.includes('poll_locked')) return t('schedule.errorPollLocked');
     if (msg.includes('seat_held')) return t('schedule.errorSeatHeld');
     if (msg.includes('seat_full')) return t('schedule.errorSeatFull');
+    // Migration 106 — a picked date is the only votable date.
+    if (msg.includes('date_not_picked')) return t('schedule.errorFillPinnedFirst');
     if (msg.includes('no_player_link')) return t('schedule.errorNoPlayerLink');
     // Migration 086 — per-date exclude error reasons. `date_disabled`
     // is what cast_poll_vote raises if a member tries to RSVP on an
@@ -3694,6 +3697,56 @@ function EditPollModal(props: EditPollModalProps) {
   // and admins don't have to re-type "בית של דני" every time.
   const knownLocations = getSettings().locations || [];
 
+  // Host-rotation suggestion. Setting the location after a date is picked
+  // is in practice "whose turn is it to host", so we rank the known hosts
+  // by how long it's been — among the people actually coming, since you
+  // can't play at the home of someone who isn't there.
+  //
+  // Attendance is read off the picked date when there is one, otherwise
+  // the current front-runner, so the panel is still useful while the
+  // group is mid-vote.
+  const hostSuggestions = useMemo(() => {
+    const relevantDateId = poll.confirmedDateId
+      ?? [...poll.dates]
+        .map(d => ({
+          id: d.id,
+          yes: poll.votes.reduce(
+            (n, v) => n + (v.dateId === d.id && v.response === 'yes' ? 1 : 0),
+            0,
+          ),
+        }))
+        .sort((a, b) => b.yes - a.yes)[0]?.id
+        ?? null;
+    const yesIds = new Set(
+      poll.votes
+        .filter(v => v.dateId === relevantDateId && v.response === 'yes')
+        .map(v => v.playerId),
+    );
+    return suggestHosts({
+      games: getAllGames(),
+      players: getAllPlayers(),
+      knownLocations,
+      // Nobody has committed yet → rank on history alone rather than
+      // filtering everyone out.
+      attendingPlayerIds: yesIds.size > 0 ? yesIds : null,
+      now: Date.now(),
+    });
+    // knownLocations is a fresh array each render; its contents are what
+    // matter, so key off the joined value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poll.confirmedDateId, poll.dates, poll.votes, knownLocations.join('|')]);
+
+  const topHost = hostSuggestions[0] ?? null;
+  const altHosts = hostSuggestions.slice(1, 3);
+
+  // "Hasn't hosted in N days" reads badly past a fortnight — switch to
+  // weeks so the number stays small and scannable.
+  const hostGapLabel = (daysSince: number | null): string => {
+    if (daysSince === null) return t('schedule.hostSuggestion.neverHosted');
+    if (daysSince < 14) return t('schedule.hostSuggestion.lastHostedDays', { n: daysSince });
+    return t('schedule.hostSuggestion.lastHostedWeeks', { n: Math.round(daysSince / 7) });
+  };
+
   // Hide the expansion-delay editor in groups with no guest tier:
   // the field controls when guest/permanent_guest players join the
   // pool, so when no such players exist there's nothing to delay.
@@ -3795,6 +3848,82 @@ function EditPollModal(props: EditPollModalProps) {
           <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             {t('schedule.fieldDefaultLocation')}
           </label>
+
+          {/* Host-rotation suggestion. Only rendered when there's actual
+              hosting history to reason from — an empty or single-host
+              group gets no panel rather than a confident-looking
+              suggestion built on one data point. Tapping a name fills
+              the location field; nothing is applied until Save. */}
+          {topHost && hostSuggestions.length > 1 && (
+            <div
+              style={{
+                marginBottom: 8, padding: '8px 10px', borderRadius: 8,
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.28)',
+              }}
+            >
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                💡 {t('schedule.hostSuggestion.title')}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setDefaultLocation(topHost.location)}
+                  disabled={submitting}
+                  style={{
+                    padding: '4px 12px', borderRadius: 6,
+                    border: defaultLocation === topHost.location
+                      ? '2px solid #3b82f6' : '1px solid rgba(59, 130, 246, 0.45)',
+                    background: defaultLocation === topHost.location
+                      ? 'rgba(59, 130, 246, 0.22)' : 'rgba(59, 130, 246, 0.12)',
+                    color: '#93c5fd', fontSize: 13, fontWeight: 700,
+                    cursor: submitting ? 'wait' : 'pointer',
+                    opacity: submitting ? 0.6 : 1,
+                  }}
+                >{topHost.location}</button>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {hostGapLabel(topHost.daysSince)}
+                  {topHost.gamesHosted > 0 && (
+                    <> · {t('schedule.hostSuggestion.hostedCount', { n: topHost.gamesHosted })}</>
+                  )}
+                </span>
+              </div>
+              {altHosts.length > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+                  marginTop: 6, paddingTop: 6,
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.85 }}>
+                    {t('schedule.hostSuggestion.alternatives')}:
+                  </span>
+                  {altHosts.map(h => (
+                    <button
+                      key={h.location}
+                      type="button"
+                      onClick={() => setDefaultLocation(h.location)}
+                      disabled={submitting}
+                      title={h.attending ? undefined : t('schedule.hostSuggestion.notAttending')}
+                      style={{
+                        padding: '3px 8px', borderRadius: 5,
+                        border: defaultLocation === h.location
+                          ? '2px solid var(--primary)' : '1px solid var(--border)',
+                        background: defaultLocation === h.location
+                          ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                        color: 'var(--text-muted)', fontSize: 11,
+                        cursor: submitting ? 'wait' : 'pointer',
+                        opacity: submitting ? 0.6 : (h.attending ? 1 : 0.65),
+                      }}
+                    >
+                      {h.location} · {hostGapLabel(h.daysSince)}
+                      {!h.attending && <> · {t('schedule.hostSuggestion.notAttendingShort')}</>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {knownLocations.map(loc => (
               <button
@@ -4656,13 +4785,27 @@ export function ReminderModal(props: ReminderModalProps) {
   // phase at modal-open because the modal lives only for the duration
   // of a single send action — by the time the admin clicks send, the
   // displayed list still matches what they saw.
+  //
+  // `expandedAt` is the authoritative "open to every tier" signal rather
+  // than the status string: a poll pinned during the permanents-only
+  // window sits at status 'confirmed' while still being permanents-only,
+  // and migration 086 stamps `expandedAt` on it once the window passes.
   const eligiblePlayers = useMemo(() => {
-    if (poll.status === 'expanded') return players;
-    // open (and any other still-active phase that exposes the button —
-    // currently just 'open') is permanents-only, matching the original
-    // 48h invitation window's recipient set.
+    if (poll.status === 'expanded' || poll.expandedAt) return players;
+    // Still in the permanents-only window, matching the original 48h
+    // invitation window's recipient set.
     return players.filter(p => p.type === 'permanent');
-  }, [players, poll.status]);
+  }, [players, poll.status, poll.expandedAt]);
+
+  // The dates a reminder can legitimately ask about. Once a date is
+  // picked it's the only votable one (migration 106), so the tally below
+  // must ignore the rest — otherwise every member who never voted on a
+  // now-frozen rival date looks "partial" and gets pinged for an answer
+  // the server would refuse. Excluded dates drop out for the same reason.
+  const relevantDateIds = useMemo(() => {
+    if (poll.confirmedDateId) return [poll.confirmedDateId];
+    return poll.dates.filter(d => !d.disabledAt).map(d => d.id);
+  }, [poll.confirmedDateId, poll.dates]);
 
   // "Hasn't given a final answer" set: registered eligible members who
   // are missing a decisive yes/no on at least one poll date. A 'maybe'
@@ -4685,7 +4828,7 @@ export function ReminderModal(props: ReminderModalProps) {
   // a flash of unfiltered names.
   const nonVoters = useMemo<Array<{ player: Player; decisiveCount: number; maybeCount: number; totalDates: number }>>(() => {
     if (!registeredIds) return [];
-    const dateIds = poll.dates.map(d => d.id);
+    const dateIds = relevantDateIds;
     const totalDates = dateIds.length;
     // Map of playerId → (dateId → response). Built once per poll-state
     // change so the per-player tally below is O(dates) not O(votes).
@@ -4717,7 +4860,7 @@ export function ReminderModal(props: ReminderModalProps) {
     }
     rows.sort((a, b) => a.player.name.localeCompare(b.player.name, 'he'));
     return rows;
-  }, [eligiblePlayers, poll.votes, poll.dates, registeredIds]);
+  }, [eligiblePlayers, poll.votes, relevantDateIds, registeredIds]);
 
   // Selection state. Starts empty; we populate it once when the
   // registered-member fetch resolves (so the default "everyone checked"
@@ -4792,7 +4935,7 @@ export function ReminderModal(props: ReminderModalProps) {
           </div>
 
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
-            {t('schedule.reminder.helper')}
+            {t(poll.confirmedDateId ? 'schedule.reminder.helperPicked' : 'schedule.reminder.helper')}
           </div>
 
           {registeredIds === null ? (
@@ -4823,7 +4966,7 @@ export function ReminderModal(props: ReminderModalProps) {
                 textAlign: 'center',
               }}
             >
-              ✅ {t('schedule.reminder.allVoted')}
+              ✅ {t(poll.confirmedDateId ? 'schedule.reminder.allVotedPicked' : 'schedule.reminder.allVoted')}
             </div>
           ) : (
             <>
@@ -4978,7 +5121,7 @@ interface ScheduleConfigPanelProps {
 
 // Ordered list drives both the persisted shape and the UI row order so
 // the toggles read in lifecycle order: invitation → expanded → confirmed
-// → target_filled → cancellation → reminder → date_excluded.
+// → target_filled → cancellation → reminder.
 const EMAIL_KIND_ORDER: ScheduleEmailKind[] = [
   'creation',
   'expanded',
@@ -4986,7 +5129,6 @@ const EMAIL_KIND_ORDER: ScheduleEmailKind[] = [
   'target_filled',
   'cancellation',
   'reminder',
-  'date_excluded',
 ];
 
 // Translation key + emoji for each kind. Kept tight on purpose — the
@@ -4999,11 +5141,10 @@ const EMAIL_KIND_META: Record<ScheduleEmailKind, { emoji: string; labelKey: Tran
   target_filled:  { emoji: '🎉', labelKey: 'schedule.config.emailKind.target_filled' },
   cancellation:   { emoji: '❌', labelKey: 'schedule.config.emailKind.cancellation' },
   reminder:       { emoji: '📣', labelKey: 'schedule.config.emailKind.reminder' },
-  date_excluded:  { emoji: '✂️', labelKey: 'schedule.config.emailKind.date_excluded' },
 };
 
 // Resolve the persisted partial into a fully-defined record so the UI
-// always renders 7 toggles with concrete booleans. A missing key falls
+// always renders every toggle with a concrete boolean. A missing key falls
 // back to true (the DB default), matching `isEmailKindAllowed` server
 // + client behavior — "absent ⇒ on".
 function readEmailKinds(stored: Partial<Record<ScheduleEmailKind, boolean>> | undefined): Record<ScheduleEmailKind, boolean> {

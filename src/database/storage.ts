@@ -572,8 +572,20 @@ export const saveSettings = (settings: Settings): void => {
 };
 
 
+// Bucket key for a game's hosting place. `location` is optional free text
+// (it was only introduced part-way through the group's history), so games
+// predating it collapse into one explicit "no place recorded" bucket rather
+// than silently disappearing from any place-based grouping.
+export const NO_LOCATION_KEY = '__no_location__';
+
+export const getGameLocationKey = (game: { location?: string }): string =>
+  (game.location || '').trim() || NO_LOCATION_KEY;
+
 // Player Statistics
-export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): PlayerStats[] => {
+export const getPlayerStats = (
+  dateFilter?: { start?: Date; end?: Date },
+  locationFilter?: Set<string> | null
+): PlayerStats[] => {
   const players = getAllPlayers();
   const allGamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
   let games = getAllGames().filter(g => g.status === 'completed');
@@ -586,6 +598,11 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
     });
+  }
+
+  // Apply hosting-place filter if provided (keys from getGameLocationKey)
+  if (locationFilter) {
+    games = games.filter(g => locationFilter.has(getGameLocationKey(g)));
   }
   
   const completedGameIds = new Set(games.map(g => g.id));

@@ -21,16 +21,24 @@
 // any other online member (or the actor themselves on next mount) drains
 // the queue. Up to 3 attempts per job before terminal `failed` status, and
 // a 5-min lease on `running` jobs auto-recovers worker crashes.
+//
+// This worker handles only the five poll-lifecycle kinds in `runJob`. Every
+// other kind (vote_change, reminder, date_excluded, trivia/training) is the
+// server worker's — `/api/notification-worker`, migration 066. Migration 108
+// teaches claim_notification_job that split, because before it the browser
+// could claim a vote_change job, fail to recognise it, and abandon it in
+// 'running' forever — which silently muted vote-change pings for that poll
+// for good via the (poll_id, kind) partial unique index.
 
 import {
   claimNotificationJobRpc, completeNotificationJobRpc,
-  preemptTargetFilledJobRpc, refreshPollsNow,
+  preemptTargetFilledJobRpc, refreshPollsNow, UNHANDLED_JOB,
   type ClaimedNotificationJob, type NotificationJobKind,
 } from '../database/supabaseCache';
 import { getAllPolls, getGroupId } from '../database/storage';
 import {
   dispatchInvitation, dispatchExpanded, dispatchConfirmed,
-  dispatchCancellation, dispatchTargetFilled,
+  dispatchCancellation, dispatchTargetFilled, isAtTargetConfirm,
 } from './scheduleNotifications';
 import type { GamePoll } from '../types';
 
@@ -72,8 +80,15 @@ export async function processNotificationJobs(): Promise<void> {
 
     let drained = 0;
     while (drained < MAX_CLAIMS_PER_RUN) {
-      const job = await claimNotificationJobRpc(groupId);
-      if (!job) break;
+      const claimed = await claimNotificationJobRpc(groupId);
+      if (!claimed) break;
+      // A kind this build can't dispatch, already handed back to the
+      // queue. End the pass rather than loop: the release preserves
+      // created_at, so this same job sits at the head of the claim order
+      // and we'd just re-claim it. The server worker owns it and pg_cron
+      // sweeps within the minute.
+      if (claimed === UNHANDLED_JOB) break;
+      const job = claimed;
       drained++;
 
       try {
@@ -105,14 +120,17 @@ async function runJob(job: ClaimedNotificationJob): Promise<void> {
       await dispatchExpanded(poll);
       return;
     case 'confirmed': {
-      const result = await dispatchConfirmed(poll);
-      // At-target confirmation: preempt any pending 'target_filled' job
-      // for this poll. Without this the recipient gets "המשחק נסגר!"
-      // followed almost immediately by "המשחק מלא — ניפגש!" — same
-      // information, twice.
-      if (result?.atTargetConfirm) {
+      // At-target confirmation: retire any 'target_filled' job for this
+      // poll BEFORE sending, or the recipient gets "המשחק נסגר!" followed
+      // almost immediately by "המשחק מלא — ניפגש!" — same information,
+      // twice. Order matters: the fan-out below takes seconds, and the
+      // other worker only needs one to claim the duplicate. Preempting
+      // first also stamps the sentinel, so a target_filled that hasn't
+      // been enqueued yet never gets created.
+      if (isAtTargetConfirm(poll)) {
         await preemptTargetFilledJobRpc(poll.id);
       }
+      await dispatchConfirmed(poll);
       return;
     }
     case 'cancellation':

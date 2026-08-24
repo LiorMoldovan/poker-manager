@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.22.0';
+export const APP_VERSION = '6.23.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.23.0',
+    date: '2026-08-24',
+    changes: [
+      '🗳 Voting stays open on the picked date',
+      '🏠 Hosting suggestion when picking a date',
+      '📍 Filter statistics by venue',
+      '💀 New records: worst nights & months',
+      '✉️ Email toggles now honored on every device',
+      '🎉 No more duplicate "date set" + "game full"',
+    ],
+  },
   {
     version: '6.22.0',
     date: '2026-07-12',

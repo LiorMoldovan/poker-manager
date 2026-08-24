@@ -18,33 +18,12 @@ import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDispl
 import { canUserGenerateAI } from '../utils/aiEligibility';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
-import { StyledSelect } from '../components/StyledSelect';
+import { StyledSelect, StyledSelectOption } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
-
-// Allowlist of non-permanent player IDs that should still appear in
-// player-vs-player views (Head-to-Head + Impact). The H2H + Impact
-// dropdowns are otherwise restricted to `type === 'permanent'`,
-// because plain `guest` and most `permanent_guest` players don't have
-// enough games to make the comparisons meaningful. Players added here
-// get treated as permanent for those two views only — color map,
-// dropdowns, and impact "other players" loop. The rest of the screen
-// (cumulative chart, AI insights, color-by-permanent-position) is
-// unchanged.
-//
-// Once a player here is promoted to `type === 'permanent'`, their
-// entry here becomes a no-op and can be removed.
-//
-// Current entries:
-//   - 'aa4de7f1-0b57-4946-a11d-f554d2a864f9' = קובי (group d1998bed,
-//     marked permanent_guest but plays often enough that the owner
-//     wants him in H2H + Impact). Pending promotion to permanent.
-const EXTRA_COMPARISON_PLAYER_IDS = new Set<string>([
-  'aa4de7f1-0b57-4946-a11d-f554d2a864f9',
-]);
 
 // Color palette for players - stable mapping by player ID
 const PLAYER_COLORS = [
@@ -158,29 +137,44 @@ const GraphsScreen = () => {
     finally { setSharing(false); }
   };
 
-  // Players eligible for the player-vs-player views (Head-to-Head +
-  // Impact dropdowns and the Impact "other players" comparison loop).
-  // Permanent players + the EXTRA_COMPARISON_PLAYER_IDS allowlist (see
-  // top of file). Order: permanents in their original list order, then
-  // allowlisted extras appended — keeps stable color assignments.
-  const comparisonViewPlayers = useMemo(() => {
-    const permanent = players.filter(p => p.type === 'permanent');
-    const extras = players.filter(p => p.type !== 'permanent' && EXTRA_COMPARISON_PLAYER_IDS.has(p.id));
-    return [...permanent, ...extras];
-  }, [players]);
+  // Options for the Head-to-Head + Impact player pickers: permanents flat at
+  // the top, regular guests behind one collapsible header. Plain `guest`
+  // players are left out on purpose — there are dozens of them and they play
+  // too rarely for the comparison to say anything, so including them would
+  // bury the useful picks in a list nobody wants to scroll.
+  const comparisonPlayerOptions = useMemo<StyledSelectOption<string>[]>(() => {
+    const order: Player['type'][] = ['permanent', 'permanent_guest'];
+    return order.flatMap(type =>
+      players
+        .filter(p => (p.type || 'permanent') === type)
+        .map(p => ({
+          value: p.id,
+          label: p.name,
+          group: type === 'permanent' ? undefined : t('settings.players.groupPermanentGuest'),
+        }))
+    );
+  }, [players, t]);
 
-  // Color mapping - stable by player order in permanent list. Plus
-  // an explicit allowlist of non-permanent player IDs that should also
-  // appear in player-vs-player views (Head-to-Head + Impact). See
-  // EXTRA_COMPARISON_PLAYER_IDS below for the rationale.
+  // Scope of the Impact view's "other players" loop — deliberately NARROWER
+  // than the picker above. A guest with three games produces a with/without
+  // delta that's noise, so they can be the subject of the comparison but not
+  // a row in it.
+  const impactComparisonPlayers = useMemo(
+    () => players.filter(p => p.type === 'permanent'),
+    [players]
+  );
+
+  // Color mapping — permanents first so their colors stay stable as guests
+  // come and go, then everyone else. Every player gets a color because any
+  // of them can now be picked in H2H / Impact.
   const playerColorMap = useMemo(() => {
     const map = new Map<string, string>();
     const permanentPlayers = players.filter(p => p.type === 'permanent');
     permanentPlayers.forEach((player, index) => {
       map.set(player.id, PLAYER_COLORS[index % PLAYER_COLORS.length]);
     });
-    const extras = players.filter(p => EXTRA_COMPARISON_PLAYER_IDS.has(p.id) && !map.has(p.id));
-    extras.forEach((player, index) => {
+    const others = players.filter(p => !map.has(p.id));
+    others.forEach((player, index) => {
       map.set(player.id, PLAYER_COLORS[(permanentPlayers.length + index) % PLAYER_COLORS.length]);
     });
     return map;
@@ -714,13 +708,13 @@ const GraphsScreen = () => {
   }, [selectedPlayers, getPlayerName]);
 
   // Impact data - for a selected player, how their avg changes with/without each other player.
-  // Uses `comparisonViewPlayers` (permanents + the EXTRA_COMPARISON_PLAYER_IDS allowlist).
-  // Plain `guest` and unlisted `permanent_guest` players are intentionally excluded — their
-  // game counts are too low to make the with/without comparison statistically useful.
+  // The subject can be anyone the picker offers, but the comparison rows stay permanent-only
+  // (`impactComparisonPlayers`) — guests' game counts are too low for the with/without delta
+  // to mean anything.
   const impactData = useMemo(() => {
     if (!impactPlayerId) return [];
 
-    const comparisonPlayers = comparisonViewPlayers.filter(p => p.id !== impactPlayerId);
+    const comparisonPlayers = impactComparisonPlayers.filter(p => p.id !== impactPlayerId);
     const results: Array<{
       otherPlayerId: string;
       otherPlayerName: string;
@@ -784,7 +778,7 @@ const GraphsScreen = () => {
 
     results.sort((a, b) => b.impact - a.impact);
     return results;
-  }, [impactPlayerId, filteredGames, gamePlayers, comparisonViewPlayers, getPlayerColor]);
+  }, [impactPlayerId, filteredGames, gamePlayers, impactComparisonPlayers, getPlayerColor]);
 
   const getTimeframeLabel = () => {
     const locale = language === 'he' ? 'he-IL' : 'en-US';
@@ -1238,7 +1232,7 @@ const GraphsScreen = () => {
               <StyledSelect<string>
                 value={player1Id}
                 onChange={setPlayer1Id}
-                options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+                options={comparisonPlayerOptions}
                 variant="green"
                 size="md"
                 fullWidth
@@ -1250,7 +1244,7 @@ const GraphsScreen = () => {
               <StyledSelect<string>
                 value={player2Id}
                 onChange={setPlayer2Id}
-                options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+                options={comparisonPlayerOptions}
                 variant="green"
                 size="md"
                 fullWidth
@@ -2169,7 +2163,7 @@ const GraphsScreen = () => {
             <StyledSelect<string>
               value={impactPlayerId}
               onChange={setImpactPlayerId}
-              options={comparisonViewPlayers.map(p => ({ value: p.id, label: p.name }))}
+              options={comparisonPlayerOptions}
               variant="green"
               size="md"
               fullWidth

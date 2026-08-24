@@ -119,7 +119,7 @@ function toSettings(row: Record<string, unknown>): Settings {
     const kinds: Partial<Record<ScheduleEmailKind, boolean>> = {};
     const allKinds: ScheduleEmailKind[] = [
       'creation', 'expanded', 'confirmed', 'target_filled',
-      'cancellation', 'reminder', 'date_excluded',
+      'cancellation', 'reminder',
     ];
     for (const k of allKinds) {
       if (typeof raw[k] === 'boolean') kinds[k] = raw[k] as boolean;
@@ -2346,11 +2346,24 @@ export type ClaimedNotificationJob = {
   attempts: number;
 };
 
+// Returned instead of a job when the queue handed us a kind this build
+// can't dispatch. Distinct from `null` (queue empty) because the caller
+// must keep draining rather than stop — see the release call below.
+export const UNHANDLED_JOB = 'unhandled' as const;
+
 // Atomic SELECT FOR UPDATE SKIP LOCKED claim. Returns null when the queue
-// is empty for this group. The RPC enforces group-membership via auth.uid().
+// is empty for this group. The RPC enforces group-membership via auth.uid()
+// and (since migration 108) only hands out the kinds `runJob` implements —
+// server-only kinds like vote_change stay for /api/notification-worker.
+//
+// The UNHANDLED_JOB path is version-skew insurance: a kind added to the
+// RPC's allowlist before this client learns it would otherwise be claimed
+// and stranded in 'running' forever, and the partial unique index on
+// (poll_id, kind) would then mute that channel for the poll permanently.
+// Releasing hands it straight back with its retry budget intact.
 export async function claimNotificationJobRpc(
   groupId: string,
-): Promise<ClaimedNotificationJob | null> {
+): Promise<ClaimedNotificationJob | typeof UNHANDLED_JOB | null> {
   const { data, error } = await supabase.rpc('claim_notification_job', {
     p_group_id: groupId,
   });
@@ -2365,8 +2378,9 @@ export async function claimNotificationJobRpc(
     row.kind !== 'confirmed' && row.kind !== 'cancellation' &&
     row.kind !== 'target_filled'
   ) {
-    console.warn('claim_notification_job: unknown kind', row.kind);
-    return null;
+    console.warn('claim_notification_job: unhandled kind, releasing', row.kind);
+    await releaseNotificationJobRpc(row.id);
+    return UNHANDLED_JOB;
   }
   return {
     id: row.id,
@@ -2374,6 +2388,20 @@ export async function claimNotificationJobRpc(
     kind: row.kind,
     attempts: row.attempts,
   };
+}
+
+// Hand a claimed job back to the queue without consuming an attempt, so
+// the worker that CAN dispatch it still has its full retry budget.
+// Migration 108.
+export async function releaseNotificationJobRpc(jobId: string): Promise<void> {
+  const { error } = await supabase.rpc('release_notification_job', {
+    p_job_id: jobId,
+  });
+  if (error) {
+    // Not thrown: the job keeps its 5-min lease, so the server worker
+    // picks it up once that expires. Slower, not lost.
+    console.warn('release_notification_job failed:', error);
+  }
 }
 
 // Mark a claimed job done OR failed. On failure with attempts < 3 the RPC

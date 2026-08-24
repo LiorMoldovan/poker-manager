@@ -17,7 +17,8 @@
 //   - onCancel                         → "בטל" admin chip
 //   - onDelete                         → "מחק" admin chip
 //   - reminder                         → "📣 תזכורת" admin chip → ReminderModal
-//                                         (open / expanded only)
+//                                         (open / expanded, or a picked date
+//                                          still short of its target)
 //   - start scheduled game             → "התחל משחק" admin chip
 //                                         (admin, confirmed-at-target, !confirmedGameId)
 //   - handleShareInvitation            → "📤 שתף הצבעה" chip
@@ -537,12 +538,14 @@ export default function PollCard(props: PollCardProps) {
             // an "include" toggle. SQL also prevents the auto-close
             // trigger from promoting a disabled date to confirmed.
             const isDisabled = !!d.disabledAt;
-            // Fill-pinned-first lock: when an admin manually pins a date
-            // before the target was reached, all other dates freeze so
-            // remaining recruitment funnels into the picked date. Lifts
-            // automatically the moment the pinned date hits target
-            // (`isConfirmedBelowTarget` flips to false).
-            const isFillPinnedLocked = isConfirmedBelowTarget && !isPinnedHere;
+            // Funnel lock: once a date is picked, every other date freezes
+            // so all remaining voting lands on the chosen night. Holds for
+            // as long as the pin does — including after the picked date
+            // fills, otherwise a full game would silently re-open its
+            // rival dates. Releasing the pin clears `confirmedDateId` and
+            // re-opens everything. Mirrors the 'date_not_picked' guard in
+            // cast_poll_vote / admin_cast_poll_vote (migration 106).
+            const isFillPinnedLocked = !!poll.confirmedDateId && !isPinnedHere;
             const expanded = expandedVoterDates.has(d.id);
             // Waze link + arrival details for this tile's location. Only
             // surfaced on the pinned/confirmed date (the chosen night) to
@@ -763,8 +766,8 @@ export default function PollCard(props: PollCardProps) {
                     (mutually exclusive by construction: SQL blocks
                     disabling the pinned date, leader detection skips
                     disabled + confirmed polls, and FillPinned only
-                    applies to non-pinned tiles of confirmed-below-
-                    target polls).
+                    applies to the non-pinned tiles of a poll that
+                    already has a picked date).
                     Lives between the header and the progress bar so
                     the "why is this tile locked / leading / disabled"
                     reason is the first thing the user reads after the
@@ -1171,13 +1174,21 @@ export default function PollCard(props: PollCardProps) {
             {isSharing ? t('common.capturing') : t('common.share')}
           </button>
         )}
-        {/* Reminder — admin-only, open + expanded polls only. Confirmed
-            polls already have a locked date; "didn't vote yet" is no
-            longer the relevant axis there (the relevant action is
-            confirming attendance, which the share-game flow covers).
+        {/* Reminder — admin-only nudge for members who haven't answered.
+            Available while the poll is still collecting votes, which
+            includes a picked date that hasn't filled its seats: since
+            migration 106 a pick funnels voting rather than freezing it,
+            and chasing the last seats is exactly when an admin wants to
+            ping the non-voters. Hidden once the seats are full, voting
+            is locked, or a game has been started off the poll — there's
+            nobody left to chase in any of those states.
             Sits with the constructive cluster (start / share / edit)
             since it's a non-destructive nudge action. */}
-        {isAdmin && (poll.status === 'open' || poll.status === 'expanded') && (
+        {isAdmin && (
+          poll.status === 'open'
+          || poll.status === 'expanded'
+          || (isConfirmedBelowTarget && !poll.confirmedGameId && !isVotingLocked)
+        ) && (
           <button
             onClick={() => setReminderOpen(true)}
             title={t('schedule.reminder.button')}

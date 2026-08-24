@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, hideForCapture, shareFiles } from '../utils/sharing';
-import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
-import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
+import { PlayerStats, Player, PlayerType, GamePlayer, Game } from '../types';
+import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles, getGameLocationKey, NO_LOCATION_KEY } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
 import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName, getGeminiApiKey } from '../utils/geminiAI';
@@ -25,6 +25,25 @@ const ME_BG = 'rgba(59, 130, 246, 0.14)';
 const ME_NAME_COLOR = '#60a5fa';
 const meRowStyle = { background: ME_BG, borderRight: '3px solid #3b82f6' } as const;
 const meNameStyle = { color: ME_NAME_COLOR } as const;
+
+// The single gate every period-scoped pipeline on this screen runs games
+// through. Combines the three global filter dimensions that decide whether a
+// game counts: completion, the date window, and the hosting-place selection.
+// `locationFilter` is null whenever every place is selected, which keeps the
+// default path allocation-free and identical to the pre-filter behaviour.
+const passesGameFilter = (
+  game: Game,
+  dateFilter?: { start?: Date; end?: Date },
+  locationFilter?: Set<string> | null
+): boolean => {
+  if (game.status !== 'completed') return false;
+  if (locationFilter && !locationFilter.has(getGameLocationKey(game))) return false;
+  if (!dateFilter) return true;
+  const gameDate = new Date(game.date || game.createdAt);
+  if (dateFilter.start && gameDate < dateFilter.start) return false;
+  if (dateFilter.end && gameDate > dateFilter.end) return false;
+  return true;
+};
 
 // Auto-shrink long player names so narrow mobile cells don't ellipsize.
 // Tiered: short names render at base size, longer names step down.
@@ -88,6 +107,11 @@ const StatisticsScreen = () => {
   const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
+  const [showLocationFilter, setShowLocationFilter] = useState(false); // Collapsed by default
+  // Hosting places currently included. Keys come from getGameLocationKey, so
+  // games with no recorded place live under NO_LOCATION_KEY. Seeded to "all"
+  // by an effect once the available places are known.
+  const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set()); // Track which record sections are expanded
   const [recordDetails, setRecordDetails] = useState<{
     title: string;
@@ -118,6 +142,8 @@ const StatisticsScreen = () => {
   const [isSharingPodiumRates, setIsSharingPodiumRates] = useState(false);
   const [isSharingAvgPlacement, setIsSharingAvgPlacement] = useState(false);
   const [isSharingBestMonths, setIsSharingBestMonths] = useState(false);
+  const [isSharingWorstNights, setIsSharingWorstNights] = useState(false);
+  const [isSharingWorstMonths, setIsSharingWorstMonths] = useState(false);
   const [isSharingOtherRecords, setIsSharingOtherRecords] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
@@ -128,6 +154,8 @@ const StatisticsScreen = () => {
   const podiumRatesRef = useRef<HTMLDivElement>(null);
   const avgPlacementRef = useRef<HTMLDivElement>(null);
   const bestMonthsRef = useRef<HTMLDivElement>(null);
+  const worstNightsRef = useRef<HTMLDivElement>(null);
+  const worstMonthsRef = useRef<HTMLDivElement>(null);
   const chronicleRef = useRef<HTMLDivElement>(null);
   const otherRecordsRef = useRef<HTMLDivElement>(null);
   // Refs for the interactive controls strips inside two of the
@@ -276,13 +304,20 @@ const StatisticsScreen = () => {
   };
 
   const getChronicleKey = () => {
-    if (timePeriod === 'all') return 'all';
-    if (timePeriod === 'year') return `${selectedYear}`;
-    if (timePeriod === 'h1') return `H1-${selectedYear}`;
-    if (timePeriod === 'h2') return `H2-${selectedYear}`;
-    if (timePeriod === 'custom') return `custom-${customStartDate || 'x'}-${customEndDate || 'x'}`;
-    if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-    return 'all';
+    const periodKey = (() => {
+      if (timePeriod === 'all') return 'all';
+      if (timePeriod === 'year') return `${selectedYear}`;
+      if (timePeriod === 'h1') return `H1-${selectedYear}`;
+      if (timePeriod === 'h2') return `H2-${selectedYear}`;
+      if (timePeriod === 'custom') return `custom-${customStartDate || 'x'}-${customEndDate || 'x'}`;
+      if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+      return 'all';
+    })();
+    // A place-scoped chronicle gets its own cache slot, otherwise the story
+    // written about one venue would overwrite the whole-group story for the
+    // same period (and vice versa) — same key, wildly different content.
+    if (!locationFilter) return periodKey;
+    return `${periodKey}@${Array.from(locationFilter).sort().join('+')}`;
   };
 
   const handleShareTable = async () => {
@@ -317,6 +352,26 @@ const StatisticsScreen = () => {
       await shareFiles(files, t('stats.bestMonths'));
     } catch (e) { console.error('Error sharing best months:', e); }
     finally { setIsSharingBestMonths(false); }
+  };
+
+  const handleShareWorstNights = async () => {
+    if (!worstNightsRef.current) return;
+    setIsSharingWorstNights(true);
+    try {
+      const files = await captureAndSplit(worstNightsRef.current, 'poker-worst-nights');
+      await shareFiles(files, t('stats.worstNights'));
+    } catch (e) { console.error('Error sharing worst nights:', e); }
+    finally { setIsSharingWorstNights(false); }
+  };
+
+  const handleShareWorstMonths = async () => {
+    if (!worstMonthsRef.current) return;
+    setIsSharingWorstMonths(true);
+    try {
+      const files = await captureAndSplit(worstMonthsRef.current, 'poker-worst-months');
+      await shareFiles(files, t('stats.worstMonths'));
+    } catch (e) { console.error('Error sharing worst months:', e); }
+    finally { setIsSharingWorstMonths(false); }
   };
 
   const handleShareTop10 = async () => {
@@ -487,14 +542,7 @@ const StatisticsScreen = () => {
   // Show all games for a player (for table row click)
   const showPlayerGames = (player: PlayerStats) => {
     const dateFilter = getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     
     const playerGames = allGamePlayers
@@ -570,18 +618,140 @@ const StatisticsScreen = () => {
     }
   };
 
+  // Distinct hosting places across ALL completed games. Deliberately not
+  // scoped to the active period or the current place selection — the chip
+  // list has to stay stable while the user toggles it, and a place with zero
+  // games in the selected period is still worth showing (greyed out) so the
+  // roster doesn't reshuffle every time the period changes. Real places sort
+  // by all-time frequency; the "no place recorded" bucket is pinned last
+  // since it's the legacy catch-all.
+  const availableLocations = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of getAllGames()) {
+      if (g.status !== 'completed') continue;
+      const key = getGameLocationKey(g);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => {
+        if (a.key === NO_LOCATION_KEY) return 1;
+        if (b.key === NO_LOCATION_KEY) return -1;
+        return b.count - a.count || a.key.localeCompare(b.key, 'he');
+      });
+    // `stats` is the re-render trigger: loadStats() refreshes it on mount, on
+    // filter changes and on realtime pushes — exactly when the cached games
+    // can have changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats]);
+
+  // Per-place game counts for the CURRENT period — this is what each chip
+  // shows, so the number always agrees with the table underneath. Ignores the
+  // place selection itself (otherwise every unselected chip would read 0).
+  const locationPeriodCounts = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const counts = new Map<string, number>();
+    for (const g of getAllGames()) {
+      if (!passesGameFilter(g, dateFilter, null)) continue;
+      const key = getGameLocationKey(g);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, stats]);
+
+  const locationLabel = useCallback(
+    (key: string) => (key === NO_LOCATION_KEY ? t('stats.noLocation') : key),
+    [t]
+  );
+
+  const availableLocationKeys = availableLocations.map(l => l.key).join('|');
+  const selectedLocationsKey = Array.from(selectedLocations).sort().join('|');
+
+  // null = "every place", i.e. no filtering at all. Memoized on the two string
+  // signatures rather than on the Set/array identities so the downstream memos
+  // don't churn every time `stats` is reassigned with equivalent content.
+  const locationFilter = useMemo<Set<string> | null>(() => {
+    if (availableLocations.length === 0) return null;
+    // Empty selection only happens on the very first render, before the seed
+    // effect below runs. Treat it as "all" so the screen never flashes empty.
+    if (selectedLocations.size === 0) return null;
+    if (availableLocations.every(l => selectedLocations.has(l.key))) return null;
+    return new Set(selectedLocations);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableLocationKeys, selectedLocationsKey]);
+
+  // Dep-array token for every memo/effect that reads `locationFilter`. The
+  // 'all' sentinel keeps "no filter" distinct from "empty selection".
+  const locationFilterKey = locationFilter ? `sel:${Array.from(locationFilter).sort().join('|')}` : 'all';
+
+  // Seed (and re-seed) the selection to "all places" whenever the set of known
+  // places actually changes — e.g. a night at a venue we've never used before.
+  // Keyed on the joined key list, not the array identity, so an ordinary stats
+  // refresh never wipes the user's current selection.
+  useEffect(() => {
+    setSelectedLocations(new Set(availableLocations.map(l => l.key)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableLocationKeys]);
+
+  // "All + facets" interaction, so the common intent costs one tap:
+  //  · from "all", tapping a place ISOLATES it rather than excluding it
+  //  · from a subset, tapping adds/removes that place as usual
+  //  · removing the last remaining place falls back to "all" instead of
+  //    dead-ending on an empty selection that renders every table blank
+  const toggleLocation = useCallback((key: string) => {
+    const allKeys = availableLocations.map(l => l.key);
+    setSelectedLocations(prev => {
+      if (allKeys.length > 0 && allKeys.every(k => prev.has(k))) return new Set([key]);
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next.size === 0 ? new Set(allKeys) : next;
+    });
+  }, [availableLocations]);
+
+  const selectAllLocations = useCallback(() => {
+    setSelectedLocations(new Set(availableLocations.map(l => l.key)));
+  }, [availableLocations]);
+
+  // Collapsed-header summary, mirroring the time-period header's "(label)".
+  const locationSummaryLabel = (): string => {
+    if (!locationFilter) return t('stats.allLocations');
+    const labels = availableLocations.filter(l => locationFilter.has(l.key)).map(l => locationLabel(l.key));
+    if (labels.length === 0) return t('stats.allLocations');
+    if (labels.length <= 2) return labels.join(', ');
+    return `${labels[0]} +${labels.length - 1}`;
+  };
+
+  // "📍 place" chip for the share-context subtitles. Empty when no place
+  // filter is active, so the subtitle stays exactly as it was before.
+  const locationContextChip = (): string =>
+    locationFilter ? `📍 ${locationSummaryLabel()}` : '';
+
+  // Compact preset-button styling, copied from the time-period row directly
+  // above so the two rows read as one control set rather than two idioms.
+  // `empty` = no games here in the current period: kept in place so the row
+  // doesn't reflow between periods, but faded and inert since selecting it
+  // could only ever produce a blank table.
+  const locationChipStyle = (selected: boolean, empty = false): React.CSSProperties => ({
+    flex: '1 1 auto',
+    minWidth: '52px',
+    padding: '0.4rem 0.3rem',
+    fontSize: '0.7rem',
+    borderRadius: '6px',
+    border: selected ? '2px solid var(--primary)' : '1px solid var(--border)',
+    background: selected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+    color: selected ? 'var(--primary)' : 'var(--text-muted)',
+    opacity: empty ? 0.4 : 1,
+    cursor: empty ? 'default' : 'pointer',
+    whiteSpace: 'nowrap',
+  });
+
   // Get top 20 single night wins (filtered by period and player types)
   const top20Wins = useMemo(() => {
     const override = tablePeriodOverrides.top10;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     
     // Get player IDs that match selected types
@@ -631,7 +801,8 @@ const StatisticsScreen = () => {
     // No `.slice` here — top10TableData slices to 10 after applying
     // its visibility filter, so a player who would only land in the
     // top 10 once we widen visibility doesn't get pre-truncated.
-  }, [tablePeriodOverrides.top10, stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.top10, stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
   const top20WinsAllTime = useMemo(() => {
@@ -677,13 +848,56 @@ const StatisticsScreen = () => {
       .slice(0, 20);
   }, [players, selectedTypes]);
 
-  // Top 10 best months ever for a single player. Aggregates each player's
-  // total profit across every completed game in a calendar month, then
-  // ranks (player, month) pairs by that summed profit. All-time, no
-  // period/active-only filtering — companion to top20WinsAllTime which
-  // ranks single-night wins. Only positive aggregates surface (a "best
-  // month" with negative profit isn't a record, it's a worst month).
-  const top10BestMonthsAllTime = useMemo(() => {
+  // Mirror of top20WinsAllTime for the losing side: the 20 heaviest single-night
+  // losses ever. Same all-time, type-filtered scope; only negative results
+  // qualify (a break-even night isn't a loss record).
+  const worst20NightsAllTime = useMemo(() => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+
+    const validPlayerIds = new Set(
+      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
+    );
+
+    const allResults: Array<{
+      playerName: string;
+      profit: number;
+      date: string;
+      gameId: string;
+      playersCount: number;
+    }> = [];
+
+    for (const game of allGames) {
+      const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+      const playersCount = gamePlayers.length;
+
+      for (const gp of gamePlayers) {
+        if (!validPlayerIds.has(gp.playerId)) continue;
+
+        if (gp.profit < 0) {
+          const currentPlayer = players.find(p => p.id === gp.playerId);
+          const playerName = currentPlayer?.name || gp.playerName;
+
+          allResults.push({
+            playerName,
+            profit: gp.profit,
+            date: game.date,
+            gameId: game.id,
+            playersCount
+          });
+        }
+      }
+    }
+
+    return allResults
+      .sort((a, b) => a.profit - b.profit)
+      .slice(0, 20);
+  }, [players, selectedTypes]);
+
+  // Every (player, calendar month) pair with its summed profit and game count,
+  // across all completed games. All-time, no period/active-only filtering —
+  // the best/worst month tables below are just opposite slices of this.
+  const monthlyPlayerTotals = useMemo(() => {
     if (players.length === 0) return [];
     const allGames = getAllGames().filter(g => g.status === 'completed');
     const allGamePlayers = getAllGamePlayers();
@@ -729,11 +943,20 @@ const StatisticsScreen = () => {
       }
     }
 
-    return Array.from(buckets.values())
-      .filter(b => b.profit > 0)
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 10);
+    return Array.from(buckets.values());
   }, [players, selectedTypes]);
+
+  // Companion to top20WinsAllTime, one rung up in granularity. Only positive
+  // aggregates surface — a "best month" that lost money isn't a record.
+  const top10BestMonthsAllTime = useMemo(
+    () => monthlyPlayerTotals.filter(b => b.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 10),
+    [monthlyPlayerTotals]
+  );
+
+  const worst10MonthsAllTime = useMemo(
+    () => monthlyPlayerTotals.filter(b => b.profit < 0).sort((a, b) => a.profit - b.profit).slice(0, 10),
+    [monthlyPlayerTotals]
+  );
 
   // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
   const podiumData = useMemo(() => {
@@ -919,10 +1142,8 @@ const StatisticsScreen = () => {
   // Reload data when filters change
   useEffect(() => {
     loadStats();
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRealtimeRefresh(useCallback(() => loadStats(true), []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);
@@ -961,7 +1182,7 @@ const StatisticsScreen = () => {
 
   const loadStats = (preserveSelection = false) => {
     const dateFilter = getDateFilter();
-    const playerStats = getPlayerStats(dateFilter);
+    const playerStats = getPlayerStats(dateFilter, locationFilter);
     const allPlayers = getAllPlayers();
     setStats(playerStats);
     setPlayers(allPlayers);
@@ -976,6 +1197,14 @@ const StatisticsScreen = () => {
     }
   };
 
+  // Realtime pushes must reload against the filters as they are NOW, not the
+  // ones captured on first render — otherwise a sync arriving while a period
+  // or place filter is active silently reloads the unfiltered set.
+  const loadStatsRef = useRef(loadStats);
+  loadStatsRef.current = loadStats;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadStatsRef.current(true), []));
+
   // Get player type - memoized
   const getPlayerType = useCallback((playerId: string): PlayerType => {
     const player = players.find(p => p.id === playerId);
@@ -985,16 +1214,9 @@ const StatisticsScreen = () => {
   // Calculate total games in the selected period (for active filter)
   const totalGamesInPeriod = useMemo(() => {
     const dateFilter = getDateFilter();
-    const games = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
-    return games.length;
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    return getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter)).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey, stats]);
 
   // Minimum games threshold = 33% of total games in period
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
@@ -1067,7 +1289,8 @@ const StatisticsScreen = () => {
     }
     setChronicleError(null);
     chronicleGenRef.current = false;
-  }, [viewMode, playerSubTab, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, playerSubTab, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -1092,14 +1315,7 @@ const StatisticsScreen = () => {
   const rebuyStats = useMemo(() => {
     const override = tablePeriodOverrides.rebuy;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     const settings = getSettings();
     const gameIds = new Set(allGames.map(g => g.id));
@@ -1151,19 +1367,13 @@ const StatisticsScreen = () => {
     return Array.from(playerMap.values())
       .filter(p => p.gamesPlayed > 0)
       .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
-  }, [tablePeriodOverrides.rebuy, stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.rebuy, stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   const rebuyDataCoverage = useMemo(() => {
     const override = tablePeriodOverrides.rebuy;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     const totalGames = allGames.length;
     let gamesWithoutRebuys = 0;
@@ -1174,7 +1384,8 @@ const StatisticsScreen = () => {
       }
     }
     return { totalGames, gamesWithoutRebuys };
-  }, [tablePeriodOverrides.rebuy, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.rebuy, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey, stats]);
 
   // Rebuy RECORDS for the "Additional Records" card.
   //  · Counts REBUYS ONLY — each player's `rebuys` field minus the
@@ -1187,14 +1398,7 @@ const StatisticsScreen = () => {
   //    records are game-level (all players that night).
   const rebuyRecords = useMemo(() => {
     const dateFilter = getDateFilter();
-    const periodGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const periodGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     const byGame = new Map<string, GamePlayer[]>();
     for (const gp of allGamePlayers) {
@@ -1261,7 +1465,7 @@ const StatisticsScreen = () => {
       breakdownByPlayer,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   // Attendance-streak RECORDS for the player-records view. Maps each
   // eligible player (via `filteredStats`) to two values:
@@ -1275,14 +1479,7 @@ const StatisticsScreen = () => {
   const attendanceStreakRecords = useMemo(() => {
     const dateFilter = getDateFilter();
     const periodGames = getAllGames()
-      .filter(g => {
-        if (g.status !== 'completed') return false;
-        if (!dateFilter) return true;
-        const gameDate = new Date(g.date || g.createdAt);
-        if (dateFilter.start && gameDate < dateFilter.start) return false;
-        if (dateFilter.end && gameDate > dateFilter.end) return false;
-        return true;
-      })
+      .filter(g => passesGameFilter(g, dateFilter, locationFilter))
       .sort((a, b) =>
         new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime());
 
@@ -1309,7 +1506,7 @@ const StatisticsScreen = () => {
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
   // Per-player place-finish rates (1st/2nd/3rd) for the current time
   // period:
@@ -1331,14 +1528,7 @@ const StatisticsScreen = () => {
   const podiumRateStats = useMemo(() => {
     const override = tablePeriodOverrides.podium;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const periodGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const periodGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const totalGames = periodGames.length;
     if (totalGames === 0) return { rows: [], totalGames: 0 };
 
@@ -1394,7 +1584,8 @@ const StatisticsScreen = () => {
       });
     // Sort + visibility filter happen in `podiumTableRows`.
     return { rows, totalGames };
-  }, [tablePeriodOverrides.podium, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.podium, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey, stats]);
 
   // Per-table visibility helpers for the "active only" override.
   // When a table's effective flag matches the global, we reuse the
@@ -1423,17 +1614,11 @@ const StatisticsScreen = () => {
     const eff = tableActiveOverrides[id] ?? filterActiveOnly;
     if (!periodOverride) return visibleNamesForActive(eff);
     const overrideFilter = getDateFilterForPreset(periodOverride);
-    const overrideStats = getPlayerStats(overrideFilter);
+    const overrideStats = getPlayerStats(overrideFilter, locationFilter);
     let pool = overrideStats.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
     if (eff) {
-      const overrideTotalGames = getAllGames().filter(g => {
-        if (g.status !== 'completed') return false;
-        if (!overrideFilter) return true;
-        const d = new Date(g.date || g.createdAt);
-        if (overrideFilter.start && d < overrideFilter.start) return false;
-        if (overrideFilter.end && d > overrideFilter.end) return false;
-        return true;
-      }).length;
+      const overrideTotalGames = getAllGames()
+        .filter(g => passesGameFilter(g, overrideFilter, locationFilter)).length;
       const overrideThreshold = Math.ceil(overrideTotalGames * 0.33);
       pool = pool.filter(s => s.gamesPlayed >= overrideThreshold);
     }
@@ -1450,18 +1635,13 @@ const StatisticsScreen = () => {
       return { stats, threshold: activeThreshold, isOverride: false };
     }
     const overrideFilter = getDateFilterForPreset(override);
-    const overrideStats = getPlayerStats(overrideFilter);
-    const overrideTotalGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!overrideFilter) return true;
-      const d = new Date(g.date || g.createdAt);
-      if (overrideFilter.start && d < overrideFilter.start) return false;
-      if (overrideFilter.end && d > overrideFilter.end) return false;
-      return true;
-    }).length;
+    const overrideStats = getPlayerStats(overrideFilter, locationFilter);
+    const overrideTotalGames = getAllGames()
+      .filter(g => passesGameFilter(g, overrideFilter, locationFilter)).length;
     const overrideThreshold = Math.ceil(overrideTotalGames * 0.33);
     return { stats: overrideStats, threshold: overrideThreshold, isOverride: true };
-  }, [tablePeriodOverrides.main, stats, activeThreshold]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.main, stats, activeThreshold, locationFilterKey]);
 
   // Main stats table rows — uses 'main' effective flag.
   const mainTableSortedStats = useMemo(() => {
@@ -1510,14 +1690,9 @@ const StatisticsScreen = () => {
   const previousRankings = useMemo(() => {
     const override = tablePeriodOverrides.main;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const periodGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const periodGames = getAllGames()
+      .filter(g => passesGameFilter(g, dateFilter, locationFilter))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // Need at least two games for "before the last game" to be meaningful.
     if (periodGames.length < 2) return new Map<string, number>();
@@ -1559,7 +1734,8 @@ const StatisticsScreen = () => {
     const rankMap = new Map<string, number>();
     ranked.forEach((p, index) => rankMap.set(p.playerId, index + 1));
     return rankMap;
-  }, [tablePeriodOverrides.main, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, mainTableSortedStats, sortBy]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.main, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, mainTableSortedStats, sortBy, locationFilterKey]);
 
   // Podium-rate rows — uses 'podium' effective flag plus user's sort.
   // Replaces the old `sortedPodiumRows`: tie-break chain is unchanged.
@@ -1637,14 +1813,7 @@ const StatisticsScreen = () => {
   const avgPlacementStats = useMemo(() => {
     const override = tablePeriodOverrides.avgPlacement;
     const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
-    const periodGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const periodGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     if (periodGames.length === 0) return [] as Array<{ playerName: string; games: number; avgRank: number; bestRank: number; worstRank: number }>;
 
     const periodGameIds = new Set(periodGames.map(g => g.id));
@@ -1700,7 +1869,8 @@ const StatisticsScreen = () => {
       bestRank: e.games > 0 ? e.bestRank : 0,
       worstRank: e.games > 0 ? e.worstRank : 0,
     }));
-  }, [tablePeriodOverrides.avgPlacement, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.avgPlacement, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey, stats]);
 
   // Avg-placement rows — uses 'avgPlacement' effective flag, sorted
   // by avg rank ascending (lower = better finishes).
@@ -1862,14 +2032,7 @@ const StatisticsScreen = () => {
     const override = tablePeriodOverrides[id];
     if (!override) return totalGamesInPeriod;
     const filter = getDateFilterForPreset(override);
-    return getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!filter) return true;
-      const d = new Date(g.date || g.createdAt);
-      if (filter.start && d < filter.start) return false;
-      if (filter.end && d > filter.end) return false;
-      return true;
-    }).length;
+    return getAllGames().filter(g => passesGameFilter(g, filter, locationFilter)).length;
   };
 
   // Small subtitle rendered below each share-able card's title:
@@ -1891,6 +2054,7 @@ const StatisticsScreen = () => {
     const gamesCount = getEffectiveGamesCount(id);
     const isActive = getEffectiveActive(id);
     const activeLabel = isActive ? t('stats.activeOnlyShort') : t('stats.allPlayersShort');
+    const placeChip = locationContextChip();
     return (
       <div style={{
         fontSize: '0.7rem',
@@ -1899,7 +2063,7 @@ const StatisticsScreen = () => {
         marginBottom: '0.35rem',
         fontWeight: 500,
       }}>
-        📊 {periodLabel} · {t('stats.gamesCount', { count: gamesCount })} · 🎮 {activeLabel}
+        📊 {periodLabel} · {t('stats.gamesCount', { count: gamesCount })} · 🎮 {activeLabel}{placeChip && ` · ${placeChip}`}
       </div>
     );
   };
@@ -2015,16 +2179,9 @@ const StatisticsScreen = () => {
 
   // Show record details modal
   const showRecordDetails = (title: string, player: PlayerStats, recordType: string) => {
-    // Apply the current date filter to games
+    // Apply the current date + place filters to games
     const dateFilter = getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date || g.createdAt);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
+    const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     
     // Get all games for this player (filtered by date)
@@ -2637,6 +2794,66 @@ const StatisticsScreen = () => {
               )}
             </div>
 
+            {/* Hosting Place Filter — only meaningful once more than one
+                distinct place (incl. the "no place recorded" bucket) exists. */}
+            {availableLocations.length > 1 && (
+            <div style={{
+              marginBottom: '0.75rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowLocationFilter(!showLocationFilter); }}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+                  marginBottom: showLocationFilter ? '0.5rem' : 0
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                  {t('stats.filterLocations')} ({locationSummaryLabel()})
+                </span>
+                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showLocationFilter ? '▲' : '▼'}</span>
+              </button>
+              {showLocationFilter && (
+                <>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllLocations(); }}
+                      style={locationChipStyle(!locationFilter)}
+                    >
+                      {t('stats.allLocationsShort')}
+                    </button>
+                    {availableLocations.map(loc => {
+                      // While "all" is active, individual places stay unlit —
+                      // the הכל button already says everything is included, and
+                      // lighting all seven at once reads as a stuck filter.
+                      const isSelected = !!locationFilter && selectedLocations.has(loc.key);
+                      const periodCount = locationPeriodCounts.get(loc.key) || 0;
+                      return (
+                        <button
+                          type="button"
+                          key={loc.key}
+                          disabled={periodCount === 0}
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleLocation(loc.key); }}
+                          style={locationChipStyle(isSelected, periodCount === 0)}
+                        >
+                          {locationLabel(loc.key)}
+                          <span style={{ fontSize: '0.6rem', opacity: 0.65 }}> ({periodCount})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', lineHeight: 1.3, marginTop: '0.4rem' }}>
+                    {t('stats.locationsHint')}
+                  </div>
+                </>
+              )}
+            </div>
+            )}
+
             <button 
               type="button"
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerFilter(!showPlayerFilter); }}
@@ -3156,6 +3373,114 @@ const StatisticsScreen = () => {
                   </button>
                 </div>
               )}
+
+              {/* Worst 10 Single Nights - ALL TIME, mirror of the top-20 wins table */}
+              {worst20NightsAllTime.length > 0 && (
+                <div ref={worstNightsRef} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.worstNights')}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.35rem', fontWeight: 500 }}>📊 {t('stats.allTimeLabel')}</div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.lossCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.dateCol')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {worst20NightsAllTime.map((entry, idx) => {
+                        const isMe = identityName && entry.playerName === identityName;
+                        return (
+                        <tr
+                          key={`${entry.gameId}-${entry.playerName}`}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                          onClick={() => navigate(`/game/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
+                        >
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--danger)', fontWeight: '600' }}>{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {worst20NightsAllTime.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareWorstNights}
+                    disabled={isSharingWorstNights}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingWorstNights ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* Worst 10 Months - ALL TIME, mirror of the best-months table */}
+              {worst10MonthsAllTime.length > 0 && (
+                <div ref={worstMonthsRef} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.worstMonths')}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.35rem', fontWeight: 500 }}>📊 {t('stats.allTimeLabel')}</div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.lossCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.avgLossCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.monthCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.gamesCol')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {worst10MonthsAllTime.map((entry, idx) => {
+                        const isMe = identityName && entry.playerName === identityName;
+                        const monthLabel = `${HEBREW_MONTH_NAMES[entry.month - 1]} ${entry.year}`;
+                        const avg = entry.gamesCount > 0 ? entry.profit / entry.gamesCount : 0;
+                        return (
+                        <tr
+                          key={`${entry.playerId}-${entry.year}-${entry.month}`}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                          onClick={() => {
+                            setViewMode('table');
+                            setTimePeriod('month');
+                            setSelectedYear(entry.year);
+                            setSelectedMonth(entry.month);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--danger)', fontWeight: '600' }}>{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--danger)', fontSize: '0.65rem' }}>{formatCurrency(avg)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{monthLabel}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{entry.gamesCount}</td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {worst10MonthsAllTime.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareWorstMonths}
+                    disabled={isSharingWorstMonths}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingWorstMonths ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
                 </>
               )}
 
@@ -3172,7 +3497,7 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                {t('stats.personalRecords')} ({getTimeframeLabel()})
+                {t('stats.personalRecords')} ({getTimeframeLabel()}){locationContextChip() && ` · ${locationContextChip()}`}
               </div>
 
               {/* Current Streaks */}
@@ -3397,7 +3722,7 @@ const StatisticsScreen = () => {
                     active-only filter, so these globals describe them
                     exactly. */}
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.5rem', fontWeight: 500 }}>
-                  📊 {getTimeframeLabel()} · {t('stats.gamesCount', { count: totalGamesInPeriod })} · 🎮 {filterActiveOnly ? t('stats.activeOnlyShort') : t('stats.allPlayersShort')}
+                  📊 {getTimeframeLabel()} · {t('stats.gamesCount', { count: totalGamesInPeriod })} · 🎮 {filterActiveOnly ? t('stats.activeOnlyShort') : t('stats.allPlayersShort')}{locationContextChip() && ` · ${locationContextChip()}`}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
@@ -4036,7 +4361,6 @@ const StatisticsScreen = () => {
                         <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
                         <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyAvg')}>{t('stats.rebuyAvg')}</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyTotal')}>{t('stats.rebuyTotal')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyOnlyCol')}>{t('stats.rebuyOnlyCol')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyMax')}>{t('stats.rebuyMax')}</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
@@ -4044,9 +4368,9 @@ const StatisticsScreen = () => {
                     </thead>
                     <tbody>
                       {rebuyTableData.map((player, index) => {
-                        // Avg + Max count REBUYS only (exclude the mandatory
-                        // first buy-in of each game), matching the "חוזרות"
-                        // column. The "סה"כ" column keeps the first buy-in.
+                        // Every buy-in figure here excludes the mandatory first
+                        // buy-in of each game, so avg / חוזרות / max all count
+                        // the same thing.
                         const totalRebuysOnly = Math.max(0, player.totalBuyins - player.gamesPlayed);
                         const avgRebuys = player.gamesPlayed > 0 ? totalRebuysOnly / player.gamesPlayed : 0;
                         const maxRebuysInGame = Math.max(0, player.maxBuyinsInGame - 1);
@@ -4080,14 +4404,7 @@ const StatisticsScreen = () => {
                               padding: '0.3rem 0.2rem',
                               color: 'var(--text-muted)'
                             }}>
-                              {fmtBuyinsCell(player.totalBuyins)}
-                            </td>
-                            <td style={{ 
-                              textAlign: 'center', 
-                              padding: '0.3rem 0.2rem',
-                              color: 'var(--text-muted)'
-                            }}>
-                              {fmtBuyinsCell(Math.max(0, player.totalBuyins - player.gamesPlayed))}
+                              {fmtBuyinsCell(totalRebuysOnly)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
@@ -4285,7 +4602,7 @@ const StatisticsScreen = () => {
                     color: 'var(--primary)',
                     fontWeight: '500'
                   }}>
-                    {t('stats.playerStats')} ({getTimeframeLabel()})
+                    {t('stats.playerStats')} ({getTimeframeLabel()}){locationContextChip() && ` · ${locationContextChip()}`}
                   </div>
 
                   {sortedStats.map((player, index) => {
@@ -4533,7 +4850,7 @@ const StatisticsScreen = () => {
                   {/* Timeframe Header */}
                   <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                      {t('stats.aiStories')} — {getTimeframeLabel()}
+                      {t('stats.aiStories')} — {getTimeframeLabel()}{locationContextChip() && ` · ${locationContextChip()}`}
                     </span>
                   </div>
 
@@ -4541,18 +4858,14 @@ const StatisticsScreen = () => {
           {(() => {
             // ===== DATA SETUP =====
             const isRebuyDataValid = timePeriod !== 'all' && (timePeriod === 'custom' ? (!customStartDate || new Date(customStartDate).getFullYear() >= 2026) : selectedYear >= 2026);
-            const allTimeStatsRaw = getPlayerStats();
+            // All-time baseline stays on the same place filter as the period
+            // stats — an "all-time rank" computed across every venue would
+            // contradict the place-scoped numbers next to it in the prompt.
+            const allTimeStatsRaw = getPlayerStats(undefined, locationFilter);
             const activePlayerIds = new Set(players.filter(p => selectedTypes.has(p.type)).map(p => p.id));
             const allTimeStats = allTimeStatsRaw.filter(s => activePlayerIds.has(s.playerId));
             const chronicleDateFilter = getDateFilter();
-            const periodGames = getAllGames().filter(pg => {
-              if (pg.status !== 'completed') return false;
-              if (!chronicleDateFilter) return true;
-              const gd = new Date(pg.date || pg.createdAt);
-              if (chronicleDateFilter.start && gd < chronicleDateFilter.start) return false;
-              if (chronicleDateFilter.end && gd > chronicleDateFilter.end) return false;
-              return true;
-            });
+            const periodGames = getAllGames().filter(pg => passesGameFilter(pg, chronicleDateFilter, locationFilter));
             const totalPeriodGames = periodGames.length;
             const latestGameDate = periodGames.length > 0
               ? new Date(Math.max(...periodGames.map(pg => new Date(pg.date || pg.createdAt).getTime())))
@@ -4642,7 +4955,7 @@ const StatisticsScreen = () => {
 
             // ===== COMPUTE MILESTONES FOR AI CONTEXT =====
             const computeMilestoneStrings = (): string[] => {
-              const allStatsForRanking = getPlayerStats(getDateFilter());
+              const allStatsForRanking = getPlayerStats(getDateFilter(), locationFilter);
               const allRankedForMilestones = [...allStatsForRanking].sort((a, b) => b.totalProfit - a.totalProfit);
               const overallRankMap = new Map<string, number>();
               allRankedForMilestones.forEach((stat, idx) => overallRankMap.set(stat.playerId, idx + 1));
@@ -4906,7 +5219,7 @@ const StatisticsScreen = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('stats.chronicle')} — {getTimeframeLabel()}
+                        {t('stats.chronicle')} — {getTimeframeLabel()}{locationContextChip() && ` · ${locationContextChip()}`}
                       </h3>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                         {t('stats.periodGamesPlayers', { games: totalPeriodGames, players: numPlayers })}

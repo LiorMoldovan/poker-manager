@@ -131,7 +131,11 @@ const bodyFor = (
       return t('voteReminder.bodySpots', { n: info.spotsLeft });
     case 'low':
     default:
-      return t('voteReminder.bodyDefault');
+      // "Dates have been proposed" is false once a date is picked — the
+      // ask there is confirming attendance on a night already chosen.
+      return info.pickedDate
+        ? t('voteReminder.bodyDefaultPicked')
+        : t('voteReminder.bodyDefault');
   }
 };
 

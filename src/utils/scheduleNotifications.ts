@@ -874,14 +874,21 @@ async function dispatch(
 //
 // dispatchX functions: pure dispatch — no claim-gate. Called by the
 // notification worker (utils/notificationWorker.ts) once it has claimed
-// a job from the queue. They return:
-//   { atTargetConfirm: true } from `dispatchConfirmed` when the poll was
-//   confirmed AT-target (yesCount >= target), so the worker can preempt
-//   the redundant 'target_filled' job. Otherwise undefined.
-// Errors thrown by these functions surface to the worker, which marks
-// the job failed (with retry up to attempts=3).
+// a job from the queue. Errors thrown by these functions surface to the
+// worker, which marks the job failed (with retry up to attempts=3).
 
-export type DispatchResult = { atTargetConfirm?: boolean } | void;
+// True when the pinned date already has every seat it needs, which means
+// `dispatchConfirmed` will send the "נסגר — ניפגש" copy and a follow-up
+// 'target_filled' would repeat it verbatim. The worker consults this
+// BEFORE dispatching so it can retire the duplicate job while the
+// duplicate still only exists as a queue row.
+export function isAtTargetConfirm(poll: GamePoll): boolean {
+  if (!poll.confirmedDateId) return false;
+  const yesCount = poll.votes.filter(
+    v => v.dateId === poll.confirmedDateId && v.response === 'yes',
+  ).length;
+  return yesCount >= poll.targetPlayerCount;
+}
 
 export async function dispatchInvitation(poll: GamePoll): Promise<void> {
   const recipientIds = resolveRecipientPlayerIds(poll, 'creation');
@@ -895,7 +902,7 @@ export async function dispatchExpanded(poll: GamePoll): Promise<void> {
   await dispatch(poll, 'expanded', buildExpandedMessage(poll), names);
 }
 
-export async function dispatchConfirmed(poll: GamePoll): Promise<DispatchResult> {
+export async function dispatchConfirmed(poll: GamePoll): Promise<void> {
   if (!poll.confirmedDateId) throw new Error('poll has no confirmedDateId');
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
   if (!confirmedDate) throw new Error('confirmed date not in poll.dates');
@@ -914,18 +921,16 @@ export async function dispatchConfirmed(poll: GamePoll): Promise<DispatchResult>
   const missing = Math.max(0, poll.targetPlayerCount - yesCount);
 
   if (missing === 0) {
-    // At-target: single "ניפגש בערב פוקר" flow to yes-voters. We tell the
-    // worker to preempt the 'target_filled' job (if one was enqueued by
-    // the trigger in the same xact, which the trigger normally avoids
-    // via its 500ms-since-confirmed_at guard, but defensive belt-and-
-    // suspenders for the case where confirmed_at lags slightly).
+    // At-target: single "ניפגש בערב פוקר" flow to yes-voters. The caller
+    // has already retired any 'target_filled' job for this poll — that
+    // message would only repeat what this one says.
     await dispatch(
       poll,
       'confirmed',
       buildConfirmedMessage(poll, confirmedDate, yesNames),
       yesNames,
     );
-    return { atTargetConfirm: true };
+    return;
   }
 
   // Below target: split the audience and tailor the copy. Both dispatches
@@ -950,7 +955,6 @@ export async function dispatchConfirmed(poll: GamePoll): Promise<DispatchResult>
       otherNames,
     ),
   ]);
-  return undefined;
 }
 
 export async function dispatchCancellation(poll: GamePoll): Promise<void> {
@@ -1163,6 +1167,28 @@ function buildReminderPush(poll: GamePoll, dates: GamePollDate[]): { title: stri
   const dateLines = dates
     .map(d => `• ${formatHebrewDateTime(d)}${d.location ? ` — ${d.location}` : ''}`)
     .join('\n');
+
+  // Once a date is picked the ask changes shape: it's an attendance
+  // question about one night, not a preference question across several.
+  // Listing "תאריכים פתוחים" would point at dates the server now refuses
+  // a vote on, so we name the chosen night and the seats still open.
+  if (poll.confirmedDateId) {
+    const yesCount = poll.votes.reduce(
+      (n, v) => n + (v.dateId === poll.confirmedDateId && v.response === 'yes' ? 1 : 0),
+      0,
+    );
+    const missing = poll.targetPlayerCount - yesCount;
+    const seatLine = missing <= 0
+      ? 'ההרכב כמעט סגור.'
+      : missing === 1
+        ? 'חסר שחקן אחד להשלמת ההרכב.'
+        : `חסרים ${missing} שחקנים להשלמת ההרכב.`;
+    return {
+      title: TITLE_REMINDER,
+      body: `המשחק נקבע ל:\n${dateLines}\n\n${seatLine}\nתגידו אם אתם באים 🙌`,
+    };
+  }
+
   return {
     title: TITLE_REMINDER,
     body: `יעד: ${poll.targetPlayerCount} שחקנים. תאריכים פתוחים:\n${dateLines}\n\nהיכנסו והשלימו את ההצבעה 📅`,
@@ -1225,6 +1251,14 @@ function buildReminderDeadlineLine(poll: GamePoll): string | null {
     if (!upcoming) return null;
     return `⏳ ההצבעה נסגרת בעוד ${formatReminderRemainingHebrew(upcoming - now)}`;
   }
+  // Picked date, seats still open: the deadline is kickoff on that night.
+  if (poll.status === 'confirmed' && poll.confirmedDateId) {
+    const picked = poll.dates.find(d => d.id === poll.confirmedDateId);
+    if (!picked) return null;
+    const ts = new Date(`${picked.proposedDate}T${picked.proposedTime || '21:00'}`).getTime();
+    if (!Number.isFinite(ts) || ts <= now) return null;
+    return `⏳ המשחק מתחיל בעוד ${formatReminderRemainingHebrew(ts - now)}`;
+  }
   return null;
 }
 
@@ -1254,7 +1288,13 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
   // listing closed ones is both misleading (they can't vote there) and
   // demoralising (their old yes/maybe count shows next to a date the
   // group already moved past).
-  const stateLines = poll.dates.filter(d => !d.disabledAt).map(d => {
+  // A picked date narrows the panel to that one night — the other dates
+  // are frozen, so showing their tallies invites a vote the server would
+  // reject and buries the only line that matters.
+  const stateSource = poll.confirmedDateId
+    ? poll.dates.filter(d => d.id === poll.confirmedDateId)
+    : poll.dates.filter(d => !d.disabledAt);
+  const stateLines = stateSource.map(d => {
     const head = `• ${formatHebrewDateTime(d)}`;
     const tally = buildPerDateYesTally(
       poll.votes.reduce(
@@ -1278,12 +1318,17 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
   // conditions (single line — the recipient just needs to recognise
   // their case), and the call-to-action on its own line so it stands
   // out at the bottom of the paragraph.
-  const intro =
-    'זו תזכורת להצבעה על המשחק הבא.'
-    + '\n\n'
-    + 'אם עוד לא הצבעת, הצבעת רק על חלק מהתאריכים, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית —'
-    + '\n'
-    + `בבקשה ${completeVerb} את ההצבעה.`;
+  const intro = poll.confirmedDateId
+    ? 'התאריך לערב הפוקר הבא נקבע, ועדיין מחפשים שחקנים להשלמת ההרכב.'
+      + '\n\n'
+      + 'אם עוד לא אישרת הגעה, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית —'
+      + '\n'
+      + `בבקשה ${completeVerb} את ההצבעה.`
+    : 'זו תזכורת להצבעה על המשחק הבא.'
+      + '\n\n'
+      + 'אם עוד לא הצבעת, הצבעת רק על חלק מהתאריכים, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית —'
+      + '\n'
+      + `בבקשה ${completeVerb} את ההצבעה.`;
   const deadlineLine = buildReminderDeadlineLine(poll);
   const deadlineBlock = deadlineLine ? `\n\n${deadlineLine}` : '';
   const stateHeader = '📊 מצב ההצבעה כרגע:';
@@ -1416,19 +1461,21 @@ export async function sendDateExcludedNotifications(
   }
 
   const pushEnabled  = getSettings().schedulePushEnabled !== false;
-  // Master + per-kind gate (migration 090). Email subject/body go out as
-  // empty strings when this kind is disabled so the worker drops the
-  // email leg entirely.
-  const emailAllowed = isEmailKindAllowed('date_excluded');
 
   const msg = buildDateExcludedMessage(refreshedPoll, excludedDate, remainingDates);
 
+  // Push-only by design. Dropping one date out of several is low-signal
+  // news — the poll still has open dates and nothing is decided — so it
+  // doesn't earn an email against the monthly quota. The empty
+  // subject/body only document that intent; the actual suppression is the
+  // `date_excluded` entry in the worker's pushOnlyKind list, because
+  // buildFromPayload substitutes the push title for a blank subject.
   const cacheMod = await import('../database/supabaseCache');
   await cacheMod.enqueueNotificationRpc('date_excluded', poll.groupId, {
     push_title:    pushEnabled ? msg.pushTitle : '',
     push_body:     pushEnabled ? msg.pushBody  : '',
-    email_subject: emailAllowed ? msg.emailSubject : '',
-    email_body:    emailAllowed ? msg.emailBody('') : '',
+    email_subject: '',
+    email_body:    '',
     recipient_player_names: recipientNames,
     url: deepLinkUrl(poll.id),
   }, poll.id);
@@ -1452,11 +1499,13 @@ export async function sendReminderNotifications(
   // same for every recipient — no per-recipient personalization beyond
   // the greeting (which the worker handles) is required for reminders.
   // Pass only enabled dates — excluded ones (migration 086) shouldn't
-  // appear in the "תאריכים פתוחים" bullet list of the push body.
-  const { title: pushTitle, body: pushBody } = buildReminderPush(
-    poll,
-    poll.dates.filter(d => !d.disabledAt),
-  );
+  // appear in the "תאריכים פתוחים" bullet list of the push body. When a
+  // date is picked it's the only one a vote can land on, so the push
+  // names just that night.
+  const reminderDates = poll.confirmedDateId
+    ? poll.dates.filter(d => d.id === poll.confirmedDateId)
+    : poll.dates.filter(d => !d.disabledAt);
+  const { title: pushTitle, body: pushBody } = buildReminderPush(poll, reminderDates);
   const link = emailVoteLink(poll);
   const cta = link ? `\n\n👉 להצבעה ולפרטים נוספים: ${link}` : '';
   const emailBody = `${buildReminderEmailBody(poll)}${cta}`;
