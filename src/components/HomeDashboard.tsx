@@ -33,6 +33,7 @@ import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { getSharedProgress, getTrainingSessionCounts } from '../utils/pokerTraining';
 import { verbForName } from '../utils/hebrewGender';
 import { usePermissions } from '../App';
+import { canViewerVoteNow } from '../utils/pollAccess';
 
 // ─── Design tokens ──────────────────────────────────────────────────────
 // Every dashboard card MUST consume these instead of hard-coding sizes,
@@ -1113,6 +1114,16 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
   // wider-audience now — same date, same need for the rich view.
   const isOpenSingleDate = (poll.status === 'open' || poll.status === 'expanded') && poll.dates.length === 1;
 
+  // Never nudge a viewer the server would turn away. During the
+  // permanents-only window a guest sees the poll but cast_poll_vote answers
+  // 'tier_not_allowed', so a "waiting for your vote" CTA sends them to a screen
+  // with every button disabled. Shared with PollCard so the two can't drift.
+  const viewerCanVoteNow = canViewerVoteNow(
+    poll,
+    myPlayerId ? (getAllPlayers().find(p => p.id === myPlayerId)?.type ?? null) : null,
+    Date.now(),
+  );
+
   // Shared renderer for the "rich" date-pinned card visual. Reused
   // by State 2 (poll explicitly confirmed by admin) and the
   // single-date open shortcut. Closes over `poll`, `t`, `order`,
@@ -1437,13 +1448,6 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
       && !!poll.confirmedDateId
       && poll.votes.some(v => v.playerId === myPlayerId && v.dateId === poll.confirmedDateId);
     const stillRecruiting = !poll.confirmedGameId && !poll.votingLockedAt;
-    // Don't nudge a viewer the server would still turn away: a poll pinned
-    // during the permanents-only window keeps guests out until `expandedAt`
-    // is stamped, and a CTA they can't act on is worse than silence.
-    const viewerType = myPlayerId
-      ? (getAllPlayers().find(p => p.id === myPlayerId)?.type ?? null)
-      : null;
-    const viewerCanVoteNow = viewerType === 'permanent' || !!poll.expandedAt;
     return renderRichDateCard({
       dateId: poll.confirmedDateId,
       awaitingViewer: myPlayerId !== null && !hasMyVoteOnPicked && stillRecruiting && viewerCanVoteNow,
@@ -1464,7 +1468,7 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
     const hasMyVoteOnSingle = myPlayerId !== null && poll.votes.some(v => v.playerId === myPlayerId);
     return renderRichDateCard({
       dateId: poll.dates[0].id,
-      awaitingViewer: myPlayerId !== null && !hasMyVoteOnSingle,
+      awaitingViewer: myPlayerId !== null && !hasMyVoteOnSingle && viewerCanVoteNow,
       emptyFallback: true,
       titleKey: 'home.schedule.openTitle',
       icon: '🗳',
@@ -1711,19 +1715,27 @@ function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlaye
     // dynamic across visits — but only when at least one member has
     // voted. With zero votes we fall back to the action prompt to
     // avoid the awkward "0 חברים הצביעו".
-    const subtitle = distinctVoterCount > 0
-      ? t('home.schedule.openYouHaventVotedStat', { n: distinctVoterCount })
-      : t('home.schedule.openYouHaventVotedHelper');
+    //
+    // A viewer the server would reject gets the neutral skin instead: same
+    // glance rows, but no personal amber summons and no "tap to vote" subtitle,
+    // because tapping leads to a screen with every button disabled.
+    const subtitle = viewerCanVoteNow
+      ? (distinctVoterCount > 0
+        ? t('home.schedule.openYouHaventVotedStat', { n: distinctVoterCount })
+        : t('home.schedule.openYouHaventVotedHelper'))
+      : (distinctVoterCount > 0
+        ? t('home.schedule.openPermsOnlyStat', { n: distinctVoterCount })
+        : t('home.schedule.openPermsOnlyHelper'));
     return (
       <HomeCard
         order={order}
         step={step}
         icon="🗳"
-        title={playerName
+        title={playerName && viewerCanVoteNow
           ? t('home.schedule.openYouHaventVoted', { name: playerName })
           : t('home.schedule.openTitle')}
         subtitle={subtitle}
-        accent="warning"
+        accent={viewerCanVoteNow ? 'warning' : 'info'}
         body={glanceBodyWithFooter}
         onClick={onClick}
       />

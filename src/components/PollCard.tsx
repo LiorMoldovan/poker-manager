@@ -51,6 +51,7 @@ import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { buildWazeUrl, openWaze } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
 import type { RsvpResponse, Player } from '../types';
+import { evaluatePollVoteGate } from '../utils/pollAccess';
 
 export default function PollCard(props: PollCardProps) {
   const {
@@ -164,37 +165,13 @@ export default function PollCard(props: PollCardProps) {
     return m;
   }, [holdsActive, poll.dates, poll.votes, playerById]);
 
-  // Permission gate — same SQL semantics + error-reason discriminants
-  // the server's cast_poll_vote enforces. Critical that this stays in
-  // sync so the disabled-button reasoning here matches what the
-  // server actually rejects. Migration 086 made the tier gate purely
-  // time-based: non-permanents are blocked only while expanded_at is
-  // NULL AND now < created_at + expansionDelayHours. Pin no longer
-  // affects this clock — that's the whole point of 086.
-  const canVote = useMemo(() => {
-    if (!currentPlayer) return { allowed: false, reason: 'no_player_link' as const };
-    if (poll.status === 'cancelled' || poll.status === 'expired') {
-      return { allowed: false, reason: 'poll_locked' as const };
-    }
-    if (isVotingLocked) {
-      return { allowed: false, reason: 'voting_locked' as const };
-    }
-    if (currentPlayer.type !== 'permanent' && !poll.expandedAt) {
-      // Cap = createdAt + expansionDelay + maybeHold (migration 104). Guests
-      // stay blocked until the poll actually opens to them (expandedAt set,
-      // which only happens once a seat is genuinely free) or the cap passes.
-      const expandsAt = new Date(poll.createdAt).getTime()
-        + (poll.expansionDelayHours + (poll.maybeHoldHours ?? 48)) * 3600_000;
-      if (now < expandsAt) {
-        return { allowed: false, reason: 'tier_not_allowed' as const };
-      }
-    }
-    return { allowed: true as const };
-  }, [
-    poll.status, poll.expandedAt, poll.createdAt,
-    poll.expansionDelayHours, poll.maybeHoldHours,
-    currentPlayer, isVotingLocked, now,
-  ]);
+  // Permission gate — shared with HomeDashboard via evaluatePollVoteGate so the
+  // disabled-button reasoning here and the vote nudge there can never disagree
+  // with each other or with cast_poll_vote.
+  const canVote = useMemo(
+    () => evaluatePollVoteGate(poll, currentPlayer?.type ?? null, now),
+    [poll, currentPlayer, now],
+  );
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
   const [proxyDateId, setProxyDateId] = useState<string | null>(null);

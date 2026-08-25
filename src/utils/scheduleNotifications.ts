@@ -1543,6 +1543,13 @@ const allPermanentsAnswered = (poll: GamePoll): boolean => {
 
 // ── Lazy sweep: called from ScheduleTab on mount and after each realtime tick ──
 //
+// No longer the only path to expansion: migration 114 added a pg_cron sweep
+// (fn_sweep_expand_polls, every minute, 08:00-23:00 Asia/Jerusalem) so a poll
+// no longer waits for somebody to open the app. This client sweep stays because
+// it reacts instantly when a member is already looking at the screen, and both
+// callers delegate to the same fn_expand_poll_internal — whichever fires first
+// wins and the other becomes a no-op.
+//
 // Two responsibilities:
 //   1. Lazy expansion: a poll flips to 'expanded' once either
 //      `expansion_delay_hours` has elapsed or every permanent has answered

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.24.1';
+export const APP_VERSION = '6.25.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.25.0',
+    date: '2026-08-25',
+    changes: [
+      '🔔 Alert when a picked poll opens to guests',
+      '⏰ Polls open on time without opening the app',
+      '🌙 No poll alerts between 23:00 and 08:00',
+      '🗳 No vote prompt before voting is open to you',
+      '🔒 Security hardening on scheduled jobs',
+    ],
+  },
   {
     version: '6.24.1',
     date: '2026-08-25',

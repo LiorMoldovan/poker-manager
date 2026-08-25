@@ -49,6 +49,11 @@ const he = {
   'home.schedule.openYouHaventVoted': '{name}, מחכים להצבעה שלך',
   'home.schedule.openYouHaventVotedHelper': 'לחצו לבחירת תאריך מועדף',
   'home.schedule.openYouHaventVotedStat': '{n} חברים כבר הצביעו · לחצו להצביע',
+  // Shown to a non-permanent viewer while the poll is still permanents-only.
+  // They can open the poll and watch, but every vote button is disabled, so the
+  // copy must not say "tap to vote".
+  'home.schedule.openPermsOnlyHelper': 'ההצבעה פתוחה כרגע לשחקנים הקבועים',
+  'home.schedule.openPermsOnlyStat': '{n} חברים כבר הצביעו · תיפתח לכולם בהמשך',
   'home.schedule.openYouVoted': 'ההצבעה שלך נשמרה',
   'home.schedule.openYouVotedThanks': 'תודה על ההצבעה, {name}!',
   'home.schedule.openYouVotedHelper': 'לחצו כדי לעדכן או לראות תוצאות ביניים',
@@ -2782,6 +2787,8 @@ const en: Record<keyof typeof he, string> = {
   'home.schedule.openYouHaventVoted': "{name}, we're waiting for your vote",
   'home.schedule.openYouHaventVotedHelper': 'Tap to pick a preferred date',
   'home.schedule.openYouHaventVotedStat': '{n} members already voted · tap to vote',
+  'home.schedule.openPermsOnlyHelper': 'Voting is open to regular players for now',
+  'home.schedule.openPermsOnlyStat': '{n} members already voted · opens to everyone later',
   'home.schedule.openYouVoted': 'Your vote is in',
   'home.schedule.openYouVotedThanks': 'Thanks for voting, {name}!',
   'home.schedule.openYouVotedHelper': 'Tap to update or view interim results',
