@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.24.0';
+export const APP_VERSION = '6.24.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.24.1',
+    date: '2026-08-25',
+    changes: [
+      '🪑 No guest invites when picked date is full',
+    ],
+  },
   {
     version: '6.24.0',
     date: '2026-08-25',
