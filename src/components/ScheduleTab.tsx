@@ -1531,6 +1531,10 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
     color = '#3b82f6';
     bg = 'rgba(59, 130, 246, 0.10)';
     border = 'rgba(59, 130, 246, 0.30)';
+    // Upper bound, not an appointment: migration 111 also expands the
+    // moment every permanent has answered, so this can fire hours early.
+    // The copy says "within {time}" for that reason — don't tighten it
+    // back to "in {time}" without also predicting the early trigger.
     const start = new Date(poll.createdAt).getTime();
     const end = start + poll.expansionDelayHours * 3600_000;
     const remaining = end - now;

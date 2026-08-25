@@ -1521,11 +1521,32 @@ export async function sendReminderNotifications(
   }, poll.id);
 }
 
+// Second expansion trigger (migration 111): the regulars have all had
+// their say, so there is nothing left to wait for. "Had their say" is
+// deliberately loose — any vote row on any of the poll's dates counts,
+// including a 'maybe' and including someone who skipped a date or two.
+//
+// This is only a cheap client-side hint for *when to call the RPC*; the
+// server re-derives the same condition and owns the decision, including
+// the free-seat check that can still veto expansion. The one place the
+// two can disagree is a permanent player with no app account: the server
+// excludes them (they can never vote, so they must not block the gate)
+// while the cache has no linkage to filter on, so this returns false and
+// we simply fall back to the delay path. Erring toward the old behaviour
+// is the right failure mode here.
+const allPermanentsAnswered = (poll: GamePoll): boolean => {
+  const permanents = getAllPlayers().filter(p => p.type === 'permanent');
+  if (permanents.length === 0) return false;
+  const answered = new Set(poll.votes.map(v => v.playerId));
+  return permanents.every(p => answered.has(p.id));
+};
+
 // ── Lazy sweep: called from ScheduleTab on mount and after each realtime tick ──
 //
 // Two responsibilities:
-//   1. Lazy expansion: poll older than `expansion_delay_hours` flips to
-//      'expanded' (the lifecycle trigger then enqueues the 'expanded' job).
+//   1. Lazy expansion: a poll flips to 'expanded' once either
+//      `expansion_delay_hours` has elapsed or every permanent has answered
+//      (the lifecycle trigger then enqueues the 'expanded' job).
 //   2. Backfill enqueue: any poll whose state implies a notification is owed
 //      (status set, sentinel still null) but whose original lifecycle trigger
 //      never fired (e.g. row pre-dates migration 061). The
@@ -1542,9 +1563,10 @@ export async function runSchedulerSweep(): Promise<void> {
   const cacheMod = await import('../database/supabaseCache');
 
   for (const poll of polls) {
-    // Lazy expansion: if `expansion_delay_hours` elapsed and the poll
-    // is still in its permanents-only window, stamp `expanded_at` via
-    // the RPC. Two cases:
+    // Lazy expansion: while the poll is still in its permanents-only
+    // window, stamp `expanded_at` via the RPC once either trigger is met
+    // — `expansion_delay_hours` elapsed, or every permanent answered
+    // (migration 111). Two cases:
     //   1. status='open' — the classic flip 'open' → 'expanded'.
     //      The DB trigger then enqueues the 'expanded' notification.
     //   2. status='confirmed' with expanded_at IS NULL — admin pinned
@@ -1560,7 +1582,7 @@ export async function runSchedulerSweep(): Promise<void> {
     if (inPermsOnlyWindow) {
       const created = new Date(poll.createdAt).getTime();
       const delayMs = poll.expansionDelayHours * 60 * 60 * 1000;
-      if (now - created >= delayMs) {
+      if (now - created >= delayMs || allPermanentsAnswered(poll)) {
         import('../database/storage').then(m => m.expandPoll(poll.id))
           .catch(err => console.warn('runSchedulerSweep/expand', err));
       }
