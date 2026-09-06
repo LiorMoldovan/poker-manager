@@ -1,10 +1,12 @@
 // Host-rotation suggestion: "whose turn is it to host the next game?"
 //
-// In this group a game's `location` is the host's name ("ליאור", "סגל"),
-// occasionally with a qualifier ("מקלט ליכטר"). So picking a location is
-// really picking a host, and the fair answer is whoever has gone longest
-// without hosting — restricted to people who are actually coming, since
-// you can't play at the home of someone who isn't there.
+// In this group a game's `location` is usually the host's name ("ליאור",
+// "סגל"), so picking a location is really picking a host and the fair answer
+// is whoever has gone longest without hosting — restricted to people who are
+// actually coming, since you can't play at the home of someone who isn't
+// there. Locations that aren't a player's name ("מקלט ליכטר") are standalone
+// venues: they carry their own history and are always selectable, since
+// there's no absent host to rule them out.
 //
 // Pure functions with no cache/DB access so the caller decides what slice
 // of history to feed in and the ranking stays trivially inspectable.
@@ -24,37 +26,27 @@ export interface HostCandidate {
   attending: boolean;
 }
 
-// 1-2 character player names ("כ", "ק") would substring-match almost any
-// location string, so they only ever match exactly.
-const MIN_SUBSTRING_NAME_LEN = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Resolve a free-text location to the player whose home it is. Exact match
-// wins; otherwise the longest player name contained in the string, so
-// "מקלט ליכטר" is credited to ליכטר rather than treated as a separate
-// venue that has "never hosted".
+// Resolve a location to the player whose home it is — exact name match only.
+//
+// This used to also match on substring, which folded "מקלט ליכטר" into
+// ליכטר's hosting count on the assumption that the qualifier described his
+// home. It doesn't: the shelter is a genuinely separate venue, and crediting
+// its games to him both overstated his turns and hid a place the group can
+// actually choose. A location that isn't somebody's name is its own venue.
 export function resolveHostPlayer(location: string, players: Player[]): Player | null {
   const raw = location.trim();
   if (!raw) return null;
-
-  const exact = players.find(p => p.name.trim() === raw);
-  if (exact) return exact;
-
-  let best: Player | null = null;
-  for (const p of players) {
-    const name = p.name.trim();
-    if (name.length < MIN_SUBSTRING_NAME_LEN) continue;
-    if (!raw.includes(name)) continue;
-    if (!best || name.length > best.name.trim().length) best = p;
-  }
-  return best;
+  return players.find(p => p.name.trim() === raw) ?? null;
 }
 
 export function suggestHosts(opts: {
   games: Game[];
   players: Player[];
-  // Location presets from Settings — included even with no history, so a
-  // newly-added venue can surface as "hasn't hosted yet".
+  // Location presets from Settings. This is the definitive list of what can
+  // be offered: a preset with no history still surfaces as "hasn't hosted
+  // yet", and a venue with history that isn't a preset is not offered.
   knownLocations: string[];
   // Players with a 'yes' on the relevant date. `null` means attendance is
   // unknown (nobody has voted yet) — then we rank everyone equally rather
@@ -101,8 +93,27 @@ export function suggestHosts(opts: {
   }
   for (const loc of knownLocations) upsert(loc, null);
 
+  // Only venues on the Settings list can be offered for a future game.
+  // History from a venue that has since been dropped ("מקלט ליכטר", used
+  // twice during a stretch in April) still lives in the games table and in
+  // the statistics screen, but it shouldn't be proposed as somewhere to play
+  // next — and it would otherwise top the ranking forever, since "longest
+  // time since hosting" reads an abandoned venue as the most overdue one.
+  // Re-adding it in Settings is all it takes to bring it back.
+  //
+  // A group that has never configured the list falls back to whatever
+  // history shows, otherwise the panel would have nothing to offer at all.
+  const offerable = new Set(
+    knownLocations
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => resolveHostPlayer(l, players)?.name.trim() ?? l),
+  );
+  const restrictToOfferable = offerable.size > 0;
+
   const candidates: HostCandidate[] = [];
   for (const [label, row] of byLabel) {
+    if (restrictToOfferable && !offerable.has(label)) continue;
     // Unknown attendance, or a venue that isn't tied to a player, is not
     // evidence of absence — only an explicit "not on the yes list" is.
     const attending = !attendingPlayerIds

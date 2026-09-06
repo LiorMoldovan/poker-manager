@@ -1479,6 +1479,11 @@ const formatRemainingMs = (
   return t('schedule.timer.fmtMinutes', { m: minutes });
 };
 
+// Cap on names listed in the "still waiting on" line before it collapses
+// into "+N more". Eight regulars all missing would otherwise wrap the
+// timer banner to three lines on a phone.
+const MAX_PENDING_NAMES_SHOWN = 4;
+
 const getDateRowTimestamp = (d: GamePollDate): number => {
   const time = d.proposedTime || '21:00';
   const ts = new Date(`${d.proposedDate}T${time}`).getTime();
@@ -1647,6 +1652,44 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
     return null;
   }
 
+  // Who the group is still waiting on. Only meaningful inside the
+  // permanents-only window: since migration 111 the poll expands the
+  // moment the last regular answers, so naming the stragglers turns the
+  // countdown from a passive clock into something actionable — chase
+  // these two and it opens tonight instead of tomorrow morning.
+  //
+  // "Answered" is deliberately the same loose test the expansion rule
+  // uses: any vote row on any date, 'maybe' included, partial coverage
+  // fine. A permanent with no app account can never vote and the server
+  // excludes them from the gate, but the cache carries no linkage so
+  // they'd sit here as permanently missing. Filtering them out properly
+  // means the admin-only registered-members RPC, which we are not going
+  // to fire from every poll card for every viewer.
+  let pendingLine: string | null = null;
+  const inPermsOnlyWindow = hasGuestTier
+    && (poll.status === 'open' || (poll.status === 'confirmed' && !poll.expandedAt));
+  if (inPermsOnlyWindow) {
+    const answered = new Set(poll.votes.map(v => v.playerId));
+    const permanents = getAllPlayers().filter(p => p.type === 'permanent');
+    const pending = permanents
+      .filter(p => !answered.has(p.id))
+      .map(p => p.name)
+      .sort((a, b) => a.localeCompare(b, 'he'));
+    if (permanents.length > 0) {
+      if (pending.length === 0) {
+        pendingLine = t('schedule.timer.allPermanentsVoted');
+      } else {
+        const shown = pending.slice(0, MAX_PENDING_NAMES_SHOWN);
+        const names = shown.join(' · ');
+        pendingLine = pending.length > shown.length
+          ? t('schedule.timer.pendingPermanentsMore', {
+              names, n: pending.length - shown.length,
+            })
+          : t('schedule.timer.pendingPermanents', { names });
+      }
+    }
+  }
+
   return (
     <div
       className={isSoon ? 'poll-timer--soon' : undefined}
@@ -1667,6 +1710,14 @@ export function PollTimer({ poll, now, t, hasGuestTier = true }: PollTimerProps)
           color: 'var(--text-muted)', lineHeight: 1.3,
         }}>
           {subLabel}
+        </div>
+      )}
+      {pendingLine && (
+        <div style={{
+          fontSize: 11.5, fontWeight: 500,
+          color: 'var(--text-muted)', lineHeight: 1.3,
+        }}>
+          {pendingLine}
         </div>
       )}
       {progress !== null && (
@@ -3709,21 +3760,53 @@ function EditPollModal(props: EditPollModalProps) {
   // Attendance is read off the picked date when there is one, otherwise
   // the current front-runner, so the panel is still useful while the
   // group is mid-vote.
+  // The single date the ranking is scoped to, plus how firm that choice is.
+  // The panel has to state both: "לא מגיע" against an unnamed date reads as
+  // "isn't coming at all", when it only ever means "didn't say yes to this
+  // particular night" — someone can be a yes on two of three dates and still
+  // show as unavailable for the one currently ahead. And "ahead" is worth
+  // distinguishing from "decided", because until a date is pinned the whole
+  // panel can re-scope itself on the next vote.
+  const hostRanking = useMemo((): {
+    dateId: string | null;
+    status: 'pinned' | 'leading' | 'tied' | 'noVotes';
+  } => {
+    if (poll.confirmedDateId) return { dateId: poll.confirmedDateId, status: 'pinned' };
+    const tallies = poll.dates
+      .map(d => ({
+        id: d.id,
+        yes: poll.votes.reduce(
+          (n, v) => n + (v.dateId === d.id && v.response === 'yes' ? 1 : 0),
+          0,
+        ),
+      }))
+      .sort((a, b) => b.yes - a.yes);
+    const top = tallies[0];
+    if (!top) return { dateId: null, status: 'noVotes' };
+    // With nothing to separate the dates, "leading" would be dressing up
+    // array order as a result. Same for a tie — say so rather than implying
+    // this date won something.
+    if (top.yes === 0) return { dateId: top.id, status: 'noVotes' };
+    const tied = tallies.filter(x => x.yes === top.yes).length > 1;
+    return { dateId: top.id, status: tied ? 'tied' : 'leading' };
+  }, [poll.confirmedDateId, poll.dates, poll.votes]);
+
+  const hostRankingDateId = hostRanking.dateId;
+
+  // Bare d/M rather than fmtHebrewDateCompact: the weekday form already
+  // carries its own "·" separator, which would nest inside the header's and
+  // blur where the label ends. The full dates sit a few pixels below anyway.
+  const hostRankingDateLabel = useMemo(() => {
+    const d = poll.dates.find(x => x.id === hostRankingDateId);
+    if (!d) return null;
+    const dt = new Date(d.proposedDate);
+    return Number.isNaN(dt.getTime()) ? d.proposedDate : `${dt.getDate()}/${dt.getMonth() + 1}`;
+  }, [poll.dates, hostRankingDateId]);
+
   const hostSuggestions = useMemo(() => {
-    const relevantDateId = poll.confirmedDateId
-      ?? [...poll.dates]
-        .map(d => ({
-          id: d.id,
-          yes: poll.votes.reduce(
-            (n, v) => n + (v.dateId === d.id && v.response === 'yes' ? 1 : 0),
-            0,
-          ),
-        }))
-        .sort((a, b) => b.yes - a.yes)[0]?.id
-        ?? null;
     const yesIds = new Set(
       poll.votes
-        .filter(v => v.dateId === relevantDateId && v.response === 'yes')
+        .filter(v => v.dateId === hostRankingDateId && v.response === 'yes')
         .map(v => v.playerId),
     );
     return suggestHosts({
@@ -3738,10 +3821,14 @@ function EditPollModal(props: EditPollModalProps) {
     // knownLocations is a fresh array each render; its contents are what
     // matter, so key off the joined value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poll.confirmedDateId, poll.dates, poll.votes, knownLocations.join('|')]);
+  }, [hostRankingDateId, poll.votes, knownLocations.join('|')]);
 
   const topHost = hostSuggestions[0] ?? null;
-  const altHosts = hostSuggestions.slice(1, 3);
+  // Every other known venue, not just the runners-up — picking a host is a
+  // negotiation, and truncating the list hid places that were perfectly
+  // valid choices. The buttons already dim and annotate anyone who isn't
+  // coming, so a long tail stays readable.
+  const altHosts = hostSuggestions.slice(1);
 
   // "Hasn't hosted in N days" reads badly past a fortnight — switch to
   // weeks so the number stays small and scannable.
@@ -3868,6 +3955,12 @@ function EditPollModal(props: EditPollModalProps) {
             >
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
                 💡 {t('schedule.hostSuggestion.title')}
+                {hostRankingDateLabel && (
+                  <> · {t('schedule.hostSuggestion.forDate', {
+                    date: hostRankingDateLabel,
+                    status: t(`schedule.hostSuggestion.dateStatus.${hostRanking.status}`),
+                  })}</>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <button
@@ -3907,7 +4000,9 @@ function EditPollModal(props: EditPollModalProps) {
                       type="button"
                       onClick={() => setDefaultLocation(h.location)}
                       disabled={submitting}
-                      title={h.attending ? undefined : t('schedule.hostSuggestion.notAttending')}
+                      title={h.attending || !hostRankingDateLabel
+                        ? undefined
+                        : t('schedule.hostSuggestion.notAttending', { date: hostRankingDateLabel })}
                       style={{
                         padding: '3px 8px', borderRadius: 5,
                         border: defaultLocation === h.location

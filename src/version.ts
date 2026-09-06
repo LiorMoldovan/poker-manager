@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.26.0';
+export const APP_VERSION = '6.27.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.27.0',
+    date: '2026-09-06',
+    changes: [
+      '👥 Poll timer shows which regulars are missing',
+      '💡 Host suggestion lists all venue options',
+      '📅 Host suggestion shows the date it ranks',
+      '📍 Only saved venues offered for hosting',
+      '🏠 Shelter venue no longer merged into a player',
+    ],
+  },
   {
     version: '6.26.0',
     date: '2026-09-06',
