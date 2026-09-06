@@ -18,6 +18,7 @@ import { getLocalGeminiKey } from './localApiKey';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 import { logChipCountAttempt, type ChipCountDebugContext, type ChipCountDebugOutcome } from './chipCountDebug';
+import { TEXT_PRIMARY, TEXT_SECONDARY, TEXT_FALLBACK_PREVIEW, TEXT_FALLBACK_LITE, CHIP_COUNT_MODEL, STRUCTURED_FAST } from './geminiModels';
 // `ChipCountDebugOutcome` is used inside `runWholePhotoShot.logAttempt`'s
 // signature. The import is type-only so it has no runtime cost.
 
@@ -33,16 +34,24 @@ function clamp(n: number, lo: number, hi: number): number {
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
+// Ids come from `geminiModels.ts` so the Settings model checker can see
+// what we depend on; see that file for why each slot holds what it does.
 export const API_CONFIGS = [
-  { version: 'v1beta', model: 'gemini-3-flash-preview' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite' },
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  { version: 'v1beta', model: TEXT_PRIMARY },
+  { version: 'v1beta', model: TEXT_SECONDARY },
+  { version: 'v1beta', model: TEXT_FALLBACK_PREVIEW },
+  { version: 'v1beta', model: TEXT_FALLBACK_LITE },
 ];
 
-// Friendly display names for UI badge
+// Friendly display names for UI badge. Retired models stay listed: stored
+// records (forecast.aiModel, chip-count modelUsed) still name them, and a
+// game from last spring should not start rendering a raw model id.
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  'gemini-3.8-flash': '3.8 Flash',
   'gemini-3-flash-preview': '3 Flash',
   'gemini-3.1-flash-lite': '3.1 Flash-Lite',
+  'gemini-3.5-flash': '3.5 Flash',
+  'gemini-3.5-flash-lite': '3.5 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
   'gemini-2.5-pro': '2.5 Pro',
   // Comic image provider — Pollinations (anonymous, free).
@@ -77,7 +86,15 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
   if (!navigator.onLine) {
     throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
   }
-  const { prompt, apiKey, temperature = 0.7, maxOutputTokens = 4096, topP, topK, responseMimeType, label = 'AI' } = opts;
+  // No default temperature. Google's guidance for the whole Gemini 3.x
+  // line is explicit: "temperature, top_p and top_k are no longer
+  // recommended — Gemini 3's reasoning capabilities are optimized for
+  // the default settings. Remove these parameters from all requests."
+  // Every model in API_CONFIGS is 3.x, so a caller that says nothing now
+  // gets the model's own defaults (temperature 1.0) instead of the 0.7
+  // we used to force. Callers that genuinely need determinism — JSON
+  // extraction, vision — still pass an explicit value and are honoured.
+  const { prompt, apiKey, temperature, maxOutputTokens = 4096, topP, topK, responseMimeType, label = 'AI' } = opts;
   let lastError = '';
   let fallbackFrom: string | undefined;
 
@@ -85,7 +102,8 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
     console.log(`   ${label}: trying ${config.model}...`);
 
     try {
-      const genConfig: Record<string, unknown> = { temperature, maxOutputTokens };
+      const genConfig: Record<string, unknown> = { maxOutputTokens };
+      if (temperature !== undefined) genConfig.temperature = temperature;
       if (topP !== undefined) genConfig.topP = topP;
       if (topK !== undefined) genConfig.topK = topK;
       if (responseMimeType) genConfig.responseMimeType = responseMimeType;
@@ -568,10 +586,7 @@ ${cards}
     const { text } = await callWithFallback({
       prompt,
       apiKey,
-      temperature: 0.8,
       maxOutputTokens: 4096,
-      topK: 40,
-      topP: 0.95,
       responseMimeType: 'application/json',
       label: 'Forecast-retry',
     });
@@ -1665,9 +1680,9 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           parts: [{ text: prompt }]
         }],
         generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
+          // Sampling left at the model's defaults on purpose — see the
+          // note in callWithFallback. Forecast text is the most-read AI
+          // output in the app and the 3.x line reasons best untouched.
           maxOutputTokens: 12288,
           responseMimeType: 'application/json',
         }
@@ -2416,7 +2431,6 @@ ${buildTraitBlock(comparisons.map(c => c.name))}
     const result = await callWithFallback({
       prompt,
       apiKey,
-      temperature: 0.7,
       maxOutputTokens: 1024,
       label: 'Forecast comparison',
     });
@@ -2593,9 +2607,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
   const result = await callWithFallback({
     prompt,
     apiKey,
-    temperature: 0.9,
     maxOutputTokens: 4096,
-    topP: 0.95,
     label: 'AI summary',
   });
 
@@ -3213,10 +3225,9 @@ Return ONLY valid JSON in this exact shape, no markdown, no commentary:
 
 If you cannot confidently locate a character, omit them from the output.`;
 
-  // Use gemini-2.5-flash for bbox detection: it's a deterministic structured
-  // extraction task (not creative writing), so we benefit from a non-thinking
-  // model that's faster + cheaper + doesn't waste output tokens on reasoning.
-  const response = await proxyGeminiGenerate('v1beta', 'gemini-2.5-flash', apiKey, {
+  // Bbox detection is deterministic structured extraction, not creative
+  // writing, so it wants the fast/cheap model rather than the clever one.
+  const response = await proxyGeminiGenerate('v1beta', STRUCTURED_FAST, apiKey, {
     contents: [{
       parts: [
         { text: prompt },
@@ -3446,9 +3457,7 @@ abc123:::בזמן שכולם מחפשים את הנוסחה, הוא כבר מצ�
   const result = await callWithFallback({
     prompt,
     apiKey,
-    temperature: 0.9,
     maxOutputTokens: 4096,
-    topP: 0.95,
     label: 'Chronicle',
   });
 
@@ -3569,9 +3578,7 @@ ${buildTraitBlock(sorted.map(p => p.playerName))}
   const result = await callWithFallback({
     prompt,
     apiKey,
-    temperature: 0.9,
     maxOutputTokens: 4096,
-    topP: 0.95,
     label: 'Graph insights',
   });
 
@@ -4167,7 +4174,7 @@ export interface CountChipsFromPhotoInput {
 // extended period, the user can retake; if it's a momentary spike,
 // the in-function retry handles it transparently.
 const CHIP_COUNT_MODELS: ReadonlyArray<{ version: string; model: string }> = [
-  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+  { version: 'v1beta', model: CHIP_COUNT_MODEL },
 ];
 
 // v6.4.1 — retry the primary once on transient failures (503 high

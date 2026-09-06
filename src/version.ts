@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.27.0';
+export const APP_VERSION = '6.28.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.28.0',
+    date: '2026-09-06',
+    changes: [
+      '🧠 Forecasts and summaries on newest Gemini model',
+      '✨ Richer, less repetitive AI writing',
+      '🔁 Four-model fallback chain for AI text',
+      '📅 Retiring models replaced before shutdown',
+      '🔍 Owner can check models against Google',
+    ],
+  },
   {
     version: '6.27.0',
     date: '2026-09-06',

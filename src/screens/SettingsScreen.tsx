@@ -43,7 +43,8 @@ import { getLocalGeminiKey, saveLocalGeminiKey } from '../utils/localApiKey';
 // The Recharts imports went with the dashboard — no other usage
 // in this file.
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyGeminiModels, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
+import { PINNED_MODELS, TTS_MODEL, scanModels, type ModelScan } from '../utils/geminiModels';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
 import { verbForName } from '../utils/hebrewGender';
 import {
@@ -159,6 +160,10 @@ const SettingsScreen = () => {
   const [, setAiStatus] = useState<AIStatusData | null>(null);
   const [aiTestResults, setAiTestResults] = useState<ModelTestResult[] | null>(null);
   const [isTestingModels, setIsTestingModels] = useState(false);
+  // Model registry check — pinned models vs Google's live list.
+  const [modelScan, setModelScan] = useState<ModelScan | null>(null);
+  const [modelScanError, setModelScanError] = useState<string | null>(null);
+  const [scanningModels, setScanningModels] = useState(false);
   const [showAiLog, setShowAiLog] = useState(false);
   const [aiTick, setAiTick] = useState(0);
 
@@ -2801,7 +2806,7 @@ const SettingsScreen = () => {
 
                     const contentTests = await testModelAvailability();
 
-                    const ttsModels = ['gemini-2.5-flash-preview-tts'];
+                    const ttsModels = [TTS_MODEL];
                     const ttsTests: ModelTestResult[] = [];
                     for (const model of ttsModels) {
                       try {
@@ -3497,6 +3502,121 @@ const SettingsScreen = () => {
                 </div>
               );
             })()}
+
+            {/* Model Registry Card — diffs the models we pin (geminiModels.ts)
+                against Google's live ListModels response. The point is early
+                warning: a pinned model that vanishes from the list is retired
+                or outside this key's tier, and every call using it is already
+                failing. Runs only on the deployed site — /api/gemini-models is
+                a Vercel Edge Function that doesn't exist in local dev. */}
+            <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h2 className="card-title" style={{ margin: 0 }}>{t('settings.models.title')}</h2>
+                <button
+                  className="btn btn-sm"
+                  disabled={scanningModels}
+                  onClick={async () => {
+                    setScanningModels(true);
+                    setModelScan(null);
+                    setModelScanError(null);
+                    try {
+                      const res = await proxyGeminiModels(geminiKey);
+                      if (!res.ok) {
+                        const body = await res.json().catch(() => ({}));
+                        setModelScanError(
+                          body?.error?.code === 'aiProxyUnavailable'
+                            ? t('settings.models.proxyOnly')
+                            : (body?.error?.message || `HTTP ${res.status}`)
+                        );
+                        return;
+                      }
+                      const data = await res.json();
+                      const ids: string[] = (data?.models || [])
+                        .map((m: { name?: string }) => m?.name || '')
+                        .filter(Boolean);
+                      setModelScan(scanModels(ids));
+                    } catch (err) {
+                      setModelScanError(err instanceof Error ? err.message : String(err));
+                    } finally {
+                      setScanningModels(false);
+                    }
+                  }}
+                  style={{ opacity: scanningModels ? 0.7 : 1 }}
+                >
+                  {scanningModels ? t('settings.models.checking') : t('settings.models.check')}
+                </button>
+              </div>
+
+              <div>
+                {PINNED_MODELS.map(p => {
+                  const gone = modelScan?.missing.some(m => m.model === p.model);
+                  return (
+                    <div key={p.model} style={{
+                      padding: '0.45rem 0', borderBottom: '1px solid var(--border)',
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text)', wordBreak: 'break-all' }}>
+                          {p.model}
+                        </div>
+                        <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>
+                          {t(p.roleKey)}
+                        </div>
+                      </div>
+                      {modelScan && (
+                        <span style={{
+                          fontSize: '0.7rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: 6,
+                          whiteSpace: 'nowrap',
+                          background: gone ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                          color: gone ? '#EF4444' : '#10B981',
+                        }}>
+                          {gone ? t('settings.models.missing') : t('settings.models.available')}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {modelScanError && (
+                <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '0.6rem', lineHeight: 1.5 }}>
+                  {modelScanError}
+                </div>
+              )}
+
+              {modelScan && modelScan.missing.length > 0 && (
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.6rem', lineHeight: 1.5 }}>
+                  {t('settings.models.missingHint')}
+                </div>
+              )}
+
+              {modelScan && modelScan.newer.length > 0 && (
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.4rem' }}>
+                    {t('settings.models.newerTitle')}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {modelScan.newer.map(id => (
+                      <span key={id} style={{
+                        fontSize: '0.68rem', padding: '0.2rem 0.45rem', borderRadius: 6,
+                        background: 'rgba(99,102,241,0.15)', color: '#818cf8',
+                      }}>
+                        {id}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.45rem', lineHeight: 1.5 }}>
+                    {t('settings.models.newerHint')}
+                  </div>
+                </div>
+              )}
+
+              {modelScan && modelScan.missing.length === 0 && modelScan.newer.length === 0 && (
+                <div style={{ fontSize: '0.72rem', color: '#10B981', marginTop: '0.6rem' }}>
+                  {t('settings.models.allOk')}
+                </div>
+              )}
+            </div>
 
             {/* Today's Usage Card */}
             <div className="card" style={{ padding: '1rem' }}>

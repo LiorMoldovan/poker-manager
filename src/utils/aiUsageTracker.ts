@@ -1,3 +1,5 @@
+import { TEXT_PRIMARY, TEXT_SECONDARY, TEXT_FALLBACK_PREVIEW, TEXT_FALLBACK_LITE, STRUCTURED_FAST } from './geminiModels';
+
 const STORAGE_KEY = 'poker_ai_status';
 const MAX_LOG_ENTRIES = 50;
 
@@ -237,11 +239,15 @@ export function getTodayLog(): ActionEntry[] {
   return data.log.filter(e => e.timestamp.startsWith(today));
 }
 
-// Known free-tier daily request limits (RPD) per model — conservative estimates
+// Known free-tier daily request limits (RPD) per model — conservative estimates.
+// Lite tiers get the higher allowance. Anything unlisted (including retired
+// models still present in an old day's log) falls back to DEFAULT_RPD.
 const MODEL_RPD_LIMITS: Record<string, number> = {
-  'gemini-3-flash-preview': 500,
-  'gemini-3.1-flash-lite': 1000,
-  'gemini-2.5-flash': 500,
+  [TEXT_PRIMARY]: 500,
+  [TEXT_SECONDARY]: 500,
+  [TEXT_FALLBACK_PREVIEW]: 500,
+  [TEXT_FALLBACK_LITE]: 1000,
+  [STRUCTURED_FAST]: 1000,
 };
 const DEFAULT_RPD = 500;
 

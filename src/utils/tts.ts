@@ -1,6 +1,7 @@
 import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage } from './apiProxy';
 import { getSettings } from '../database/storage';
 import { isElevenLabsEnabledForCurrentGroup } from './aiEligibility';
+import { TTS_MODEL } from './geminiModels';
 
 // Gender-aware Hebrew number words for TTS
 // feminine=true for feminine nouns (קניות, פעמים, דקות)
@@ -220,7 +221,7 @@ function ttsStatus(text: string, type: 'info' | 'warn' | 'success' | 'error' = '
 
 // Gemini TTS URL now routed through apiProxy.ts (proxyGeminiGenerateWithSignal)
 const GEMINI_TTS_MODELS = [
-  'gemini-2.5-flash-preview-tts',
+  TTS_MODEL,
 ];
 const GEMINI_TTS_VOICES = ['Kore', 'Aoede', 'Charon', 'Puck', 'Orus', 'Zephyr'];
 

@@ -34,6 +34,7 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, runGeminiTextPrompt } from '../utils/geminiAI';
 import { proxyGeminiGenerate } from '../utils/apiProxy';
+import { STRUCTURED_FAST, TEXT_FALLBACK_LITE, TEXT_PRIMARY } from '../utils/geminiModels';
 import { notifyReportersOfResolution, type AiResolutionText } from '../utils/trainingReportNotifications';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
@@ -1556,8 +1557,8 @@ ${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, boa
 JSON בלבד, בלי markdown:`;
 
       try {
-        // Try stable gemini-2.5-flash first (preview models often hit 503/504 under load)
-        const SCAN_MODELS = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
+        // Fast structured model first (preview models often hit 503/504 under load)
+        const SCAN_MODELS = [STRUCTURED_FAST, TEXT_FALLBACK_LITE, TEXT_PRIMARY];
         let result: unknown[] | null = null;
 
         let lastError = '';

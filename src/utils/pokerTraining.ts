@@ -2,6 +2,7 @@ import { getGeminiApiKey, API_CONFIGS, getModelDisplayName, runGeminiTextPrompt 
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { PlayerStats } from '../types';
 import { proxyGeminiGenerate } from './apiProxy';
+import { STRUCTURED_FAST, TEXT_FALLBACK_LITE, TEXT_PRIMARY } from './geminiModels';
 
 let lastUsedTrainingModel = '';
 export const getLastTrainingModel = () => lastUsedTrainingModel;
@@ -1800,11 +1801,11 @@ export interface PoolBatchResult {
 }
 
 // Pool generation uses small batches to fit within Vercel Edge timeout (~25s).
-// Stable gemini-2.5-flash is tried first for reliability; previews are slow/overloaded.
+// The fast structured model leads for reliability; previews are slow/overloaded.
 const POOL_GEN_MODELS = [
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite' },
-  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+  { version: 'v1beta', model: STRUCTURED_FAST },
+  { version: 'v1beta', model: TEXT_FALLBACK_LITE },
+  { version: 'v1beta', model: TEXT_PRIMARY },
 ];
 const BATCH_SIZE = 6; // questions per single API call (fits comfortably in <20s)
 const MAX_BATCH_TOKENS = 4096; // ~6 questions ~ 2-3k tokens
