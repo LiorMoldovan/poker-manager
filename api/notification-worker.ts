@@ -87,6 +87,12 @@ interface BuiltMessage {
 interface DispatchPlan {
   message: BuiltMessage;
   recipientPlayerNames: string[];
+  // Push to every subscriber in the group rather than to
+  // recipientPlayerNames, which then only governs the email leg. Used by the
+  // two group-wide announcements ('creation', 'target_filled'). Expressed to
+  // send-push by omitting the target list, which also keeps a 40-name roster
+  // out of a PostgREST query string.
+  pushToWholeGroup?: boolean;
   groupId: string;
   // When true, the email leg is skipped entirely (group has emails off,
   // or kind is push-only by design — trivia/training reports).
@@ -251,6 +257,7 @@ function permanentNames(ctx: PollCtx): string[] {
   }
   return out;
 }
+
 
 function guestAndPermanentGuestNames(ctx: PollCtx): string[] {
   const out: string[] = [];
@@ -610,12 +617,17 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
 
     let message: BuiltMessage | null = null;
     let recipientPlayerNames: string[] = [];
+    let pushToWholeGroup = false;
     let pushOnly = false;
     let preemptTargetFilledPollId: string | undefined;
 
     if (kind === 'creation') {
       message = buildCreationMessage(ctx);
+      // Every subscriber on push, permanents only on email. A poll opening is
+      // the one event everybody wants on their phone regardless of tier —
+      // guests just can't vote yet, which the deep-linked screen explains.
       recipientPlayerNames = permanentNames(ctx);
+      pushToWholeGroup = true;
     } else if (kind === 'expanded') {
       message = buildExpandedMessage(ctx);
       recipientPlayerNames = guestAndPermanentGuestNames(ctx);
@@ -632,7 +644,11 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
       }
     } else if (kind === 'target_filled') {
       message = buildTargetFilledMessage(ctx);
+      // The game filling up is group news — the people who didn't make it in
+      // are exactly the ones who need to know the door just closed. Email
+      // stays on the yes-voters so we don't re-email the whole roster.
       recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
+      pushToWholeGroup = true;
     } else if (kind === 'cancellation') {
       message = buildCancellationMessage(ctx);
       recipientPlayerNames = allParticipantNames(ctx);
@@ -666,6 +682,7 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     return {
       message,
       recipientPlayerNames,
+      pushToWholeGroup,
       groupId: group_id,
       pushOnly: !emailAllowedForGroup || pushOnly,
       emailOnly,
@@ -734,7 +751,9 @@ async function postSendPush(plan: DispatchPlan): Promise<{ ok: boolean; status: 
       groupId: plan.groupId,
       title: plan.message.pushTitle,
       body: plan.message.pushBody,
-      targetPlayerNames: plan.recipientPlayerNames,
+      // Omitted entirely for whole-group announcements: send-push reads a
+      // missing target list as "every subscriber in this group".
+      targetPlayerNames: plan.pushToWholeGroup ? undefined : plan.recipientPlayerNames,
       url: plan.message.url,
     }),
   });
@@ -865,17 +884,32 @@ async function fetchEmailsFor(groupId: string, names: string[]): Promise<Array<{
   return out;
 }
 
-async function dispatch(plan: DispatchPlan): Promise<{ pushOk: boolean; emailOk: boolean; errors: string[] }> {
+async function dispatch(plan: DispatchPlan): Promise<{
+  pushOk: boolean; emailOk: boolean; errors: string[];
+  pushSent: number; pushTotal: number;
+}> {
   const errors: string[] = [];
   let pushOk = false;
   let emailOk = false;
+  let pushSent = 0;
+  let pushTotal = 0;
 
   // ── Push (skip when group has push disabled) ──
-  if (!plan.emailOnly && plan.recipientPlayerNames.length > 0) {
+  if (!plan.emailOnly && (plan.pushToWholeGroup || plan.recipientPlayerNames.length > 0)) {
     try {
       const r = await postSendPush(plan);
       if (r.ok) {
         pushOk = true;
+        // A 2xx from send-push only means the request was well-formed — it
+        // also returns 200 with `sent: 0` when nothing matched. Carry the
+        // real delivery counts out so the handler can report them; without
+        // this a push that reached nobody is indistinguishable from a
+        // perfect fan-out, which is why this bug survived so long.
+        try {
+          const parsed = JSON.parse(r.bodyText) as { sent?: number; total?: number };
+          if (typeof parsed.sent === 'number') pushSent = parsed.sent;
+          if (typeof parsed.total === 'number') pushTotal = parsed.total;
+        } catch { /* body wasn't the expected shape — counts stay at 0 */ }
       } else {
         errors.push(`push ${r.status}: ${r.bodyText.slice(0, 200)}`);
       }
@@ -914,7 +948,7 @@ async function dispatch(plan: DispatchPlan): Promise<{ pushOk: boolean; emailOk:
     emailOk = true; // push-only kinds: email is "n/a", not "failed"
   }
 
-  return { pushOk, emailOk, errors };
+  return { pushOk, emailOk, errors, pushSent, pushTotal };
 }
 
 // ─── Top-level handler ─────────────────────────────────────────────────────
@@ -987,7 +1021,11 @@ export default async function handler(req: Request): Promise<Response> {
   // batch per call. 10 is enough to keep up with a busy poll night
   // without exceeding Vercel's Edge timeout (default 25s).
   const MAX_PER_INVOCATION = 10;
-  const stats = { processed: 0, pushOk: 0, emailOk: 0, failed: 0 };
+  // pushSent/pushTotal are the actual device counts, not the per-job 2xx
+  // tally that pushOk carries. This body is stored verbatim by pg_net in
+  // net._http_response, so it's the audit trail for "did that notification
+  // reach anyone" — queryable long after the Vercel logs have rolled off.
+  const stats = { processed: 0, pushOk: 0, emailOk: 0, failed: 0, pushSent: 0, pushTotal: 0 };
 
   for (let i = 0; i < MAX_PER_INVOCATION; i++) {
     const job = await claimJob();
@@ -1015,6 +1053,8 @@ export default async function handler(req: Request): Promise<Response> {
       const r = await dispatch(plan);
       if (r.pushOk) stats.pushOk += 1;
       if (r.emailOk) stats.emailOk += 1;
+      stats.pushSent += r.pushSent;
+      stats.pushTotal += r.pushTotal;
       const success = r.pushOk || r.emailOk;
       const errMsg = success ? null : r.errors.join(' | ').slice(0, 480);
       if (!success) stats.failed += 1;

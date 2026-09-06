@@ -255,33 +255,51 @@ export default async function handler(req: Request): Promise<Response> {
     const supabaseUrl = process.env.SUPABASE_URL || 'https://ursjltxklmxmapfvkttj.supabase.co';
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_TzhEQmU6mX2n-utnOUAtwQ_zkGTR13j';
 
-    // Pick the right client based on auth path:
-    //   * user mode → forward the caller's JWT so push_subscriptions RLS
-    //     filters subs to ones the caller can see (admins see all; regular
-    //     members only see their own — but the client only calls send-push
-    //     from admin-gated UI, so the practical effect is "admins fan out").
-    //   * worker mode → use service-role to bypass RLS. The notification
-    //     worker doesn't have a user JWT (it's invoked by the pg_net
-    //     webhook with X-Worker-Secret), but it needs to reach EVERY
-    //     subscriber for a target_filled / confirmed broadcast — not just
-    //     subs the caller can see.
-    let db: ReturnType<typeof createClient>;
-    if (auth.mode === 'worker') {
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!serviceKey) {
-        return new Response(JSON.stringify({ error: { message: 'SUPABASE_SERVICE_ROLE_KEY missing — required for worker-mode push' } }), {
-          status: 500, headers: JSON_HEADERS,
-        });
-      }
-      db = createClient(supabaseUrl, serviceKey, {
-        auth: { persistSession: false },
-      });
-    } else {
+    // Subscription lookup always runs as service-role, in both auth paths.
+    //
+    // It used to run as the caller in user mode, which quietly broke every
+    // notification a non-admin happened to dispatch: push_subscriptions RLS
+    // (`push_subs_select`) shows a member only their own row, so the fan-out
+    // collapsed to a single recipient and returned `sent: 0` with HTTP 200.
+    // That was survivable while only admin-gated UI called this endpoint, but
+    // the client-side notification worker (utils/notificationWorker.ts) drains
+    // the job queue from EVERY member's browser — so whichever member happened
+    // to have the app open when a poll was auto-created claimed the 'creation'
+    // job, sent nothing, and marked it done. Claim-gating meant no retry.
+    //
+    // Who may be pushed is decided by the caller's own authorization, not by
+    // what the caller can see in this table, so we authorize the group instead
+    // and then read the subscriptions with full visibility.
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (auth.mode !== 'worker') {
       const authHeader = req.headers.get('Authorization') || '';
-      db = createClient(supabaseUrl, supabaseAnonKey, {
+      const asCaller = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
+      // gm_select restricts group_members to `user_id = auth.uid()`, so a row
+      // comes back only when the caller is themselves a member of this group.
+      const { data: membership, error: membershipError } = await asCaller
+        .from('group_members')
+        .select('group_id')
+        .eq('group_id', groupId)
+        .limit(1);
+      if (membershipError) throw new Error(`DB error: ${membershipError.message}`);
+      if (!membership || membership.length === 0) {
+        return new Response(JSON.stringify({ error: { message: 'Not a member of this group' } }), {
+          status: 403, headers: JSON_HEADERS,
+        });
+      }
     }
+
+    if (!serviceKey) {
+      return new Response(JSON.stringify({ error: { message: 'SUPABASE_SERVICE_ROLE_KEY missing — required to reach group subscribers' } }), {
+        status: 500, headers: JSON_HEADERS,
+      });
+    }
+    const db = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    });
 
     let query = db.from('push_subscriptions').select('endpoint, keys_p256dh, keys_auth, player_name').eq('group_id', groupId);
     if (targetPlayerNames && targetPlayerNames.length > 0) {

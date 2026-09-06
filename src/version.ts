@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.25.0';
+export const APP_VERSION = '6.26.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.26.0',
+    date: '2026-09-06',
+    changes: [
+      '🔔 Poll opening alert now reaches everyone',
+      '🎉 "Game is full" alert to the whole group',
+      '📱 Phone and PC no longer cancel each other',
+      '🔕 Fewer missed alerts from lost registrations',
+    ],
+  },
   {
     version: '6.25.0',
     date: '2026-08-25',

@@ -1,3 +1,5 @@
+import { APP_VERSION } from '../src/version';
+
 export const config = { runtime: 'edge' };
 
 export default async function handler(req: Request): Promise<Response> {
@@ -85,6 +87,15 @@ const log = (msg, color) => {
   }
 
   const checks: Record<string, string> = {};
+  // Which build is actually serving /api/*. The Edge Functions deploy as a
+  // separate artifact from the browser bundle, so the APP_VERSION shown in
+  // Settings → About can be current while these are stale. commit_sha is the
+  // ground truth — APP_VERSION is the human-readable label next to it.
+  checks['app_version'] = APP_VERSION;
+  checks['commit_sha'] = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'unknown (local dev)';
+  checks['deploy_env'] = process.env.VERCEL_ENV || 'unknown (local dev)';
+  checks['SUPABASE_SERVICE_ROLE_KEY'] = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'MISSING — all push fan-out returns 500';
+  checks['WORKER_INTERNAL_SECRET'] = process.env.WORKER_INTERNAL_SECRET ? 'set' : 'MISSING — notification worker cannot authenticate';
   checks['SUPABASE_JWT_SECRET'] = process.env.SUPABASE_JWT_SECRET ? `set (${process.env.SUPABASE_JWT_SECRET.length} chars)` : 'MISSING';
   checks['SUPABASE_URL'] = process.env.SUPABASE_URL || 'fallback used';
   checks['SUPABASE_ANON_KEY'] = process.env.SUPABASE_ANON_KEY ? 'set' : 'fallback used';

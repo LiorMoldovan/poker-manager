@@ -791,9 +791,17 @@ async function dispatch(
     // `confirmed-below-target-yes` email at pin time. Saves up to 6
     // duplicate emails per messy poll (v5.44.2 quota optimization).
     emailRecipientNames?: string[];
+    // Push to every subscriber in the group rather than to
+    // `recipientNames`, which then only governs the email leg. Used by
+    // the two group-wide announcements (a poll opening, a game filling
+    // up). Expressed by omitting the target list — send-push reads that
+    // as "whole group", which also keeps a 40-name roster out of a
+    // PostgREST query string.
+    pushToWholeGroup?: boolean;
   },
 ): Promise<void> {
-  if (recipientNames.length === 0) {
+  const pushToWholeGroup = options?.pushToWholeGroup === true;
+  if (recipientNames.length === 0 && !pushToWholeGroup) {
     console.log(`[schedule-notify/${kind}] no recipients, skipping`);
     return;
   }
@@ -807,7 +815,7 @@ async function dispatch(
         groupId: poll.groupId,
         title: msg.pushTitle,
         body: msg.pushBody,
-        targetPlayerNames: recipientNames,
+        targetPlayerNames: pushToWholeGroup ? undefined : recipientNames,
         url: deepLinkUrl(poll.id),
       });
     } catch (err) {
@@ -891,9 +899,13 @@ export function isAtTargetConfirm(poll: GamePoll): boolean {
 }
 
 export async function dispatchInvitation(poll: GamePoll): Promise<void> {
-  const recipientIds = resolveRecipientPlayerIds(poll, 'creation');
-  const names = playerNamesForIds(recipientIds);
-  await dispatch(poll, 'creation', buildInvitationMessage(poll), names);
+  // Push to every subscriber, email to permanents only. A poll opening is the
+  // one event everybody wants on their phone regardless of tier — guests just
+  // can't vote yet, which the deep-linked screen already explains.
+  const names = playerNamesForIds(resolveRecipientPlayerIds(poll, 'creation'));
+  await dispatch(poll, 'creation', buildInvitationMessage(poll), names, {
+    pushToWholeGroup: true,
+  });
 }
 
 export async function dispatchExpanded(poll: GamePoll): Promise<void> {
@@ -964,9 +976,11 @@ export async function dispatchCancellation(poll: GamePoll): Promise<void> {
 }
 
 // Fires when a confirmed-below-target poll reaches its seat target via
-// post-pin yes-votes. Yes-voters on the pinned date get a final
-// "המשחק מלא — ניפגש!" announcement. Skipped when the seat target
-// hasn't actually been reached yet (caller bug — the trigger only
+// post-pin yes-votes. The "המשחק מלא — ניפגש!" push goes to the whole
+// roster — the game filling up is group news, and the people who didn't
+// make it in are exactly the ones who need to know the door just closed.
+// Email stays on the yes-voters, deduped below. Skipped when the seat
+// target hasn't actually been reached yet (caller bug — the trigger only
 // enqueues this kind when count >= target, but defensive).
 export async function dispatchTargetFilled(poll: GamePoll): Promise<void> {
   if (poll.status !== 'confirmed' || !poll.confirmedDateId) {
@@ -1010,7 +1024,7 @@ export async function dispatchTargetFilled(poll: GamePoll): Promise<void> {
     'target_filled',
     buildTargetFilledMessage(poll, confirmedDate, yesNames),
     yesNames,
-    { emailRecipientNames: emailNames },
+    { emailRecipientNames: emailNames, pushToWholeGroup: true },
   );
 }
 

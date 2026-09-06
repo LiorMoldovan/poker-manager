@@ -713,13 +713,31 @@ function SupabaseApp() {
 
     const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
     const isDead = (ep: string) => ep.includes('permanently-removed') || ep.includes('.invalid');
+    // A subscription minted against a different VAPID key can't be decrypted
+    // by our sender, so it has to be replaced rather than reused.
+    const matchesOurVapidKey = (s: PushSubscription): boolean => {
+      const raw = s.options?.applicationServerKey;
+      if (!raw) return false;
+      let bin = '';
+      for (const b of new Uint8Array(raw)) bin += String.fromCharCode(b);
+      const b64url = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return b64url === VAPID_PUBLIC;
+    };
     try {
       let reg = await navigator.serviceWorker.ready;
       const existing = await reg.pushManager.getSubscription();
+
+      // Reuse a healthy registration instead of tearing it down. This used to
+      // unsubscribe unconditionally and mint a fresh endpoint on every single
+      // app load, which meant the stored endpoint was only ever as good as the
+      // last successful save — and the save is best-effort. Reusing keeps a
+      // device's endpoint stable for its whole lifetime.
+      if (existing && !isDead(existing.endpoint) && matchesOurVapidKey(existing)) {
+        await savePushSubscription(groupId, playerName, existing);
+        return;
+      }
       if (existing) {
-        if (isDead(existing.endpoint)) {
-          deletePushSubscription(existing.endpoint);
-        }
+        deletePushSubscription(existing.endpoint);
         await existing.unsubscribe();
       }
 
@@ -747,7 +765,9 @@ function SupabaseApp() {
       }
 
       await savePushSubscription(groupId, playerName, sub);
-    } catch (_err) { /* push subscription not available */ }
+    } catch (err) {
+      console.warn('Push subscription failed — this device will not receive notifications:', err);
+    }
   }, [groupId, playerName]);
 
   useEffect(() => {

@@ -2486,16 +2486,13 @@ export async function savePushSubscription(
     return;
   }
 
-  // Keep exactly one active subscription per (user_id, group_id): drop
-  // any row for this user in this group whose endpoint isn't the one we
-  // just saved. The browser only has one live push subscription per
-  // origin at a time, so the others are guaranteed dead.
-  const { error: pruneError } = await supabase.from('push_subscriptions')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('group_id', groupId)
-    .neq('endpoint', subscription.endpoint);
-  if (pruneError) console.warn('Failed to prune stale push subscriptions:', pruneError);
+  // Deliberately no prune here. This used to delete every other row for
+  // (user_id, group_id), justified by "the browser only has one live push
+  // subscription per origin at a time, so the others are guaranteed dead" —
+  // true per browser profile, false per person. Anyone using a phone and a
+  // PC had one device silently unregistered every time they opened the app
+  // on the other. Dead endpoints are cleaned up where they can actually be
+  // identified as dead: send-push deletes on a 404/410 from the push service.
 }
 
 export async function deletePushSubscription(endpoint: string): Promise<void> {
