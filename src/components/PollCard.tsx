@@ -51,7 +51,7 @@ import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { buildWazeUrl, openWaze } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
 import type { RsvpResponse, Player } from '../types';
-import { evaluatePollVoteGate } from '../utils/pollAccess';
+import { evaluatePollVoteGate, guestGateLiftsAt } from '../utils/pollAccess';
 
 export default function PollCard(props: PollCardProps) {
   const {
@@ -172,6 +172,19 @@ export default function PollCard(props: PollCardProps) {
     () => evaluatePollVoteGate(poll, currentPlayer?.type ?? null, now),
     [poll, currentPlayer, now],
   );
+
+  // The instant both guest gates lift: the tier gate in evaluatePollVoteGate
+  // and the permanent-maybe seat hold above are driven by the same deadline,
+  // so one formatted label serves both explanations. Blocked guests used to
+  // get this only as a `title` tooltip, which no phone ever shows — the
+  // reason has to be on the card itself.
+  const gateLiftsLabel = useMemo(() => {
+    const d = new Date(guestGateLiftsAt(poll));
+    if (Number.isNaN(d.getTime())) return '';
+    const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
+    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    return `${weekday} ${d.getDate()}/${d.getMonth() + 1} ${time}`;
+  }, [poll]);
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
   const [proxyDateId, setProxyDateId] = useState<string | null>(null);
@@ -496,6 +509,25 @@ export default function PollCard(props: PollCardProps) {
         </div>
       )}
 
+      {/* Why the RSVP buttons below are dead. Only the two reasons a viewer
+          can actually act on (or wait out) get a banner — a cancelled poll
+          and an admin lock already announce themselves in the header, and
+          repeating them here would just be noise on every frozen card. */}
+      {!canVote.allowed && (canVote.reason === 'tier_not_allowed' || canVote.reason === 'no_player_link') && (
+        <div
+          style={{
+            marginTop: 10, padding: '8px 10px', borderRadius: 8,
+            background: 'rgba(234, 179, 8, 0.10)',
+            border: '1px solid rgba(234, 179, 8, 0.28)',
+            color: 'var(--text)', fontSize: 12, lineHeight: 1.5,
+          }}
+        >
+          {canVote.reason === 'tier_not_allowed'
+            ? t('schedule.guestGateNote', { when: gateLiftsLabel })
+            : t('schedule.noPlayerLinkNote')}
+        </div>
+      )}
+
       {/* Per-date tiles. Hidden on expired (the timer banner
           already says "expired" and there's no actionable vote);
           cancelled polls still render so members can see the
@@ -523,6 +555,17 @@ export default function PollCard(props: PollCardProps) {
             // re-opens everything. Mirrors the 'date_not_picked' guard in
             // cast_poll_vote / admin_cast_poll_vote (migration 106).
             const isFillPinnedLocked = !!poll.confirmedDateId && !isPinnedHere;
+            // Held seats for this date, from the guest viewer's perspective
+            // (permanents are never blocked by holds, so it's always 0 for
+            // them). Hoisted out of the RSVP-button loop because the tile
+            // also needs it to decide whether to explain the block in text.
+            const heldHere = viewerIsGuest ? (heldByDate.get(d.id) ?? 0) : 0;
+            // "Yes" is blocked purely by holds — real seats remain, they're
+            // just reserved. A genuinely full date is a different message
+            // (errorSeatFull) and must not be papered over with this one.
+            const yesBlockedByHold = !isDisabled
+              && s.yes < poll.targetPlayerCount
+              && s.yes + heldHere >= poll.targetPlayerCount;
             const expanded = expandedVoterDates.has(d.id);
             // Waze link + arrival details for this tile's location. Only
             // surfaced on the pinned/confirmed date (the chosen night) to
@@ -912,12 +955,11 @@ export default function PollCard(props: PollCardProps) {
                     // window, held seats also count against the cap
                     // (migration 101 raises 'seat_held'); permanents are
                     // never blocked by holds.
-                    const held = viewerIsGuest ? (heldByDate.get(d.id) ?? 0) : 0;
                     const wouldOverfill =
                       resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
                     const wouldHitHold =
                       resp === 'yes' && !active && !wouldOverfill
-                      && s.yes + held >= poll.targetPlayerCount;
+                      && s.yes + heldHere >= poll.targetPlayerCount;
                     const disabled = !canVote.allowed || wouldOverfill || wouldHitHold || isFillPinnedLocked || isDisabled;
                     return (
                       <button
@@ -927,11 +969,15 @@ export default function PollCard(props: PollCardProps) {
                         title={
                           isDisabled ? t('schedule.errorDateDisabled') :
                           wouldOverfill ? t('schedule.errorSeatFull') :
-                          wouldHitHold ? t('schedule.errorSeatHeld') :
+                          wouldHitHold ? (gateLiftsLabel
+                            ? t('schedule.errorSeatHeldAt', { when: gateLiftsLabel })
+                            : t('schedule.errorSeatHeld')) :
                           isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
                           canVote.allowed ? '' :
                           canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
-                          canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
+                          canVote.reason === 'tier_not_allowed' ? (gateLiftsLabel
+                            ? t('schedule.errorTierNotAllowedAt', { when: gateLiftsLabel })
+                            : t('schedule.errorTierNotAllowed')) :
                           canVote.reason === 'voting_locked' ? t('schedule.errorVotingLocked') :
                           t('schedule.errorPollLocked')
                         }
@@ -974,6 +1020,21 @@ export default function PollCard(props: PollCardProps) {
                       }}>{t('schedule.proxy.add')}</button>
                   )}
                 </div>
+
+                {/* Seat-hold explainer, per date. Only shown to a guest whose
+                    "yes" this date is actually refusing, and only while the
+                    hold is what's refusing it — once the viewer can vote and
+                    the seats really are gone, errorSeatFull is the honest
+                    message and this one would be a lie. */}
+                {canVote.allowed && yesBlockedByHold && heldHere > 0 && gateLiftsLabel && (
+                  <div style={{
+                    fontSize: 11, lineHeight: 1.5, color: 'var(--text-muted)',
+                    background: 'rgba(148, 163, 184, 0.10)',
+                    borderRadius: 6, padding: '6px 8px',
+                  }}>
+                    {t('schedule.seatHeldNote', { when: gateLiftsLabel })}
+                  </div>
+                )}
 
                 {/* Voter list — collapsed by default. Empty list
                     renders nothing. `highlightPlayerId` tags the
@@ -1123,8 +1184,11 @@ export default function PollCard(props: PollCardProps) {
             {isSharing ? t('common.capturing') : t('schedule.share.shareMenuLabel')}
           </button>
         )}
-        {/* Vote-change subscription toggle — members on active polls. */}
-        {!isAdmin && (visualStatus === 'open' || visualStatus === 'expanded') && (
+        {/* Vote-change toggle — everyone, on active polls. This is a
+            durable per-user preference, not a per-poll subscription, so
+            admins get it too: they were previously opted in with no way
+            to decline from here. */}
+        {(visualStatus === 'open' || visualStatus === 'expanded') && (
           <button
             onClick={onToggleSubscription}
             title={isSubscribed

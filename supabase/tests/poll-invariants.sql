@@ -24,6 +24,10 @@
 --   I8  Only group members can drive expansion.
 --   I9  Every transition that changes who can vote announces itself exactly once.
 --  I10  The cron sweep reaches the same verdict as the client-driven RPC.
+--  I11  Nothing is delivered outside 07:00-23:00, by either worker.
+--  I12  A nudge reaches only people it still applies to, exactly once per slot.
+--  I13  Vote-change notifications follow the person's switch, not their role.
+--  I14  The full-game channel reopens only when the game is genuinely not full.
 --
 -- ADDING A SCENARIO
 -- Start from an invariant, not from the code. Ask which combination of
@@ -81,6 +85,7 @@ $f$;
 DO $harness$
 DECLARE
   g uuid; p uuid; dPick uuid; dRival uuid; r text; i int; n int;
+  ts timestamptz; hr int;
   pu uuid[];   -- linked permanent accounts
   gu uuid;     -- a linked non-permanent account
 BEGIN
@@ -327,6 +332,152 @@ BEGIN
     INSERT INTO res VALUES (25, 'I10', 'Sweep respects the picked-date seat check',
       'closed', pg_temp.expanded(p), pg_temp.expanded(p) = 'closed');
   END IF;
+
+  ------------------------------------------------------------------ I11
+  -- Migration 117. Asserted as a property rather than against a fixed clock:
+  -- whatever hour the suite runs at, the next delivery slot has to be inside
+  -- the waking window and never behind us. A regression that returned now()
+  -- unconditionally would pass at noon and fail at 03:00 — this catches it
+  -- at any hour.
+  SELECT fn_next_delivery_slot() INTO ts;
+  n := extract(hour from (ts AT TIME ZONE 'Asia/Jerusalem'))::int;
+  INSERT INTO res VALUES (26, 'I11', 'Next delivery slot lands inside 07:00-23:00',
+    'true', (n BETWEEN 7 AND 22)::text, n BETWEEN 7 AND 22);
+  INSERT INTO res VALUES (27, 'I11', '  and never in the past',
+    'true', (ts >= now() - interval '1 second')::text, ts >= now() - interval '1 second');
+
+  -- A parked job is invisible to the browser claim. Without this the quiet
+  -- window would only be honoured by the server worker, and any open tab
+  -- would happily drain the queue at 03:00.
+  --
+  -- Earlier scenarios left claimable jobs in this group's queue, and the claim
+  -- returns whichever one is oldest. Park them all first so the assertion can
+  -- only be satisfied by the run_after filter, then unpark to prove the empty
+  -- result was the filter talking and not some unrelated gate.
+  UPDATE notification_jobs SET run_after = now() + interval '9 hours'
+   WHERE group_id = g AND status = 'pending';
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '25 hours');
+  INSERT INTO notification_jobs (group_id, poll_id, kind, payload, run_after)
+  VALUES (g, p, 'creation', '{}'::jsonb, now() + interval '4 hours');
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', pu[1])::text, true);
+  SELECT count(*) INTO n FROM claim_notification_job(g);
+  INSERT INTO res VALUES (28, 'I11', 'Browser claim skips every job inside quiet hours',
+    '0', n::text, n = 0);
+
+  UPDATE notification_jobs SET run_after = now() - interval '1 minute' WHERE poll_id = p;
+  SELECT count(*) INTO n FROM claim_notification_job(g) c WHERE c.poll_id = p;
+  INSERT INTO res VALUES (29, 'I11', '  and claims the same job once its slot arrives',
+    '1', n::text, n = 1);
+
+  ------------------------------------------------------------------ I12
+  -- Migration 120. The sweep's hour arguments exist for exactly this: pin the
+  -- slot to the current hour so the assertion is deterministic whenever the
+  -- suite runs. The poll is aged to 00:30 local so its expansion lands
+  -- tomorrow, putting the "day before" nudge slot on today at that hour.
+  hr := extract(hour from (now() AT TIME ZONE 'Asia/Jerusalem'))::int;
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '0 hours');
+  UPDATE game_polls
+     SET created_at = date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem')
+                        AT TIME ZONE 'Asia/Jerusalem' + interval '30 minutes'
+   WHERE id = p;
+  PERFORM fn_sweep_poll_reminders(hr, hr);
+  SELECT count(*) INTO n
+    FROM notification_jobs WHERE poll_id = p AND kind = 'reminder_no_vote';
+  INSERT INTO res VALUES (30, 'I12', 'Nobody answered, nudge slot is live',
+    '1', n::text, n = 1);
+
+  SELECT jsonb_array_length(payload->'recipient_player_names') INTO n
+    FROM notification_jobs WHERE poll_id = p AND kind = 'reminder_no_vote';
+  SELECT count(*) INTO i FROM players WHERE group_id = g AND type = 'permanent';
+  INSERT INTO res VALUES (31, 'I12', '  and it names every permanent who is silent',
+    i::text, n::text, n = i);
+
+  -- The log, not the queue, is what makes this idempotent. A second sweep in
+  -- the same window must be inert — the cron runs every 15 minutes and the
+  -- slot is two hours wide, so this fires eight times per nudge in production.
+  PERFORM fn_sweep_poll_reminders(hr, hr);
+  SELECT count(*) INTO n
+    FROM notification_jobs WHERE poll_id = p AND kind = 'reminder_no_vote';
+  INSERT INTO res VALUES (32, 'I12', '  re-sweeping the same slot does not re-nudge',
+    '1', n::text, n = 1);
+
+  -- Guests are admitted, so "vote before the guests" is no longer true.
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '0 hours');
+  UPDATE game_polls
+     SET created_at = date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem')
+                        AT TIME ZONE 'Asia/Jerusalem' + interval '30 minutes',
+         expanded_at = now()
+   WHERE id = p;
+  PERFORM fn_sweep_poll_reminders(hr, hr);
+  SELECT count(*) INTO n
+    FROM notification_jobs WHERE poll_id = p AND kind = 'reminder_no_vote';
+  INSERT INTO res VALUES (33, 'I12', 'Already open to guests, so no non-voter nudge',
+    '0', n::text, n = 0);
+
+  -- A permanent who answered is not a non-voter, whatever they answered.
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '0 hours');
+  SELECT id INTO dPick FROM game_poll_dates WHERE poll_id = p;
+  PERFORM pg_temp.vote(pu[1], dPick, 'maybe');
+  UPDATE game_polls
+     SET created_at = date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem')
+                        AT TIME ZONE 'Asia/Jerusalem' + interval '30 minutes'
+   WHERE id = p;
+  PERFORM fn_sweep_poll_reminders(hr, hr);
+  SELECT jsonb_array_length(payload->'recipient_player_names') INTO n
+    FROM notification_jobs WHERE poll_id = p AND kind = 'reminder_no_vote';
+  SELECT count(*) INTO i FROM players WHERE group_id = g AND type = 'permanent';
+  INSERT INTO res VALUES (34, 'I12', 'An "אעדכן" answer counts as having voted',
+    (i - 1)::text, n::text, n = i - 1);
+
+  ------------------------------------------------------------------ I13
+  -- Migration 118. Vote-change is a per-person switch, not a role perk. Being
+  -- an admin used to be enough to receive them, which is the whole reason
+  -- ליכטר could not turn them off.
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '0 hours');
+  UPDATE group_members SET schedule_vote_change_notifs = false
+   WHERE group_id = g AND user_id = pu[1];
+  SELECT count(*) INTO n FROM get_poll_change_recipients(p) rcp
+   WHERE rcp.player_name = (SELECT pl.name FROM players pl
+                              JOIN group_members gm ON gm.player_id = pl.id
+                             WHERE gm.user_id = pu[1] AND pl.group_id = g);
+  INSERT INTO res VALUES (35, 'I13', 'Opted-out member is excluded whatever their role',
+    '0', n::text, n = 0);
+
+  UPDATE group_members SET schedule_vote_change_notifs = true
+   WHERE group_id = g AND user_id = pu[1];
+  SELECT count(*) INTO n FROM get_poll_change_recipients(p) rcp
+   WHERE rcp.player_name = (SELECT pl.name FROM players pl
+                              JOIN group_members gm ON gm.player_id = pl.id
+                             WHERE gm.user_id = pu[1] AND pl.group_id = g);
+  INSERT INTO res VALUES (36, 'I13', '  and opted back in without an admin role',
+    '1', n::text, n = 1);
+
+  ------------------------------------------------------------------ I14
+  -- Migration 119. The "game is full" sentinel mutes the channel for good, so
+  -- a worker that skips a stale full-game notice has to be able to clear it —
+  -- but only when the game really did empty out. Clearing it on a still-full
+  -- poll would let the announcement fire twice.
+  p := pg_temp.mkpoll(g, pu[1], 7, 1, interval '73 hours');
+  SELECT id INTO dPick FROM game_poll_dates WHERE poll_id = p;
+  FOR i IN 1..7 LOOP PERFORM pg_temp.vote(pu[i], dPick, 'yes'); END LOOP;
+  UPDATE game_polls SET status = 'confirmed', confirmed_date_id = dPick,
+                        confirmed_at = now(), target_filled_notifications_sent_at = now()
+   WHERE id = p;
+  SELECT reopen_target_filled_channel(p)::text INTO r;
+  INSERT INTO res VALUES (37, 'I14', 'Still-full game keeps its channel muted',
+    'false', r, r = 'false');
+
+  -- Someone dropped out between the enqueue and the delivery.
+  DELETE FROM game_poll_votes WHERE date_id = dPick AND player_id = (
+    SELECT pl.id FROM players pl JOIN group_members gm ON gm.player_id = pl.id
+     WHERE gm.user_id = pu[7] AND pl.group_id = g);
+  SELECT reopen_target_filled_channel(p)::text INTO r;
+  INSERT INTO res VALUES (38, 'I14', 'Game dipped below target, channel reopens',
+    'true', r, r = 'true');
+  SELECT count(*) INTO n FROM game_polls
+   WHERE id = p AND target_filled_notifications_sent_at IS NULL;
+  INSERT INTO res VALUES (39, 'I14', '  and the sentinel is actually cleared',
+    '1', n::text, n = 1);
 END $harness$;
 
 SELECT n, invariant, scenario, expected, actual,

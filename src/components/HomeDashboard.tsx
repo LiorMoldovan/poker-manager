@@ -273,16 +273,23 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   // (no "active poll" message) but Home was still surfacing it as a
   // vote prompt, which contradicted the schedule view AND nagged
   // users about a vote on a date that has already passed.
-  // Returns BOTH the headlined poll (one card slot) AND the count of
-  // *other* polls that would otherwise have been eligible — used by
-  // ScheduleCard to render a small "+N more open polls" footer so a
-  // member with two parallel votes pending isn't blind to the second
-  // one without having to open `/schedule`. We compute these together
-  // because the eligibility filter (status whitelist + not past-dated
-  // + not already linked to a game) must be IDENTICAL — otherwise the
-  // "+N more" count could include polls that wouldn't have qualified
-  // for the slot themselves, which is misleading.
-  const { activePoll, additionalActivePollCount } = useMemo(() => {
+  // Returns BOTH the headlined poll (one card slot) AND a descriptor of
+  // the *other* polls that would otherwise have been eligible — used by
+  // ScheduleCard to render a small footer chip so a member with two
+  // parallel nights pending isn't blind to the second one without
+  // having to open `/schedule`. We compute these together because the
+  // eligibility filter (status whitelist + not past-dated + not already
+  // linked to a game) must be IDENTICAL — otherwise the footer could
+  // include polls that wouldn't have qualified for the slot themselves,
+  // which is misleading.
+  //
+  // The descriptor carries `actionable` because "another poll exists" and
+  // "you have a vote to cast" are different claims. A second poll that is
+  // already pinned and full (the two-nights-in-one-week shape) is worth
+  // knowing about but has nothing to vote on — the server would reject a
+  // yes with `seat_full`, and the viewer may already be on its roster.
+  // Promising a vote there sends people to a screen with nothing to do.
+  const { activePoll, additionalPolls } = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayStartTs = todayStart.getTime();
@@ -316,12 +323,61 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
       ?? polls.find(p => (p.status === 'open' || p.status === 'expanded') && !p.confirmedGameId && !isPastDated(p))
       ?? null
     );
-    const totalEligible = polls.filter(isEligible).length;
+    const others = polls.filter(p => isEligible(p) && p.id !== headline?.id);
+
+    // Dates that can still receive a vote. A pinned poll funnels every
+    // remaining vote onto the pinned date (migration 106), so the rest
+    // are frozen and must not count as somewhere to act.
+    const votableDates = (p: typeof polls[number]) => (
+      p.confirmedDateId
+        ? p.dates.filter(d => d.id === p.confirmedDateId)
+        : p.dates.filter(d => !d.disabledAt)
+    );
+
+    const nowTs = Date.now();
+    const myPlayerId = myStats?.playerId ?? null;
+    const myType = myPlayerId
+      ? (getAllPlayers().find(p => p.id === myPlayerId)?.type ?? null)
+      : null;
+
+    // Three ways a poll can have nothing for this viewer: the tier/lock
+    // gate rejects them, they already voted yes, or the date is full.
+    const hasSomethingForMe = (p: typeof polls[number]): boolean => {
+      if (!canViewerVoteNow(p, myType, nowTs)) return false;
+      return votableDates(p).some(d => {
+        const mine = myPlayerId
+          ? p.votes.find(v => v.dateId === d.id && v.playerId === myPlayerId)
+          : null;
+        if (mine?.response === 'yes') return false;
+        const yes = p.votes.filter(v => v.dateId === d.id && v.response === 'yes').length;
+        return yes < p.targetPlayerCount;
+      });
+    };
+
+    // Naming the night is more useful than counting polls, so resolve a
+    // representative date: the pinned one, else the soonest still ahead.
+    const labelFor = (p: typeof polls[number]): string | null => {
+      const cands = votableDates(p)
+        .filter(d => !!d.proposedDate)
+        .sort((a, b) => a.proposedDate.localeCompare(b.proposedDate));
+      const d = cands.find(x =>
+        new Date(`${x.proposedDate}T23:59:59`).getTime() >= todayStartTs
+      ) ?? cands[0];
+      if (!d) return null;
+      const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
+      if (Number.isNaN(dt.getTime())) return null;
+      return dt.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
+    };
+
     return {
       activePoll: headline,
-      additionalActivePollCount: headline ? Math.max(0, totalEligible - 1) : 0,
+      additionalPolls: {
+        count: others.length,
+        dateLabel: others.length === 1 ? labelFor(others[0]) : null,
+        actionable: others.some(hasSomethingForMe),
+      },
     };
-  }, [polls]);
+  }, [polls, myStats?.playerId]);
 
 
   // Self-healing link: any active poll without a confirmed_game_id gets
@@ -549,7 +605,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         step={STEP}
         t={t}
         poll={activePoll}
-        additionalActivePollCount={additionalActivePollCount}
+        additionalPolls={additionalPolls}
         myPlayerId={myStats?.playerId ?? null}
         playerName={effectivePlayerName}
         isAdmin={isAdmin}
@@ -959,15 +1015,22 @@ function NewGroupTeaserCard({ order, step, t }: SectionProps) {
 
 interface ScheduleCardProps extends SectionProps {
   poll: ReturnType<typeof getAllPolls>[number] | null;
-  // Count of OTHER eligible active polls beyond the one being shown.
-  // When > 0, the card renders a small footer line nudging the
-  // viewer to /schedule for the rest — so a member with two parallel
-  // votes pending isn't blind to the second one. Defaults to 0 (no
-  // footer rendered) — eligibility filter lives in HomeDashboard and
-  // must match the `activePoll` selection exactly, otherwise the
-  // count can falsely include polls that wouldn't have qualified for
-  // the slot either.
-  additionalActivePollCount: number;
+  // The OTHER eligible active polls beyond the one being shown. When
+  // `count > 0` the card renders a footer chip pointing at /schedule —
+  // so a member with two parallel nights pending isn't blind to the
+  // second one. The eligibility filter lives in HomeDashboard and must
+  // match the `activePoll` selection exactly, otherwise the chip can
+  // falsely include polls that wouldn't have qualified for the slot.
+  //
+  // `dateLabel` is set only when there's exactly one other poll (naming
+  // the night beats counting polls); `actionable` says whether this
+  // viewer actually has a vote to cast there, which decides between a
+  // vote CTA and a neutral heads-up.
+  additionalPolls: {
+    count: number;
+    dateLabel: string | null;
+    actionable: boolean;
+  };
   // The current viewer's linked playerId (NULL when the user hasn't
   // self-claimed a player yet). Used to detect whether *this* viewer
   // has cast a vote on the open poll, so the card can switch into a
@@ -996,56 +1059,69 @@ interface ScheduleCardProps extends SectionProps {
   onClick: () => void;
 }
 
-function ScheduleCard({ order, step, t, poll, additionalActivePollCount, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
+function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playerName, isAdmin, nextAutoPoll, onClick }: ScheduleCardProps) {
   // Arrival details (floor / code / etc.) are collapsed by default to
   // keep the card compact — tapping the 📍 location name toggles them.
   // The Waze pill stays a separate tap target (navigation), so the two
   // actions don't fight over the same click.
   const [detailsExpanded, setDetailsExpanded] = useState(false);
-  // Small "+N more open polls" badge wedged into the bottom of the
-  // card body. Rendered as a blue pill chip so it reads as a distinct
-  // call-to-action regardless of the card's own accent (amber missing-
-  // seat, green filled, blue voted) — a muted-italic footnote was too
-  // easy to miss against the warning card states. Blue is the "vote
-  // awareness" colour family already used by the `openYouVoted` card,
-  // so it stays inside the dashboard's existing visual vocabulary.
+  // "Another night" badge wedged into the bottom of the card body,
+  // rendered as a pill chip so it survives the card's own accent (amber
+  // missing-seat, green filled, blue voted) — a muted-italic footnote
+  // was too easy to miss against the warning card states.
+  //
+  // Two tones, because the chip makes two different claims. Blue + 🗳 is
+  // the "vote awareness" family already used by the `openYouVoted` card
+  // and promises something to do. Slate + 📅 is a neutral heads-up for a
+  // night that's already settled — it must NOT borrow the vote colour,
+  // or we're back to sending people to a screen with every button
+  // disabled.
   //
   // The outer flex wrapper keeps the chip from stretching to the full
   // card width — the pill should look like a tappable badge, not a
   // banner line. Click target is the whole card (already routes to
   // `/schedule`), so we don't duplicate interactivity here.
   //
-  // Disappears automatically when the second poll closes: the count
+  // Disappears automatically when the second poll closes: the descriptor
   // is recomputed from the same eligibility filter as `activePoll`,
   // which excludes `cancelled` / `expired` polls, past-dated polls,
   // and confirmed polls that are already linked to a game. Realtime
   // cache updates re-render the parent within ~500ms of any remote
   // status change, so the footer vanishes without a manual refresh.
-  const extraPollsFooter: React.ReactNode = additionalActivePollCount > 0 ? (
-    <div style={{
-      display: 'flex',
-      paddingTop: '0.55rem',
-    }}>
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.35rem',
-        fontSize: '0.72rem',
-        fontWeight: 600,
-        color: '#93c5fd',
-        background: 'rgba(59, 130, 246, 0.14)',
-        border: '1px solid rgba(59, 130, 246, 0.40)',
-        borderRadius: 999,
-        padding: '0.3rem 0.7rem',
-        lineHeight: 1.3,
+  const extraPollsFooter: React.ReactNode = additionalPolls.count > 0 ? (() => {
+    const { count, dateLabel, actionable } = additionalPolls;
+    const label = (count === 1 && dateLabel)
+      ? t(actionable
+          ? 'home.schedule.additionalPollOneVote'
+          : 'home.schedule.additionalPollOneInfo', { date: dateLabel })
+      : t(actionable
+          ? 'home.schedule.additionalPollsManyVote'
+          : 'home.schedule.additionalPollsManyInfo', { n: count });
+    const tone = actionable
+      ? { color: '#93c5fd', background: 'rgba(59, 130, 246, 0.14)', border: '1px solid rgba(59, 130, 246, 0.40)' }
+      : { color: '#cbd5e1', background: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.32)' };
+    return (
+      <div style={{
+        display: 'flex',
+        paddingTop: '0.55rem',
       }}>
-        <span aria-hidden>🗳</span>
-        {additionalActivePollCount === 1
-          ? t('home.schedule.additionalPollsOne')
-          : t('home.schedule.additionalPollsMany', { n: additionalActivePollCount })}
-      </span>
-    </div>
-  ) : null;
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.35rem',
+          fontSize: '0.72rem',
+          fontWeight: 600,
+          borderRadius: 999,
+          padding: '0.3rem 0.7rem',
+          lineHeight: 1.3,
+          ...tone,
+        }}>
+          <span aria-hidden>{actionable ? '🗳' : '📅'}</span>
+          {label}
+        </span>
+      </div>
+    );
+  })() : null;
 
   if (!poll) {
     // Empty state is purely forward-looking — a teaser inviting the

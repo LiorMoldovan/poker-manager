@@ -27,7 +27,12 @@ npm-debug.log*
 .vercel
 
 # Dev scripts (may contain tokens)
-scripts/
+scripts/*
+
+# ...except the prompt-quality harness, which is a committed regression tool.
+# Its out/ holds generated prompts, model responses and run logs — never commit those.
+!scripts/promptlab/
+scripts/promptlab/out/
 
 # Cursor MCP config (contains Supabase PAT)
 .cursor/mcp.json

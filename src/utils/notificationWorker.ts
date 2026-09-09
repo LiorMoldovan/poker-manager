@@ -32,7 +32,8 @@
 
 import {
   claimNotificationJobRpc, completeNotificationJobRpc,
-  preemptTargetFilledJobRpc, refreshPollsNow, UNHANDLED_JOB,
+  preemptTargetFilledJobRpc, reopenTargetFilledChannelRpc,
+  refreshPollsNow, UNHANDLED_JOB,
   type ClaimedNotificationJob, type NotificationJobKind,
 } from '../database/supabaseCache';
 import { getAllPolls, getGroupId } from '../database/storage';
@@ -92,6 +93,18 @@ export async function processNotificationJobs(): Promise<void> {
       drained++;
 
       try {
+        // Quiet hours (migration 117) can hold a job until 07:00, so the
+        // news may have stopped being true while it waited. Check before
+        // sending rather than trusting the state at enqueue time.
+        const stale = staleReason(job);
+        if (stale) {
+          console.log(`[notification-worker] skipping stale ${job.kind} — ${stale.reason}`);
+          await completeNotificationJobRpc(job.id, true);
+          // Completion stamps the "already announced" sentinel, which
+          // would permanently block a later, genuine announcement.
+          if (stale.reopen) await reopenTargetFilledChannelRpc(job.pollId);
+          continue;
+        }
         await runJob(job);
         await completeNotificationJobRpc(job.id, true);
       } catch (err) {
@@ -107,6 +120,38 @@ export async function processNotificationJobs(): Promise<void> {
   } finally {
     workerRunning = false;
   }
+}
+
+// Mirrors `obsolescenceCheck` in api/notification-worker.ts. Both workers
+// can win the 07:00 race for a job that waited out quiet hours, so both
+// have to refuse to send news that stopped being true overnight.
+//
+// `reopen` marks the one case where suppression must not be permanent: a
+// game that dipped below target may fill again, and completing the job
+// stamps the sentinel that blocks any future 'game is full' notice.
+interface StaleJob {
+  reason: string;
+  reopen: boolean;
+}
+
+function staleReason(job: ClaimedNotificationJob): StaleJob | null {
+  const poll = getAllPolls().find(p => p.id === job.pollId);
+  // Missing from cache is runJob's problem — it throws and the job retries.
+  if (!poll) return null;
+
+  if (poll.status === 'cancelled' && job.kind !== 'cancellation') {
+    return { reason: `poll was cancelled before the '${job.kind}' notice went out`, reopen: false };
+  }
+
+  if (job.kind === 'confirmed' && (poll.status !== 'confirmed' || !poll.confirmedDateId)) {
+    return { reason: 'pin was released before the pick went out', reopen: false };
+  }
+
+  if (job.kind === 'target_filled' && !isAtTargetConfirm(poll)) {
+    return { reason: 'game is no longer full', reopen: true };
+  }
+
+  return null;
 }
 
 async function runJob(job: ClaimedNotificationJob): Promise<void> {

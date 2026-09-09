@@ -437,6 +437,26 @@ export interface GlobalRankingContext {
 
 
 /**
+ * Game dates reach this module in two shapes: ISO from the games table, and
+ * the DD/MM/YYYY strings the screens pre-format onto `gameHistory`. `new Date`
+ * reads the latter as MM/DD/YYYY, so 03/09/2026 became 9 March and anything
+ * past the 12th of a month became Invalid Date — which wrecked both the sort
+ * and the day count below. The forecast teaser opened with "back at אייל after
+ * 184 days" on a night when the group had played there six days earlier.
+ */
+const parseHistoryDate = (dateStr: string): Date => {
+  const parts = dateStr.split('/');
+  if (parts.length >= 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+  return new Date(dateStr);
+};
+
+/**
  * Analyze location data and return insights only when genuinely interesting.
  * Returns an empty string if location is absent, insufficient data, or nothing notable.
  */
@@ -466,9 +486,9 @@ export const buildLocationInsights = (
   if (allGamesWithLocations) {
     const gamesAtLoc = allGamesWithLocations
       .filter(g => g.location === location)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => parseHistoryDate(b.date).getTime() - parseHistoryDate(a.date).getTime());
     if (gamesAtLoc.length > 0) {
-      const lastDate = new Date(gamesAtLoc[0].date);
+      const lastDate = parseHistoryDate(gamesAtLoc[0].date);
       const daysSince = Math.round((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
       if (daysSince > 30) {
         insights.push(`חזרה אצל ${location} אחרי ${daysSince} יום! פעם אחרונה: ${lastDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}`);
@@ -580,7 +600,9 @@ ${cards}
 • הטון חייב להתאים לכיוון ולעוצמה של החיזוי הנעול (🔒): חיובי → בטוח/חוגג, שלילי → אתגר/עקיצה חברית או עידוד-קאמבק שמכיר שהוא מתחת, בלי השפלה. בחיזוי שלילי אסור למסגר סביב הצלחה/מומנטום/ניצחון מהעבר — זה סותר את המספר
 • אסור להזכיר את מספר החיזוי במשפט; אסור "הערב/היום/הלילה" או תאריך — השתמש ב"הפעם", "במשחק הקרוב"
 • שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים
-עברית תקנית: מספר מתאים במין לשם העצם (שלושה משחקים, חמש קניות). פעלים ותארים לפי מין השם בכרטיס (זכר/נקבה). שמור על שם השחקן מדויק.`;
+• כל ממוצע, דירוג או שיא חייב לנקוב בתקופה שלו: "טבלת <תקופה>" היא חצי שנה, "היסטוריה כוללת" ו"שיא אישי כל הזמנים" הם כל הזמנים
+• "שיא" בלי תקופה צמודה שייך רק ל"שיא אישי כל הזמנים". מספר של מחצית חייב תקופה צמודה ("שיא חציוני של 379") או ניסוח בלי המילה ("הניצחון הגדול שלו בחציון שני"). תוצאה טובה במשחק האחרון היא תוצאה, לא שיא
+עברית תקנית: מספרים בספרות — "379 שקלים", "245 משחקים", "39%", "2026" — ולא במילים. ספירה קטנה במילים חייבת להתאים במין לשם העצם (שלושה משחקים, חמש קניות). פעלים ותארים לפי מין השם בכרטיס (זכר/נקבה). שמור על שם השחקן מדויק.`;
 
   try {
     const { text } = await callWithFallback({
@@ -637,16 +659,19 @@ export const generateAIForecasts = async (
   const sortedByGames = [...players].sort((a, b) => b.gamesPlayed - a.gamesPlayed);
   const sortedByAvg = [...players].filter(p => p.gamesPlayed >= 3).sort((a, b) => b.avgProfit - a.avgProfit);
   
+  // Rounded like every other figure in the prompt. Raw profits carry float
+  // noise from the chip split, and the model echoes what it is given — the
+  // group leader was being fed to it as "+14165.016428571424".
   if (sortedByTotalProfit[0]?.totalProfit > 0) {
-    participantHighlights.push(`🥇 הכי רווחי מבין משתתפי הערב: ${sortedByTotalProfit[0].name} (סה"כ \u200E+${sortedByTotalProfit[0].totalProfit})`);
+    participantHighlights.push(`🥇 הכי רווחי מבין משתתפי הערב: ${sortedByTotalProfit[0].name} (סה"כ \u200E+${Math.round(sortedByTotalProfit[0].totalProfit)})`);
   }
   
   if (sortedByBestWin[0]?.bestWin > 0) {
-    participantHighlights.push(`💰 הניצחון הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByBestWin[0].name} (\u200E+${sortedByBestWin[0].bestWin})`);
+    participantHighlights.push(`💰 הניצחון הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByBestWin[0].name} (\u200E+${Math.round(sortedByBestWin[0].bestWin)})`);
   }
   
   if (sortedByWorstLoss[0]?.worstLoss < 0) {
-    participantHighlights.push(`📉 ההפסד הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByWorstLoss[0].name} (${sortedByWorstLoss[0].worstLoss})`);
+    participantHighlights.push(`📉 ההפסד הגדול ביותר בערב בודד מבין המשתתפים: ${sortedByWorstLoss[0].name} (${Math.round(sortedByWorstLoss[0].worstLoss)})`);
   }
   
   if (sortedByWinRate.length > 0) {
@@ -674,6 +699,17 @@ export const generateAIForecasts = async (
   }
   
   const participantHighlightsText = participantHighlights.length > 0 ? participantHighlights.join('\n') : '';
+
+  // Superlatives were landing on ordinary facts — "רצף של שלושה נצחונות
+  // מרשימים", "ניצחון אדיר" on +70 — because the rule asserted thresholds in
+  // the abstract ("רצף 5+, פער 150+") without telling the model what a win in
+  // this group actually looks like. Derive the bar from the same history the
+  // cards are built from, so "big" means big here rather than big in general.
+  const winSizes = players.flatMap(p => p.gameHistory.map(g => g.profit)).filter(v => v > 0).sort((a, b) => a - b);
+  const quantile = (q: number) => winSizes.length ? Math.round(winSizes[Math.min(winSizes.length - 1, Math.floor(winSizes.length * q))]) : 0;
+  const scaleText = winSizes.length >= 20
+    ? `\n📏 קנה מידה של הקבוצה: ניצחון חציוני ${quantile(0.5)} ש"ח, ניצחון גדול מתחיל ב-${quantile(0.9)} ש"ח, רצף נחשב ארוך מ-4 נצחונות ומעלה`
+    : '';
 
   // ========== CALCULATE MILESTONES (via shared engine) ==========
   const milestonePlayersForPrompt = players.map(p => ({
@@ -843,16 +879,28 @@ export const generateAIForecasts = async (
   }
 
   // === STORYLINE TYPE 3: Revenge game ===
-  for (const h of h2hResults) {
-    if (h.sharedGames < 3) continue;
-    const profitDiff = Math.abs(h.lastGameAProfit - h.lastGameBProfit);
-    if (profitDiff >= 80) {
-      const loser = h.lastGameAProfit < h.lastGameBProfit ? h.a : h.b;
-      const winner = h.lastGameAProfit < h.lastGameBProfit ? h.b : h.a;
-      const loserProfit = Math.round(Math.min(h.lastGameAProfit, h.lastGameBProfit));
-      const winnerProfit = Math.round(Math.max(h.lastGameAProfit, h.lastGameBProfit));
-      storylines.push(`🔥 נקמה: ${loser} סיים עם ${loserProfit} בזמן ש${winner} סגר על \u200E+${winnerProfit} במשחק האחרון - הפעם משחק הנקמה?`);
-    }
+  // A revenge setup needs one player who actually won and one who actually
+  // lost. Ranking on the gap alone paired two losers and printed "סגל finished
+  // -180 while ליאור closed on +-90" — no revenge in it, and the hard-coded
+  // plus in front of a negative. Capped and de-duplicated too, or the night's
+  // heaviest loser generates the identical beat against every opponent.
+  const revengeNamed = new Set<string>();
+  const revengePairs = h2hResults
+    .filter(h => h.sharedGames >= 3
+      && Math.min(h.lastGameAProfit, h.lastGameBProfit) < 0
+      && Math.max(h.lastGameAProfit, h.lastGameBProfit) > 0
+      && Math.abs(h.lastGameAProfit - h.lastGameBProfit) >= 80)
+    .sort((a, b) => Math.abs(b.lastGameAProfit - b.lastGameBProfit) - Math.abs(a.lastGameAProfit - a.lastGameBProfit));
+  for (const h of revengePairs) {
+    const loser = h.lastGameAProfit < h.lastGameBProfit ? h.a : h.b;
+    const winner = h.lastGameAProfit < h.lastGameBProfit ? h.b : h.a;
+    if (revengeNamed.has(loser) || revengeNamed.has(winner)) continue;
+    revengeNamed.add(loser);
+    revengeNamed.add(winner);
+    const loserProfit = Math.round(Math.min(h.lastGameAProfit, h.lastGameBProfit));
+    const winnerProfit = Math.round(Math.max(h.lastGameAProfit, h.lastGameBProfit));
+    storylines.push(`🔥 נקמה: ${loser} סיים עם ${loserProfit} בזמן ש${winner} סגר על \u200E+${winnerProfit} במשחק האחרון - הפעם משחק הנקמה?`);
+    if (revengeNamed.size >= 4) break;
   }
 
   // === STORYLINE TYPE 4: Lucky charm / bad luck ===
@@ -894,16 +942,29 @@ export const generateAIForecasts = async (
   }
 
   // === STORYLINE TYPE 6: Nemesis (profit gap in shared games) ===
-  for (const h of h2hResults) {
-    if (h.sharedGames < 4) continue;
+  // "הרוויח" only fits a positive total; the stronger side of a pair can still
+  // be down overall, which produced "סגל הרוויח סה\"כ -547". The verb now
+  // follows the sign, and the framing stays on the gap between the two rather
+  // than on either man's running balance.
+  // Capped and de-duplicated like the other pair types. Uncapped it filled
+  // five of the eight storylines a night with the same sentence shape, which
+  // is the surest way to get eight interchangeable forecasts back.
+  const nemesisNamed = new Set<string>();
+  const nemesisPairs = h2hResults
+    .filter(h => h.sharedGames >= 4 && Math.abs(h.aTotalProfit - h.bTotalProfit) >= 200)
+    .sort((a, b) => Math.abs(b.aTotalProfit - b.bTotalProfit) - Math.abs(a.aTotalProfit - a.bTotalProfit));
+  for (const h of nemesisPairs) {
     const profitGap = h.aTotalProfit - h.bTotalProfit;
-    if (Math.abs(profitGap) >= 200) {
-      const stronger = profitGap > 0 ? h.a : h.b;
-      const weaker = profitGap > 0 ? h.b : h.a;
-      const strongerTotal = profitGap > 0 ? h.aTotalProfit : h.bTotalProfit;
-      const weakerTotal = profitGap > 0 ? h.bTotalProfit : h.aTotalProfit;
-      storylines.push(`💸 נמסיס: ב-${h.sharedGames} משחקים משותפים, ${stronger} הרוויח סה"כ ${strongerTotal >= 0 ? '+' : ''}${Math.round(strongerTotal)} ואילו ${weaker} סיים עם ${weakerTotal >= 0 ? '+' : ''}${Math.round(weakerTotal)} — פער של ${Math.abs(Math.round(profitGap))}`);
-    }
+    const stronger = profitGap > 0 ? h.a : h.b;
+    const weaker = profitGap > 0 ? h.b : h.a;
+    if (nemesisNamed.has(stronger) || nemesisNamed.has(weaker)) continue;
+    nemesisNamed.add(stronger);
+    nemesisNamed.add(weaker);
+    const strongerTotal = Math.round(profitGap > 0 ? h.aTotalProfit : h.bTotalProfit);
+    const weakerTotal = Math.round(profitGap > 0 ? h.bTotalProfit : h.aTotalProfit);
+    const said = (v: number) => v >= 0 ? `הרוויח ‎+${v}` : `הפסיד ${v}`;
+    storylines.push(`💸 נמסיס: ב-${h.sharedGames} משחקים משותפים, ${stronger} ${said(strongerTotal)} ואילו ${weaker} ${said(weakerTotal)} — פער של ${Math.abs(Math.round(profitGap))}`);
+    if (nemesisNamed.size >= 4) break;
   }
 
   // === STORYLINE TYPE 7: H2H win streak ===
@@ -939,7 +1000,10 @@ export const generateAIForecasts = async (
   for (let i = 0; i < sortedByYearProfitStory.length - 1; i++) {
     const gap = sortedByYearProfitStory[i].yearProfit - sortedByYearProfitStory[i + 1].yearProfit;
     if (gap >= 0 && gap <= 50 && sortedByYearProfitStory[i].yearGames >= 2) {
-      storylines.push(`🏆 קרב דירוג: ${sortedByYearProfitStory[i].name} ו${sortedByYearProfitStory[i + 1].name} רק ${gap} הפרש בטבלת ${currentYear}! המשחק הבא מכריע מי מקום ${i + 1}`);
+      // No absolute place is claimed: `i` indexes tonight's roster only, so
+      // "מקום 3" here meant third among the handful of people playing, not
+      // third in the year table the sentence names. The gap is the real fact.
+      storylines.push(`🏆 קרב דירוג: ${sortedByYearProfitStory[i].name} ו${sortedByYearProfitStory[i + 1].name} צמודים בטבלת ${currentYear} — רק ${Math.round(gap)} הפרש ביניהם!`);
     }
   }
 
@@ -949,7 +1013,10 @@ export const generateAIForecasts = async (
     const last5 = p.gameHistory.slice(0, 5);
     const last5Profit = last5.reduce((s, g) => s + g.profit, 0);
     if (last5Profit > 50 && p.totalProfit < -100) {
-      storylines.push(`💪 קאמבק: ${p.name} על ${Math.round(p.totalProfit)} כולל, אבל ב-5 משחקים אחרונים \u200E+${Math.round(last5Profit)}. המגמה מתהפכת!`);
+      // Leads with the recovery, not the hole. Handing over the career
+      // deficit here invited the model to print the one number the writing
+      // rules forbid — "אתה על מינוס 807 כולל" is not a story anyone enjoys.
+      storylines.push(`💪 קאמבק: ${p.name} ב-5 המשחקים האחרונים \u200E+${Math.round(last5Profit)} אחרי תקופה ארוכה במינוס. המגמה מתהפכת!`);
     }
   }
 
@@ -1380,6 +1447,25 @@ export const generateAIForecasts = async (
   
   // Sort by YEAR PROFIT (2026) - this is "tonight's" ranking!
   const tonightRanking = [...playersWithYearStats].sort((a, b) => b.yearProfit - a.yearProfit);
+
+  // Neighbourhood in the half-year table. Rank, neighbour name and gap must
+  // all be read off the SAME table the card's label names. They used to come
+  // from three places — a half rank, a name indexed out of the tonight-only
+  // year-sorted list, and a year-sized profit gap — which put lines like
+  // "2162 ahead of #4 (ליכטר)" under an H2 heading when the real H2 gap was
+  // 428 and ליכטר's own card in the same prompt placed him 5th.
+  const halfTable = globalRankings?.currentHalf.rankings || [];
+  const halfNeighbourhood = (name: string) => {
+    const me = halfTable.find(r => r.name === name);
+    if (!me) return null;
+    const above = halfTable.find(r => r.rank === me.rank - 1);
+    const below = halfTable.find(r => r.rank === me.rank + 1);
+    return {
+      rank: me.rank,
+      above: above ? { name: above.name, gap: Math.round(above.profit - me.profit) } : null,
+      below: below ? { name: below.name, gap: Math.round(me.profit - below.profit) } : null,
+    };
+  };
   
   // ========== ANGLE ASSIGNMENT ==========
   // Assign each player a unique narrative angle to ensure variety
@@ -1400,11 +1486,9 @@ export const generateAIForecasts = async (
     const lastGame = p.gameHistory[0];
     const lastGameProfit = lastGame?.profit || 0;
 
-    const halfRankData = globalRankings?.currentHalf.rankings.find(r => r.name === p.name);
-    const halfRank = halfRankData?.rank || tonightRanking.findIndex(sp => sp.name === p.name) + 1;
-    const aboveIdx = halfRank - 2;
-    const gapToAbove = aboveIdx >= 0 && aboveIdx < tonightRanking.length 
-      ? Math.round(tonightRanking[aboveIdx].yearProfit - p.yearProfit) : 999;
+    const nb = halfNeighbourhood(p.name);
+    const halfRank = nb?.rank || tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+    const gapToAbove = nb?.above ? nb.above.gap : 999;
 
     const milestones = [500, 1000, 1500, 2000];
     const nearMilestone = milestones.find(m => p.totalProfit > 0 && m - Math.round(p.totalProfit) > 0 && m - Math.round(p.totalProfit) <= 150);
@@ -1418,9 +1502,8 @@ export const generateAIForecasts = async (
     } else if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
       const dir = p.currentStreak > 0 ? `${p.currentStreak} נצחונות ברצף` : `${Math.abs(p.currentStreak)} הפסדים - מחפש קאמבק`;
       assign('streak', `${dir} ← התמקד בנתון הרצף, לא בממוצע!`);
-    } else if (gapToAbove <= 120 && gapToAbove > 0 && halfRank > 1 && canUse('ranking_battle')) {
-      const aboveName = tonightRanking[aboveIdx]?.name || '';
-      assign('ranking_battle', `${gapToAbove} ממקום ${halfRank - 1} (${aboveName}) ← התמקד בפער הדירוג, לא בממוצע!`);
+    } else if (gapToAbove <= 120 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
+      assign('ranking_battle', `${gapToAbove} ממקום ${halfRank - 1} (${nb.above.name}) ← התמקד בפער הדירוג, לא בממוצע!`);
     } else if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900 && canUse('comeback')) {
       assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים ← התמקד בימי ההיעדרות, לא בממוצע!`);
     } else if (nearMilestone && canUse('milestone')) {
@@ -1498,8 +1581,11 @@ export const generateAIForecasts = async (
     const periodAvg = periodGames.length > 0 
       ? Math.round(periodGames.reduce((sum, g) => sum + g.profit, 0) / periodGames.length) : 0;
 
-    const halfRankData = globalRankings?.currentHalf.rankings.find(r => r.name === p.name);
-    const halfRank = halfRankData?.rank || tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+    // Only claim a standing when the card's period label IS the current half
+    // and the player actually appears in that table. Players below the
+    // activity threshold, or ones falling back to the previous half, used to
+    // be handed a rank borrowed from a different table entirely.
+    const nb = periodLabel === currentPeriodLabel ? halfNeighbourhood(p.name) : null;
     const halfTotalActive = globalRankings?.currentHalf.totalActivePlayers || players.length;
 
     const allTimeRankData = globalRankings?.allTime.rankings.find(r => r.name === p.name);
@@ -1511,15 +1597,6 @@ export const generateAIForecasts = async (
     const suggestion = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
     const angle = playerAngles.find(a => a.name === p.name);
 
-    const aboveIdx = halfRank - 2;
-    const belowIdx = halfRank;
-    const aboveName = aboveIdx >= 0 && aboveIdx < tonightRanking.length ? tonightRanking[aboveIdx].name : '';
-    const belowName = belowIdx >= 0 && belowIdx < tonightRanking.length ? tonightRanking[belowIdx].name : '';
-    const gapAbove = aboveIdx >= 0 && aboveIdx < tonightRanking.length 
-      ? Math.round(tonightRanking[aboveIdx].yearProfit - p.yearProfit) : 0;
-    const gapBelow = belowIdx >= 0 && belowIdx < tonightRanking.length 
-      ? Math.round(p.yearProfit - tonightRanking[belowIdx].yearProfit) : 0;
-
     const lines: string[] = [];
     lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : '(זכר)'} ══`);
     if (isNewPlayer) {
@@ -1527,18 +1604,41 @@ export const generateAIForecasts = async (
     } else {
       lines.push(`משחק אחרון: ${lastGameResult} (${lastGame?.date || 'N/A'})`);
       lines.push(`רצף: ${streakText}`);
+      // Both "best win" figures are carried, each stapled to the period it
+      // belongs to, because they routinely disagree and the model can't tell
+      // them apart on its own: it once billed a +379 last game as a plain
+      // שיא. That was the half-year best but only the fifth best result of
+      // that player's career (+703, the previous half) — true of one period,
+      // false of the other, and the text named neither.
       if (periodGames.length > 0) {
-        lines.push(`⭐ טבלת ${periodLabel}: מקום #${halfRank} מתוך ${halfTotalActive}, ${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}`);
+        // A "biggest win" needs at least two wins to be biggest of, or the
+        // line just re-labels a lone result as a superlative — one player's
+        // single +7 across four games was being offered up as his period high.
+        const periodWins = periodGames.filter(g => g.profit > 0);
+        const periodBest = periodWins.length >= 2 ? Math.max(...periodWins.map(g => g.profit)) : 0;
+        const lastIsPeriodBest = !!lastGame
+          && periodGames.some(g => g.gameId === lastGame.gameId)
+          && Math.round(lastGame.profit) === Math.round(periodBest);
+        const periodBestText = periodBest > 0
+          ? `, הניצחון הגדול ביותר ב${periodLabel}: \u200E+${Math.round(periodBest)}${lastIsPeriodBest ? ' ← נקבע במשחק האחרון!' : ''}`
+          : '';
+        const rankText = nb ? `מקום #${nb.rank} מתוך ${halfTotalActive}, ` : '';
+        lines.push(`⭐ טבלת ${periodLabel}: ${rankText}${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}${periodBestText}`);
       }
       lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}`);
+      if (p.bestWin > 0 && p.gamesPlayed >= 10) {
+        const lastIsAllTimeBest = !!lastGame
+          && Math.round(lastGame.profit) === Math.round(p.bestWin);
+        lines.push(`שיא אישי כל הזמנים (הניצחון הגדול ביותר שלו אי־פעם): \u200E+${Math.round(p.bestWin)}${lastIsAllTimeBest ? ' ← נקבע במשחק האחרון!' : ''}`);
+      }
       if (allTimeRank > 0 && allTimeRank <= 3) {
         lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
       }
-      if (gapAbove > 0 && halfRank > 1) {
-        lines.push(`פער בטבלת ${periodLabel}: ${gapAbove} מאחורי מקום ${halfRank - 1} (${aboveName})`);
+      if (nb?.above && nb.above.gap > 0) {
+        lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name})`);
       }
-      if (gapBelow > 0 && belowName) {
-        lines.push(`יתרון בטבלת ${periodLabel}: ${gapBelow} על מקום ${halfRank + 1} (${belowName})`);
+      if (nb?.below && nb.below.gap > 0) {
+        lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name})`);
       }
       if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900) {
         lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
@@ -1588,7 +1688,7 @@ export const generateAIForecasts = async (
 
 📊 כרטיסי שחקנים (${players.length} שחקנים):
 ${playerDataText}
-${participantHighlightsText ? `\n🏅 מצטייני הערב (סטטיסטיקות מבין המשתתפים בלבד — לא שיאי קבוצה; הדירוג הכללי האמיתי מופיע בכרטיס כל שחקן):\n${participantHighlightsText}` : ''}
+${participantHighlightsText ? `\n🏅 מצטייני הערב (סטטיסטיקות מבין המשתתפים בלבד — לא שיאי קבוצה; הדירוג הכללי האמיתי מופיע בכרטיס כל שחקן):\n${participantHighlightsText}` : ''}${scaleText}
 ${storylinesText ? `\n📖 סיפורי הערב - יריבויות, נקמות, קשרים מעניינים:\n${storylinesText}` : ''}
 ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${milestonesText}` : ''}
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
@@ -1644,19 +1744,21 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 
 🚫 איסורים (הפרה = פסילה!):
 • אסור להזכיר מספר החיזוי ב-sentence! המספר מוצג בכרטיס בנפרד
-• אסור להזכיר הפסד מצטבר/כולל/היסטורי!
+• אסור להזכיר את המאזן המצטבר השלילי של השחקן מ"היסטוריה כוללת" — אף אחד לא רוצה לקרוא כמה הוא במינוס אי־פעם. מספרי ראש-בראש מ📖 (נמסיס, שליטה, יריבות) כן מותרים: הם סיפור בין שני שחקנים, לא כרטיס ציונים אישי
 • אסור תבנית חוזרת בין משפטים!
-• "מטורף", "מדהים", "היסטורי" → רק לנתונים באמת חריגים (רצף 5+, פער 150+)
+• מילות הפלאה ("מדהים", "אדיר", "מטורף", "פנומנלי", "דמיוני", "בלתי ייאמן", "מרשים") על תוצאת ערב בודד או על רצף — רק מעל קנה המידה (📏). מתחתיו נסח עובדתית: 3 נצחונות ברצף או ניצחון של 70 ש"ח הם נתון טוב, לא מדהים
 • sentence קצר מ-20 מילים = פסילה! כל שחקן חייב לקבל אותה רמת תשומת לב ואיכות, כולל האחרון ברשימה
 
 עברית תקנית (קריטי — שגיאות מין/מספר נשמעות חובבניות):
-• מספר חייב להתאים במין לשם העצם שאחריו. שמות עצם זכריים (משחק, נצחון, הפסד, רצף, ערב, שקל, אחוז) → מספר זכר: "שלושה משחקים", "חמישה נצחונות", "שני הפסדים". שמות עצם נקביים (פעם, קנייה, דקה, יד) → מספר נקבה: "שלוש פעמים", "חמש קניות". אסור בתכלית "שלוש משחקים" או "חמישה פעמים"
+• מספרים בספרות, לא במילים. סכומים, אחוזים, דירוגים, שנים ומספרי משחקים תמיד בספרות: "379 שקלים", "245 משחקים", "39%", "חציון שני 2026". "מאתיים ארבעים וחמישה משחקים" או "אלפיים עשרים ושש" מסרבלים את המשפט — הקורא סורק אותו בשביל המספר
+• ספירה קטנה (עד עשר) אפשר לכתוב במילים, ואז המספר חייב להתאים במין לשם העצם שאחריו. שמות עצם זכריים (משחק, נצחון, הפסד, רצף, ערב, שקל, אחוז) → מספר זכר: "שלושה משחקים", "חמישה נצחונות", "שני הפסדים". שמות עצם נקביים (פעם, קנייה, דקה, יד) → מספר נקבה: "שלוש פעמים", "חמש קניות". אסור בתכלית "שלוש משחקים" או "חמישה פעמים"
 • פעלים, תארים וכינויים יתאימו למין השם של השחקן — רוב השמות בקבוצה זכר, אבל אם שם השחקן נקבה כתוב עליו/עליה בלשון נקבה לאורך כל המשפט
 • שמור על שם השחקן מדויק בדיוק כפי שמופיע בכרטיס — בלי לשנות אות, לקצר או להוסיף
 
 כללי כתיבה:
-• דירוגים: רק מטבלת התקופה (⭐). מקום 1 = הכי טוב
-• "מצטייני הערב" (🏅) = הכי טובים מבין משתתפי הערב בלבד — לא שיאי קבוצה. אל תכתיר אף אחד כ"שיא הקבוצה", "המוביל של כל הזמנים" או "השיא ההיסטורי" על סמך הרשימה הזו. הדירוג הכללי האמיתי הוא רק מה שכתוב "דירוג כללי (כל הזמנים)" בכרטיס השחקן
+• כל מספר שייך לתקופה — כתוב אותה תמיד. "טבלת <תקופה>" (⭐) היא חצי שנה; "היסטוריה כוללת", "דירוג כללי" ו"שיא אישי כל הזמנים" הם כל הזמנים. אל תערבב דירוג תקופתי בכל-זמני. מספר בלי תקופה נקרא כאילו הוא כל-זמני, וזו הטעיה
+• "שיא" בלי תקופה צמודה = השיא הכל-זמני בלבד. לניצחון הגדול של המחצית כתוב "שיא חציוני של 379" או "הניצחון הגדול שלו בחציון שני" — לא "שיא של 379". תוצאה טובה במשחק האחרון היא תוצאה, לא שיא (אלא אם מסומן "← נקבע במשחק האחרון!"). "מצטייני הערב" (🏅) הם רק הטובים מבין משתתפי הערב, לא שיא קבוצתי
+• דירוגים: מקום 1 = הכי טוב
 • "מוביל" = מקום 1 | "רודף" = מנסה לעלות | "שומר" = מגן על הדירוג
 • highlight ו-sentence עקביים, כל highlight שונה, כל משפט במבנה שונה, גיוון מלא!`;
 
@@ -2075,24 +2177,32 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           'הצלחה', 'גלים', 'רוכב', 'בפסגה', 'שורף', 'בוער', 'כובש', 'דומיננט', 'מלכות', 'מבריק', 'זינוק', 'עלייה חדה',
         ];
         const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה', 'ייאוש', 'טובע'];
-        const superlativeWords = ['מטורף', 'מדהים', 'היסטורי', 'חסר תקדים', 'מושלם', 'אגדי', 'פנומנלי'];
+        // One map, rather than a word list plus a parallel replace chain that
+        // could drift apart — a word could be detected and then left in the
+        // text, or softened without ever being flagged. Each entry is the
+        // wording to use when the locked prediction is positive vs negative.
+        const superlativeSofteners: Record<string, [string, string]> = {
+          'מטורף': ['ברור', 'לא פשוט'],
+          'מדהים': ['סביר', 'בולט'],
+          'אדיר': ['ניכר', 'בולט'],
+          'דמיוני': ['גבוה', 'חריג'],
+          'פנומנלי': ['סביר', 'בולט'],
+          // "היסטורי" deliberately absent: in this app it means "all-time"
+          // ("הממוצע ההיסטורי שלו"), not "historic". Softening it rewrote a
+          // correct period label into "הממוצע הברור".
+          'חסר תקדים': ['יוצא דופן', 'יוצא דופן'],
+          'מושלם': ['טוב', 'טוב'],
+          'אגדי': ['מעניין', 'מעניין'],
+        };
         const hedgeWords = /אבל|עדיין|החיזוי|הערב|זהיר|לא פשוט|מאתגר|צריך|חייב להוכיח|אתגר/;
         
         // Only flag superlatives for truly tiny predictions (±20 or less)
         if (Math.abs(predictedProfit) <= 20) {
-          for (const word of superlativeWords) {
-            if (correctedSentence.includes(word)) {
-              errorDetails.push(`intensity_mismatch: "${word}" used for tiny prediction ${predictedProfit}`);
-
-              correctedSentence = correctedSentence
-                .replace('מטורף', predictedProfit > 0 ? 'ברור' : 'לא פשוט')
-                .replace('מדהים', predictedProfit > 0 ? 'סביר' : 'בולט')
-                .replace('היסטורי', 'ברור')
-                .replace('חסר תקדים', 'יוצא דופן')
-                .replace('מושלם', 'טוב')
-                .replace('אגדי', 'מעניין')
-                .replace('פנומנלי', 'סביר');
-            }
+          for (const [word, [whenPositive, whenNegative]] of Object.entries(superlativeSofteners)) {
+            if (!correctedSentence.includes(word)) continue;
+            errorDetails.push(`intensity_mismatch: "${word}" used for tiny prediction ${predictedProfit}`);
+            // split/join rather than replaceAll — lib is ES2020.
+            correctedSentence = correctedSentence.split(word).join(predictedProfit > 0 ? whenPositive : whenNegative);
           }
         }
         
@@ -2100,8 +2210,12 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
         const hasHedge = hedgeWords.test(correctedSentence);
         
-        // Negative prediction: block celebratory tone (lower bar than before; hedge can salvage borderline cases)
-        if (predictedProfit <= -25 && hasOptimistic && !hasPessimistic && !(hasHedge && predictedProfit > -55)) {
+        // Negative prediction: block celebratory tone. A sentence that names the
+        // forecast itself ("אך החיזוי השלילי...") is not mismatched — it is the
+        // contrast we asked for. The old magnitude cap ignored the hedge below
+        // -55 and so discarded precisely the best-written negative sentences,
+        // replacing rich period-scoped text with canned filler.
+        if (predictedProfit <= -25 && hasOptimistic && !hasPessimistic && !hasHedge) {
           errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit} — replacing`);
           correctedSentence = '';
         }
@@ -2130,6 +2244,47 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
             : `מקום ${rankTonight} — אופטימיות מדודה`;
         }
         
+        // ========== 7c. SCOPE AND INTENSITY REPAIRS ==========
+        // The prompt asks for both of these and mostly gets them, but "mostly"
+        // is not good enough for the two claims players actually challenge. Fix
+        // them in place rather than discarding the sentence — the earlier
+        // blank-and-fall-back approach cost far more than it saved.
+        const allTimeBest = Math.round(player.bestWin);
+        const halfGamesForScope = getHalfGames(player, currentYear, currentHalf);
+        const periodBest = halfGamesForScope.length
+          ? Math.round(Math.max(...halfGamesForScope.map(g => g.profit)))
+          : null;
+
+        // A bare "שיא" reads as an all-time record. Only the half-year best is
+        // rewritten, and only when it differs from the all-time figure, so a
+        // genuine career record and unrelated numbers (rebuy counts) are left
+        // alone. This is the claim that misled a player into thinking a
+        // half-season best was his career high.
+        if (periodBest !== null && periodBest !== allTimeBest && periodBest > 0) {
+          correctedSentence = correctedSentence.replace(
+            /שיא(\s+(?:של\s+)?)(\d[\d,]*)/g,
+            (full: string, sep: string, num: string, offset: number) => {
+              if (Number(num.replace(/,/g, '')) !== periodBest) return full;
+              const around = correctedSentence.slice(Math.max(0, offset - 30), offset + full.length + 30);
+              if (/חציון|מחצית|חציוני/.test(around)) return full;
+              errorDetails.push(`record_scope: bare "שיא ${num}" is the half-year best, not the all-time ${allTimeBest}`);
+              return `שיא חציוני${sep}${num}`;
+            }
+          );
+        }
+
+        // A run of three is ordinary here; calling it מרשים/מדהים inflates it.
+        // Drop the adjective and keep the fact.
+        if (Math.abs(actualStreak) <= 3) {
+          const before = correctedSentence;
+          correctedSentence = correctedSentence
+            .replace(/(רצף)\s+(?:מרשים|מדהים|אדיר|מטורף|פנומנלי)/g, '$1')
+            .replace(/((?:נצחונות|ניצחונות|הפסדים)\s*)(?:מרשימים|מדהימים|אדירים|מטורפים|פנומנליים)/g, '$1');
+          if (correctedSentence !== before) {
+            errorDetails.push(`intensity: superlative on a streak of ${Math.abs(actualStreak)}`);
+          }
+        }
+
         // ========== FINAL CLEANUP ==========
         // Remove any orphaned fragments at sentence end (prepositions, connectives)
         correctedSentence = correctedSentence
@@ -2142,9 +2297,13 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         // ========== 8. VALIDATE AI SENTENCE (fallback if empty/short) ==========
         if (!correctedSentence || correctedSentence.length < 10 || correctedSentence === 'X') {
           // Generate direction-appropriate fallback
+          // allTimeAvg goes negative, and a hard-coded "+" in front of it shipped
+          // "ממוצע ‎+-4" to players. It is an all-time figure, so it also has to
+          // say so under the period rule.
+          const avgText = `ממוצע ${allTimeAvg >= 0 ? '\u200E+' : ''}${allTimeAvg} ב-${player.gamesPlayed} משחקים בכל הזמנים`;
           if (predictedProfit >= 40) {
-            if (actualStreak >= 3) correctedSentence = `${actualStreak} נצחונות ברצף, ממוצע \u200E+${allTimeAvg} ב-${player.gamesPlayed} משחקים. הרוח בגב!`;
-            else correctedSentence = `ממוצע \u200E+${allTimeAvg} ב-${player.gamesPlayed} משחקים, ${winRate}% נצחונות. ערב טוב צפוי`;
+            if (actualStreak >= 3) correctedSentence = `${actualStreak} נצחונות ברצף, ${avgText}. הרוח בגב!`;
+            else correctedSentence = `${avgText}, ${winRate}% נצחונות. ערב טוב צפוי`;
           } else if (predictedProfit <= -40) {
             correctedSentence = `${player.gamesPlayed} משחקים ו-${winRate}% נצחונות, אבל הנתונים לא מבשרים טובות. ערב מאתגר`;
           } else if (predictedProfit > 0) {
@@ -2152,9 +2311,11 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           } else {
             correctedSentence = `${player.gamesPlayed} משחקים, ${winRate}% נצחונות. צריך לעבוד קשה הפעם`;
           }
-          console.log(`⚠️ ${player.name}: Used direction-appropriate fallback sentence`);
+          // errorDetails was collected at a dozen sites and never read, so a
+          // discarded sentence looked identical to one the model never sent.
+          console.log(`⚠️ ${player.name}: Used direction-appropriate fallback sentence — ${errorDetails.length ? errorDetails.join('; ') : 'model returned nothing usable'}`);
         } else {
-          console.log(`✅ ${player.name}: AI sentence: "${correctedSentence}"`);
+          console.log(`✅ ${player.name}: AI sentence: "${correctedSentence}"${errorDetails.length ? `  [repaired: ${errorDetails.join('; ')}]` : ''}`);
         }
         
         return {
@@ -2504,8 +2665,18 @@ export const generateGameNightSummary = async (
     `${p.rank}. ${p.name}: ${p.profit >= 0 ? '+' : ''}${p.profit} (${p.rebuys} קניות)`
   ).join('\n');
 
+  // A run of one is a result, not a streak, and "רצף 1 נצחונות" is broken
+  // Hebrew on top of that — the model was being handed both and weaving them
+  // into the summary as though someone were on a run.
+  const streakText = (n: number) => {
+    if (n >= 2) return `, רצף ${n} נצחונות`;
+    if (n <= -2) return `, רצף ${Math.abs(n)} הפסדים`;
+    if (n === 1) return ', ניצח אחרון';
+    if (n === -1) return ', הפסיד אחרון';
+    return '';
+  };
   const standingsLines = periodStandings.map(s =>
-    `מקום ${s.periodRank}: ${s.name} — ${s.totalProfit >= 0 ? '+' : ''}${s.totalProfit}, ${s.gamesPlayed} משחקים, ${Math.round(s.winPct)}% נצחונות${s.currentStreak !== 0 ? `, רצף ${s.currentStreak > 0 ? s.currentStreak + ' נצחונות' : Math.abs(s.currentStreak) + ' הפסדים'}` : ''}`
+    `מקום ${s.periodRank}: ${s.name} — ${s.totalProfit >= 0 ? '+' : ''}${s.totalProfit}, ${s.gamesPlayed} משחקים, ${Math.round(s.winPct)}% נצחונות${streakText(s.currentStreak)}`
   ).join('\n');
 
   const contextSections: string[] = [];
@@ -2585,9 +2756,10 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 - עברית טבעית וזורמת. הזכר את כל ${tonight.length} השחקנים בשמם
 - 2-3 פסקאות קצרות (שורה ריקה ביניהן), כל פסקה 2-4 משפטים. סה״כ 60-120 מילים${periodEndingLines.length > 0 ? ` (+ פסקאות תקופתיות נוספות)` : ''}
 - שלב עובדות (רצפים, שיאים, דירוגים) בצורה טבעית בתוך הסיפור — לא כרשימה
-- שיאים ורגעים היסטוריים הם הדבר הכי חשוב וחובה לתת להם מקום מרכזי: שיא קבוצתי, שיא אישי, כניסה ל-Top 20, עקיפה בטבלת השנה או בטבלת כל-הזמנים (למשל "עלה למקום הראשון של השנה" או "עקף את X בטבלת כל הזמנים"), ורצף פעיל ארוך של נצחונות או הפסדים. אם מופיעים ב"שיאים", ב"שינויים בטבלה" או ב"רצפים בולטים" — אל תשמיט אותם, אלה הרגעים שהשחקנים הכי מתרגשים מהם. הקפד להבחין: שיא אישי = הכי טוב של השחקן עצמו; שיא קבוצתי = הכי טוב אי-פעם בקבוצה. לעולם אל תתאר שיא אישי כאילו הוא שיא של כל הקבוצה
+- שיאים ורגעים היסטוריים הם הלב של הסיכום: שיא קבוצתי, שיא אישי, כניסה ל-Top 20, עקיפה בטבלה, ורצף ארוך. אם מופיעים ב"שיאים", ב"שינויים בטבלה" או ב"רצפים בולטים" — אל תשמיט אותם
+- כל מספר שייך לתקופה — כתוב אותה תמיד. תווית שכתוב בה "${periodLabel}" מוגבלת למחצית הזו, "כל הזמנים" היא היסטורית. גם ההיקף חובה: שיא אישי = הכי טוב של השחקן עצמו, שיא קבוצתי = הכי טוב אי-פעם בקבוצה. אל תתאר שיא אישי כקבוצתי ואל תתאר שיא של מחצית ככל-זמני. מספר בלי תקופה נקרא כאילו הוא כל-זמני, וזו הטעיה
+- מילות הפלאה ("מדהים", "אדיר", "מטורף", "פנומנלי", "מרשים") רק לנתון שבאמת חורג. 3 נצחונות ברצף או ניצחון של 70 ש"ח הם נתון טוב, לא מדהים
 - אם יש מידע על הרכב חוזר (🔄) — שלב אותו: ציין שזה הרכב שכבר שיחק יחד, האם הדפוסים המשיכו או נשברו
-- "${periodLabel}" = שם התקופה (מחצית של שנה). אם מזכירים → "בתקופת ${periodLabel}" או "במחצית"
 - סיים עם פאנץ׳ליין, עקיצה, או הצצה לשבוע הבא
 
 ⚠️ דיוק עובדתי:

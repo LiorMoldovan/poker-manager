@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.28.0';
+export const APP_VERSION = '6.29.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.29.0',
+    date: '2026-09-09',
+    changes: [
+      '🔕 No notifications between 23:00 and 07:00',
+      '⏰ Automatic reminders for non-voters',
+      '⏳ Reminders before held seats are released',
+      '🔔 Vote-change alerts are now your own setting',
+      '🚫 Guests see why a date is blocked',
+      '🎯 AI names the period for every record',
+      '📊 Superlatives reserved for genuinely big results',
+      '✍️ Fewer forecasts fall back to filler text',
+    ],
+  },
   {
     version: '6.28.0',
     date: '2026-09-06',

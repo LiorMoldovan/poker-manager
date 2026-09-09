@@ -54,6 +54,12 @@ const OWNER_GROUP_ID = process.env.OWNER_GROUP_ID || '';
 type Kind =
   | 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled'
   | 'vote_change' | 'reminder'
+  // Automatic nudges (migration 120). Built entirely server-side by
+  // fn_sweep_poll_reminders, which puts the Hebrew copy and the recipient
+  // list straight into the payload — so they fall into the generic
+  // payload-driven branch of planForJob with no kind-specific handler.
+  // Push-only and permanents-only, both enforced upstream in the sweep.
+  | 'reminder_no_vote' | 'reminder_maybe'
   | 'trivia_report_filed' | 'trivia_report_resolved'
   | 'training_report_filed' | 'training_report_resolved' | 'training_milestone'
   // Per-date exclude broadcast (migration 087). Client pre-builds the
@@ -93,6 +99,10 @@ interface DispatchPlan {
   // send-push by omitting the target list, which also keeps a 40-name roster
   // out of a PostgREST query string.
   pushToWholeGroup?: boolean;
+  // When set, push goes to `recipientPlayerNames` but email is restricted
+  // to this narrower list. Mirrors the client dispatcher's option of the
+  // same name. An empty array means "push only for this leg".
+  emailRecipientNames?: string[];
   groupId: string;
   // When true, the email leg is skipped entirely (group has emails off,
   // or kind is push-only by design — trivia/training reports).
@@ -190,6 +200,7 @@ interface PollCtx {
     status: string;
     target_player_count: number;
     confirmed_date_id: string | null;
+    expanded_at: string | null;
     default_location: string | null;
     cancellation_reason: string | null;
     share_slug: string | null;
@@ -199,6 +210,7 @@ interface PollCtx {
     proposed_date: string;
     proposed_time: string | null;
     location: string | null;
+    disabled_at: string | null;
   }>;
   votes: Array<{
     player_id: string;
@@ -214,8 +226,8 @@ interface PollCtx {
 async function loadPollCtx(pollId: string): Promise<PollCtx | null> {
   const sb = db();
   const [pollRes, datesRes, votesRes, playersRes] = await Promise.all([
-    sb.from('game_polls').select('id, group_id, status, target_player_count, confirmed_date_id, default_location, cancellation_reason, share_slug').eq('id', pollId).maybeSingle(),
-    sb.from('game_poll_dates').select('id, proposed_date, proposed_time, location').eq('poll_id', pollId).order('proposed_date'),
+    sb.from('game_polls').select('id, group_id, status, target_player_count, confirmed_date_id, expanded_at, default_location, cancellation_reason, share_slug').eq('id', pollId).maybeSingle(),
+    sb.from('game_poll_dates').select('id, proposed_date, proposed_time, location, disabled_at').eq('poll_id', pollId).order('proposed_date'),
     sb.from('game_poll_votes').select('player_id, date_id, response, user_id, created_at').eq('poll_id', pollId),
     // Deferred: load all players in the group (cheap, one query) so the
     // recipient resolver and confirmed-line builder have name + type.
@@ -267,6 +279,41 @@ function guestAndPermanentGuestNames(ctx: PollCtx): string[] {
   return out;
 }
 
+// Everyone who should hear that a date got picked, minus the players who
+// are already in the game. Mirrors resolveConfirmedOthers in
+// src/utils/scheduleNotifications.ts — the two workers race for the same
+// job, so they have to agree on the audience.
+//
+// Guests are included only once the poll has expanded: before that they
+// were never shown the poll, and telling them about a night they could not
+// have joined reads as noise.
+//
+// This audience is push-only, so there is no narrower email variant to
+// compute. Someone who said no to this date still gets the push — knowing
+// the night is settled is how they plan around it.
+function confirmedOthersNames(ctx: PollCtx): string[] {
+  const expanded = !!ctx.poll.expanded_at;
+  const ids = new Set<string>();
+  for (const p of ctx.playersById.values()) {
+    if (p.type === 'permanent') ids.add(p.id);
+    else if (expanded && (p.type === 'permanent_guest' || p.type === 'guest')) ids.add(p.id);
+  }
+  // Anyone who engaged with the poll hears the outcome regardless of tier.
+  for (const v of ctx.votes) ids.add(v.player_id);
+
+  for (const v of ctx.votes) {
+    if (v.date_id !== ctx.poll.confirmed_date_id) continue;
+    if (v.response === 'yes') ids.delete(v.player_id);
+  }
+
+  const out: string[] = [];
+  for (const id of ids) {
+    const name = ctx.playersById.get(id)?.name;
+    if (name) out.push(name);
+  }
+  return out;
+}
+
 function allParticipantNames(ctx: PollCtx): string[] {
   const seen = new Set<string>();
   for (const v of ctx.votes) {
@@ -281,8 +328,11 @@ function allParticipantNames(ctx: PollCtx): string[] {
   return Array.from(seen);
 }
 
-// Server-side equivalent of get_poll_change_recipients RPC — admins,
-// super-admins, and per-poll change subscribers minus the actor.
+// Server-side equivalent of get_poll_change_recipients RPC — everyone in
+// the group whose own preference flag is on, minus the actor. Role and the
+// old per-poll game_poll_change_subscribers table no longer participate:
+// see migration 118 for why, and for the backfill that made the switchover
+// a no-op for every existing member.
 async function voteChangeRecipientNames(pollId: string, actorUserId: string | null): Promise<string[]> {
   const sb = db();
   // The existing RPC is SECURITY DEFINER but checks auth.uid(). We have
@@ -291,16 +341,10 @@ async function voteChangeRecipientNames(pollId: string, actorUserId: string | nu
   if (!poll) return [];
   const groupId = (poll as { group_id: string }).group_id;
 
-  const [members, supers, subs] = await Promise.all([
-    sb.from('group_members')
-      .select('user_id, role, schedule_vote_change_notifs, player_id')
-      .eq('group_id', groupId),
-    sb.from('super_admins').select('user_id'),
-    sb.from('game_poll_change_subscribers').select('user_id').eq('poll_id', pollId),
-  ]);
-  const memberRows = (members.data || []) as Array<{ user_id: string; role: string; schedule_vote_change_notifs: boolean | null; player_id: string }>;
-  const superSet = new Set(((supers.data || []) as Array<{ user_id: string }>).map(r => r.user_id));
-  const subSet   = new Set(((subs.data   || []) as Array<{ user_id: string }>).map(r => r.user_id));
+  const { data: members } = await sb.from('group_members')
+    .select('user_id, schedule_vote_change_notifs, player_id')
+    .eq('group_id', groupId);
+  const memberRows = (members || []) as Array<{ user_id: string; schedule_vote_change_notifs: boolean | null; player_id: string }>;
 
   // Resolve player names by joining group_members.player_id → players.name.
   const playerIds = memberRows.map(m => m.player_id).filter(Boolean);
@@ -312,11 +356,8 @@ async function voteChangeRecipientNames(pollId: string, actorUserId: string | nu
   const out = new Set<string>();
   for (const m of memberRows) {
     if (m.user_id === actorUserId) continue;
+    // Absent means on, matching the column default and the SQL rule.
     if (m.schedule_vote_change_notifs === false) continue;
-    const isAdmin       = m.role === 'admin';
-    const isSuper       = superSet.has(m.user_id);
-    const isSubscriber  = subSet.has(m.user_id);
-    if (!(isAdmin || isSuper || isSubscriber)) continue;
     const name = nameById.get(m.player_id);
     if (name) out.add(name);
   }
@@ -363,20 +404,70 @@ function buildCreationMessage(ctx: PollCtx): BuiltMessage {
   };
 }
 
+// "Open to everyone" is a recruitment pitch, so it has to answer the only
+// question a guest actually has: is there room, and for when. The old copy
+// answered neither — it listed every proposed date, including ones an admin
+// had already excluded, and never showed how full the night was.
+//
+// Two shapes, because expansion can find the poll in two very different
+// states. If a date is already pinned there is nothing to choose, only a
+// seat to claim. If nothing is pinned yet the dates are still competing,
+// so each one carries its own yes-tally.
 function buildExpandedMessage(ctx: PollCtx): BuiltMessage {
-  const dateLines = ctx.dates.map(d => {
+  const open = ctx.dates.filter(d => !d.disabled_at);
+  const target = ctx.poll.target_player_count;
+  const yesOn = (dateId: string) =>
+    ctx.votes.filter(v => v.date_id === dateId && v.response === 'yes').length;
+  const seatsLine = (taken: number) => {
+    const missing = Math.max(0, target - taken);
+    if (missing === 0) return 'המקומות מלאים כרגע';
+    return missing === 1 ? 'נשאר מקום אחד' : `נשארו ${missing} מקומות`;
+  };
+  const link = emailVoteLink(ctx.poll.share_slug || ctx.poll.id);
+  const pinned = ctx.poll.confirmed_date_id
+    ? open.find(d => d.id === ctx.poll.confirmed_date_id)
+    : undefined;
+
+  if (pinned) {
+    const loc = pinned.location || ctx.poll.default_location;
+    const when = formatHebrewDateTime(pinned.proposed_date, pinned.proposed_time);
+    const seats = seatsLine(yesOn(pinned.id));
+    return {
+      pushTitle: '🎯 נקבע תאריך — יש מקום',
+      pushBody: `${when}${loc ? ` — ${loc}` : ''} · ${seats}`,
+      emailSubject: '🎯 נקבע תאריך — נשארו מקומות',
+      emailBody:
+        'הערב נסגר על תאריך, ועדיין מחפשים שחקנים.\n\n' +
+        `${I}📅 ${formatHebrewDateTimeVerbose(pinned.proposed_date, pinned.proposed_time)}\n` +
+        (loc ? `${I}📍 ${loc}\n` : '') +
+        `${I}🪑 ${seats} מתוך ${target}\n\n` +
+        `👉 לאישור הגעה: ${link}`,
+      url: deepLinkUrl(ctx.poll.id),
+    };
+  }
+
+  const dateLines = open.map(d => {
     const loc = d.location || ctx.poll.default_location;
-    return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}${loc ? ` — ${loc}` : ''}`;
+    const taken = yesOn(d.id);
+    return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}`
+      + `${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו`;
   }).join('\n');
+  const leading = open.reduce((max, d) => Math.max(max, yesOn(d.id)), 0);
+  const missing = Math.max(0, target - leading);
+
   return {
     pushTitle: '🎯 ההצבעה פתוחה לכולם',
-    pushBody: 'הקבוצה צריכה עוד שחקנים — היכנסו והצביעו 📅',
+    pushBody: missing === 0
+      ? 'ההצבעה נפתחה לכולם — היכנסו והצביעו 📅'
+      : missing === 1
+        ? 'חסר שחקן אחד לסגירת הערב — היכנסו והצביעו 📅'
+        : `חסרים ${missing} שחקנים לסגירת הערב — היכנסו והצביעו 📅`,
     emailSubject: '🎯 ההצבעה פתוחה — הצטרפו',
     emailBody:
-      'הקבוצה צריכה עוד שחקנים! ההצבעה לערב הפוקר עברה לשלב פתוח לכולם.\n\n' +
-      `📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
-      `🎯 יעד: ${ctx.poll.target_player_count} שחקנים\n\n` +
-      `👉 להצבעה: ${emailVoteLink(ctx.poll.share_slug || ctx.poll.id)}`,
+      'ההצבעה לערב הפוקר נפתחה לכולם. אלה התאריכים ומצב ההצבעה בכל אחד:\n\n' +
+      `${I}📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
+      `${I}🎯 יעד: ${target} שחקנים\n\n` +
+      `👉 להצבעה: ${link}`,
     url: deepLinkUrl(ctx.poll.id),
   };
 }
@@ -438,6 +529,64 @@ function buildConfirmedMessage(ctx: PollCtx): BuiltMessage | null {
       `${I}👥 ${confirmedLine}` +
       cta +
       '\n\nנתראה על השולחן! 🃏',
+    url: deepLinkUrl(ctx.poll.id),
+  };
+}
+
+// The other half of a date-selected announcement: the people who are NOT
+// in the game. buildConfirmedMessage speaks to the yes-voters; until now
+// nobody spoke to anyone else, so a member who hadn't voted was never told
+// the night had been settled — the one fact they need in order to plan
+// around it.
+function buildConfirmedOthersMessage(ctx: PollCtx): BuiltMessage | null {
+  const dateRow = ctx.dates.find(d => d.id === ctx.poll.confirmed_date_id);
+  if (!dateRow) return null;
+  const loc = dateRow.location || ctx.poll.default_location;
+  const dateCompact = formatHebrewDateTime(dateRow.proposed_date, dateRow.proposed_time);
+  const dateVerbose = formatHebrewDateTimeVerbose(dateRow.proposed_date, dateRow.proposed_time);
+  const yesNames = yesVoterNamesOnPinnedDate(ctx);
+  const yesCount = yesNames.length;
+  const missing = Math.max(0, ctx.poll.target_player_count - yesCount);
+
+  let confirmedLine: string;
+  if (yesCount === 0) confirmedLine = '0 שחקנים אישרו';
+  else if (yesCount === 1) confirmedLine = `שחקן אחד אישר: ${yesNames[0]}.`;
+  else confirmedLine = `${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.`;
+
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const cta = `\n\n${I}👉 לפרטים: ${emailVoteLink(ctx.poll.share_slug || ctx.poll.id)}`;
+
+  if (missing === 0) {
+    return {
+      pushTitle: '📅 נקבע תאריך לערב הפוקר',
+      pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''} · המשחק כבר מלא`,
+      emailSubject: '📅 נקבע תאריך לערב הפוקר',
+      emailBody:
+        'נקבע תאריך לערב הפוקר 🎯\n\n' +
+        `${I}📅 ${dateVerbose}\n` +
+        locLine +
+        `${I}👥 ${confirmedLine}\n` +
+        '🪑 כל המקומות תפוסים. אם מישהו יבטל — נעדכן' +
+        cta,
+      url: deepLinkUrl(ctx.poll.id),
+    };
+  }
+
+  const seatsPhrase = missing === 1
+    ? 'נשאר עוד מקום אחרון'
+    : `נשארו עוד ${missing} מקומות`;
+  return {
+    pushTitle: '✅ התאריך נבחר — עוד לא סגור',
+    pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''} · ${seatsPhrase}`,
+    emailSubject: '✅ התאריך נבחר — עוד לא סגור',
+    emailBody:
+      'נבחר תאריך לערב הפוקר 🎯\n\n' +
+      `${I}📅 ${dateVerbose}\n` +
+      locLine +
+      `${I}👥 ${confirmedLine}\n` +
+      `🪑 ${seatsPhrase}\n\n` +
+      'רוצה מקום? עדכנו בהצבעה 🤝' +
+      cta,
     url: deepLinkUrl(ctx.poll.id),
   };
 }
@@ -573,9 +722,116 @@ function buildFromPayload(payload: Record<string, unknown>): BuiltMessage | null
   };
 }
 
+// ─── Obsolescence guard ────────────────────────────────────────────────────
+//
+// Quiet hours (migration 117) can hold a job until 07:00, which opens a gap
+// the queue never had: the news can stop being true while the job waits. So
+// re-check the premise at delivery time instead of trusting the state that
+// existed at enqueue time.
+//
+// `reopen` decides whether that (poll, kind) channel stays usable afterwards.
+// Completing a job stamps *_notifications_sent_at, and enqueue_poll_notification
+// refuses to queue a kind whose sentinel is set — permanent suppression. That
+// is right for a cancelled poll and wrong for a game that merely dipped below
+// target and may fill again, which is the exact shape of the bug migration 108
+// had to undo.
+interface Obsolete {
+  reason: string;
+  reopen: boolean;
+}
+
+const SENTINEL_COLUMN: Partial<Record<Kind, string>> = {
+  creation:      'creation_notifications_sent_at',
+  expanded:      'expanded_notifications_sent_at',
+  confirmed:     'confirmed_notifications_sent_at',
+  cancellation:  'cancellation_notifications_sent_at',
+  target_filled: 'target_filled_notifications_sent_at',
+};
+
+async function obsolescenceCheck(job: Job): Promise<Obsolete | null> {
+  const { kind, poll_id } = job;
+  if (!poll_id) return null;
+  if (kind !== 'creation' && kind !== 'expanded' && kind !== 'confirmed'
+      && kind !== 'target_filled' && kind !== 'vote_change'
+      && kind !== 'reminder_no_vote' && kind !== 'reminder_maybe') {
+    return null;
+  }
+
+  const sb = db();
+  const { data } = await sb.from('game_polls')
+    .select('status, confirmed_date_id, target_player_count, expanded_at')
+    .eq('id', poll_id)
+    .maybeSingle();
+  // Poll vanished — planForJob returns null for that anyway.
+  if (!data) return null;
+  const poll = data as {
+    status: string;
+    confirmed_date_id: string | null;
+    target_player_count: number;
+    expanded_at: string | null;
+  };
+
+  // A cancelled poll invalidates every announcement about it. The
+  // cancellation job carries the only news still worth sending, and none of
+  // these kinds should ever fire for this poll again.
+  if (poll.status === 'cancelled') {
+    return { reason: `poll was cancelled before the '${kind}' notice went out`, reopen: false };
+  }
+
+  // A nudge is only worth sending while the thing it warns about is still
+  // ahead of the person. Once a date is pinned there is nothing left to
+  // decide, and once guests are in, "vote before the guests" is a lie.
+  if (kind === 'reminder_no_vote' || kind === 'reminder_maybe') {
+    if (poll.status === 'confirmed') {
+      return { reason: 'a date was pinned before the nudge went out', reopen: false };
+    }
+    if (kind === 'reminder_no_vote' && poll.expanded_at) {
+      return { reason: 'guests were admitted before the nudge went out', reopen: false };
+    }
+    return null;
+  }
+
+  // Pin released overnight, so there is no pick to announce. manual_close
+  // clears this sentinel on the next pin, so a future pick still announces.
+  if (kind === 'confirmed' && (poll.status !== 'confirmed' || !poll.confirmed_date_id)) {
+    return { reason: 'pin was released before the pick went out', reopen: false };
+  }
+
+  if (kind === 'target_filled') {
+    if (poll.status !== 'confirmed' || !poll.confirmed_date_id) {
+      return { reason: 'pin was released before the full-game notice went out', reopen: true };
+    }
+    const { count } = await sb.from('game_poll_votes')
+      .select('player_id', { count: 'exact', head: true })
+      .eq('date_id', poll.confirmed_date_id)
+      .eq('response', 'yes');
+    const yes = count ?? 0;
+    if (yes < poll.target_player_count) {
+      return {
+        reason: `dropped to ${yes}/${poll.target_player_count} before the full-game notice went out`,
+        reopen: true,
+      };
+    }
+  }
+
+  return null;
+}
+
+// Undo the sentinel that completeJob stamps, so a premise that becomes true
+// again can be announced. Touches no column the poll triggers watch.
+async function reopenChannel(pollId: string, kind: Kind): Promise<void> {
+  const col = SENTINEL_COLUMN[kind];
+  if (!col) return;
+  const { error } = await db().from('game_polls').update({ [col]: null }).eq('id', pollId);
+  if (error) console.warn('[notification-worker] reopen failed:', kind, error.message);
+}
+
 // ─── Plan resolution ───────────────────────────────────────────────────────
 
-async function planForJob(job: Job): Promise<DispatchPlan | null> {
+// Returns every dispatch a job implies. Usually one, but a date-selected
+// job produces two — the players who are in the game and everyone else read
+// completely different news from the same event.
+async function planForJob(job: Job): Promise<DispatchPlan[]> {
   const { kind, group_id, poll_id, payload } = job;
   const sb = db();
 
@@ -595,6 +851,8 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
   const emailKinds = ((settings as { schedule_email_kinds?: Record<string, unknown> } | null)?.schedule_email_kinds) || {};
   const kindAllowedByFilter =
     kind === 'vote_change'
+    || kind === 'reminder_no_vote'
+    || kind === 'reminder_maybe'
     || kind === 'trivia_report_filed'
     || kind === 'trivia_report_resolved'
     || kind === 'training_report_filed'
@@ -613,13 +871,15 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     || kind === 'cancellation' || kind === 'target_filled' || kind === 'vote_change'
   )) {
     const ctx = await loadPollCtx(poll_id);
-    if (!ctx) return null;
+    if (!ctx) return [];
 
     let message: BuiltMessage | null = null;
     let recipientPlayerNames: string[] = [];
     let pushToWholeGroup = false;
     let pushOnly = false;
     let preemptTargetFilledPollId: string | undefined;
+    // Additional audiences for the same event, each with its own copy.
+    const extraPlans: DispatchPlan[] = [];
 
     if (kind === 'creation') {
       message = buildCreationMessage(ctx);
@@ -634,6 +894,28 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     } else if (kind === 'confirmed') {
       message = buildConfirmedMessage(ctx);
       recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
+
+      // Second audience: everyone who isn't in the game, including people who
+      // voted no on this date — they still need to know the night is settled.
+      //
+      // Push-only, hard-coded rather than left to the email filter. A pick is
+      // push news for people not in the game; mailing non-participants about
+      // a game they aren't in is the exact category of noise that started this
+      // rework, and it must not switch itself back on the day someone
+      // re-enables `confirmed` emails for the yes-voters.
+      const othersMessage = buildConfirmedOthersMessage(ctx);
+      const othersPush = confirmedOthersNames(ctx);
+      if (othersMessage && othersPush.length > 0) {
+        extraPlans.push({
+          message: othersMessage,
+          recipientPlayerNames: othersPush,
+          emailRecipientNames: [],
+          groupId: group_id,
+          pushOnly: true,
+          emailOnly,
+        });
+      }
+
       // At-target pin: buildConfirmedMessage just produced the "נסגר —
       // ניפגש" copy, so a follow-up 'target_filled' would say the same
       // thing again. The 500ms confirmed_at debounce inside
@@ -674,12 +956,12 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
       pushOnly = true;
     }
 
-    if (!message) return null;
+    if (!message) return [];
     // pushOnly = true when the group can't broadcast email (email disabled
     // in settings or non-owner group) OR the kind itself is push-only by
     // design (none in this branch — all poll lifecycle kinds support both
     // channels).
-    return {
+    return [{
       message,
       recipientPlayerNames,
       pushToWholeGroup,
@@ -687,7 +969,7 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
       pushOnly: !emailAllowedForGroup || pushOnly,
       emailOnly,
       preemptTargetFilledPollId,
-    };
+    }, ...extraPlans];
   }
 
   // ── Trivia kinds (push only by design — email retired in v5.43) ──
@@ -695,28 +977,28 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
     const reporter = String(payload.reporter_name || '');
     const supers = await superAdminPlayerNamesInGroup(group_id);
     const targets = supers.filter(n => n !== reporter);
-    return {
+    return [{
       message: buildTriviaReportFiledMessage(payload),
       recipientPlayerNames: targets,
       groupId: group_id,
       pushOnly: true,
       emailOnly,
-    };
+    }];
   }
   if (kind === 'trivia_report_resolved') {
     const reporter = String(payload.reporter_name || '');
-    return {
+    return [{
       message: buildTriviaReportResolvedMessage(payload),
       recipientPlayerNames: reporter ? [reporter] : [],
       groupId: group_id,
       pushOnly: true,
       emailOnly,
-    };
+    }];
   }
 
   // ── Reminder, training_*, anything else: payload IS the message ──
   const message = buildFromPayload(payload);
-  if (!message) return null;
+  if (!message) return [];
   const recipientNames = Array.isArray(payload.recipient_player_names)
     ? (payload.recipient_player_names as string[])
     : [];
@@ -730,14 +1012,19 @@ async function planForJob(job: Job): Promise<DispatchPlan | null> {
   const pushOnlyKind = kind === 'training_report_filed'
     || kind === 'training_report_resolved'
     || kind === 'training_milestone'
-    || kind === 'date_excluded';
-  return {
+    || kind === 'date_excluded'
+    // Nudges are push-only on purpose. They repeat up to four times per
+    // poll, which is fine on a channel people can mute per-device and
+    // ruinous against a 200/month email quota.
+    || kind === 'reminder_no_vote'
+    || kind === 'reminder_maybe';
+  return [{
     message,
     recipientPlayerNames: recipientNames,
     groupId: group_id,
     pushOnly: pushOnlyKind || !emailAllowedForGroup,
     emailOnly,
-  };
+  }];
 }
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────
@@ -921,9 +1208,10 @@ async function dispatch(plan: DispatchPlan): Promise<{
   }
 
   // ── Email (skip when pushOnly) ──
-  if (!plan.pushOnly && plan.recipientPlayerNames.length > 0) {
+  const emailNames = plan.emailRecipientNames ?? plan.recipientPlayerNames;
+  if (!plan.pushOnly && emailNames.length > 0) {
     try {
-      const recipients = await fetchEmailsFor(plan.groupId, plan.recipientPlayerNames);
+      const recipients = await fetchEmailsFor(plan.groupId, emailNames);
       if (recipients.length === 0) {
         // No emails on file for the recipients — not an error, just nothing
         // to send. Email leg counts as "ok" in this case so the job
@@ -1025,20 +1313,30 @@ export default async function handler(req: Request): Promise<Response> {
   // tally that pushOk carries. This body is stored verbatim by pg_net in
   // net._http_response, so it's the audit trail for "did that notification
   // reach anyone" — queryable long after the Vercel logs have rolled off.
-  const stats = { processed: 0, pushOk: 0, emailOk: 0, failed: 0, pushSent: 0, pushTotal: 0 };
+  const stats = { processed: 0, pushOk: 0, emailOk: 0, failed: 0, stale: 0, pushSent: 0, pushTotal: 0 };
 
   for (let i = 0; i < MAX_PER_INVOCATION; i++) {
     const job = await claimJob();
     if (!job) break;
     stats.processed += 1;
     try {
-      const plan = await planForJob(job);
-      if (!plan) {
+      // Premise may have died while the job waited out quiet hours.
+      const stale = await obsolescenceCheck(job);
+      if (stale) {
+        console.log('[notification-worker] skipping stale job', job.id, job.kind, '—', stale.reason);
+        stats.stale += 1;
+        await completeJob(job.id, true, null);
+        if (stale.reopen && job.poll_id) await reopenChannel(job.poll_id, job.kind);
+        continue;
+      }
+      const plans = await planForJob(job);
+      if (plans.length === 0) {
         // Nothing to dispatch — settings forbid push+email, recipients are empty,
         // poll deleted, etc. Mark done so the queue doesn't keep retrying.
         await completeJob(job.id, true, null);
         continue;
       }
+      const plan = plans[0];
       // BEFORE dispatch, deliberately. Dispatching first loses the race:
       // on poll edb1d40b the 'target_filled' row was enqueued one second
       // after 'confirmed' and a browser worker claimed it while this
@@ -1050,15 +1348,23 @@ export default async function handler(req: Request): Promise<Response> {
       if (plan.preemptTargetFilledPollId) {
         await preemptTargetFilled(plan.preemptTargetFilledPollId);
       }
-      const r = await dispatch(plan);
-      if (r.pushOk) stats.pushOk += 1;
-      if (r.emailOk) stats.emailOk += 1;
-      stats.pushSent += r.pushSent;
-      stats.pushTotal += r.pushTotal;
-      const success = r.pushOk || r.emailOk;
-      const errMsg = success ? null : r.errors.join(' | ').slice(0, 480);
+      // A job can imply more than one audience (see planForJob). The job
+      // counts as delivered if any leg landed — a second audience failing
+      // shouldn't force a retry that re-notifies the first.
+      const results = await Promise.all(plans.map(p => dispatch(p)));
+      const errors: string[] = [];
+      let success = false;
+      for (const r of results) {
+        if (r.pushOk) stats.pushOk += 1;
+        if (r.emailOk) stats.emailOk += 1;
+        stats.pushSent += r.pushSent;
+        stats.pushTotal += r.pushTotal;
+        if (r.pushOk || r.emailOk) success = true;
+        errors.push(...r.errors);
+      }
+      const errMsg = errors.length ? errors.join(' | ').slice(0, 480) : null;
       if (!success) stats.failed += 1;
-      await completeJob(job.id, success, errMsg);
+      await completeJob(job.id, success, success ? null : errMsg);
     } catch (err) {
       stats.failed += 1;
       const msg = err instanceof Error ? err.message : String(err);

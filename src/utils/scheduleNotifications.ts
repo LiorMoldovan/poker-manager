@@ -170,8 +170,8 @@ function resolveRecipientPlayerIds(poll: GamePoll, kind: NotificationKind): stri
       return Array.from(ids);
     }
     // vote_change recipients are resolved server-side via
-    // get_poll_change_recipients (admins/owners/super-admins ∪ subscribers),
-    // not from the local player roster — so this branch is unreachable
+    // get_poll_change_recipients (everyone whose own preference flag is
+    // on), not from the local player roster — so this branch is unreachable
     // through the dispatch path but kept here for type-exhaustiveness.
     case 'vote_change':
       return [];
@@ -376,25 +376,73 @@ export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
   };
 }
 
+// "Open to everyone" is a recruitment pitch, so it has to answer the only
+// question a guest actually has: is there room, and for when. The previous
+// copy answered neither — it listed bare dates with no vote counts and said
+// "the group needs more players" without saying how many.
+//
+// Two shapes, because expansion can find the poll in two very different
+// states. If a date is already pinned there is nothing left to choose, only
+// a seat to claim. If nothing is pinned the dates are still competing, so
+// each one carries its own yes-tally via buildDatesAndLocationBlock (which
+// also drops excluded dates — migration 086 closes voting on those
+// server-side, so listing them would invite a bounced vote).
+//
+// Mirrored by buildExpandedMessage in api/notification-worker.ts.
 export function buildExpandedMessage(poll: GamePoll): BuiltMessage {
-  // Skip excluded dates (migration 086) — listing them in an "open to
-  // everyone" expansion announcement would invite votes on dates the
-  // server has already closed.
-  const dateLines = poll.dates
-    .filter(d => !d.disabledAt)
-    .map(d => formatDateBullet(d, poll.defaultLocation))
-    .join('\n');
+  const I = '\u00a0\u00a0';
+  const target = poll.targetPlayerCount;
+  const yesOn = (dateId: string) =>
+    poll.votes.filter(v => v.dateId === dateId && v.response === 'yes').length;
+  const seatsLine = (taken: number): string => {
+    const missing = Math.max(0, target - taken);
+    if (missing === 0) return 'המקומות מלאים כרגע';
+    return missing === 1 ? 'נשאר מקום אחד' : `נשארו ${missing} מקומות`;
+  };
+
+  const pinned = poll.confirmedDateId
+    ? poll.dates.find(d => d.id === poll.confirmedDateId && !d.disabledAt)
+    : undefined;
+
+  if (pinned) {
+    const loc = pinned.location || poll.defaultLocation;
+    const seats = seatsLine(yesOn(pinned.id));
+    return {
+      pushTitle: '🎯 נקבע תאריך — יש מקום',
+      pushBody: `${formatHebrewDateTime(pinned)}${loc ? ` — ${loc}` : ''} · ${seats}`,
+      emailSubject: '🎯 נקבע תאריך — נשארו מקומות',
+      emailBody: (name) =>
+        emailGreeting(name) +
+        'הערב נסגר על תאריך, ועדיין מחפשים שחקנים.\n\n' +
+        `${I}📅 ${formatHebrewDateTimeVerbose(pinned)}\n` +
+        (loc ? `${I}📍 מיקום - ${loc}\n` : '') +
+        `${I}🪑 ${seats} מתוך ${target}` +
+        emailCtaBlock(poll, 'לאישור הגעה'),
+    };
+  }
+
+  const { dateLines, locationLine } = buildDatesAndLocationBlock(poll);
   const deadline = buildReminderDeadlineLine(poll);
+  const leading = poll.dates
+    .filter(d => !d.disabledAt)
+    .reduce((max, d) => Math.max(max, yesOn(d.id)), 0);
+  const missing = Math.max(0, target - leading);
+
   return {
     pushTitle: '🎯 ההצבעה פתוחה לכולם',
-    pushBody: 'הקבוצה צריכה עוד שחקנים — היכנסו והצביעו 📅',
+    pushBody: missing === 0
+      ? 'ההצבעה נפתחה לכולם — היכנסו והצביעו 📅'
+      : missing === 1
+        ? 'חסר שחקן אחד לסגירת הערב — היכנסו והצביעו 📅'
+        : `חסרים ${missing} שחקנים לסגירת הערב — היכנסו והצביעו 📅`,
     emailSubject: '🎯 ההצבעה פתוחה — הצטרפו',
     emailBody: (name) =>
       emailGreeting(name) +
-      'הקבוצה צריכה עוד שחקנים! ההצבעה לערב הפוקר עברה לשלב פתוח לכולם.\n\n' +
-      `📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
-      `🎯 יעד: ${poll.targetPlayerCount} שחקנים` +
-      (deadline ? `\n${deadline}` : '') +
+      'ההצבעה לערב הפוקר נפתחה לכולם. אלה התאריכים ומצב ההצבעה בכל אחד:\n\n' +
+      `${I}📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
+      (locationLine ? `📍 ${locationLine}\n\n` : '') +
+      `${I}🎯 יעד: ${target} שחקנים` +
+      (deadline ? `\n${I}⏳ ${deadline}` : '') +
       emailCtaBlock(poll, 'להצבעה'),
   };
 }
@@ -449,6 +497,49 @@ export function buildConfirmedMessage(
       `${I}👥 ${confirmedLine}` +
       ctaBlock +
       '\n\nנתראה על השולחן! 🃏',
+  };
+}
+
+// Sibling of buildConfirmedMessage for the people who are NOT in the game.
+// The night is settled and there is no seat for them, so the copy states
+// that plainly rather than inviting them in. Dispatched push-only.
+// Mirrored by buildConfirmedOthersMessage in api/notification-worker.ts.
+export function buildConfirmedFullOthersMessage(
+  poll: GamePoll,
+  confirmedDate: GamePollDate,
+  yesNames: string[],
+): BuiltMessage {
+  const loc = confirmedDate.location || poll.defaultLocation;
+  const dateLineCompact = formatHebrewDateTime(confirmedDate);
+  const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
+
+  const yesCount = yesNames.length;
+  let confirmedLine: string;
+  if (yesCount === 0) {
+    confirmedLine = '0 שחקנים אישרו';
+  } else if (yesCount === 1) {
+    confirmedLine = `שחקן אחד אישר: ${yesNames[0]}.`;
+  } else {
+    confirmedLine = `${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.`;
+  }
+
+  const I = '\u00a0\u00a0';
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 לפרטים: ${link}` : '';
+
+  return {
+    pushTitle: '📅 נקבע תאריך לערב הפוקר',
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''} · המשחק כבר מלא`,
+    emailSubject: '📅 נקבע תאריך לערב הפוקר',
+    emailBody: (name) =>
+      emailGreeting(name) +
+      'נקבע תאריך לערב הפוקר 🎯\n\n' +
+      `${I}📅 ${dateLineVerbose}\n` +
+      locLine +
+      `${I}👥 ${confirmedLine}\n` +
+      '🪑 כל המקומות תפוסים. אם מישהו יבטל — נעדכן' +
+      ctaBlock,
   };
 }
 
@@ -685,7 +776,16 @@ export function buildConfirmedBelowTargetOthersMessage(
 //     response) — they're clearly engaged with this round.
 // Then subtract the "yes on pinned date" set so each player ends up in
 // exactly one audience.
-function resolveConfirmedBelowTargetOthers(
+// Everyone who should hear that a date got picked, minus the players
+// already in the game. Guests only once the poll has expanded — before
+// that they were never shown it.
+//
+// This audience is push-only, so there is no narrower email variant to
+// compute — a pick is news for people outside the game, not a mailing.
+//
+// Mirrored by confirmedOthersNames in api/notification-worker.ts. Both
+// workers race for the same job, so they must agree on the audience.
+function resolveConfirmedOthers(
   poll: GamePoll,
   yesOnPinned: Set<string>,
 ): string[] {
@@ -698,21 +798,6 @@ function resolveConfirmedBelowTargetOthers(
   }
   for (const v of poll.votes) ids.add(v.playerId);
   for (const id of yesOnPinned) ids.delete(id);
-  // Also drop anyone who explicitly voted NO on the pinned date — they
-  // already told us this date doesn't work for them, so the
-  // "join us, חסר אחד" recruitment email is just noise to them and
-  // burns quota. They still get push (the channel they didn't opt out
-  // of) and can see the live date in the app. A maybe-vote stays in
-  // the audience because "maybe" implies undecided, where a nudge
-  // CAN flip them. Cancellation/reminder/etc. flows are unaffected —
-  // a no-voter still gets the cancellation email if the poll is
-  // cancelled, because that's the state they actually need.
-  const noOnPinned = new Set(
-    poll.votes
-      .filter(v => v.dateId === poll.confirmedDateId && v.response === 'no')
-      .map(v => v.playerId)
-  );
-  for (const id of noOnPinned) ids.delete(id);
   return Array.from(ids);
 }
 
@@ -932,27 +1017,40 @@ export async function dispatchConfirmed(poll: GamePoll): Promise<void> {
   const yesCount = yesOnPinnedSet.size;
   const missing = Math.max(0, poll.targetPlayerCount - yesCount);
 
+  // Everyone who isn't in the game, reached by push only. Both audiences
+  // are dispatched in parallel under one Promise.allSettled — partial
+  // failure is acceptable, since the worker marks the job done once at
+  // least one audience got their message.
+  const otherPushNames = playerNamesForIds(resolveConfirmedOthers(poll, yesOnPinnedSet));
+
   if (missing === 0) {
-    // At-target: single "ניפגש בערב פוקר" flow to yes-voters. The caller
-    // has already retired any 'target_filled' job for this poll — that
-    // message would only repeat what this one says.
-    await dispatch(
-      poll,
-      'confirmed',
-      buildConfirmedMessage(poll, confirmedDate, yesNames),
-      yesNames,
-    );
+    // At-target. Yes-voters get the "ניפגש בערב פוקר" flow; the caller has
+    // already retired any 'target_filled' job, which would only repeat it.
+    //
+    // Everyone else gets a push saying the night is settled and full. They
+    // used to get nothing at all: the game closing was invisible to anyone
+    // not in it, which is precisely the person who needs to stop holding
+    // the evening. Push-only — 'game is full' already carries this by
+    // email for the groups that have email on.
+    await Promise.allSettled([
+      dispatch(
+        poll,
+        'confirmed',
+        buildConfirmedMessage(poll, confirmedDate, yesNames),
+        yesNames,
+      ),
+      dispatch(
+        poll,
+        'confirmed',
+        buildConfirmedFullOthersMessage(poll, confirmedDate, yesNames),
+        otherPushNames,
+        { emailRecipientNames: [] },
+      ),
+    ]);
     return;
   }
 
-  // Below target: split the audience and tailor the copy. Both dispatches
-  // run in parallel under one Promise.allSettled — partial failure is
-  // acceptable (the worker still marks the job done since at least one
-  // audience got their message; the other will be retried via the sweep
-  // recovery if its sentinel is still null).
-  const otherIds = resolveConfirmedBelowTargetOthers(poll, yesOnPinnedSet);
-  const otherNames = playerNamesForIds(otherIds);
-
+  // Below target: split the audience and tailor the copy.
   await Promise.allSettled([
     dispatch(
       poll,
@@ -964,7 +1062,13 @@ export async function dispatchConfirmed(poll: GamePoll): Promise<void> {
       poll,
       'confirmed',
       buildConfirmedBelowTargetOthersMessage(poll, confirmedDate, yesCount, missing),
-      otherNames,
+      otherPushNames,
+      // Push-only, hard-coded rather than left to the email filter. A pick
+      // is push news for people not in the game; mailing non-participants a
+      // recruitment note is the exact category of noise that started this
+      // rework, and it must not switch itself back on the day someone
+      // re-enables `confirmed` emails for the yes-voters.
+      { emailRecipientNames: [] },
     ),
   ]);
 }
@@ -1059,10 +1163,9 @@ export async function sendTargetFilledNotifications(_poll: GamePoll): Promise<vo
 // ── Vote-event notifications ──
 // Fires every time a vote row is created (initial cast) OR updated
 // (response/comment changed). Recipients are resolved server-side via
-// get_poll_change_recipients: admins, owners, super-admins, plus members
-// who opted in via the subscription button. Each recipient may also have
-// muted via the per-group schedule_vote_change_notifs flag — that filter
-// runs in the RPC, so we don't repeat it here.
+// get_poll_change_recipients: every member whose own
+// schedule_vote_change_notifs flag is on. Role stopped mattering in
+// migration 118 — that filter runs in the RPC, so we don't repeat it here.
 //
 // NOT claim-gated: each vote event is its own discrete signal. If the same
 // client fires twice for the same event, the recipient list resolution is

@@ -9,8 +9,6 @@ import {
   updatePollMeta,
   deletePoll,
   adminCastVote, adminDeleteVote,
-  subscribeToPollChanges, unsubscribeFromPollChanges,
-  getMyPollChangeSubscriptions,
   getMyVoteChangeNotifs, setMyVoteChangeNotifs,
   getGroupId,
   getPlayerStats, getAllGames,
@@ -316,11 +314,12 @@ export default function ScheduleTab() {
   const [releasePinPending, setReleasePinPending] = useState<{ poll: GamePoll } | null>(null);
   const [releasePinSubmitting, setReleasePinSubmitting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
-  // Set of poll IDs the current user has opted in to receive vote-change
-  // notifications for. Loaded once on mount and updated optimistically by
-  // the toggle button. Admins/owners are always notified (server-side) so
-  // we don't need to track their state here.
-  const [subscribedPollIds, setSubscribedPollIds] = useState<Set<string>>(() => new Set());
+  // Whether the current user wants a push for every vote. One durable
+  // preference per (user, group) rather than the old per-poll opt-in,
+  // which reset with each new poll and left admins with no way to
+  // decline at all. Lives here rather than in the poll card so the bell
+  // and the admin config toggle can never disagree within a session.
+  const [voteChangeOn, setVoteChangeOn] = useState<boolean>(true);
 
   const reload = useCallback(() => {
     setPolls(getAllPolls());
@@ -342,15 +341,17 @@ export default function ScheduleTab() {
   // fresh.
   useRealtimeRefresh(reload, forceRefreshPollsFromDb);
 
-  // Load the current user's vote-change subscriptions once on mount. We
-  // don't subscribe to realtime updates here because subscriptions are
-  // per-user and only the user's own clicks change them — toggling refreshes
-  // local state directly.
+  // Load the current user's vote-change preference once on mount. No
+  // realtime subscription: only this user's own clicks change it, and the
+  // toggle updates local state directly. Assume on until the server
+  // answers, matching the column default, so the bell doesn't flicker.
   useEffect(() => {
     let cancelled = false;
-    getMyPollChangeSubscriptions()
-      .then(ids => { if (!cancelled) setSubscribedPollIds(new Set(ids)); })
-      .catch(err => console.warn('getMyPollChangeSubscriptions failed:', err));
+    const groupId = getGroupId();
+    if (!groupId) return;
+    getMyVoteChangeNotifs(groupId)
+      .then(enabled => { if (!cancelled) setVoteChangeOn(enabled); })
+      .catch(err => console.warn('getMyVoteChangeNotifs failed:', err));
     return () => { cancelled = true; };
   }, []);
 
@@ -429,44 +430,34 @@ export default function ScheduleTab() {
     navigate({ pathname: location.pathname, search: newSearch }, { replace: true });
   }, [location.search, location.pathname, isAdmin, navigate]);
 
-  const handleToggleSubscription = async (pollId: string) => {
-    const isSubscribed = subscribedPollIds.has(pollId);
-    // Optimistic update — flip the local Set immediately so the button
-    // reflects the new state without waiting for the round-trip.
-    setSubscribedPollIds(prev => {
-      const next = new Set(prev);
-      if (isSubscribed) next.delete(pollId);
-      else next.add(pollId);
-      return next;
-    });
+  // Flips the durable per-(user, group) vote-change preference. Optimistic
+  // so the bell responds instantly; rolls back if the write fails.
+  const handleToggleSubscription = async () => {
+    const groupId = getGroupId();
+    if (!groupId) return;
+    const next = !voteChangeOn;
+    setVoteChangeOn(next);
     try {
-      if (isSubscribed) {
-        await unsubscribeFromPollChanges(pollId);
+      await setMyVoteChangeNotifs(groupId, next);
+      if (!next) {
         showMsg('success', t('schedule.subscribe.unsubscribed'));
-      } else {
-        await subscribeToPollChanges(pollId);
-        // Vote-change alerts are push-only since v5.43 (email was
-        // retired to stay inside the EmailJS free quota). If push
-        // isn't actually enabled in this browser, the toggle is a
-        // no-op until the user installs the PWA + grants permission
-        // — surface that hint in the success toast so it's clear
-        // why notifications aren't arriving.
-        const pushReady = typeof Notification !== 'undefined' && Notification.permission === 'granted';
-        showMsg(
-          'success',
-          pushReady
-            ? t('schedule.subscribe.subscribed')
-            : `${t('schedule.subscribe.subscribed')} — ${t('schedule.subscribe.pushHint')}`,
-        );
+        return;
       }
+      // Vote-change alerts are push-only since v5.43 (email was
+      // retired to stay inside the EmailJS free quota). If push
+      // isn't actually enabled in this browser, the toggle is a
+      // no-op until the user installs the PWA + grants permission
+      // — surface that hint in the success toast so it's clear
+      // why notifications aren't arriving.
+      const pushReady = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+      showMsg(
+        'success',
+        pushReady
+          ? t('schedule.subscribe.subscribed')
+          : `${t('schedule.subscribe.subscribed')} — ${t('schedule.subscribe.pushHint')}`,
+      );
     } catch (e) {
-      // Roll back on failure.
-      setSubscribedPollIds(prev => {
-        const next = new Set(prev);
-        if (isSubscribed) next.add(pollId);
-        else next.delete(pollId);
-        return next;
-      });
+      setVoteChangeOn(!next);
       showMsg('error', handleRpcError(e));
     }
   };
@@ -867,6 +858,8 @@ export default function ScheduleTab() {
           <ScheduleConfigPanel
             onSuccess={(text) => showMsg('success', text)}
             onError={(text) => showMsg('error', text)}
+            voteChangeOn={voteChangeOn}
+            onToggleVoteChange={handleToggleSubscription}
             t={t}
           />
         )}
@@ -959,8 +952,8 @@ export default function ScheduleTab() {
           }
           onCancel={() => setShowCancelModal({ pollId: poll.id })}
           onDelete={() => handleDeletePoll(poll)}
-          isSubscribed={subscribedPollIds.has(poll.id)}
-          onToggleSubscription={() => handleToggleSubscription(poll.id)}
+          isSubscribed={voteChangeOn}
+          onToggleSubscription={handleToggleSubscription}
           onError={(text) => showMsg('error', text)}
           onSuccess={(text) => showMsg('success', text)}
           handleRpcError={handleRpcError}
@@ -5215,6 +5208,10 @@ export function ReminderModal(props: ReminderModalProps) {
 interface ScheduleConfigPanelProps {
   onSuccess: (text: string) => void;
   onError: (text: string) => void;
+  // Vote-change preference is owned by ScheduleTab so this panel and the
+  // poll-card bell always show the same value.
+  voteChangeOn: boolean;
+  onToggleVoteChange: () => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
@@ -5255,7 +5252,7 @@ function readEmailKinds(stored: Partial<Record<ScheduleEmailKind, boolean>> | un
 }
 
 function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
-  const { onSuccess, onError, t } = props;
+  const { onSuccess, onError, voteChangeOn, onToggleVoteChange, t } = props;
   const initial = getSettings();
   // Single-tier groups skip the default-expansion-delay field for the
   // same reason as Create / Edit Poll modals — there's no guest tier
@@ -5279,12 +5276,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [autoCreateEnabled, setAutoCreateEnabled] = useState<boolean>(initial.scheduleAutoCreateEnabled === true);
   const [autoCreateDay, setAutoCreateDay] = useState<number>(initial.scheduleAutoCreateDay ?? 0);
   const [autoCreateTime, setAutoCreateTime] = useState<string>(initial.scheduleAutoCreateTime ?? '18:00');
-  // Per-(user, group) vote-change opt-out (migration 032). Optimistic
-  // UI: assume ON until the server reports the persisted value, since
-  // that's the default for fresh accounts and avoids a "flicker off"
-  // on first paint.
-  const [voteChangeNotifs, setVoteChangeNotifs] = useState<boolean>(true);
-
   // Re-sync local state when the underlying settings change (e.g. after a
   // realtime refresh) so the toggles never silently revert without telling
   // the user that the persist round-trip failed.
@@ -5305,19 +5296,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     };
     window.addEventListener('supabase-cache-updated', sync);
     return () => window.removeEventListener('supabase-cache-updated', sync);
-  }, []);
-
-  // Load the user's vote-change opt-out preference once on mount. It
-  // lives on group_members (per-user, per-group) rather than the
-  // group-wide settings cache, so it has its own fetch.
-  useEffect(() => {
-    const groupId = getGroupId();
-    if (!groupId) return;
-    let cancelled = false;
-    getMyVoteChangeNotifs(groupId)
-      .then(enabled => { if (!cancelled) setVoteChangeNotifs(enabled); })
-      .catch(err => console.warn('getMyVoteChangeNotifs failed:', err));
-    return () => { cancelled = true; };
   }, []);
 
   type Patch = Partial<Pick<Settings,
@@ -5444,22 +5422,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     void persist({ scheduleAutoCreateTime: next });
   };
 
-  // Vote-change opt-out toggle. Optimistic local state; rolls back on
-  // server failure so the UI never lies about the persisted value.
-  const handleVoteChangeNotifsToggle = async (checked: boolean) => {
-    const groupId = getGroupId();
-    if (!groupId) return;
-    setVoteChangeNotifs(checked);
-    try {
-      await setMyVoteChangeNotifs(groupId, checked);
-      onSuccess(t('schedule.config.saved'));
-    } catch (err) {
-      console.warn('setMyVoteChangeNotifs failed:', err);
-      setVoteChangeNotifs(!checked);
-      onError(t('schedule.errorGeneric'));
-    }
-  };
-
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 12,
     padding: '8px 0',
@@ -5550,10 +5512,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
 
       <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
 
-      {/* Per-admin opt-out for vote_change pings. Group-wide push and
+      {/* Personal opt-out for vote_change pings. Group-wide push and
           email toggles above gate the channel for everyone; this row
           is the personal "should the chatty vote-change notifications
-          ping me specifically" preference. Per (user, group). */}
+          ping me specifically" preference. Per (user, group), and the
+          same switch as the bell on every poll card. */}
       <div style={rowStyle}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
@@ -5564,8 +5527,8 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
           </div>
         </div>
         <ToggleSwitch
-          checked={voteChangeNotifs}
-          onChange={handleVoteChangeNotifsToggle}
+          checked={voteChangeOn}
+          onChange={onToggleVoteChange}
           ariaLabel={t('schedule.config.voteChangeNotifs')}
         />
       </div>

@@ -2427,6 +2427,18 @@ export async function completeNotificationJobRpc(
   }
 }
 
+// Clears target_filled_notifications_sent_at so a game that refills can
+// announce again. Called after a worker skips a stale 'game is full' job,
+// since completing that job stamps the sentinel that would otherwise mute
+// the channel permanently. The RPC refuses while the game really is full,
+// so this can't be used to force a repeat. Migration 119.
+export async function reopenTargetFilledChannelRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('reopen_target_filled_channel', {
+    p_poll_id: pollId,
+  });
+  if (error) console.warn('reopen_target_filled_channel failed:', error);
+}
+
 // Preempt a 'target_filled' job when the worker just processed an at-target
 // 'confirmed' job. Mirrors the original "המשחק נסגר!" / "המשחק מלא"
 // dedup semantics — without this preemption the recipient would get the
