@@ -14,9 +14,10 @@ const CHECKS = [
   })],
 ];
 
-// Every card ends at its "זווית מוצעת" line. Without that cut the final card
-// swallows the trailing rules block, which mentions the record labels itself.
-const cards = t => t.split('══ ').slice(1).map(c => c.split('זווית מוצעת')[0]);
+// Every card ends at its subject line. Without that cut the final card
+// swallows the trailing rules block, which mentions the record labels itself
+// and then trips the thin-history check on whichever player happens to be last.
+const cards = t => t.split('══ ').slice(1).map(c => c.split('🎯 נושא המשפט')[0]);
 
 // Rank/gap self-consistency: every "<gap> ahead of place N (name)" must agree
 // with that player's own "מקום #N" line in the same prompt.
@@ -54,7 +55,7 @@ const NUMBER_WORDS = /מאתיים|שלוש מאות|ארבע מאות|חמש מ
 // A bare "שיא" reads as an all-time record. Calling the half-year best a שיא
 // without naming the period is exactly the claim that misled Lichter — but
 // "שיא חציוני" is fine, so only flag the unqualified form.
-const PERIOD_HINT = /חציון|חציוני|מחצית|מחצ/;
+const PERIOD_HINT = /חציון|חציוני|מחצית|מחצ|חצי.?שנת/;
 function recordScope(text, prompt) {
   if (!prompt) return [];
   const problems = [];

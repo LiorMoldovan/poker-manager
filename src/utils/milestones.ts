@@ -27,6 +27,28 @@ export interface MilestonePlayer {
   gameHistory: { profit: number; date: string; gameId: string }[];
 }
 
+/** Widest all-time lead a runner-up can realistically close in a couple of
+ *  strong nights. Above this the leader is not "under pressure" no matter
+ *  how badly the last game went. */
+const LEADER_PRESSURE_GAP = 500;
+
+/** Career game counts worth calling out: dense early, then every 50 with no
+ *  ceiling. The old fixed list stopped at 200, which silently retired the
+ *  milestone for exactly the players who have played the most. */
+const EARLY_GAME_MILESTONES = [10, 25, 50, 75];
+
+/** True when this game count is itself a milestone — used after a game to
+ *  report "tonight was his 250th". */
+export const isCareerGameMilestone = (gamesPlayed: number): boolean =>
+  EARLY_GAME_MILESTONES.includes(gamesPlayed) || (gamesPlayed >= 100 && gamesPlayed % 50 === 0);
+
+/** The next milestone strictly above `gamesPlayed` — used before a game to
+ *  report "tonight is his 250th". */
+export const nextCareerGameMilestone = (gamesPlayed: number): number => {
+  for (const m of EARLY_GAME_MILESTONES) if (gamesPlayed < m) return m;
+  return Math.floor(gamesPlayed / 50) * 50 + 50;
+};
+
 export interface MilestoneOptions {
   mode: 'tonight' | 'period';
   periodLabel?: string;
@@ -273,10 +295,13 @@ function generateBattles(
 
       items.push({
         emoji: aboveRank <= 2 ? '👑' : '⚔️', category: 'battle', sentiment: 'battle',
-        title: aboveRank <= 2 ? 'קרב על הכתר!' : `קרב על מקום ${aboveRank}`,
+        title: aboveRank <= 2 ? 'קרב על הכתר!' : `קרב על מקום ${aboveRank} בכל הזמנים`,
+        // Ranks here come from the all-time table. The player cards carry the
+        // period table, so an unlabelled "מקום 6" here reads as a flat
+        // contradiction of the card and the model picks one at random.
         description: opts.mode === 'tonight'
-          ? `${below.name} (מקום ${belowRank}) רק ${gap} מאחורי ${above.name} (מקום ${aboveRank}). נצחון גדול הפעם = עקיפה!`
-          : `${below.name} (מקום ${belowRank}) יכול לעקוף את ${above.name} (מקום ${aboveRank}) עם ${gap} בלבד.`,
+          ? `${below.name} (מקום ${belowRank} בכל הזמנים) רק ${gap} מאחורי ${above.name} (מקום ${aboveRank} בכל הזמנים). נצחון גדול הפעם = עקיפה!`
+          : `${below.name} (מקום ${belowRank} בכל הזמנים) יכול לעקוף את ${above.name} (מקום ${aboveRank} בכל הזמנים) עם ${gap} בלבד.`,
         priority: 95 - i * 3,
       });
       break;
@@ -477,21 +502,20 @@ function generateNumericGoals(
   }
 
   // Games milestones (check distance 1-3)
-  const gameMilestones = [10, 25, 50, 75, 100, 150, 200];
   for (const p of players) {
-    for (const gm of gameMilestones) {
-      const dist = gm - p.gamesPlayed;
-      if (dist >= 1 && dist <= 3) {
-        items.push({
-          emoji: '🎮', category: 'milestone', sentiment: 'positive',
-          title: dist === 1 ? `משחק מספר ${gm}` : `${dist} משחקים ל-${gm}!`,
-          description: dist === 1
-            ? `הפעם ${p.name} ${isPlayerFemale(p.name) ? 'תשחק' : 'ישחק'} את המשחק ה-${gm} ${isPlayerFemale(p.name) ? 'שלה' : 'שלו'}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
-            : `${p.name} עוד ${dist} משחקים למשחק ה-${gm}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`,
-          priority: 65 + gm / 5 + (3 - dist) * 5,
-        });
-        break;
-      }
+    const gm = nextCareerGameMilestone(p.gamesPlayed);
+    const dist = gm - p.gamesPlayed;
+    if (dist >= 1 && dist <= 3) {
+      items.push({
+        emoji: '🎮', category: 'milestone', sentiment: 'positive',
+        title: dist === 1 ? `משחק מספר ${gm}` : `${dist} משחקים ל-${gm}!`,
+        description: dist === 1
+          ? `הפעם ${p.name} ${isPlayerFemale(p.name) ? 'תשחק' : 'ישחק'} את המשחק ה-${gm} ${isPlayerFemale(p.name) ? 'שלה' : 'שלו'}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
+          : `${p.name} עוד ${dist} משחקים למשחק ה-${gm}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`,
+        // Cap the target's contribution so the ladder staying open past 200
+        // doesn't let a 400th game outrank everything else on the board.
+        priority: 65 + Math.min(gm, 200) / 5 + (3 - dist) * 5,
+      });
     }
   }
 
@@ -652,12 +676,18 @@ function generateDrama(
     const leader = sortedAllTime[0];
     const second = sortedAllTime[1];
     const leaderPS = pStats.find(s => s.player.name === leader.name);
-    if (leaderPS && leaderPS.lastGameProfit < -30) {
-      const gap = Math.round(leader.totalProfit - second.totalProfit);
+    const gap = Math.round(leader.totalProfit - second.totalProfit);
+    // A bad night only puts the leader under pressure if the runner-up is
+    // actually within reach. Without this ceiling the item fired on a
+    // 10,444₪ lead and told the model "הפער: 10444 בלבד" — the leader is
+    // untouchable and the word "בלבד" turns a non-event into a headline.
+    // Two big wins is the widest gap a runner-up can realistically close.
+    const catchable = gap <= LEADER_PRESSURE_GAP;
+    if (leaderPS && leaderPS.lastGameProfit < -30 && catchable) {
       items.push({
         emoji: '👀', category: 'drama', sentiment: 'surprise',
         title: 'המוביל בלחץ',
-        description: `${leader.name} (מקום 1) הפסיד ${fmt(leaderPS.lastGameProfit)} במשחק האחרון. הפער מ${second.name}: ${gap} בלבד.`,
+        description: `${leader.name} (מקום 1 בכל הזמנים) הפסיד ${fmt(leaderPS.lastGameProfit)} במשחק האחרון. הפער מ${second.name} בכל הזמנים: ${gap} בלבד.`,
         priority: 81,
       });
     }

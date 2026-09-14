@@ -11,12 +11,12 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const OUT = 'scripts/promptlab/out';
+const OUT = 'scripts/promptlab/out/_inject-truncation';
 const LABEL = 'S6-summary-0309';
 const FRAGMENT_TAIL = 'בעוד אורן ביצע קאמבק של';
 
 const run = truncate => {
-  const env = { ...process.env, PROMPTLAB_INJECT: 'scripts/promptlab/inject-summary.txt', PROMPTLAB_TRUNCATE: String(truncate) };
+  const env = { ...process.env, PROMPTLAB_INJECT: 'scripts/promptlab/inject-summary.txt', PROMPTLAB_TRUNCATE: String(truncate), PROMPTLAB_OUT: OUT };
   delete env.GEMINI_API_KEY;
   execSync('node scripts/promptlab/out/lab.mjs', { env, stdio: 'ignore' });
   return JSON.parse(readFileSync(`${OUT}/${LABEL}.result.json`, 'utf8')).text || '';

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.30.0';
+export const APP_VERSION = '6.31.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.31.0',
+    date: '2026-09-14',
+    changes: [
+      '🎯 Forecasts lead with what is at stake',
+      '🏅 Career landmarks like game 150 get a mention',
+      '📊 Summary puts table changes first',
+      '✍️ Fewer filler lines in forecasts',
+      '🗣️ Voice pronounces player names correctly',
+      '🔢 Voice fixes male/female number errors',
+      '💯 Voice reads ranks, decimals and thousands right',
+    ],
+  },
   {
     version: '6.30.0',
     date: '2026-09-14',

@@ -14,7 +14,12 @@ import { formatHebrewHalf } from '../../src/utils/calculations';
 import { captures, setCaptureLabel, isLive } from './stubs/apiProxy';
 
 const fixture = JSON.parse(readFileSync('scripts/promptlab/fixture.json', 'utf8'));
-const OUT = 'scripts/promptlab/out';
+// Overridable so the injected-fixture runs (repairtest, truncationtest) don't
+// overwrite the artifacts from a live run. They used to share this directory,
+// which meant running the regression suite replaced the real output with
+// deliberately-defective fixtures — and any check.mjs run after that was
+// silently grading the fixtures instead of the model.
+const OUT = process.env.PROMPTLAB_OUT || 'scripts/promptlab/out';
 mkdirSync(OUT, { recursive: true });
 
 type Row = { gameId: string; playerId: string; playerName: string; profit: number; rebuys: number };

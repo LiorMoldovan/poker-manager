@@ -10,6 +10,7 @@ import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf, formatChips } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
+import { isCareerGameMilestone } from '../utils/milestones';
 import { canUserGenerateAI } from '../utils/aiEligibility';
 import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
@@ -662,6 +663,7 @@ const GameSummaryScreen = () => {
       const streaks: { name: string; streak: number; type: 'win' | 'loss' }[] = [];
       const upsets: { name: string; wp: number; type: 'win' | 'loss' }[] = [];
       const periodMilestones: { name: string; num: number }[] = [];
+      const careerMilestones: { name: string; num: number }[] = [];
       const welcomeBacks: { name: string; days: number }[] = [];
       const firstInPeriod: string[] = [];
       const periodProfitMilestones: { name: string; amount: number }[] = [];
@@ -704,6 +706,12 @@ const GameSummaryScreen = () => {
 
         if (pStats && [5, 10, 15, 20, 25].includes(pStats.gamesPlayed)) {
           periodMilestones.push({ name: player.playerName, num: pStats.gamesPlayed });
+        }
+
+        // Career landmark reached BY tonight. allStats already includes this
+        // game, so an exact hit means tonight was the 150th/250th/etc.
+        if (allTimeStats && isCareerGameMilestone(allTimeStats.gamesPlayed)) {
+          careerMilestones.push({ name: player.playerName, num: allTimeStats.gamesPlayed });
         }
 
         if (allTimeStats && allTimeStats.lastGameResults.length >= 2) {
@@ -790,6 +798,10 @@ const GameSummaryScreen = () => {
           return `${u.name} (${u.wp}%) ${action}`;
         });
         bank.push({ emoji: '🎯', label: 'הפתעות', detail: parts.join(', '), priority: 2 });
+      }
+      if (careerMilestones.length > 0) {
+        const parts = careerMilestones.map(m => `${m.name} — המשחק ה-${m.num} בקריירה`);
+        bank.push({ emoji: '🏅', label: 'אבן דרך בקריירה', detail: parts.join(', '), priority: 2 });
       }
       if (periodMilestones.length > 0) {
         const parts = periodMilestones.map(m => `${m.name} — משחק #${m.num}`);

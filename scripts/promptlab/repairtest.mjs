@@ -6,8 +6,10 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const OUT = 'scripts/promptlab/out';
-const env = { ...process.env, PROMPTLAB_INJECT: 'scripts/promptlab/inject-defects.json' };
+// Own scratch dir per suite. Sharing one with truncationtest meant a stale
+// result from whichever ran first could be read as this suite's output.
+const OUT = 'scripts/promptlab/out/_inject-repair';
+const env = { ...process.env, PROMPTLAB_INJECT: 'scripts/promptlab/inject-defects.json', PROMPTLAB_OUT: OUT };
 delete env.GEMINI_API_KEY;
 
 execSync('node scripts/promptlab/build.mjs', { stdio: 'ignore' });
@@ -17,7 +19,9 @@ const shipped = JSON.parse(readFileSync(`${OUT}/S1-regulars.result.json`, 'utf8'
   .find(p => p.name === 'ליכטר').sentence;
 
 const cases = [
-  ['bare "שיא" on the half-year best is scoped', () => !/שיא של 379/.test(shipped) && /שיא חציוני של 379/.test(shipped)],
+  // Wedged form on purpose: the repair used to require the number to sit
+  // directly after "שיא", so "שיא מרשים של 379" slipped through unscoped.
+  ['bare "שיא" on the half-year best is scoped, even with words wedged in', () => !/שיא מרשים של 379/.test(shipped) && /שיא חציוני מרשים של 379/.test(shipped)],
   ['superlative on a 3-win streak is dropped', () => !/נצחונות מרשימים/.test(shipped)],
   ['the rest of the sentence survives', () => /ליכטר רוכב על רצף/.test(shipped) && shipped.length > 90],
 ];

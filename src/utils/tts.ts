@@ -95,15 +95,26 @@ export const numberToHebrewTTS = (n: number, feminine = false): string => {
 // reported. Matching is whole-word only: the name must NOT be glued to another
 // Hebrew letter (so prefixes like "לסגל" / common words aren't touched).
 const NAME_PRONUNCIATION: Array<{ name: string; say: string }> = [
-  // "סגל" defaults to "segel" (staff). The player is Segal → "se-GAL".
-  { name: 'סגל', say: 'סגאל' },
+  // Segal — segol on the ס, kamatz on the ג. Spelling it with an alef
+  // ("סגאל") made the engines read it as the female name Sigal, so the
+  // vowel points are given explicitly instead. Engines that ignore nikud
+  // fall back to the bare consonants, i.e. no worse than untreated.
+  { name: 'סגל', say: 'סֶגַל' },
 ];
+
+// Single-letter particles that attach straight to a name ("לסגל", "וסגל").
+// "ה" is excluded on purpose — "הסגל" is a real word (the staff) and is far
+// likelier to be that than the player.
+const NAME_PREFIXES = 'ובלכמש';
 
 function fixNamePronunciation(text: string): string {
   let r = text;
   for (const { name, say } of NAME_PRONUNCIATION) {
-    const re = new RegExp(`(^|[^\\u0590-\\u05FF])${name}(?=$|[^\\u0590-\\u05FF])`, 'g');
-    r = r.replace(re, `$1${say}`);
+    const re = new RegExp(
+      `(^|[^\\u0590-\\u05FF])([${NAME_PREFIXES}]?)${name}(?=$|[^\\u0590-\\u05FF])`,
+      'g'
+    );
+    r = r.replace(re, `$1$2${say}`);
   }
   return r;
 }
@@ -126,9 +137,88 @@ function fixFeminineCounts(text: string): string {
   });
 }
 
-// Fix common Hebrew grammar/pronunciation issues for TTS
-function fixHebrewForTTS(text: string): string {
+// Counterpart list for the other direction ("שלוש משחקים" → "שלושה משחקים").
+const MASCULINE_COUNTED_NOUNS = 'משחקים|משחק|נצחונות|ניצחונות|ניצחון|הפסדים|הפסד|שקלים|שקל|שחקנים|שחקן|ימים|יום|חודשים|חודש|אחוזים|אחוז|סיבובים|סיבוב|קלפים|קלף|צ\'יפים';
+
+// Count words 1–10 paired by gender. "שמונה" is identical in both and so is
+// absent. "עשרה"/"עשר" is deliberately absent too: it doubles as the second
+// word of the teens ("שלוש עשרה קניות"), where swapping it would corrupt an
+// already-correct number.
+const COUNT_GENDER_PAIRS: Array<[masc: string, fem: string]> = [
+  ['אחד', 'אחת'],
+  ['שניים', 'שתיים'],
+  ['שני', 'שתי'],
+  ['שלושה', 'שלוש'],
+  ['ארבעה', 'ארבע'],
+  ['חמישה', 'חמש'],
+  ['שישה', 'שש'],
+  ['ששה', 'שש'],
+  ['שבעה', 'שבע'],
+  ['תשעה', 'תשע'],
+];
+
+// Gender agreement for counts that are already spelled out as words. The
+// digit pass above only fires on digits, so anything the model writes in
+// words ("שלושה קניות") reached the engine uncorrected.
+function fixNumberGender(text: string): string {
   let r = text;
+  const boundary = '(^|[^\\u0590-\\u05FF])';
+  const prefix = '([ובלכמשה]?)';
+  for (const [masc, fem] of COUNT_GENDER_PAIRS) {
+    r = r.replace(
+      new RegExp(`${boundary}${prefix}${masc}(\\s+ה?)(${FEMININE_COUNTED_NOUNS})(?![\\u0590-\\u05FF])`, 'g'),
+      `$1$2${fem}$3$4`
+    );
+    r = r.replace(
+      new RegExp(`${boundary}${prefix}${fem}(\\s+ה?)(${MASCULINE_COUNTED_NOUNS})(?![\\u0590-\\u05FF])`, 'g'),
+      `$1$2${masc}$3$4`
+    );
+  }
+  return r;
+}
+
+// Digit shapes that a naive digit→word pass mangles. Runs before that pass on
+// the legacy path, and is a no-op once the digits are already words.
+function normalizeDigitForms(text: string): string {
+  let r = text;
+
+  // Thousands separator — "1,200" otherwise reads as "אחד" then "מאתיים"
+  r = r.replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+
+  // "המקום ה-10" → "המקום העשירי", not "ה מינוס עשרה"
+  r = r.replace(/(^|[^\u0590-\u05FF])ה[-־](\d+)(?![\d.])/g, (_m, pre, d) =>
+    `${pre}ה${hebrewOrdinal(parseInt(d, 10))}`
+  );
+
+  // Halves read as a fraction rather than "שתיים נקודה חמש"
+  r = r.replace(
+    new RegExp(`(\\d+)\\.5(\\s+ה?)(${FEMININE_COUNTED_NOUNS})(?![\\u0590-\\u05FF])`, 'g'),
+    (_m, d, sep, noun) => `${numberToHebrewTTS(parseInt(d, 10), true)} וחצי${sep}${noun}`
+  );
+  r = r.replace(/(\d+)\.5(?!\d)/g, (_m, d) => `${numberToHebrewTTS(parseInt(d, 10))} וחצי`);
+
+  // Any other decimal — spelled out entirely, both so the dot isn't read as a
+  // full stop and so the leftover digits can't collide with the feminine-count
+  // pass ("נקודה" is itself in that noun list). Hebrew reads decimals in the
+  // feminine, digit by digit after the point: 3.25 → "שלוש נקודה שתיים חמש".
+  r = r.replace(/(\d+)\.(\d+)/g, (_m, intPart, frac) => {
+    const whole = numberToHebrewTTS(parseInt(intPart, 10), true);
+    const digits = frac.split('').map((d: string) => numberToHebrewTTS(parseInt(d, 10), true)).join(' ');
+    return `${whole} נקודה ${digits}`;
+  });
+
+  // Leading minus → the word, so the engine doesn't read a dash
+  r = r.replace(/(^|[\s(])-(\d)/g, '$1מינוס $2');
+
+  return r;
+}
+
+// Fix common Hebrew grammar/pronunciation issues for TTS
+export function fixHebrewForTTS(text: string): string {
+  let r = text;
+
+  // Digit shapes first — no-op if the legacy pass already spelled them out
+  r = normalizeDigitForms(r);
 
   // Player names whose default Hebrew reading is the wrong word
   r = fixNamePronunciation(r);
@@ -136,15 +226,21 @@ function fixHebrewForTTS(text: string): string {
   // Feminine-counted numbers → feminine form (before any masculine digit pass)
   r = fixFeminineCounts(r);
 
-  // Construct form: "שתיים" directly before a Hebrew word → "שתי"
-  r = r.replace(/שתיים(?=\s+[\u0590-\u05FF])/g, 'שתי');
-  r = r.replace(/שניים(?=\s+[\u0590-\u05FF])/g, 'שני');
+  // Counts already written as words, in the wrong gender
+  r = fixNumberGender(r);
 
-  // Prefixed forms: "בשתיים" / "ושתיים" before noun
-  r = r.replace(/בשתיים(?=\s+[\u0590-\u05FF])/g, 'בשתי');
-  r = r.replace(/בשניים(?=\s+[\u0590-\u05FF])/g, 'בשני');
-  r = r.replace(/ושתיים(?=\s+[\u0590-\u05FF])/g, 'ושתי');
-  r = r.replace(/ושניים(?=\s+[\u0590-\u05FF])/g, 'ושני');
+  // Construct form, but only directly before a noun actually being counted.
+  // Keying off "any Hebrew word" turned "שתיים וחצי" into "שתי וחצי" and
+  // "שתיים לערב" into "שתי לערב"; the standalone form is right everywhere
+  // except immediately before the counted noun itself.
+  r = r.replace(
+    new RegExp(`שתיים(?=\\s+ה?(?:${FEMININE_COUNTED_NOUNS})(?![\\u0590-\\u05FF]))`, 'g'),
+    'שתי'
+  );
+  r = r.replace(
+    new RegExp(`שניים(?=\\s+ה?(?:${MASCULINE_COUNTED_NOUNS})(?![\\u0590-\\u05FF]))`, 'g'),
+    'שני'
+  );
 
   // Cardinal → ordinal in ranking context ("במקום אחד" → "במקום ראשון")
   r = r.replace(/במקום אחד/g, 'במקום ראשון');
@@ -178,12 +274,14 @@ function fixHebrewForTTS(text: string): string {
 
 // Preprocess text for legacy TTS engines (Cloud TTS / Browser SpeechSynthesis)
 export const prepareTTSText = (text: string): string => {
-  // 1) Feminine-counted nouns first (needs digits intact) → feminine words.
-  // 2) Convert remaining digits with the masculine default (shekel/percent/
+  // 1) Digit shapes (thousands, decimals, "ה-10", minus) while digits are intact.
+  // 2) Feminine-counted nouns (also needs digits intact) → feminine words.
+  // 3) Convert remaining digits with the masculine default (shekel/percent/
   //    games/wins/losses are masculine).
-  // 3) Grammar/name/construct fixes last, so the "שניים→שני before a noun"
-  //    fix lands on numbers produced by step 2.
-  let result = fixFeminineCounts(text);
+  // 4) Grammar/name/construct fixes last, so the "שניים→שני before a noun"
+  //    fix lands on numbers produced by step 3.
+  let result = normalizeDigitForms(text);
+  result = fixFeminineCounts(result);
   result = result.replace(/\d+/g, (match) => {
     const num = parseInt(match, 10);
     if (isNaN(num) || num > 9999) return match;
