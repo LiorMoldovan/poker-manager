@@ -626,6 +626,27 @@ const GraphsScreen = () => {
     // Last 5 games only
     const last5Games = recentGames.slice(-5);
 
+    // Win rate with the opponent at the table vs without them. The raw "40%
+    // when he shows up" only means something next to the same player's rate
+    // when he doesn't, so both are computed off the same filtered period.
+    const soloGamesFor = (playerId: string) => gamePlayers.filter(
+      gp => gp.playerId === playerId && filteredGameIds.has(gp.gameId) && !sharedGameIds.has(gp.gameId)
+    );
+    const winPct = (wins: number, games: number) => (games > 0 ? Math.round((wins / games) * 100) : null);
+    const splitFor = (playerId: string, stats: HeadToHeadStat) => {
+      const solo = soloGamesFor(playerId);
+      return {
+        withPct: winPct(stats.wins, stats.gamesPlayed),
+        withGames: stats.gamesPlayed,
+        withoutPct: winPct(solo.filter(g => g.profit > 0).length, solo.length),
+        withoutGames: solo.length,
+      };
+    };
+    const winRateSplit = {
+      p1: splitFor(player1Id, player1Stats),
+      p2: splitFor(player2Id, player2Stats),
+    };
+
     // Cumulative data for shared games (for the chart)
     const cumulativeComparison: Array<{
       gameIndex: number;
@@ -672,6 +693,7 @@ const GraphsScreen = () => {
       recentForm: last5Games,
       distribution: { p1: p1Distribution, p2: p2Distribution },
       volatility: { p1: p1Volatility, p2: p2Volatility },
+      winRateSplit,
     };
   }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName, isRTL]);
 
@@ -2066,6 +2088,79 @@ const GraphsScreen = () => {
                 marginTop: '0.4rem',
               }}>
                 {t('graphs.volatilityDesc')}
+              </div>
+            </div>
+
+            {/* Win rate with the opponent at the table vs without him */}
+            <div style={{
+              padding: '0.5rem',
+              background: 'var(--surface)',
+              borderRadius: '8px',
+              marginTop: '0.75rem',
+            }}>
+              <div style={{
+                fontSize: '0.7rem',
+                color: 'var(--text-muted)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+                textAlign: 'center',
+              }}>
+                {t('graphs.presenceWinRate')}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                {[
+                  {
+                    split: headToHeadData.winRateSplit.p1,
+                    other: headToHeadData.player2Stats.playerName,
+                    color: '#10B981',
+                  },
+                  {
+                    split: headToHeadData.winRateSplit.p2,
+                    other: headToHeadData.player1Stats.playerName,
+                    color: '#3B82F6',
+                  },
+                ].map(({ split, other, color }, i) => {
+                  const delta = split.withPct !== null && split.withoutPct !== null
+                    ? split.withPct - split.withoutPct
+                    : null;
+                  return (
+                    <div key={other} style={{
+                      textAlign: 'center',
+                      flex: 1,
+                      borderInlineStart: i === 1 ? '1px solid var(--border)' : undefined,
+                    }}>
+                      <div style={{ fontSize: '1rem', fontWeight: '700', color }}>
+                        {split.withPct !== null ? `${split.withPct}%` : '—'}
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                        {t('graphs.presenceWith', { name: other, n: split.withGames })}
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {split.withoutPct !== null
+                          ? t('graphs.presenceWithout', { name: other, pct: split.withoutPct, n: split.withoutGames })
+                          : t('graphs.presenceNoSolo', { name: other })}
+                      </div>
+                      {delta !== null && delta !== 0 && (
+                        <div style={{
+                          fontSize: '0.65rem',
+                          fontWeight: '700',
+                          marginTop: '0.2rem',
+                          color: delta > 0 ? '#10B981' : '#EF4444',
+                        }}>
+                          {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}%
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{
+                fontSize: '0.55rem',
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginTop: '0.4rem',
+              }}>
+                {t('graphs.presenceWinRateDesc')}
               </div>
             </div>
           </div>

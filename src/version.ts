@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.31.0';
+export const APP_VERSION = '6.32.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.32.0',
+    date: '2026-09-14',
+    changes: [
+      '🎯 Win rate with and without each opponent',
+      '🔁 Forecasts retry instead of falling back to template',
+      '🚫 No more invented "steadiest player" claims',
+    ],
+  },
   {
     version: '6.31.0',
     date: '2026-09-14',

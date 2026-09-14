@@ -15,8 +15,9 @@ delete env.GEMINI_API_KEY;
 execSync('node scripts/promptlab/build.mjs', { stdio: 'ignore' });
 execSync('node scripts/promptlab/out/lab.mjs', { env, stdio: 'ignore' });
 
-const shipped = JSON.parse(readFileSync(`${OUT}/S1-regulars.result.json`, 'utf8'))
-  .find(p => p.name === 'ליכטר').sentence;
+const result = JSON.parse(readFileSync(`${OUT}/S1-regulars.result.json`, 'utf8'));
+const shipped = result.find(p => p.name === 'ליכטר').sentence;
+const oren = result.find(p => p.name === 'אורן').sentence;
 
 const cases = [
   // Wedged form on purpose: the repair used to require the number to sit
@@ -24,6 +25,9 @@ const cases = [
   ['bare "שיא" on the half-year best is scoped, even with words wedged in', () => !/שיא מרשים של 379/.test(shipped) && /שיא חציוני מרשים של 379/.test(shipped)],
   ['superlative on a 3-win streak is dropped', () => !/נצחונות מרשימים/.test(shipped)],
   ['the rest of the sentence survives', () => /ליכטר רוכב על רצף/.test(shipped) && shipped.length > 90],
+  // We never send a volatility figure, so "the most volatile player" is a
+  // guess — and it shipped pointing at the second-steadiest player.
+  ['invented "most volatile player" title is swapped for the name', () => !/תנודתי ביותר/.test(oren) && /אורן מנסה לשמור/.test(oren)],
 ];
 
 let bad = 0;

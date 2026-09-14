@@ -628,10 +628,40 @@ const buildTonightRosterImpactLines = (tonightNames: string[]): string => {
  * main prompt used. Returns the parsed entries (best-effort); on any failure
  * it returns [] so the caller keeps the existing fallback behaviour.
  */
+/** Turns an internal fact-check reason code into an instruction the model can
+ *  act on. Without this a retry is just a re-roll of the same dice. */
+const REJECTION_GUIDANCE: Array<[RegExp, string]> = [
+  [/tone_mismatch: optimistic/, 'הניסיון הקודם נפסל: הוא נכתב כחגיגה מול חיזוי שלילי. כתוב אתגר או עידוד-קאמבק, בלי מומנטום/הצלחה/ניצחון'],
+  [/tone_mismatch: pessimistic/, 'הניסיון הקודם נפסל: הוא נכתב בטון פסימי מול חיזוי חיובי. כתוב בביטחון'],
+  [/last_game: claimed loss but actually won/, 'הניסיון הקודם נפסל: הוא טען שהשחקן הפסיד במשחק האחרון — הוא ניצח'],
+  [/last_game: claimed win but actually lost/, 'הניסיון הקודם נפסל: הוא טען שהשחקן ניצח במשחק האחרון — הוא הפסיד'],
+  [/record_scope/, 'הניסיון הקודם נפסל: הוא קרא לתוצאה "שיא" בלי לציין את התקופה'],
+  [/rank/, 'הניסיון הקודם נפסל: הוא טעה בדירוג. קח את הדירוג מהכרטיס בלבד'],
+  [/streak/, 'הניסיון הקודם נפסל: הוא טעה ברצף. קח את הרצף מהכרטיס בלבד'],
+];
+
+const buildRejectionBlock = (
+  names: string[],
+  rejectionByName?: Map<string, string[]>,
+): string => {
+  if (!rejectionByName) return '';
+  const lines: string[] = [];
+  for (const name of names) {
+    const reasons = rejectionByName.get(name);
+    if (!reasons?.length) continue;
+    const guidance = REJECTION_GUIDANCE
+      .filter(([re]) => reasons.some(r => re.test(r)))
+      .map(([, text]) => text);
+    lines.push(`• ${name}: ${guidance.length ? guidance.join('. ') : 'הניסיון הקודם נפסל בבדיקת העובדות — הישען רק על מספרים שמופיעים בכרטיס'}`);
+  }
+  return lines.length ? `\n\n⚠️ תקן בדיוק את מה שנכשל:\n${lines.join('\n')}\n` : '';
+};
+
 const retryMissingForecastText = async (
   missingNames: string[],
   playerCardByName: Map<string, string>,
   apiKey: string,
+  rejectionByName?: Map<string, string[]>,
 ): Promise<{ name: string; highlight: string; sentence: string }[]> => {
   const cards = missingNames
     .map(n => playerCardByName.get(n))
@@ -642,7 +672,7 @@ const retryMissingForecastText = async (
   const prompt = `אתה כתב פוקר. כתוב טקסט טרי לשחקנים הבאים בלבד, על סמך הכרטיסים. החזר JSON תקין בלבד בפורמט: {"players":[{"name":"שם","highlight":"כותרת","sentence":"משפט"}]}
 
 📊 כרטיסי שחקנים:
-${cards}
+${cards}${buildRejectionBlock(missingNames, rejectionByName)}
 
 לכל שחקן:
 • highlight — כותרת קצרה (3-6 מילים), העובדה הכי מעניינת
@@ -1855,6 +1885,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • תוצאה טובה במשחק האחרון היא תוצאה, לא שיא — אלא אם מסומן "← נקבע במשחק האחרון!".
 • 🏅 "מצטייני הערב" הם הטובים מבין משתתפי הערב בלבד, לא שיאי קבוצה.
 • דירוג: מקום 1 = הכי טוב. "מוביל" = מקום 1, "רודף" = מנסה לעלות, "שומר" = מגן על מקומו.
+• "הכי X בשולחן" מותר רק כשהדירוג הזה מופיע בכרטיס. אין בכרטיס נתון יציבות או תנודתיות — אל תכתיר שחקן כ"היציב ביותר" או "התנודתי ביותר". תאר מה עשה, לא איזה טיפוס הוא.
 
 ━━━ עברית ━━━
 • מספרים בספרות: "379 שקלים", "245 משחקים", "39%", "חציון שני 2026". לא "מאתיים ארבעים וחמישה משחקים" — הקורא סורק את המשפט בשביל המספר, וספרות הן מה שהעין תופסת.
@@ -2042,7 +2073,11 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       // ========== FACT-CHECK AND CORRECT AI OUTPUT ==========
       console.log('🔍 Fact-checking AI output...');
       
-      forecasts = forecasts.map(forecast => {
+      // Why each sentence was thrown away, so the retry below can tell the
+      // model what to avoid instead of re-rolling the same dice.
+      let discarded: { name: string; reasons: string[] }[] = [];
+
+      const factCheckPass = (list: ForecastResult[]): ForecastResult[] => list.map(forecast => {
         const player = players.find(p => p.name === forecast.name);
         if (!player) return forecast;
         
@@ -2415,6 +2450,20 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           }
         }
 
+        // "השחקן היציב/התנודתי ביותר בשולחן" — a ranking of players by a trait
+        // we never compute or send, so it is always a guess, and it came out
+        // backwards (the player called most volatile was the second steadiest).
+        // Swap the invented title for the name; superlatives about a NUMBER on
+        // the card ("הרווח הגדול ביותר שלו") are untouched.
+        const detitled = correctedSentence.replace(
+          /ה?שחקן\s+ה[\u0590-\u05FF]+\s+ביותר(\s+ב[\u0590-\u05FF]+)?/g,
+          player.name
+        );
+        if (detitled !== correctedSentence) {
+          errorDetails.push('invented_superlative: ranked the player by a trait we never supply');
+          correctedSentence = detitled;
+        }
+
         // ========== FINAL CLEANUP ==========
         // Remove any orphaned fragments at sentence end (prepositions, connectives)
         correctedSentence = correctedSentence
@@ -2457,6 +2506,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           }
           // errorDetails was collected at a dozen sites and never read, so a
           // discarded sentence looked identical to one the model never sent.
+          discarded.push({ name: player.name, reasons: errorDetails.slice() });
           console.log(`⚠️ ${player.name}: Used direction-appropriate fallback sentence — ${errorDetails.length ? errorDetails.join('; ') : 'model returned nothing usable'}`);
         } else {
           console.log(`✅ ${player.name}: AI sentence: "${correctedSentence}"${errorDetails.length ? `  [repaired: ${errorDetails.join('; ')}]` : ''}`);
@@ -2469,6 +2519,43 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         };
       });
       
+      forecasts = factCheckPass(forecasts);
+
+      // The existing retry above only covers players the MODEL skipped, and it
+      // runs before this point. A sentence the model DID write but the
+      // fact-check rejected therefore never got a second attempt — it went
+      // straight to the canned template, which is how the same players kept
+      // receiving template text week after week. Give those a real retry,
+      // telling the model exactly why the previous attempt was rejected.
+      if (discarded.length > 0) {
+        const names = discarded.map(d => d.name);
+        console.log(`🔁 ${names.length} sentence(s) rejected by fact-check, retrying:`, names.join(', '));
+        const reasonByName = new Map(discarded.map(d => [d.name, d.reasons]));
+        const supplements = await retryMissingForecastText(names, playerCardByName, apiKey, reasonByName);
+
+        // Only the players we asked about: a model that answers with the whole
+        // table must not overwrite sentences that already passed the check.
+        const reattempt = supplements
+          .filter(s => names.includes(s.name) && s.sentence && s.sentence.trim().length >= 12)
+          .map(s => {
+            const current = forecasts.find(f => f.name === s.name);
+            return current ? { ...current, sentence: s.sentence, highlight: s.highlight || current.highlight } : null;
+          })
+          .filter((f): f is ForecastResult => f !== null);
+
+        if (reattempt.length > 0) {
+          discarded = [];
+          let rescued = 0;
+          for (const checked of factCheckPass(reattempt)) {
+            // Rejected a second time — keep the fallback already in place.
+            if (discarded.some(d => d.name === checked.name)) continue;
+            const i = forecasts.findIndex(f => f.name === checked.name);
+            if (i >= 0) { forecasts[i] = checked; rescued++; }
+          }
+          console.log(`✅ Fact-check retry rescued ${rescued}/${names.length}`);
+        }
+      }
+
       console.log('✅ Fact-checking complete');
       // ========== END FACT-CHECKING ==========
       
