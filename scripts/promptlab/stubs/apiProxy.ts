@@ -25,6 +25,14 @@ const INJECT = process.env.PROMPTLAB_INJECT
   ? readFileSync(process.env.PROMPTLAB_INJECT, 'utf8')
   : '';
 
+// Simulate Gemini running out of output budget mid-sentence: the first N calls
+// come back finishReason MAX_TOKENS with a fragment, exactly as a thinking
+// model does when reasoning has eaten the budget. Set high to make every
+// attempt truncate and exercise the last-resort path.
+const TRUNCATE_FIRST = Number(process.env.PROMPTLAB_TRUNCATE || 0);
+let truncatedSoFar = 0;
+const FRAGMENT = 'משחק 13 בחציון שני 2026 ננעל בניצחון שיא אישי של אייל עם 320 שקלים בפלוס, שהקפיץ אותו למקום השביעי. ליאור חצה את רף ה-1000 שקלים בחציון עם פלוס 122 שקלים, בעוד אורן ביצע קאמבק של';
+
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -37,6 +45,16 @@ export async function proxyGeminiGenerate(
   const prompt: string = payload?.contents?.[0]?.parts?.[0]?.text ?? '';
   const cap: Capture = { label: currentLabel, model, prompt };
   captures.push(cap);
+
+  if (TRUNCATE_FIRST && truncatedSoFar < TRUNCATE_FIRST) {
+    truncatedSoFar++;
+    cap.response = FRAGMENT;
+    cap.error = 'simulated MAX_TOKENS';
+    return jsonResponse({
+      candidates: [{ content: { parts: [{ text: FRAGMENT }] }, finishReason: 'MAX_TOKENS' }],
+      usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 180, thoughtsTokenCount: 3900, totalTokenCount: 5580 },
+    });
+  }
 
   if (INJECT) {
     cap.response = INJECT;

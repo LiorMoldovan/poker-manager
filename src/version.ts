@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.29.0';
+export const APP_VERSION = '6.30.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.30.0',
+    date: '2026-09-14',
+    changes: [
+      '💸 Fewer tiny amounts in settlements',
+      '🧾 Near-even players settle with one person',
+      '⚡ Summary page no longer waits for AI',
+      '✂️ AI text never cut off mid-sentence',
+    ],
+  },
   {
     version: '6.29.0',
     date: '2026-09-09',

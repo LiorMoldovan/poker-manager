@@ -133,6 +133,10 @@ const GameSummaryScreen = () => {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: !isPayModeInit, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: true, standings: true, comic: true });
   const toggleSection = (key: string) => { hapticTap(); setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] })); };
   const forceGenerateRef = useRef(false);
+  // The forecast comparison runs detached from loadData, so a realtime refresh
+  // can re-enter loadData while the call is still out and the comment has not
+  // been saved yet. Without this the same Gemini request fires twice.
+  const forecastCommentInFlightRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
@@ -546,17 +550,27 @@ const GameSummaryScreen = () => {
       // Use cached comment if available, otherwise generate and cache
       if (game.forecastComment) {
         setForecastComment(game.forecastComment);
-      } else if (canUseAI && getGeminiApiKey()) {
+      } else if (canUseAI && getGeminiApiKey() && !forecastCommentInFlightRef.current) {
+        // Deliberately not awaited. This is a Gemini round-trip that the app's
+        // own timing table estimates at ~4 s, and awaiting it held the entire
+        // screen — results, settlements, everything — behind the global spinner
+        // until it came back, even though the settlements above were ready
+        // immediately. The forecast card already renders its own progress bar
+        // off `isLoadingComment`, so the comment simply fills in when it lands.
+        forecastCommentInFlightRef.current = true;
         setIsLoadingComment(true);
-        try {
-          const comment = await withAITiming('forecast_comparison', () => generateForecastComparison(game.forecasts!, sortedPlayers));
-          setForecastComment(comment);
-          saveForecastComment(game.id, comment);
-        } catch (err) {
-          console.error('Error generating forecast comment:', err);
-        } finally {
-          setIsLoadingComment(false);
-        }
+        withAITiming('forecast_comparison', () => generateForecastComparison(game.forecasts!, sortedPlayers))
+          .then(comment => {
+            setForecastComment(comment);
+            saveForecastComment(game.id, comment);
+          })
+          .catch(err => {
+            console.error('Error generating forecast comment:', err);
+          })
+          .finally(() => {
+            forecastCommentInFlightRef.current = false;
+            setIsLoadingComment(false);
+          });
       }
     }
     

@@ -77,9 +77,43 @@ interface FallbackCallOptions {
   label?: string;
 }
 
+// Gemini 3.x models spend output tokens on internal reasoning before writing
+// a single word, and those thinking tokens count against `maxOutputTokens` —
+// the same mechanism that cut chip-count JSON mid-string in v5.62.5. Chip
+// counting solved it with `thinkingBudget: 0`, which is right for extraction
+// and wrong here: forecasts and summaries are the text members actually read,
+// and taking away the model's reasoning to save tokens trades the wrong thing.
+// So give the answer room instead — retry the same model with a larger budget
+// before falling through to a weaker one. Unused budget costs nothing; you are
+// billed for tokens produced, not tokens allowed.
+const TOKEN_ESCALATION = [1, 4];
+const MAX_OUTPUT_TOKEN_CEILING = 32768;
+
+/**
+ * Cut a truncated response back to its last complete sentence.
+ *
+ * A summary that stops mid-word ("...בעוד אורן ביצע קאמבק של") reads as
+ * broken; the same text ending one sentence earlier just reads as short.
+ * Only used as a last resort, once every retry has still come back truncated.
+ * Returns the input unchanged when there is no sentence break to fall back to,
+ * or when trimming would throw away more than half the text.
+ */
+const trimToCompleteSentence = (text: string): string => {
+  const trimmed = text.trimEnd();
+  // Lookahead for whitespace/end so a decimal ("ממוצע 3.5") is not mistaken
+  // for a sentence break.
+  const breaks = [...trimmed.matchAll(/[.!?](?=\s|$)/g)];
+  if (!breaks.length) return trimmed;
+  const last = breaks[breaks.length - 1];
+  const end = (last.index ?? 0) + 1;
+  if (end === trimmed.length) return trimmed;
+  return end >= trimmed.length * 0.5 ? trimmed.slice(0, end) : trimmed;
+};
+
 /**
  * Centralized Gemini API call with automatic model fallback.
  * Tries each model in API_CONFIGS order; on 429/404/503/SAFETY/empty, falls back to the next.
+ * On a truncated response, retries the same model with a larger token budget.
  * Returns { text, model } on success, throws on total failure.
  */
 const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: string; model: string; usage?: Record<string, number> }> => {
@@ -98,124 +132,140 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
   let lastError = '';
   let fallbackFrom: string | undefined;
 
+  // Longest truncated answer seen across every model and budget. Kept only as
+  // a last resort, so a bad night degrades to a short summary rather than an
+  // error screen.
+  let bestPartial: { text: string; model: string; usage?: Record<string, number> } | null = null;
+
   for (const config of API_CONFIGS) {
-    console.log(`   ${label}: trying ${config.model}...`);
+    for (let attempt = 0; attempt < TOKEN_ESCALATION.length; attempt++) {
+      const budget = Math.min(maxOutputTokens * TOKEN_ESCALATION[attempt], MAX_OUTPUT_TOKEN_CEILING);
+      // Already at the ceiling — a retry would send the identical request.
+      if (attempt > 0 && budget <= Math.min(maxOutputTokens * TOKEN_ESCALATION[attempt - 1], MAX_OUTPUT_TOKEN_CEILING)) break;
+      console.log(`   ${label}: trying ${config.model}${attempt > 0 ? ` (retry, ${budget} tokens)` : ''}...`);
 
-    try {
-      const genConfig: Record<string, unknown> = { maxOutputTokens };
-      if (temperature !== undefined) genConfig.temperature = temperature;
-      if (topP !== undefined) genConfig.topP = topP;
-      if (topK !== undefined) genConfig.topK = topK;
-      if (responseMimeType) genConfig.responseMimeType = responseMimeType;
+      try {
+        const genConfig: Record<string, unknown> = { maxOutputTokens: budget };
+        if (temperature !== undefined) genConfig.temperature = temperature;
+        if (topP !== undefined) genConfig.topP = topP;
+        if (topK !== undefined) genConfig.topK = topK;
+        if (responseMimeType) genConfig.responseMimeType = responseMimeType;
 
-      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: genConfig,
-      });
+        const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: genConfig,
+        });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData?.error?.message || `Status ${response.status}`;
-        const errCode = errData?.error?.code;
-        console.warn(`   ${label}: ${config.model} failed: ${errMsg}`);
-        lastError = errMsg;
-        // Server-side gate: this group has no Gemini key configured AND
-        // isn't the platform-owner group, so the proxy refused the call
-        // (see `api/gemini.ts` v5.60.3+). Every fallback model would fail
-        // the same way — fail fast with the canonical NO_API_KEY sentinel
-        // so the calling screen renders the friendly "set your key" notice
-        // instead of cycling through retries and surfacing a red error.
-        if (response.status === 403 && (errCode === 'aiKeyRequired' || errMsg.includes('Gemini API key'))) {
-          throw new Error('NO_API_KEY');
-        }
-        // Synthesized 503 from `apiProxy.ts` when the /api/* Edge Function
-        // route doesn't exist in this environment (typically: localhost dev
-        // server). Every fallback model would hit the same wall — fail fast
-        // with a clean sentinel so the calling screen renders the
-        // "AI proxy unavailable" notice instead of cycling through retries.
-        if (response.status === 503 && errCode === 'aiProxyUnavailable') {
-          throw new Error('AI_PROXY_UNAVAILABLE');
-        }
-        if (response.status === 429) {
-          const rlHeaders = readRateLimitHeaders(response);
-          recordRateLimit(config.model, rlHeaders, errMsg);
-          if (!fallbackFrom) fallbackFrom = config.model;
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `Status ${response.status}`;
+          const errCode = errData?.error?.code;
+          console.warn(`   ${label}: ${config.model} failed: ${errMsg}`);
+          lastError = errMsg;
+          // Server-side gate: this group has no Gemini key configured AND
+          // isn't the platform-owner group, so the proxy refused the call
+          // (see `api/gemini.ts` v5.60.3+). Every fallback model would fail
+          // the same way — fail fast with the canonical NO_API_KEY sentinel
+          // so the calling screen renders the friendly "set your key" notice
+          // instead of cycling through retries and surfacing a red error.
+          if (response.status === 403 && (errCode === 'aiKeyRequired' || errMsg.includes('Gemini API key'))) {
+            throw new Error('NO_API_KEY');
+          }
+          // Synthesized 503 from `apiProxy.ts` when the /api/* Edge Function
+          // route doesn't exist in this environment (typically: localhost dev
+          // server). Every fallback model would hit the same wall — fail fast
+          // with a clean sentinel so the calling screen renders the
+          // "AI proxy unavailable" notice instead of cycling through retries.
+          if (response.status === 503 && errCode === 'aiProxyUnavailable') {
+            throw new Error('AI_PROXY_UNAVAILABLE');
+          }
+          if (response.status === 429) {
+            const rlHeaders = readRateLimitHeaders(response);
+            recordRateLimit(config.model, rlHeaders, errMsg);
+            if (!fallbackFrom) fallbackFrom = config.model;
+            continue;
+          }
+          if (response.status === 404 || response.status === 503) {
+            if (!fallbackFrom) fallbackFrom = config.model;
+            continue;
+          }
+          if (response.status === 400 && errMsg.includes('API key')) throw new Error('INVALID_API_KEY');
           continue;
         }
-        if (response.status === 404 || response.status === 503) {
-          if (!fallbackFrom) fallbackFrom = config.model;
+
+        const data = await response.json();
+        const candidate = data?.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+
+        if (finishReason === 'SAFETY') {
+          console.warn(`   ${label}: ${config.model} blocked by safety filter`);
+          lastError = 'Safety filter';
           continue;
         }
-        if (response.status === 400 && errMsg.includes('API key')) throw new Error('INVALID_API_KEY');
-        continue;
-      }
 
-      const data = await response.json();
-      const candidate = data?.candidates?.[0];
-      const finishReason = candidate?.finishReason;
+        const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+        const text = parts
+          .map((p: { text?: string }) => (typeof p?.text === 'string' ? p.text : ''))
+          .join('')
+          .trim();
 
-      if (finishReason === 'SAFETY') {
-        console.warn(`   ${label}: ${config.model} blocked by safety filter`);
-        lastError = 'Safety filter';
-        continue;
-      }
+        const usage = data?.usageMetadata ? {
+          promptTokens: data.usageMetadata.promptTokenCount || 0,
+          outputTokens: data.usageMetadata.candidatesTokenCount || 0,
+          thinkingTokens: data.usageMetadata.thoughtsTokenCount || 0,
+          totalTokens: data.usageMetadata.totalTokenCount || 0,
+        } : undefined;
 
-      const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
-      const text = parts
-        .map((p: { text?: string }) => (typeof p?.text === 'string' ? p.text : ''))
-        .join('')
-        .trim();
-
-      if (finishReason === 'MAX_TOKENS') {
-        if (text.length >= 60) {
-          console.warn(`   ${label}: ${config.model} MAX_TOKENS — נשמר טקסט חלקי (${text.length} תווים)`);
-          lastUsedModel = config.model;
-          const usage = data?.usageMetadata ? {
-            promptTokens: data.usageMetadata.promptTokenCount || 0,
-            outputTokens: data.usageMetadata.candidatesTokenCount || 0,
-            thinkingTokens: data.usageMetadata.thoughtsTokenCount || 0,
-            totalTokens: data.usageMetadata.totalTokenCount || 0,
-          } : undefined;
-          const rlHeaders = readRateLimitHeaders(response);
-          recordSuccess(config.model, label, usage?.totalTokens, fallbackFrom, rlHeaders);
-          return { text, model: config.model, usage };
+        // Truncated. This used to ship as-is whenever 60+ characters had made it
+        // through, which is how members ended up reading a summary that stopped
+        // mid-word. Keep it aside and retry with more room instead.
+        if (finishReason === 'MAX_TOKENS') {
+          if (text.length > (bestPartial?.text.length ?? 0)) {
+            bestPartial = { text, model: config.model, usage };
+          }
+          console.warn(`   ${label}: ${config.model} truncated at ${budget} tokens (${usage?.thinkingTokens ?? '?'} spent thinking, ${text.length} chars written)`);
+          lastError = 'Token limit exceeded';
+          continue;
         }
-        console.warn(`   ${label}: ${config.model} hit token limit with empty/short output, trying next`);
-        lastError = 'Token limit exceeded';
+
+        if (!text) {
+          console.warn(`   ${label}: ${config.model} returned empty response`);
+          lastError = 'Empty response';
+          continue;
+        }
+
+        console.log(`   ${label}: ✅ ${config.model} responded (${text.length} chars)`);
+        lastUsedModel = config.model;
+
+        const rlHeaders = readRateLimitHeaders(response);
+        recordSuccess(config.model, label, usage?.totalTokens, fallbackFrom, rlHeaders);
+
+        return { text, model: config.model, usage };
+      } catch (err) {
+        if (err instanceof Error && (
+          err.message === 'INVALID_API_KEY' ||
+          err.message === 'NO_API_KEY' ||
+          err.message === 'AI_PROXY_UNAVAILABLE'
+        )) throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`   ${label}: ${config.model} error: ${msg}`);
+        lastError = msg;
         continue;
       }
-
-      if (!text) {
-        console.warn(`   ${label}: ${config.model} returned empty response`);
-        lastError = 'Empty response';
-        continue;
-      }
-
-      console.log(`   ${label}: ✅ ${config.model} responded (${text.length} chars)`);
-      lastUsedModel = config.model;
-
-      const usage = data?.usageMetadata ? {
-        promptTokens: data.usageMetadata.promptTokenCount || 0,
-        outputTokens: data.usageMetadata.candidatesTokenCount || 0,
-        thinkingTokens: data.usageMetadata.thoughtsTokenCount || 0,
-        totalTokens: data.usageMetadata.totalTokenCount || 0,
-      } : undefined;
-
-      const rlHeaders = readRateLimitHeaders(response);
-      recordSuccess(config.model, label, usage?.totalTokens, fallbackFrom, rlHeaders);
-
-      return { text, model: config.model, usage };
-    } catch (err) {
-      if (err instanceof Error && (
-        err.message === 'INVALID_API_KEY' ||
-        err.message === 'NO_API_KEY' ||
-        err.message === 'AI_PROXY_UNAVAILABLE'
-      )) throw err;
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`   ${label}: ${config.model} error: ${msg}`);
-      lastError = msg;
-      continue;
     }
+  }
+
+  // Every model at every budget came back truncated. A short answer that ends
+  // cleanly still beats an error, so ship the longest one — trimmed back to a
+  // full sentence, because a dangling fragment is what this whole path exists
+  // to prevent. JSON callers are left untrimmed: a partial object cannot be
+  // repaired by cutting it, and they have their own fallbacks.
+  if (bestPartial && bestPartial.text.length >= 60) {
+    const text = responseMimeType ? bestPartial.text : trimToCompleteSentence(bestPartial.text);
+    console.warn(`   ${label}: every model truncated — shipping ${text.length} chars from ${bestPartial.model}`);
+    lastUsedModel = bestPartial.model;
+    recordSuccess(bestPartial.model, label, bestPartial.usage?.totalTokens, fallbackFrom);
+    return { ...bestPartial, text };
   }
 
   throw new Error(`ALL_MODELS_FAILED: ${lastError}`);
@@ -1785,7 +1835,10 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           // Sampling left at the model's defaults on purpose — see the
           // note in callWithFallback. Forecast text is the most-read AI
           // output in the app and the 3.x line reasons best untouched.
-          maxOutputTokens: 12288,
+          // Budget is deliberately far above the ~3k tokens a full roster's
+          // JSON needs: thinking is charged here too, and running out mid-
+          // object costs the entire forecast, not one sentence.
+          maxOutputTokens: 24576,
           responseMimeType: 'application/json',
         }
       });
@@ -1842,13 +1895,18 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 
       const data = await response.json();
       const forecastTokens = data?.usageMetadata?.totalTokenCount || 0;
-      
-      // Extract the text from Gemini response
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
+      const finishReason = data.candidates?.[0]?.finishReason;
+
+      // Join every part. A thinking model can split its answer across parts,
+      // and reading only the first silently drops the rest.
+      const parts = data.candidates?.[0]?.content?.parts;
+      const text = Array.isArray(parts)
+        ? parts.map((p: { text?: string }) => (typeof p?.text === 'string' ? p.text : '')).join('')
+        : undefined;
+
       if (!text) {
         console.error('❌ Empty response from', config.model);
-        if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        if (finishReason === 'SAFETY') {
           continue; // Try next model
         }
         continue; // Try next model
@@ -1879,7 +1937,14 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         console.log('✅ Parsed', aiOutput.length, 'forecasts from AI');
         if (preGameTeaser) console.log('🌟 Pre-game teaser:', preGameTeaser.substring(0, 80) + '...');
       } catch (parseError) {
-        console.error('❌ JSON parse error, trying next model');
+        // Truncated JSON and malformed JSON both land here, but they need
+        // different responses from a human reading the console: one means the
+        // budget was too small, the other means the model ignored the schema.
+        if (finishReason === 'MAX_TOKENS') {
+          console.error(`❌ ${config.model} ran out of output budget before closing the JSON (${data?.usageMetadata?.thoughtsTokenCount ?? '?'} tokens spent thinking) — trying next model`);
+        } else {
+          console.error('❌ JSON parse error, trying next model');
+        }
         continue; // Try next model
       }
 
@@ -2592,7 +2657,9 @@ ${buildTraitBlock(comparisons.map(c => c.name))}
     const result = await callWithFallback({
       prompt,
       apiKey,
-      maxOutputTokens: 1024,
+      // 1024 was set before the chain moved to thinking models. Reasoning
+      // alone can exceed that, leaving the one-sentence verdict cut in half.
+      maxOutputTokens: 4096,
       label: 'Forecast comparison',
     });
     return result.text;
@@ -2779,7 +2846,10 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
   const result = await callWithFallback({
     prompt,
     apiKey,
-    maxOutputTokens: 4096,
+    // The summary runs 60-120 words plus optional period paragraphs (~1k
+    // tokens), but thinking is charged to the same budget and can eat several
+    // thousand on its own — which is what cut summaries off mid-sentence.
+    maxOutputTokens: 8192,
     label: 'AI summary',
   });
 

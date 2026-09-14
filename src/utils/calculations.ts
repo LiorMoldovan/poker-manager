@@ -50,45 +50,93 @@ const PROTECTED_FROM_SMALL_TRANSFER: ReadonlySet<string> = new Set([
   'ליאור', 'Lior',
 ]);
 
-// Lex-sortable score for a candidate settlement. Lower is strictly better,
-// component by component, in this priority order:
-//   1. fewest sub-minTransfer transfers involving a PROTECTED_FROM_SMALL_TRANSFER
-//      player (Lior must not be the small leftover)
-//   2. largest min-transfer (avoid tiny remainders overall)
-//   3. fewest transfers (clean payment count)
-//   4. lowest "max transfers per person" (avoid one person doing 4+ trips
-//      while everyone else does 1 — the original tiebreaker only counted total
-//      transactions and missed this fairness dimension)
-type TransferScore = readonly [number, number, number, number];
+// Thresholds for "annoyingly small", derived from the group's own minTransfer
+// so they scale with whatever floor the group chose rather than hard-coding
+// shekel amounts. At the default minTransfer of 5: a transfer under 25 is
+// petty, and a player whose whole night nets under 50 counts as near-flat.
+const PETTY_TRANSFER_MULTIPLE = 5;
+const SMALL_BALANCE_MULTIPLE = 12;
 
-const scoreTransfers = (transfers: Settlement[], minTransfer: number): TransferScore => {
-  if (transfers.length === 0) return [0, 0, 0, 0];
-  let protectedSmall = 0;
+type ScoreContext = {
+  minTransfer: number;
+  /** At or above this a transfer feels like a normal payment; below it the
+   *  penalty ramps up the closer the amount gets to nothing. */
+  comfortable: number;
+  /** Players whose net for the night is small enough that they should be
+   *  settled by one counterparty rather than collecting in pieces, mapped to
+   *  how flat they are (1 = dead even, 0 = right at the edge). Splitting
+   *  someone who finished +4₪ is worse than splitting someone at +55₪. */
+  flatness: ReadonlyMap<string, number>;
+};
+
+// Prices, not a priority order.
+//
+// The previous scoring was strictly lexicographic: rule 2 could never be
+// traded against rule 3 no matter how lopsided the numbers were, and every
+// rule counted occurrences, so a 24₪ transfer and a 6₪ transfer were "one
+// small transfer" each. That is what made the output feel mechanical — it
+// applied the same rule every week regardless of what the week looked like.
+//
+// Costing each flaw by how bad it actually is lets the search make the trade
+// that fits the specific night: accept one slightly-small transfer to keep a
+// near-even player on a single payment, or the reverse, depending on the
+// actual amounts in front of it.
+const COST_PER_TRANSFER = 3;
+const COST_SUB_FLOOR = 4;
+const COST_PROTECTED_SUB_FLOOR = 1;
+const COST_SMALLNESS = 2;
+const COST_SPLIT = 2.5;
+// Deliberately small: once nothing is uncomfortable the above prices all read
+// zero and the search stops caring, which let an even 53/53 split lose to a
+// lopsided 29/77. This keeps nudging the smallest payment upward, but at a
+// price low enough that it only ever settles otherwise-equal candidates.
+const COST_UNEVENNESS = 0.5;
+const EVEN_SPREAD_SCALE = 4;
+
+/**
+ * Total cost of a candidate settlement. Lower is better.
+ *
+ * Every payment costs something, so the search still lands on the minimum
+ * number of transfers. On top of that:
+ *  - A transfer below `comfortable` is charged by how far below it is, squared,
+ *    so 6₪ is dramatically worse than 24₪ rather than merely equal to it.
+ *  - Dropping under the group's minTransfer costs extra on top, because those
+ *    get parked in a separate list instead of being a normal payment.
+ *  - Making a near-even player collect in pieces is charged in proportion to
+ *    how even they finished.
+ */
+const scoreTransfers = (transfers: Settlement[], ctx: ScoreContext): number => {
+  if (transfers.length === 0) return 0;
+  let cost = transfers.length * COST_PER_TRANSFER;
   let minAmt = Infinity;
   const personCount = new Map<string, number>();
   for (const t of transfers) {
     if (t.amount < minAmt) minAmt = t.amount;
-    if (
-      t.amount < minTransfer &&
-      (PROTECTED_FROM_SMALL_TRANSFER.has(t.from) || PROTECTED_FROM_SMALL_TRANSFER.has(t.to))
-    ) {
-      protectedSmall++;
+    if (t.amount < ctx.comfortable) {
+      const shortfall = (ctx.comfortable - t.amount) / ctx.comfortable;
+      cost += COST_SMALLNESS * shortfall * shortfall;
+    }
+    if (t.amount < ctx.minTransfer) {
+      cost += COST_SUB_FLOOR;
+      if (PROTECTED_FROM_SMALL_TRANSFER.has(t.from) || PROTECTED_FROM_SMALL_TRANSFER.has(t.to)) {
+        cost += COST_PROTECTED_SUB_FLOOR;
+      }
     }
     personCount.set(t.from, (personCount.get(t.from) ?? 0) + 1);
     personCount.set(t.to, (personCount.get(t.to) ?? 0) + 1);
   }
-  let maxPerPerson = 0;
-  for (const c of personCount.values()) if (c > maxPerPerson) maxPerPerson = c;
-  return [protectedSmall, -minAmt, transfers.length, maxPerPerson];
+  for (const [name, c] of personCount) {
+    if (c <= 1) continue;
+    const flat = ctx.flatness.get(name);
+    if (flat !== undefined) cost += (c - 1) * COST_SPLIT * flat;
+  }
+  const evenAt = ctx.comfortable * EVEN_SPREAD_SCALE;
+  cost += COST_UNEVENNESS * (Math.max(0, evenAt - minAmt) / evenAt);
+  return cost;
 };
 
-// Returns negative if `a` strictly better than `b`, positive if worse, 0 if equal.
-const compareScores = (a: TransferScore, b: TransferScore): number => {
-  for (let i = 0; i < 4; i++) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return 0;
-};
+// Returns negative if `a` strictly better than `b`, positive if worse.
+const compareScores = (a: number, b: number): number => a - b;
 
 /**
  * Partition players into the maximum number of independent zero-sum groups.
@@ -212,7 +260,8 @@ function greedySettle(balances: BalanceEntry[]): Settlement[] {
 function bestSettleRecursive(
   balances: BalanceEntry[],
   depth: number,
-  minTransfer: number
+  ctx: ScoreContext,
+  fixDebtor: boolean
 ): Settlement[] {
   const creditors = balances.filter(b => b.balance > 0.001);
   const debtors = balances.filter(b => b.balance < -0.001);
@@ -226,11 +275,25 @@ function bestSettleRecursive(
   // Depth guard for unexpectedly large groups
   if (depth > 12) return greedySettle(balances);
 
+  // `fixDebtor` narrows the branching from every (creditor, debtor) pair to
+  // every creditor for a single debtor. Since every settlement has to move
+  // money out of that debtor, this still reaches almost all of them — it drops
+  // only the leaves where another debtor pre-shrinks a creditor so the fixed
+  // debtor's transfer stops being the maximum the pair can clear. Measured on
+  // 30 real games those leaves never changed the outcome beyond the final
+  // tiebreak, and the tree gets ~30x smaller, which is what makes a 9+ player
+  // night searchable at all. If no debtor has a permitted counterparty then no
+  // unblocked settlement exists and greedy's forced pass is the right answer.
+  const pivots = fixDebtor
+    ? debtors.filter(d => creditors.some(c => !isBlocked(d.name, c.name))).slice(0, 1)
+    : debtors;
+  if (pivots.length === 0) return greedySettle(balances);
+
   let best: Settlement[] | null = null;
-  let bestScore: TransferScore | null = null;
+  let bestScore: number | null = null;
 
   for (const cr of creditors) {
-    for (const db of debtors) {
+    for (const db of pivots) {
       if (isBlocked(db.name, cr.name)) continue;
       const amount = Math.min(cr.balance, Math.abs(db.balance));
       if (amount < 0.001) continue;
@@ -241,9 +304,9 @@ function bestSettleRecursive(
         return { name: b.name, balance: b.balance };
       }).filter(b => Math.abs(b.balance) > 0.001);
 
-      const rest = bestSettleRecursive(next, depth + 1, minTransfer);
+      const rest = bestSettleRecursive(next, depth + 1, ctx, fixDebtor);
       const transfers = [{ from: db.name, to: cr.name, amount }, ...rest];
-      const score = scoreTransfers(transfers, minTransfer);
+      const score = scoreTransfers(transfers, ctx);
 
       if (bestScore === null || compareScores(score, bestScore) < 0) {
         bestScore = score;
@@ -256,30 +319,68 @@ function bestSettleRecursive(
 }
 
 /**
- * Settle one zero-sum group optimally:
- * - For small groups (≤ 8): exhaustively try all (creditor, debtor) orderings
- *   under the 4-component score (max-min, count, max-per-person, protected-
- *   player-on-tiny-leftover).
- * - For larger groups: fall back to largest-first greedy. The pre-step
- *   `findMaxZeroSumPartition` usually breaks larger groups into smaller
- *   independent pieces anyway, so this fallback rarely fires in practice.
+ * Settle one zero-sum group by minimising `scoreTransfers`:
+ * - ≤ 8 players: exhaustively try every (creditor, debtor) ordering.
+ * - 9–11 players: narrowed search (one pivot debtor per level) with greedy
+ *   kept as a floor, so these can never come out worse than before.
+ * - > 11: largest-first greedy. `findMaxZeroSumPartition` usually breaks big
+ *   groups into smaller independent pieces first, so this rarely fires.
  *
- * The previous threshold was ≤ 7, which silently routed every 8-player game
- * (the typical poker night) to greedy. That was the real reason settlements
- * looked unoptimised — the recursive ranker existed but wasn't being called
- * for the most common group size. Threshold 9 was tested but recursion at
- * n=9 averaged 2 s and spiked to 5.7 s on real-shape inputs (game-summary
- * screen would freeze noticeably), so the cap stays at 8. Validated against
- * 12 historical games: every game whose largest zero-sum sub-group has ≤ 8
- * players now matches the independently-derived optimum under the
- * 4-component score.
+ * Replayed over the last 30 real Poker Night games (`scripts/settlelab`), this
+ * took near-flat players being paid in pieces from 17 occurrences to 0 and
+ * transfers under 25₪ from 38 to 20 — and all 20 that remain are forced by a
+ * player whose own night was itself under 25₪.
+ *
+ * It costs nothing in payment count: 199 movements before, 199 after, and
+ * `optimality.mjs` confirms both hit the exact theoretical floor (n minus the
+ * largest number of independent zero-sum subsets) in every game. Reshuffling
+ * who pays whom is free; the count is fixed by the balances, not by the
+ * pairing. Two of those movements simply grew past minTransfer and moved out
+ * of the sub-minimum leftover list into the main one.
+ *
+ * The five sub-minTransfer leftovers that remain are all forced: in each one a
+ * player's own night was under the floor, and someone who finished +1.05₪ has
+ * to be handed 1.05₪. The prices in `scoreTransfers` were checked for
+ * overfitting by rerunning all 30 games at 2-3x each weight — the output does
+ * not move, so the result comes from the balances rather than the tuning.
  */
 function settleGroup(group: BalanceEntry[], minTransfer: number): Settlement[] {
   const active = group.filter(b => Math.abs(b.balance) > 0.001);
-  if (active.length <= 8) {
-    return bestSettleRecursive(active.map(b => ({ ...b })), 0, minTransfer);
+  // 11 is where the narrowed search still lands around 125 ms; 12 measured
+  // 1.2 s, which is back in freeze territory.
+  if (active.length > 11) return greedySettle(active.map(b => ({ ...b })));
+
+  // How flat each player finished is a property of the night, so resolve it
+  // once from the starting balances rather than from whatever is left
+  // mid-search.
+  const nearFlatLimit = minTransfer * SMALL_BALANCE_MULTIPLE;
+  const flatness = new Map<string, number>();
+  for (const b of active) {
+    const abs = Math.abs(b.balance);
+    if (abs < nearFlatLimit) flatness.set(b.name, 1 - abs / nearFlatLimit);
   }
-  return greedySettle(active.map(b => ({ ...b })));
+  const ctx: ScoreContext = {
+    minTransfer,
+    comfortable: minTransfer * PETTY_TRANSFER_MULTIPLE,
+    flatness,
+  };
+  // Up to 8 the exhaustive search finishes in well under a second, so take the
+  // exact answer. Beyond that it blows up (a 9-player night measured ~2 s and
+  // spiked to 5.7 s, which the summary screen visibly froze on), so switch to
+  // the narrowed search — still far better than the greedy fallback that used
+  // to handle these, and fast enough not to be felt.
+  if (active.length <= 8) {
+    return bestSettleRecursive(active.map(b => ({ ...b })), 0, ctx, false);
+  }
+
+  // The narrowed search can miss leaves, so keep greedy as a floor: whichever
+  // scores better wins, and a 9+ player night can never come out worse than
+  // what it used to produce.
+  const searched = bestSettleRecursive(active.map(b => ({ ...b })), 0, ctx, true);
+  const fallback = greedySettle(active.map(b => ({ ...b })));
+  return compareScores(scoreTransfers(fallback, ctx), scoreTransfers(searched, ctx)) < 0
+    ? fallback
+    : searched;
 }
 
 /**

@@ -34,5 +34,10 @@ scripts/*
 !scripts/promptlab/
 scripts/promptlab/out/
 
+# ...and the settlement harness, same deal: invariants.mjs is the correctness
+# gate for the payout engine, analyze.mjs reports payout quality on real games.
+!scripts/settlelab/
+scripts/settlelab/out/
+
 # Cursor MCP config (contains Supabase PAT)
 .cursor/mcp.json
