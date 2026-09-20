@@ -19,6 +19,8 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
   const [loading, setLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [waitingForDevAuth, setWaitingForDevAuth] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [launchMsg, setLaunchMsg] = useState('');
 
   const isEmbeddedWebview = typeof window !== 'undefined' && (
     window.self !== window.top ||
@@ -280,33 +282,121 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
             {waitingForDevAuth && (
               <div style={{
                 marginTop: '1rem',
-                padding: '0.75rem',
+                padding: '0.85rem',
                 borderRadius: '8px',
                 background: 'rgba(59, 130, 246, 0.1)',
                 border: '1px solid rgba(59, 130, 246, 0.3)',
                 textAlign: 'center',
                 fontSize: '0.8rem',
               }}>
-                <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.3rem' }}>
-                  🌐 פותח את Chrome להתחברות עם Google...
+                <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
+                  🌐 התחברות עם Google דרך הדפדפן
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                  התחבר ב-Chrome עם חשבון ה-Google שלך, וה-UI כאן יתחבר אוטומטית מיד!
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4, marginBottom: '0.6rem' }}>
+                  בשל מדיניות האבטחה של גוגל שחוסמת דפדפנים פנימיים ב-IDE, פתח את Chrome במחשב והיכנס לכתובת:
                 </div>
-                <a
-                  href="http://localhost:3000/?dev_bridge=1"
-                  target="_blank"
-                  rel="noreferrer"
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  background: 'var(--surface)',
+                  padding: '0.4rem 0.6rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  marginBottom: '0.6rem',
+                  direction: 'ltr',
+                }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>
+                    http://localhost:3000
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('http://localhost:3000');
+                      setCopiedAddress(true);
+                      setTimeout(() => setCopiedAddress(false), 2000);
+                    }}
+                    style={{
+                      background: copiedAddress ? 'var(--success)' : 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {copiedAddress ? '✓ הועתק' : 'העתק'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setLaunchMsg('✓ נשלחה פקודה לפתיחת הדפדפן במחשב...');
+                        await fetch('/__dev_open_chrome', { method: 'POST' });
+                        setTimeout(() => setLaunchMsg(''), 4000);
+                      } catch {
+                        setLaunchMsg('לא ניתן להפעיל פקודה, נא לפתוח את Chrome ידנית.');
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      color: 'var(--primary)',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      borderRadius: '6px',
+                      padding: '0.4rem 0.75rem',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    🚀 לחץ כאן לפתיחת Chrome במחשב
+                  </button>
+                  {launchMsg && (
+                    <div style={{ color: 'var(--success)', fontSize: '0.7rem', fontWeight: 500 }}>
+                      {launchMsg}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginBottom: '0.6rem' }}>
+                  התחבר שם עם Google – והמסך כאן ב-IDE יתחבר אוטומטית!
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('/__dev_auth_sync').then(r => r.json());
+                      if (res?.access_token && res?.refresh_token) {
+                        await supabase.auth.setSession({
+                          access_token: res.access_token,
+                          refresh_token: res.refresh_token,
+                        });
+                      } else {
+                        setError('טרם זוהתה התחברות. אנא פתח את Chrome ב-localhost:3000 והתחבר שם תחילה.');
+                      }
+                    } catch {
+                      setError('שגיאה בתקשורת עם השרת המקומי.');
+                    }
+                  }}
                   style={{
-                    display: 'inline-block',
-                    marginTop: '0.5rem',
+                    background: 'transparent',
                     color: 'var(--primary)',
+                    border: '1px solid var(--primary)',
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.75rem',
                     fontSize: '0.75rem',
-                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    fontWeight: 600,
                   }}
                 >
-                  לא נפתח? לחץ כאן לפתיחה ישירה ב-Chrome
-                </a>
+                  🔄 בדוק סנכרון עכשיו
+                </button>
               </div>
             )}
           </>

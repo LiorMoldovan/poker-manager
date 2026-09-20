@@ -74,7 +74,16 @@ export default defineConfig({
 
           if (url.pathname === '/__dev_open_chrome') {
             const targetUrl = 'http://localhost:3000/?dev_bridge=1'
-            exec(`start "" "${targetUrl}"`, () => {})
+            const cmd = process.platform === 'win32'
+              ? `cmd.exe /c start "" "${targetUrl}"`
+              : process.platform === 'darwin'
+              ? `open "${targetUrl}"`
+              : `xdg-open "${targetUrl}"`
+            exec(cmd, (err) => {
+              if (err && process.platform === 'win32') {
+                exec(`explorer.exe "${targetUrl}"`, () => {})
+              }
+            })
             res.writeHead(200, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ ok: true }))
             return
