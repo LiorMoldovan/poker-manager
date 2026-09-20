@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.34.0';
+export const APP_VERSION = '6.34.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.34.1',
+    date: '2026-09-21',
+    changes: [
+      '⚡ Align location totals with rounded games',
+    ],
+  },
   {
     version: '6.34.0',
     date: '2026-09-21',

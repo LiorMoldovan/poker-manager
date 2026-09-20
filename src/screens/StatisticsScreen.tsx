@@ -2013,15 +2013,17 @@ const StatisticsScreen = () => {
       let totalProfit = 0;
       for (const [loc, data] of locMap.entries()) {
         const sortedGames = [...data.gameList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Sum of rounded individual games so the visual total matches the game list rows 100%
+        const visualProfit = sortedGames.reduce((sum, g) => sum + Math.round(g.profit), 0);
         cells.set(loc, {
           games: data.games,
-          profit: data.profit,
+          profit: visualProfit,
           wins: data.wins,
-          avg: data.games > 0 ? data.profit / data.games : 0,
+          avg: data.games > 0 ? visualProfit / data.games : 0,
           winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
           gameList: sortedGames,
         });
-        totalProfit += data.profit;
+        totalProfit += visualProfit;
       }
       return { playerName, totalProfit, cells };
     });
