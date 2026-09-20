@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.32.0';
+export const APP_VERSION = '6.33.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.33.0',
+    date: '2026-09-20',
+    changes: [
+      '📍 Location performance comparison matrix in stats',
+      '👑 Best earner highlight per game location',
+      '📸 Image share button for location matrix',
+    ],
+  },
   {
     version: '6.32.0',
     date: '2026-09-14',

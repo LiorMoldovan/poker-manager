@@ -145,6 +145,7 @@ const StatisticsScreen = () => {
   const [isSharingWorstNights, setIsSharingWorstNights] = useState(false);
   const [isSharingWorstMonths, setIsSharingWorstMonths] = useState(false);
   const [isSharingOtherRecords, setIsSharingOtherRecords] = useState(false);
+  const [isSharingLocationMatrix, setIsSharingLocationMatrix] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const top10Ref = useRef<HTMLDivElement>(null);
@@ -175,6 +176,8 @@ const StatisticsScreen = () => {
   const top10ActiveToggleRef = useRef<HTMLDivElement>(null);
   const rebuyActiveToggleRef = useRef<HTMLDivElement>(null);
   const avgPlacementActiveToggleRef = useRef<HTMLDivElement>(null);
+  const locationMatrixRef = useRef<HTMLDivElement>(null);
+  const locationMatrixControlsRef = useRef<HTMLDivElement>(null);
 
   // Per-table override of the "active only" filter. Each table in the
   // טבלה view gets its own toggle that defaults to mirroring the global
@@ -186,7 +189,7 @@ const StatisticsScreen = () => {
   // `selectedPlayers` was auto-clamped by global at useEffect time and
   // override means "show this table as if global were the override
   // value".
-  type ActiveOverrideTableId = 'main' | 'podium' | 'top10' | 'rebuy' | 'avgPlacement';
+  type ActiveOverrideTableId = 'main' | 'podium' | 'top10' | 'rebuy' | 'avgPlacement' | 'locationMatrix';
   const [tableActiveOverrides, setTableActiveOverrides] = useState<Partial<Record<ActiveOverrideTableId, boolean>>>({});
   const getEffectiveActive = (id: ActiveOverrideTableId): boolean =>
     tableActiveOverrides[id] ?? filterActiveOnly;
@@ -427,6 +430,20 @@ const StatisticsScreen = () => {
     finally {
       restoreToggle();
       setIsSharingAvgPlacement(false);
+    }
+  };
+
+  const handleShareLocationMatrix = async () => {
+    if (!locationMatrixRef.current) return;
+    setIsSharingLocationMatrix(true);
+    const restoreControls = hideForCapture(locationMatrixControlsRef.current);
+    try {
+      const files = await captureAndSplit(locationMatrixRef.current, 'poker-location-performance');
+      await shareFiles(files, t('stats.locationPerformance'));
+    } catch (e) { console.error('Error sharing location matrix:', e); }
+    finally {
+      restoreControls();
+      setIsSharingLocationMatrix(false);
     }
   };
 
@@ -1871,7 +1888,6 @@ const StatisticsScreen = () => {
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tablePeriodOverrides.avgPlacement, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey, stats]);
-
   // Avg-placement rows — uses 'avgPlacement' effective flag, sorted
   // by avg rank ascending (lower = better finishes).
   const avgPlacementTableRows = useMemo(() => {
@@ -1884,6 +1900,109 @@ const StatisticsScreen = () => {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableActiveOverrides.avgPlacement, tablePeriodOverrides.avgPlacement, filterActiveOnly, avgPlacementStats, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+
+  // ── Location Performance Matrix ──────────────────────────────────
+  // Player × Location heatmap data. Each cell holds { games, profit,
+  // avg, winRate } for that player at that location. `locations` lists
+  // the distinct hosting places in the period (sorted by game count,
+  // "no location" pinned last). `playerRows` lists players sorted by
+  // total profit across all locations. `kings` maps locationKey → the
+  // playerName with the highest profit there (for the 👑 icon).
+  type LocationCell = { games: number; profit: number; avg: number; winRate: number };
+  type LocationMatrixRow = { playerName: string; totalProfit: number; cells: Map<string, LocationCell> };
+
+  const locationMatrixData = useMemo(() => {
+    const override = tablePeriodOverrides.locationMatrix;
+    const dateFilter = override ? getDateFilterForPreset(override) : getDateFilter();
+    // This table ignores the global locationFilter on purpose — the
+    // whole point is comparing ACROSS locations, so filtering to a
+    // single place would produce a single-column table.
+    const periodGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, null));
+    if (periodGames.length === 0) return { locations: [] as { key: string; games: number }[], playerRows: [] as LocationMatrixRow[], kings: new Map<string, string>() };
+
+    // Build per-location game sets
+    const gamesByLoc = new Map<string, Set<string>>();
+    for (const g of periodGames) {
+      const key = getGameLocationKey(g);
+      const set = gamesByLoc.get(key);
+      if (set) set.add(g.id);
+      else gamesByLoc.set(key, new Set([g.id]));
+    }
+
+    // Sort locations: most games first, "no location" last
+    const locations = Array.from(gamesByLoc.entries())
+      .map(([key, ids]) => ({ key, games: ids.size }))
+      .sort((a, b) => {
+        if (a.key === NO_LOCATION_KEY) return 1;
+        if (b.key === NO_LOCATION_KEY) return -1;
+        return b.games - a.games || a.key.localeCompare(b.key, 'he');
+      });
+
+    // Aggregate per player × location
+    const periodGameIds = new Set(periodGames.map(g => g.id));
+    const periodGP = getAllGamePlayers().filter(gp => periodGameIds.has(gp.gameId));
+
+    // gameId → locationKey lookup
+    const gameLocMap = new Map<string, string>();
+    for (const g of periodGames) gameLocMap.set(g.id, getGameLocationKey(g));
+
+    // Accumulate
+    const acc = new Map<string, Map<string, { games: number; profit: number; wins: number }>>();
+    for (const gp of periodGP) {
+      const loc = gameLocMap.get(gp.gameId);
+      if (!loc) continue;
+      let playerMap = acc.get(gp.playerName);
+      if (!playerMap) { playerMap = new Map(); acc.set(gp.playerName, playerMap); }
+      let cell = playerMap.get(loc);
+      if (!cell) { cell = { games: 0, profit: 0, wins: 0 }; playerMap.set(loc, cell); }
+      cell.games++;
+      cell.profit += gp.profit;
+      if (gp.profit > 0) cell.wins++;
+    }
+
+    // Build rows
+    const playerRows: LocationMatrixRow[] = Array.from(acc.entries()).map(([playerName, locMap]) => {
+      const cells = new Map<string, LocationCell>();
+      let totalProfit = 0;
+      for (const [loc, data] of locMap.entries()) {
+        cells.set(loc, {
+          games: data.games,
+          profit: data.profit,
+          avg: data.games > 0 ? data.profit / data.games : 0,
+          winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
+        });
+        totalProfit += data.profit;
+      }
+      return { playerName, totalProfit, cells };
+    });
+
+    // Kings: highest profit per location
+    const kings = new Map<string, string>();
+    for (const loc of locations) {
+      let bestProfit = -Infinity;
+      let bestName = '';
+      for (const row of playerRows) {
+        const cell = row.cells.get(loc.key);
+        if (cell && cell.profit > bestProfit) {
+          bestProfit = cell.profit;
+          bestName = row.playerName;
+        }
+      }
+      if (bestProfit > 0) kings.set(loc.key, bestName);
+    }
+
+    return { locations, playerRows, kings };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablePeriodOverrides.locationMatrix, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, stats]);
+
+  // Filtered + sorted rows for the location matrix — uses the
+  // 'locationMatrix' active/period override pair.
+  const locationMatrixRows = useMemo(() => {
+    const visible = visibleNamesForTable('locationMatrix');
+    const rows = locationMatrixData.playerRows.filter(r => visible.has(r.playerName));
+    return [...rows].sort((a, b) => b.totalProfit - a.totalProfit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableActiveOverrides.locationMatrix, tablePeriodOverrides.locationMatrix, filterActiveOnly, locationMatrixData, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -4535,6 +4654,142 @@ const StatisticsScreen = () => {
                     }}
                   >
                     {isSharingAvgPlacement ? t('common.capturing') : t('common.share')}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Location Performance Matrix ────────────────────── */}
+              {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
+                <div ref={locationMatrixRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                  <div ref={locationMatrixControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    {renderPeriodOverrideDropdown('locationMatrix')}
+                    {renderActiveOverrideToggle('locationMatrix')}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.locationPerformance')}
+                  </div>
+                  {renderShareContextSubtitle('locationMatrix')}
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                    <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', minWidth: `${120 + locationMatrixData.locations.length * 90}px` }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <th style={{
+                            textAlign: isRTL ? 'right' : 'left',
+                            padding: '0.25rem 0.3rem',
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            [isRTL ? 'right' : 'left']: 0,
+                            background: 'var(--surface)',
+                            zIndex: 2,
+                            minWidth: '70px',
+                          }}>{t('stats.playerCol')}</th>
+                          {locationMatrixData.locations.map(loc => (
+                            <th key={loc.key} style={{
+                              textAlign: 'center',
+                              padding: '0.25rem 0.2rem',
+                              whiteSpace: 'nowrap',
+                              minWidth: '80px',
+                            }}>
+                              <div style={{ fontSize: '0.65rem', fontWeight: 600 }}>
+                                {loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key}
+                              </div>
+                              <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                ({loc.games})
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {locationMatrixRows.map(row => {
+                          const isMe = identityName && row.playerName === identityName;
+                          return (
+                            <tr key={row.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
+                              <td style={{
+                                padding: '0.4rem 0.3rem',
+                                whiteSpace: 'nowrap',
+                                fontWeight: '500',
+                                textAlign: isRTL ? 'right' : 'left',
+                                fontSize: getNameFontSize(row.playerName, 0.7),
+                                position: 'sticky',
+                                [isRTL ? 'right' : 'left']: 0,
+                                background: isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)',
+                                zIndex: 1,
+                                ...(isMe ? meNameStyle : {}),
+                              }}>
+                                {row.playerName}
+                              </td>
+                              {locationMatrixData.locations.map(loc => {
+                                const cell = row.cells.get(loc.key);
+                                if (!cell || cell.games === 0) {
+                                  return (
+                                    <td key={loc.key} style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--text-muted)', opacity: 0.3 }}>
+                                      —
+                                    </td>
+                                  );
+                                }
+                                const isKing = locationMatrixData.kings.get(loc.key) === row.playerName;
+                                const intensity = Math.min(Math.abs(cell.profit) / 1500, 1) * 0.18;
+                                const bgColor = cell.profit > 0
+                                  ? `rgba(16, 185, 129, ${intensity})`
+                                  : cell.profit < 0
+                                  ? `rgba(239, 68, 68, ${intensity})`
+                                  : 'transparent';
+                                return (
+                                  <td key={loc.key} style={{
+                                    textAlign: 'center',
+                                    padding: '0.3rem 0.15rem',
+                                    background: bgColor,
+                                    borderInlineStart: '1px solid rgba(255,255,255,0.04)',
+                                  }}>
+                                    <div style={{
+                                      fontWeight: 600,
+                                      fontSize: '0.72rem',
+                                      color: cell.profit > 0 ? 'var(--success)' : cell.profit < 0 ? '#ef4444' : 'var(--text)',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {isKing && '👑 '}{formatCurrency(cell.profit)}
+                                    </div>
+                                    <div style={{
+                                      fontSize: '0.52rem',
+                                      color: 'var(--text-muted)',
+                                      opacity: 0.7,
+                                      whiteSpace: 'nowrap',
+                                      marginTop: '1px',
+                                    }}>
+                                      {cell.games} {t('stats.locationGames')} · {t('stats.locationAvg')} {cell.avg >= 0 ? '+' : ''}{Math.round(cell.avg)}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    onClick={handleShareLocationMatrix}
+                    disabled={isSharingLocationMatrix}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingLocationMatrix ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}

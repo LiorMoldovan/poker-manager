@@ -1648,6 +1648,13 @@ const he = {
   'stats.archFighter': 'הלוחם',
   'stats.archNewcomer': 'החדש',
 
+  // ── Location Performance Matrix ──
+  'stats.locationPerformance': '📍 ביצועים לפי מקום אירוח',
+  'stats.locationGames': 'מש׳',
+  'stats.locationAvg': 'ממ',
+  'stats.locationNoData': 'אין נתוני מיקום להצגה',
+  'stats.locationKing': '👑',
+
   // ── Graphs ──
   'graphs.title': 'ניתוח',
   'graphs.subtitle': 'מגמות, השוואות וכימיה בין שחקנים',
@@ -4335,6 +4342,13 @@ const en: Record<keyof typeof he, string> = {
   'stats.archCoaster': 'Roller Coaster',
   'stats.archFighter': 'The Fighter',
   'stats.archNewcomer': 'The Newcomer',
+
+  // ── Location Performance Matrix ──
+  'stats.locationPerformance': '📍 Performance by Location',
+  'stats.locationGames': 'G',
+  'stats.locationAvg': 'Avg',
+  'stats.locationNoData': 'No location data to display',
+  'stats.locationKing': '👑',
 
   // ── Graphs ──
   'graphs.title': 'Analysis',
