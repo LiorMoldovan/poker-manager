@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.33.2';
+export const APP_VERSION = '6.34.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.34.0',
+    date: '2026-09-21',
+    changes: [
+      '📍 Compact location matrix and cards view',
+      '💀 Skull icon for last place in location',
+      '🔍 Interactive game details popup per cell',
+      '📐 Fixed plus and minus sign alignment',
+    ],
+  },
   {
     version: '6.33.2',
     date: '2026-09-21',

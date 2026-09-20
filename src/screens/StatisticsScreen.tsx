@@ -178,6 +178,21 @@ const StatisticsScreen = () => {
   const avgPlacementActiveToggleRef = useRef<HTMLDivElement>(null);
   const locationMatrixRef = useRef<HTMLDivElement>(null);
   const locationMatrixControlsRef = useRef<HTMLDivElement>(null);
+  const locationMatrixTableContainerRef = useRef<HTMLDivElement>(null);
+  const [locationViewMode, setLocationViewMode] = useState<'matrix' | 'cards'>('matrix');
+  const [locationCellDetails, setLocationCellDetails] = useState<{
+    playerName: string;
+    locationName: string;
+    locationKey: string;
+    profit: number;
+    avg: number;
+    games: number;
+    wins: number;
+    winRate: number;
+    isKing: boolean;
+    isLoser: boolean;
+    gameList: Array<{ gameId: string; date: string; profit: number }>;
+  } | null>(null);
 
   // Per-table override of the "active only" filter. Each table in the
   // טבלה view gets its own toggle that defaults to mirroring the global
@@ -437,11 +452,22 @@ const StatisticsScreen = () => {
     if (!locationMatrixRef.current) return;
     setIsSharingLocationMatrix(true);
     const restoreControls = hideForCapture(locationMatrixControlsRef.current);
+    const container = locationMatrixTableContainerRef.current;
+    const prevOverflow = container?.style.overflowX;
+    const prevWidth = container?.style.width;
+    if (container) {
+      container.style.overflowX = 'visible';
+      container.style.width = 'max-content';
+    }
     try {
       const files = await captureAndSplit(locationMatrixRef.current, 'poker-location-performance');
       await shareFiles(files, t('stats.locationPerformance'));
     } catch (e) { console.error('Error sharing location matrix:', e); }
     finally {
+      if (container) {
+        container.style.overflowX = prevOverflow || '';
+        container.style.width = prevWidth || '';
+      }
       restoreControls();
       setIsSharingLocationMatrix(false);
     }
@@ -1903,12 +1929,20 @@ const StatisticsScreen = () => {
 
   // ── Location Performance Matrix ──────────────────────────────────
   // Player × Location heatmap data. Each cell holds { games, profit,
-  // avg, winRate } for that player at that location. `locations` lists
+  // avg, winRate, gameList } for that player at that location. `locations` lists
   // the distinct hosting places in the period (sorted by game count,
   // "no location" pinned last). `playerRows` lists players sorted by
   // total profit across all locations. `kings` maps locationKey → the
-  // playerName with the highest profit there (for the 👑 icon).
-  type LocationCell = { games: number; profit: number; avg: number; winRate: number };
+  // playerName with the highest profit there (for the 👑 icon). `losers`
+  // maps locationKey → the playerName with the lowest profit there (< 0, for the 💀 icon).
+  type LocationCell = {
+    games: number;
+    profit: number;
+    avg: number;
+    wins: number;
+    winRate: number;
+    gameList: Array<{ gameId: string; date: string; profit: number }>;
+  };
   type LocationMatrixRow = { playerName: string; totalProfit: number; cells: Map<string, LocationCell> };
 
   const locationMatrixData = useMemo(() => {
@@ -1918,11 +1952,18 @@ const StatisticsScreen = () => {
     // whole point is comparing ACROSS locations, so filtering to a
     // single place would produce a single-column table.
     const periodGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, null));
-    if (periodGames.length === 0) return { locations: [] as { key: string; games: number }[], playerRows: [] as LocationMatrixRow[], kings: new Map<string, string>() };
+    if (periodGames.length === 0) return {
+      locations: [] as { key: string; games: number }[],
+      playerRows: [] as LocationMatrixRow[],
+      kings: new Map<string, string>(),
+      losers: new Map<string, string>(),
+    };
 
     // Build per-location game sets
     const gamesByLoc = new Map<string, Set<string>>();
+    const gameMap = new Map<string, typeof periodGames[0]>();
     for (const g of periodGames) {
+      gameMap.set(g.id, g);
       const key = getGameLocationKey(g);
       const set = gamesByLoc.get(key);
       if (set) set.add(g.id);
@@ -1947,17 +1988,23 @@ const StatisticsScreen = () => {
     for (const g of periodGames) gameLocMap.set(g.id, getGameLocationKey(g));
 
     // Accumulate
-    const acc = new Map<string, Map<string, { games: number; profit: number; wins: number }>>();
+    const acc = new Map<string, Map<string, { games: number; profit: number; wins: number; gameList: Array<{ gameId: string; date: string; profit: number }> }>>();
     for (const gp of periodGP) {
       const loc = gameLocMap.get(gp.gameId);
       if (!loc) continue;
       let playerMap = acc.get(gp.playerName);
       if (!playerMap) { playerMap = new Map(); acc.set(gp.playerName, playerMap); }
       let cell = playerMap.get(loc);
-      if (!cell) { cell = { games: 0, profit: 0, wins: 0 }; playerMap.set(loc, cell); }
+      if (!cell) { cell = { games: 0, profit: 0, wins: 0, gameList: [] }; playerMap.set(loc, cell); }
       cell.games++;
       cell.profit += gp.profit;
       if (gp.profit > 0) cell.wins++;
+      const gObj = gameMap.get(gp.gameId);
+      cell.gameList.push({
+        gameId: gp.gameId,
+        date: gObj?.date || '',
+        profit: gp.profit,
+      });
     }
 
     // Build rows
@@ -1965,33 +2012,46 @@ const StatisticsScreen = () => {
       const cells = new Map<string, LocationCell>();
       let totalProfit = 0;
       for (const [loc, data] of locMap.entries()) {
+        const sortedGames = [...data.gameList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         cells.set(loc, {
           games: data.games,
           profit: data.profit,
+          wins: data.wins,
           avg: data.games > 0 ? data.profit / data.games : 0,
           winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
+          gameList: sortedGames,
         });
         totalProfit += data.profit;
       }
       return { playerName, totalProfit, cells };
     });
 
-    // Kings: highest profit per location
+    // Kings (highest profit > 0) & Losers (lowest profit < 0) per location
     const kings = new Map<string, string>();
+    const losers = new Map<string, string>();
     for (const loc of locations) {
       let bestProfit = -Infinity;
       let bestName = '';
+      let worstProfit = Infinity;
+      let worstName = '';
       for (const row of playerRows) {
         const cell = row.cells.get(loc.key);
-        if (cell && cell.profit > bestProfit) {
-          bestProfit = cell.profit;
-          bestName = row.playerName;
+        if (cell && cell.games > 0) {
+          if (cell.profit > bestProfit) {
+            bestProfit = cell.profit;
+            bestName = row.playerName;
+          }
+          if (cell.profit < worstProfit) {
+            worstProfit = cell.profit;
+            worstName = row.playerName;
+          }
         }
       }
       if (bestProfit > 0) kings.set(loc.key, bestName);
+      if (worstProfit < 0) losers.set(loc.key, worstName);
     }
 
-    return { locations, playerRows, kings };
+    return { locations, playerRows, kings, losers };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tablePeriodOverrides.locationMatrix, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, stats]);
 
@@ -4662,112 +4722,302 @@ const StatisticsScreen = () => {
               {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
                 <div ref={locationMatrixRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
                   <div ref={locationMatrixControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-                    {renderPeriodOverrideDropdown('locationMatrix')}
-                    {renderActiveOverrideToggle('locationMatrix')}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {renderPeriodOverrideDropdown('locationMatrix')}
+                      {renderActiveOverrideToggle('locationMatrix')}
+                    </div>
+                    {/* View mode toggle: 📊 Matrix vs 📑 Cards */}
+                    <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setLocationViewMode('matrix')}
+                        style={{
+                          padding: '0.2rem 0.45rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: locationViewMode === 'matrix' ? 'var(--primary)' : 'transparent',
+                          color: locationViewMode === 'matrix' ? 'white' : 'var(--text-muted)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {t('stats.locationViewMatrix')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLocationViewMode('cards')}
+                        style={{
+                          padding: '0.2rem 0.45rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: locationViewMode === 'cards' ? 'var(--primary)' : 'transparent',
+                          color: locationViewMode === 'cards' ? 'white' : 'var(--text-muted)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {t('stats.locationViewCards')}
+                      </button>
+                    </div>
                   </div>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
                     {t('stats.locationPerformance')}
                   </div>
                   {renderShareContextSubtitle('locationMatrix')}
-                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                    <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', minWidth: `${120 + locationMatrixData.locations.length * 90}px` }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{
-                            textAlign: isRTL ? 'right' : 'left',
-                            padding: '0.25rem 0.3rem',
-                            whiteSpace: 'nowrap',
-                            position: 'sticky',
-                            [isRTL ? 'right' : 'left']: 0,
-                            background: 'var(--surface)',
-                            zIndex: 2,
-                            minWidth: '70px',
-                          }}>{t('stats.playerCol')}</th>
-                          {locationMatrixData.locations.map(loc => (
-                            <th key={loc.key} style={{
-                              textAlign: 'center',
-                              padding: '0.25rem 0.2rem',
+
+                  {locationViewMode === 'matrix' ? (
+                    /* ── COMPACT MATRIX VIEW ────────────────────────── */
+                    <div ref={locationMatrixTableContainerRef} style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                      <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', minWidth: `${70 + locationMatrixData.locations.length * 52}px` }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                            <th style={{
+                              textAlign: isRTL ? 'right' : 'left',
+                              padding: '0.25rem 0.3rem',
                               whiteSpace: 'nowrap',
-                              minWidth: '80px',
-                            }}>
-                              <div style={{ fontSize: '0.65rem', fontWeight: 600 }}>
-                                {loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key}
-                              </div>
-                              <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                                ({loc.games})
-                              </div>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {locationMatrixRows.map(row => {
-                          const isMe = identityName && row.playerName === identityName;
-                          return (
-                            <tr key={row.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
-                              <td style={{
-                                padding: '0.4rem 0.3rem',
+                              position: 'sticky',
+                              [isRTL ? 'right' : 'left']: 0,
+                              background: 'var(--surface)',
+                              zIndex: 2,
+                              minWidth: '65px',
+                              maxWidth: '85px',
+                            }}>{t('stats.playerCol')}</th>
+                            {locationMatrixData.locations.map(loc => (
+                              <th key={loc.key} style={{
+                                textAlign: 'center',
+                                padding: '0.25rem 0.15rem',
                                 whiteSpace: 'nowrap',
-                                fontWeight: '500',
-                                textAlign: isRTL ? 'right' : 'left',
-                                fontSize: getNameFontSize(row.playerName, 0.7),
-                                position: 'sticky',
-                                [isRTL ? 'right' : 'left']: 0,
-                                background: isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)',
-                                zIndex: 1,
-                                ...(isMe ? meNameStyle : {}),
+                                minWidth: '50px',
                               }}>
-                                {row.playerName}
-                              </td>
-                              {locationMatrixData.locations.map(loc => {
-                                const cell = row.cells.get(loc.key);
-                                if (!cell || cell.games === 0) {
+                                <div style={{ fontSize: '0.62rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '65px' }} title={loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key}>
+                                  {loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key}
+                                </div>
+                                <div style={{ fontSize: '0.52rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                  ({loc.games})
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {locationMatrixRows.map(row => {
+                            const isMe = identityName && row.playerName === identityName;
+                            return (
+                              <tr key={row.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
+                                <td style={{
+                                  padding: '0.35rem 0.3rem',
+                                  whiteSpace: 'nowrap',
+                                  fontWeight: '500',
+                                  textAlign: isRTL ? 'right' : 'left',
+                                  fontSize: getNameFontSize(row.playerName, 0.7),
+                                  position: 'sticky',
+                                  [isRTL ? 'right' : 'left']: 0,
+                                  background: isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)',
+                                  zIndex: 1,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: '85px',
+                                  ...(isMe ? meNameStyle : {}),
+                                }}>
+                                  {row.playerName}
+                                </td>
+                                {locationMatrixData.locations.map(loc => {
+                                  const cell = row.cells.get(loc.key);
+                                  if (!cell || cell.games === 0) {
+                                    return (
+                                      <td key={loc.key} style={{ textAlign: 'center', padding: '0.3rem 0.15rem', color: 'var(--text-muted)', opacity: 0.25 }}>
+                                        —
+                                      </td>
+                                    );
+                                  }
+                                  const isKing = locationMatrixData.kings.get(loc.key) === row.playerName;
+                                  const isLoser = locationMatrixData.losers.get(loc.key) === row.playerName;
+                                  const intensity = Math.min(Math.abs(cell.profit) / 1500, 1) * 0.18;
+                                  const bgColor = cell.profit > 0
+                                    ? `rgba(16, 185, 129, ${intensity})`
+                                    : cell.profit < 0
+                                    ? `rgba(239, 68, 68, ${intensity})`
+                                    : 'transparent';
                                   return (
-                                    <td key={loc.key} style={{ textAlign: 'center', padding: '0.3rem 0.2rem', color: 'var(--text-muted)', opacity: 0.3 }}>
-                                      —
+                                    <td
+                                      key={loc.key}
+                                      onClick={() => setLocationCellDetails({
+                                        playerName: row.playerName,
+                                        locationName: loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key,
+                                        locationKey: loc.key,
+                                        profit: cell.profit,
+                                        avg: cell.avg,
+                                        games: cell.games,
+                                        wins: cell.wins,
+                                        winRate: cell.winRate,
+                                        isKing,
+                                        isLoser,
+                                        gameList: cell.gameList,
+                                      })}
+                                      style={{
+                                        textAlign: 'center',
+                                        padding: '0.28rem 0.15rem',
+                                        background: bgColor,
+                                        borderInlineStart: '1px solid rgba(255,255,255,0.04)',
+                                        cursor: 'pointer',
+                                        transition: 'filter 0.15s ease',
+                                      }}
+                                      onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.2)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.filter = 'none'}
+                                      title={`${row.playerName} ב${loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key} - לחץ לפרטים`}
+                                    >
+                                      <div style={{
+                                        fontWeight: 700,
+                                        fontSize: '0.72rem',
+                                        color: cell.profit > 0 ? 'var(--success)' : cell.profit < 0 ? '#ef4444' : 'var(--text)',
+                                        whiteSpace: 'nowrap',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '2px',
+                                      }}>
+                                        {isKing && <span>👑</span>}
+                                        {isLoser && <span>💀</span>}
+                                        <span dir="ltr" style={{ display: 'inline-block' }}>
+                                          {cell.profit > 0
+                                            ? `+${cleanNumber(Math.round(cell.profit))}`
+                                            : cell.profit < 0
+                                            ? `-${cleanNumber(Math.round(Math.abs(cell.profit)))}`
+                                            : '0'}
+                                        </span>
+                                      </div>
+                                      <div style={{
+                                        fontSize: '0.52rem',
+                                        color: 'var(--text-muted)',
+                                        opacity: 0.75,
+                                        whiteSpace: 'nowrap',
+                                        marginTop: '1px',
+                                      }}>
+                                        ({cell.games})
+                                      </div>
                                     </td>
                                   );
-                                }
-                                const isKing = locationMatrixData.kings.get(loc.key) === row.playerName;
-                                const intensity = Math.min(Math.abs(cell.profit) / 1500, 1) * 0.18;
-                                const bgColor = cell.profit > 0
-                                  ? `rgba(16, 185, 129, ${intensity})`
-                                  : cell.profit < 0
-                                  ? `rgba(239, 68, 68, ${intensity})`
-                                  : 'transparent';
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    /* ── LOCATION CARDS VIEW (NO HORIZONTAL SCROLL) ──── */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      {locationMatrixData.locations.map(loc => {
+                        const locName = loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key;
+                        const kingName = locationMatrixData.kings.get(loc.key);
+                        const loserName = locationMatrixData.losers.get(loc.key);
+                        const locPlayers = locationMatrixRows
+                          .map(r => {
+                            const cell = r.cells.get(loc.key);
+                            return cell && cell.games > 0 ? { playerName: r.playerName, ...cell } : null;
+                          })
+                          .filter((p): p is NonNullable<typeof p> => p !== null)
+                          .sort((a, b) => b.profit - a.profit);
+
+                        if (locPlayers.length === 0) return null;
+
+                        return (
+                          <div
+                            key={loc.key}
+                            style={{
+                              background: 'var(--surface)',
+                              borderRadius: '8px',
+                              padding: '0.5rem',
+                              border: '1px solid var(--border)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', paddingBottom: '0.3rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text)' }}>📍 {locName}</span>
+                                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>({loc.games} {t('stats.locationGames')})</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem' }}>
+                                {kingName && <span title={`מלך המיקום: ${kingName}`}>👑 {kingName}</span>}
+                                {loserName && <span title={`מקום אחרון: ${loserName}`} style={{ opacity: 0.85 }}>💀 {loserName}</span>}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              {locPlayers.map((p, idx) => {
+                                const isMe = identityName && p.playerName === identityName;
+                                const isKing = kingName === p.playerName;
+                                const isLoser = loserName === p.playerName;
                                 return (
-                                  <td key={loc.key} style={{
-                                    textAlign: 'center',
-                                    padding: '0.3rem 0.15rem',
-                                    background: bgColor,
-                                    borderInlineStart: '1px solid rgba(255,255,255,0.04)',
-                                  }}>
-                                    <div style={{
-                                      fontWeight: 600,
+                                  <div
+                                    key={p.playerName}
+                                    onClick={() => setLocationCellDetails({
+                                      playerName: p.playerName,
+                                      locationName: locName,
+                                      locationKey: loc.key,
+                                      profit: p.profit,
+                                      avg: p.avg,
+                                      games: p.games,
+                                      wins: p.wins,
+                                      winRate: p.winRate,
+                                      isKing,
+                                      isLoser,
+                                      gameList: p.gameList,
+                                    })}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      padding: '0.3rem 0.5rem',
+                                      borderRadius: '6px',
+                                      background: isMe ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255,255,255,0.02)',
+                                      border: isMe ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.04)',
+                                      cursor: 'pointer',
                                       fontSize: '0.72rem',
-                                      color: cell.profit > 0 ? 'var(--success)' : cell.profit < 0 ? '#ef4444' : 'var(--text)',
-                                      whiteSpace: 'nowrap',
-                                    }}>
-                                      {isKing && '👑 '}{formatCurrency(cell.profit)}
+                                      transition: 'background 0.15s ease',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: '16px', textAlign: 'center' }}>
+                                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
+                                      </span>
+                                      <span style={{ fontWeight: isMe ? 700 : 500, color: isMe ? 'var(--primary)' : 'var(--text)' }}>
+                                        {p.playerName}
+                                      </span>
+                                      {isKing && <span>👑</span>}
+                                      {isLoser && <span>💀</span>}
                                     </div>
-                                    <div style={{
-                                      fontSize: '0.52rem',
-                                      color: 'var(--text-muted)',
-                                      opacity: 0.7,
-                                      whiteSpace: 'nowrap',
-                                      marginTop: '1px',
-                                    }}>
-                                      {cell.games} {t('stats.locationGames')} · {t('stats.locationAvg')} {cell.avg >= 0 ? '+' : ''}{Math.round(cell.avg)}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                        {p.games} {t('stats.locationGames')}
+                                      </span>
+                                      <span style={{
+                                        fontWeight: 700,
+                                        color: p.profit > 0 ? 'var(--success)' : p.profit < 0 ? '#ef4444' : 'var(--text)',
+                                        minWidth: '55px',
+                                        textAlign: 'end',
+                                      }}>
+                                        <span dir="ltr">
+                                          {p.profit > 0
+                                            ? `+${cleanNumber(Math.round(p.profit))}`
+                                            : p.profit < 0
+                                            ? `-${cleanNumber(Math.round(Math.abs(p.profit)))}`
+                                            : '0'}
+                                        </span>
+                                      </span>
                                     </div>
-                                  </td>
+                                  </div>
                                 );
                               })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
@@ -5932,6 +6182,181 @@ const StatisticsScreen = () => {
                 {t('common.noData')}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Location Cell Details Modal */}
+      {locationCellDetails && (
+        <div
+          className="modal-overlay"
+          onClick={() => setLocationCellDetails(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              borderRadius: '12px',
+              padding: '1rem',
+              maxWidth: '400px',
+              width: '100%',
+              maxHeight: '75vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
+                  📍 {locationCellDetails.locationName}
+                </div>
+                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  {locationCellDetails.playerName}
+                  {locationCellDetails.isKing && <span title="מלך המיקום">👑</span>}
+                  {locationCellDetails.isLoser && <span title="מקום אחרון במיקום">💀</span>}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocationCellDetails(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1,
+                  padding: '0.2rem',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Summary Row */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '0.4rem',
+              marginBottom: '0.75rem',
+            }}>
+              <div style={{ background: 'var(--surface)', padding: '0.4rem', borderRadius: '6px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.profitCol')}</div>
+                <div style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color: locationCellDetails.profit > 0 ? 'var(--success)' : locationCellDetails.profit < 0 ? '#ef4444' : 'var(--text)',
+                }}>
+                  <span dir="ltr">
+                    {locationCellDetails.profit > 0
+                      ? `+${cleanNumber(Math.round(locationCellDetails.profit))}`
+                      : locationCellDetails.profit < 0
+                      ? `-${cleanNumber(Math.round(Math.abs(locationCellDetails.profit)))}`
+                      : '0'}
+                  </span>
+                </div>
+              </div>
+              <div style={{ background: 'var(--surface)', padding: '0.4rem', borderRadius: '6px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.avgCol')}</div>
+                <div style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  color: locationCellDetails.avg > 0 ? 'var(--success)' : locationCellDetails.avg < 0 ? '#ef4444' : 'var(--text)',
+                }}>
+                  <span dir="ltr">
+                    {locationCellDetails.avg > 0
+                      ? `+${cleanNumber(Math.round(locationCellDetails.avg))}`
+                      : locationCellDetails.avg < 0
+                      ? `-${cleanNumber(Math.round(Math.abs(locationCellDetails.avg)))}`
+                      : '0'}
+                  </span>
+                </div>
+              </div>
+              <div style={{ background: 'var(--surface)', padding: '0.4rem', borderRadius: '6px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.winRate')}</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)' }}>
+                  {locationCellDetails.wins}/{locationCellDetails.games} ({Math.round(locationCellDetails.winRate)}%)
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+              {t('stats.gamesCount', { count: locationCellDetails.gameList.length })}:
+            </div>
+
+            {/* Games List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', overflowY: 'auto', flex: 1, maxHeight: '50vh' }}>
+              {locationCellDetails.gameList.map((game, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setLocationCellDetails(null);
+                    navigate(`/game/${game.gameId}`, {
+                      state: {
+                        from: 'statistics',
+                        viewMode: viewMode,
+                        timePeriod,
+                        selectedYear,
+                      },
+                    });
+                    window.scrollTo(0, 0);
+                  }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.45rem 0.65rem',
+                    background: 'var(--surface)',
+                    borderRadius: '6px',
+                    borderInlineEnd: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? '#ef4444' : 'var(--border)'}`,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text)' }}>
+                      {game.date ? new Date(game.date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      }) : '—'}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>❯</span>
+                  </div>
+                  <span style={{
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? '#ef4444' : 'var(--text)',
+                  }}>
+                    <span dir="ltr">
+                      {game.profit > 0
+                        ? `+${cleanNumber(Math.round(game.profit))}`
+                        : game.profit < 0
+                        ? `-${cleanNumber(Math.round(Math.abs(game.profit)))}`
+                        : '0'}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

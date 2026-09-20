@@ -1654,6 +1654,10 @@ const he = {
   'stats.locationAvg': 'ממ',
   'stats.locationNoData': 'אין נתוני מיקום להצגה',
   'stats.locationKing': '👑',
+  'stats.locationLastPlace': '💀',
+  'stats.locationViewMatrix': '📊 טבלה',
+  'stats.locationViewCards': '📑 כרטיסיות',
+  'stats.locationSummary': 'סיכום מיקום',
 
   // ── Graphs ──
   'graphs.title': 'ניתוח',
@@ -4349,6 +4353,10 @@ const en: Record<keyof typeof he, string> = {
   'stats.locationAvg': 'Avg',
   'stats.locationNoData': 'No location data to display',
   'stats.locationKing': '👑',
+  'stats.locationLastPlace': '💀',
+  'stats.locationViewMatrix': '📊 Table',
+  'stats.locationViewCards': '📑 Cards',
+  'stats.locationSummary': 'Location Summary',
 
   // ── Graphs ──
   'graphs.title': 'Analysis',
