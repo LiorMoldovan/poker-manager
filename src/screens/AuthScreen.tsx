@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { APP_VERSION } from '../version';
 import { useTranslation } from '../i18n';
+import { supabase } from '../database/supabaseClient';
 
 interface AuthScreenProps {
   onSignIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -17,6 +18,37 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [waitingForDevAuth, setWaitingForDevAuth] = useState(false);
+
+  const isEmbeddedWebview = typeof window !== 'undefined' && (
+    window.self !== window.top ||
+    /Electron|Antigravity/i.test(navigator.userAgent)
+  );
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    if (window.location.search.includes('dev_bridge=1') && onGoogleSignIn) {
+      onGoogleSignIn();
+    }
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch('/__dev_auth_sync').then(r => r.json());
+        if (res?.access_token && res?.refresh_token) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: res.access_token,
+            refresh_token: res.refresh_token,
+          });
+          if (!error && data?.session) {
+            setWaitingForDevAuth(false);
+          }
+        }
+      } catch {}
+    }, 1200);
+
+    return () => clearInterval(timer);
+  }, [onGoogleSignIn]);
 
   const handleSubmit = async () => {
     setError('');
@@ -214,7 +246,15 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
             </div>
 
             <button
-              onClick={() => { setError(''); onGoogleSignIn(); }}
+              onClick={() => {
+                setError('');
+                if (isEmbeddedWebview) {
+                  setWaitingForDevAuth(true);
+                  fetch('/__dev_open_chrome', { method: 'POST' }).catch(() => {});
+                } else if (onGoogleSignIn) {
+                  onGoogleSignIn();
+                }
+              }}
               disabled={loading}
               style={{
                 ...buttonStyle,
@@ -236,6 +276,39 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
               </svg>
               {t('auth.google')}
             </button>
+
+            {waitingForDevAuth && (
+              <div style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                textAlign: 'center',
+                fontSize: '0.8rem',
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.3rem' }}>
+                  🌐 פותח את Chrome להתחברות עם Google...
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                  התחבר ב-Chrome עם חשבון ה-Google שלך, וה-UI כאן יתחבר אוטומטית מיד!
+                </div>
+                <a
+                  href="http://localhost:3000/?dev_bridge=1"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '0.5rem',
+                    color: 'var(--primary)',
+                    fontSize: '0.75rem',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  לא נפתח? לחץ כאן לפתיחה ישירה ב-Chrome
+                </a>
+              </div>
+            )}
           </>
         )}
       </div>

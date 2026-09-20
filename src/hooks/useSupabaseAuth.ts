@@ -197,20 +197,51 @@ export function useSupabaseAuth() {
   useEffect(() => {
     let membershipFetchedFor: string | null = null;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         setState(prev => ({ ...prev, user: session.user, session }));
         membershipFetchedFor = session.user.id;
         fetchMemberships(session.user.id);
         checkSuperAdmin(session.user.id);
+        if (import.meta.env.DEV) {
+          fetch('/__dev_auth_sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: session.access_token, refresh_token: session.refresh_token }),
+          }).catch(() => {});
+        }
       } else {
-        setState(prev => ({ ...prev, loading: false }));
+        let restored = false;
+        if (import.meta.env.DEV) {
+          try {
+            const res = await fetch('/__dev_auth_sync').then(r => r.json());
+            if (res?.access_token && res?.refresh_token) {
+              const { data, error } = await supabase.auth.setSession({
+                access_token: res.access_token,
+                refresh_token: res.refresh_token,
+              });
+              if (!error && data?.session) {
+                restored = true;
+              }
+            }
+          } catch {}
+        }
+        if (!restored) {
+          setState(prev => ({ ...prev, loading: false }));
+        }
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setState(prev => ({ ...prev, user: session.user, session }));
+        if (import.meta.env.DEV) {
+          fetch('/__dev_auth_sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: session.access_token, refresh_token: session.refresh_token }),
+          }).catch(() => {});
+        }
         if (session.user.id !== membershipFetchedFor) {
           membershipFetchedFor = session.user.id;
           fetchMemberships(session.user.id);
@@ -236,16 +267,6 @@ export function useSupabaseAuth() {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    // Use the FULL current URL as the redirect target (not just origin)
-    // so query params survive the OAuth round-trip. This is what makes
-    // share-card deep links land on the right poll: a recipient who
-    // taps `…/schedule?poll=abc` (or the legacy `…/settings?tab=schedule
-    // &poll=abc` URL which SettingsScreen transparently redirects) and
-    // signs in with Google returns to that same URL after the OAuth
-    // dance, and the in-app routers + ScheduleTab pick up the poll param
-    // naturally. For users signing in from the home page this is
-    // identical to the old behavior (origin === href when there are no
-    // params).
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -257,6 +278,9 @@ export function useSupabaseAuth() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    if (import.meta.env.DEV) {
+      fetch('/__dev_auth_sync', { method: 'DELETE' }).catch(() => {});
+    }
     setState({ user: null, session: null, memberships: [], allGroups: [], activeGroupId: null, isSuperAdmin: false, loading: false });
   }, []);
 
