@@ -4,7 +4,7 @@
 // "סגל"), so picking a location is really picking a host and the fair answer
 // is whoever has gone longest without hosting — restricted to people who are
 // actually coming, since you can't play at the home of someone who isn't
-// there. Locations that aren't a player's name ("מקלט ליכטר") are standalone
+// there. Locations that aren't a player's name ("מקלט") are standalone
 // venues: they carry their own history and are always selectable, since
 // there's no absent host to rule them out.
 //
@@ -30,11 +30,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Resolve a location to the player whose home it is — exact name match only.
 //
-// This used to also match on substring, which folded "מקלט ליכטר" into
-// ליכטר's hosting count on the assumption that the qualifier described his
-// home. It doesn't: the shelter is a genuinely separate venue, and crediting
-// its games to him both overstated his turns and hid a place the group can
-// actually choose. A location that isn't somebody's name is its own venue.
+// Venues that aren't a player's name (e.g. "מקלט") are genuinely separate
+// venues. A location that isn't somebody's name is its own venue.
 export function resolveHostPlayer(location: string, players: Player[]): Player | null {
   const raw = location.trim();
   if (!raw) return null;
@@ -57,7 +54,7 @@ export function suggestHosts(opts: {
   const { games, players, knownLocations, attendingPlayerIds, now } = opts;
 
   // Canonical label → tally. Keyed by the resolved host's name when the
-  // location maps to a player, so "ליכטר" and "מקלט ליכטר" share one row.
+  // location maps to a player, or the raw venue name (e.g. "מקלט").
   const byLabel = new Map<string, {
     playerId: string | null;
     gamesHosted: number;
@@ -94,7 +91,7 @@ export function suggestHosts(opts: {
   for (const loc of knownLocations) upsert(loc, null);
 
   // Only venues on the Settings list can be offered for a future game.
-  // History from a venue that has since been dropped ("מקלט ליכטר", used
+  // History from a venue that has since been dropped ("מקלט", used
   // twice during a stretch in April) still lives in the games table and in
   // the statistics screen, but it shouldn't be proposed as somewhere to play
   // next — and it would otherwise top the ranking forever, since "longest

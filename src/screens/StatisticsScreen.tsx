@@ -178,8 +178,11 @@ const StatisticsScreen = () => {
   const avgPlacementActiveToggleRef = useRef<HTMLDivElement>(null);
   const locationMatrixRef = useRef<HTMLDivElement>(null);
   const locationMatrixControlsRef = useRef<HTMLDivElement>(null);
+  const locationMatrixSubControlsRef = useRef<HTMLDivElement>(null);
   const locationMatrixTableContainerRef = useRef<HTMLDivElement>(null);
   const [locationViewMode, setLocationViewMode] = useState<'matrix' | 'cards'>('matrix');
+  const [locationMetric, setLocationMetric] = useState<'total' | 'avg'>('total');
+  const [sharingSpecificCardKey, setSharingSpecificCardKey] = useState<string | null>(null);
   const [locationCellDetails, setLocationCellDetails] = useState<{
     playerName: string;
     locationName: string;
@@ -189,9 +192,14 @@ const StatisticsScreen = () => {
     games: number;
     wins: number;
     winRate: number;
+    rank: number;
+    totalInLoc: number;
     isKing: boolean;
     isLoser: boolean;
     gameList: Array<{ gameId: string; date: string; profit: number }>;
+  } | null>(null);
+  const [playerLocationSummary, setPlayerLocationSummary] = useState<{
+    playerName: string;
   } | null>(null);
 
   // Per-table override of the "active only" filter. Each table in the
@@ -451,25 +459,86 @@ const StatisticsScreen = () => {
   const handleShareLocationMatrix = async () => {
     if (!locationMatrixRef.current) return;
     setIsSharingLocationMatrix(true);
-    const restoreControls = hideForCapture(locationMatrixControlsRef.current);
+    const restoreControls = hideForCapture(
+      locationMatrixControlsRef.current,
+      locationMatrixSubControlsRef.current
+    );
+    const card = locationMatrixRef.current;
     const container = locationMatrixTableContainerRef.current;
-    const prevOverflow = container?.style.overflowX;
-    const prevWidth = container?.style.width;
-    if (container) {
-      container.style.overflowX = 'visible';
-      container.style.width = 'max-content';
-    }
-    try {
-      const files = await captureAndSplit(locationMatrixRef.current, 'poker-location-performance');
-      await shareFiles(files, t('stats.locationPerformance'));
-    } catch (e) { console.error('Error sharing location matrix:', e); }
-    finally {
+
+    const prevCardWidth = card.style.width;
+    const prevCardMaxWidth = card.style.maxWidth;
+    const prevContainerOverflow = container?.style.overflowX;
+    const prevContainerWidth = container?.style.width;
+
+    const modifiedCells: Array<{ el: HTMLElement; prevPos: string }> = [];
+    let targetWidth: number | undefined;
+
+    if (locationViewMode === 'matrix') {
+      const stickyCells = card.querySelectorAll<HTMLElement>('th, td');
+      stickyCells.forEach(cell => {
+        if (cell.style.position === 'sticky') {
+          modifiedCells.push({ el: cell, prevPos: cell.style.position });
+          cell.style.position = 'static';
+        }
+      });
+      const tableEl = container?.querySelector('table');
+      const fullTableWidth = tableEl ? tableEl.scrollWidth : (container?.scrollWidth || 0);
+      targetWidth = Math.max(fullTableWidth + 32, card.offsetWidth);
+      card.style.width = `${targetWidth}px`;
+      card.style.maxWidth = 'none';
       if (container) {
-        container.style.overflowX = prevOverflow || '';
-        container.style.width = prevWidth || '';
+        container.style.overflowX = 'visible';
+        container.style.width = `${fullTableWidth}px`;
+      }
+    }
+
+    try {
+      const files = await captureAndSplit(card, 'poker-location-performance', {
+        width: targetWidth,
+        windowWidth: targetWidth ? targetWidth + 50 : undefined,
+      });
+      await shareFiles(files, t('stats.locationPerformance'));
+    } catch (e) {
+      console.error('Error sharing location matrix:', e);
+    } finally {
+      if (locationViewMode === 'matrix') {
+        card.style.width = prevCardWidth;
+        card.style.maxWidth = prevCardMaxWidth;
+        if (container) {
+          container.style.overflowX = prevContainerOverflow || '';
+          container.style.width = prevContainerWidth || '';
+        }
+        modifiedCells.forEach(({ el, prevPos }) => {
+          el.style.position = prevPos;
+        });
       }
       restoreControls();
       setIsSharingLocationMatrix(false);
+    }
+  };
+
+  const handleShareSpecificLocationCard = async (locationKey: string, locationName: string) => {
+    const cardEl = document.querySelector<HTMLElement>(`[data-location-card="${locationKey}"]`);
+    if (!cardEl) return;
+    setSharingSpecificCardKey(locationKey);
+
+    const shareBtn = cardEl.querySelector<HTMLElement>('[data-share-btn="true"]');
+    const prevBtnDisplay = shareBtn ? shareBtn.style.display : undefined;
+    if (shareBtn) shareBtn.style.display = 'none';
+
+    try {
+      const files = await captureAndSplit(cardEl, `poker-location-${locationKey}`, {
+        backgroundColor: '#1e293b',
+      });
+      await shareFiles(files, `${t('stats.locationPerformance')} - ${locationName}`);
+    } catch (e) {
+      console.error('Error sharing specific location card:', e);
+    } finally {
+      if (shareBtn && prevBtnDisplay !== undefined) {
+        shareBtn.style.display = prevBtnDisplay;
+      }
+      setSharingSpecificCardKey(null);
     }
   };
 
@@ -1941,6 +2010,8 @@ const StatisticsScreen = () => {
     avg: number;
     wins: number;
     winRate: number;
+    rank: number;
+    totalInLoc: number;
     gameList: Array<{ gameId: string; date: string; profit: number }>;
   };
   type LocationMatrixRow = { playerName: string; totalProfit: number; cells: Map<string, LocationCell> };
@@ -2021,6 +2092,8 @@ const StatisticsScreen = () => {
           wins: data.wins,
           avg: data.games > 0 ? visualProfit / data.games : 0,
           winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
+          rank: 0,
+          totalInLoc: 0,
           gameList: sortedGames,
         });
         totalProfit += visualProfit;
@@ -2028,29 +2101,27 @@ const StatisticsScreen = () => {
       return { playerName, totalProfit, cells };
     });
 
-    // Kings (highest profit > 0) & Losers (lowest profit < 0) per location
+    // Kings (highest profit > 0), Losers (lowest profit < 0), and Per-Location Rankings
     const kings = new Map<string, string>();
     const losers = new Map<string, string>();
     for (const loc of locations) {
-      let bestProfit = -Infinity;
-      let bestName = '';
-      let worstProfit = Infinity;
-      let worstName = '';
-      for (const row of playerRows) {
-        const cell = row.cells.get(loc.key);
-        if (cell && cell.games > 0) {
-          if (cell.profit > bestProfit) {
-            bestProfit = cell.profit;
-            bestName = row.playerName;
-          }
-          if (cell.profit < worstProfit) {
-            worstProfit = cell.profit;
-            worstName = row.playerName;
-          }
-        }
+      const locPlayers = playerRows
+        .map(row => ({ row, cell: row.cells.get(loc.key) }))
+        .filter((item): item is { row: LocationMatrixRow; cell: LocationCell } => !!item.cell && item.cell.games > 0)
+        .sort((a, b) => b.cell.profit - a.cell.profit || b.cell.games - a.cell.games);
+
+      const totalInLoc = locPlayers.length;
+      locPlayers.forEach((item, index) => {
+        item.cell.rank = index + 1;
+        item.cell.totalInLoc = totalInLoc;
+      });
+
+      if (locPlayers.length > 0) {
+        const top = locPlayers[0];
+        if (top.cell.profit > 0) kings.set(loc.key, top.row.playerName);
+        const bottom = locPlayers[locPlayers.length - 1];
+        if (bottom.cell.profit < 0) losers.set(loc.key, bottom.row.playerName);
       }
-      if (bestProfit > 0) kings.set(loc.key, bestName);
-      if (worstProfit < 0) losers.set(loc.key, worstName);
     }
 
     return { locations, playerRows, kings, losers };
@@ -2065,6 +2136,116 @@ const StatisticsScreen = () => {
     return [...rows].sort((a, b) => b.totalProfit - a.totalProfit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableActiveOverrides.locationMatrix, tablePeriodOverrides.locationMatrix, filterActiveOnly, locationMatrixData, filteredStats, stats, selectedTypes, getPlayerType, activeThreshold]);
+
+  // Aggregate multi-location summary for selected player
+  const playerSummaryData = useMemo(() => {
+    if (!playerLocationSummary) return null;
+    const row = locationMatrixData.playerRows.find(r => r.playerName === playerLocationSummary.playerName);
+    if (!row) return null;
+
+    const venues: Array<{
+      key: string;
+      name: string;
+      games: number;
+      profit: number;
+      avg: number;
+      wins: number;
+      winRate: number;
+      rank: number;
+      totalInLoc: number;
+      isKing: boolean;
+      isLoser: boolean;
+      gameList: Array<{ gameId: string; date: string; profit: number }>;
+    }> = [];
+
+    for (const loc of locationMatrixData.locations) {
+      const cell = row.cells.get(loc.key);
+      if (cell && cell.games > 0) {
+        venues.push({
+          key: loc.key,
+          name: loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key,
+          games: cell.games,
+          profit: cell.profit,
+          avg: cell.avg,
+          wins: cell.wins,
+          winRate: cell.winRate,
+          rank: cell.rank,
+          totalInLoc: cell.totalInLoc,
+          isKing: cell.rank === 1,
+          isLoser: locationMatrixData.losers.get(loc.key) === row.playerName,
+          gameList: cell.gameList,
+        });
+      }
+    }
+
+    if (venues.length === 0) return null;
+
+    // Sort venues by total profit descending
+    venues.sort((a, b) => b.profit - a.profit);
+
+    const totalGames = venues.reduce((sum, v) => sum + v.games, 0);
+    const totalProfit = venues.reduce((sum, v) => sum + v.profit, 0);
+    const overallAvg = totalGames > 0 ? totalProfit / totalGames : 0;
+
+    const bestVenue = venues[0];
+    const worstVenue = venues[venues.length - 1];
+    const isProfitableEverywhere = worstVenue.profit >= 0;
+
+    // Single best winning night across all venues
+    let bestSingleNight: { venueName: string; profit: number; date: string } | null = null;
+    for (const v of venues) {
+      for (const g of v.gameList) {
+        if (!bestSingleNight || g.profit > bestSingleNight.profit) {
+          bestSingleNight = { venueName: v.name, profit: Math.round(g.profit), date: g.date };
+        }
+      }
+    }
+
+    const goldCount = venues.filter(v => v.rank === 1).length;
+    const silverCount = venues.filter(v => v.rank === 2).length;
+    const bronzeCount = venues.filter(v => v.rank === 3).length;
+    const loserCount = venues.filter(v => v.isLoser).length;
+
+    // Home vs Outside (Away) calculations
+    const homeVenue = venues.find(v => v.name.trim().toLowerCase() === playerLocationSummary.playerName.trim().toLowerCase());
+    const awayVenues = venues.filter(v => v !== homeVenue);
+    const homeGames = homeVenue ? homeVenue.games : 0;
+    const homeProfit = homeVenue ? homeVenue.profit : 0;
+    const homeAvg = homeGames > 0 ? Math.round(homeProfit / homeGames) : 0;
+
+    const awayGames = awayVenues.reduce((sum, v) => sum + v.games, 0);
+    const awayProfit = awayVenues.reduce((sum, v) => sum + v.profit, 0);
+    const awayAvg = awayGames > 0 ? Math.round(awayProfit / awayGames) : 0;
+
+    const homeVsAway = {
+      hasHomeGames: homeGames > 0,
+      homeGames,
+      homeProfit,
+      homeAvg,
+      hasAwayGames: awayGames > 0,
+      awayGames,
+      awayProfit,
+      awayAvg,
+      diff: homeAvg - awayAvg,
+    };
+
+    return {
+      playerName: playerLocationSummary.playerName,
+      venues,
+      totalGames,
+      totalProfit,
+      overallAvg,
+      bestVenue,
+      worstVenue,
+      isProfitableEverywhere,
+      bestSingleNight,
+      goldCount,
+      silverCount,
+      bronzeCount,
+      loserCount,
+      homeVsAway,
+    };
+  }, [playerLocationSummary, locationMatrixData, t]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -4724,17 +4905,30 @@ const StatisticsScreen = () => {
               {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
                 <div ref={locationMatrixRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
                   <div ref={locationMatrixControlsRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {renderPeriodOverrideDropdown('locationMatrix')}
-                      {renderActiveOverrideToggle('locationMatrix')}
-                    </div>
+                    {renderPeriodOverrideDropdown('locationMatrix')}
+                    {renderActiveOverrideToggle('locationMatrix')}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
+                    {t('stats.locationPerformance')}
+                  </div>
+                  {renderShareContextSubtitle('locationMatrix')}
+
+                  {/* Sub-toolbar: View Mode + Metric Toggle */}
+                  <div ref={locationMatrixSubControlsRef} style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    flexWrap: 'wrap',
+                    margin: '0.35rem 0 0.55rem 0',
+                  }}>
                     {/* View mode toggle: 📊 Matrix vs 📑 Cards */}
                     <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border)' }}>
                       <button
                         type="button"
                         onClick={() => setLocationViewMode('matrix')}
                         style={{
-                          padding: '0.2rem 0.45rem',
+                          padding: '0.2rem 0.5rem',
                           fontSize: '0.65rem',
                           fontWeight: 600,
                           borderRadius: '4px',
@@ -4751,7 +4945,7 @@ const StatisticsScreen = () => {
                         type="button"
                         onClick={() => setLocationViewMode('cards')}
                         style={{
-                          padding: '0.2rem 0.45rem',
+                          padding: '0.2rem 0.5rem',
                           fontSize: '0.65rem',
                           fontWeight: 600,
                           borderRadius: '4px',
@@ -4765,11 +4959,18 @@ const StatisticsScreen = () => {
                         {t('stats.locationViewCards')}
                       </button>
                     </div>
+
+                    {/* Metric Dropdown: 💰 רווח סה"כ vs 📊 ממוצע למשחק */}
+                    {renderStyledSelect({
+                      id: 'location-metric',
+                      value: locationMetric,
+                      onChange: (v) => setLocationMetric(v as 'total' | 'avg'),
+                      options: [
+                        { value: 'total', label: t('stats.locationMetricTotal') },
+                        { value: 'avg',   label: t('stats.locationMetricAvg') },
+                      ],
+                    })}
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.35rem' }}>
-                    {t('stats.locationPerformance')}
-                  </div>
-                  {renderShareContextSubtitle('locationMatrix')}
 
                   {locationViewMode === 'matrix' ? (
                     /* ── COMPACT MATRIX VIEW ────────────────────────── */
@@ -4810,22 +5011,32 @@ const StatisticsScreen = () => {
                             const isMe = identityName && row.playerName === identityName;
                             return (
                               <tr key={row.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
-                                <td style={{
-                                  padding: '0.35rem 0.3rem',
-                                  whiteSpace: 'nowrap',
-                                  fontWeight: '500',
-                                  textAlign: isRTL ? 'right' : 'left',
-                                  fontSize: getNameFontSize(row.playerName, 0.7),
-                                  position: 'sticky',
-                                  [isRTL ? 'right' : 'left']: 0,
-                                  background: isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)',
-                                  zIndex: 1,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  maxWidth: '85px',
-                                  ...(isMe ? meNameStyle : {}),
-                                }}>
-                                  {row.playerName}
+                                <td
+                                  onClick={() => setPlayerLocationSummary({ playerName: row.playerName })}
+                                  onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.25)'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+                                  title={t('stats.playerLocationSummaryHint')}
+                                  style={{
+                                    padding: '0.35rem 0.3rem',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: '600',
+                                    textAlign: isRTL ? 'right' : 'left',
+                                    fontSize: getNameFontSize(row.playerName, 0.7),
+                                    position: 'sticky',
+                                    [isRTL ? 'right' : 'left']: 0,
+                                    background: isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)',
+                                    zIndex: 1,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '85px',
+                                    cursor: 'pointer',
+                                    ...(isMe ? meNameStyle : {}),
+                                  }}
+                                >
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                    <span>{row.playerName}</span>
+                                    <span style={{ fontSize: '0.6rem', opacity: 0.55 }}>📊</span>
+                                  </span>
                                 </td>
                                 {locationMatrixData.locations.map(loc => {
                                   const cell = row.cells.get(loc.key);
@@ -4838,10 +5049,12 @@ const StatisticsScreen = () => {
                                   }
                                   const isKing = locationMatrixData.kings.get(loc.key) === row.playerName;
                                   const isLoser = locationMatrixData.losers.get(loc.key) === row.playerName;
-                                  const intensity = Math.min(Math.abs(cell.profit) / 1500, 1) * 0.18;
-                                  const bgColor = cell.profit > 0
+                                  const val = locationMetric === 'total' ? cell.profit : cell.avg;
+                                  const valRounded = Math.round(val);
+                                  const intensity = Math.min(Math.abs(val) / (locationMetric === 'total' ? 1500 : 300), 1) * 0.18;
+                                  const bgColor = valRounded > 0
                                     ? `rgba(16, 185, 129, ${intensity})`
-                                    : cell.profit < 0
+                                    : valRounded < 0
                                     ? `rgba(239, 68, 68, ${intensity})`
                                     : 'transparent';
                                   return (
@@ -4856,6 +5069,8 @@ const StatisticsScreen = () => {
                                         games: cell.games,
                                         wins: cell.wins,
                                         winRate: cell.winRate,
+                                        rank: cell.rank,
+                                        totalInLoc: cell.totalInLoc,
                                         isKing,
                                         isLoser,
                                         gameList: cell.gameList,
@@ -4870,25 +5085,32 @@ const StatisticsScreen = () => {
                                       }}
                                       onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.2)'}
                                       onMouseLeave={(e) => e.currentTarget.style.filter = 'none'}
-                                      title={`${row.playerName} ב${loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key} - לחץ לפרטים`}
+                                      title={`${row.playerName} ב${loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key} - מקום ${cell.rank}/${cell.totalInLoc}`}
                                     >
                                       <div style={{
                                         fontWeight: 700,
                                         fontSize: '0.72rem',
-                                        color: cell.profit > 0 ? 'var(--success)' : cell.profit < 0 ? '#ef4444' : 'var(--text)',
+                                        color: valRounded > 0 ? 'var(--success)' : valRounded < 0 ? '#ef4444' : 'var(--text)',
                                         whiteSpace: 'nowrap',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         gap: '2px',
                                       }}>
-                                        {isKing && <span>👑</span>}
-                                        {isLoser && <span>💀</span>}
+                                        {cell.rank === 1 ? (
+                                          <span title="מקום 1">🥇</span>
+                                        ) : isLoser ? (
+                                          <span title="מקום אחרון">💀</span>
+                                        ) : cell.rank === 2 ? (
+                                          <span title="מקום 2">🥈</span>
+                                        ) : cell.rank === 3 ? (
+                                          <span title="מקום 3">🥉</span>
+                                        ) : null}
                                         <span dir="ltr" style={{ display: 'inline-block' }}>
-                                          {cell.profit > 0
-                                            ? `+${cleanNumber(Math.round(cell.profit))}`
-                                            : cell.profit < 0
-                                            ? `-${cleanNumber(Math.round(Math.abs(cell.profit)))}`
+                                          {valRounded > 0
+                                            ? `+${cleanNumber(valRounded)}`
+                                            : valRounded < 0
+                                            ? `-${cleanNumber(Math.round(Math.abs(valRounded)))}`
                                             : '0'}
                                         </span>
                                       </div>
@@ -4915,21 +5137,20 @@ const StatisticsScreen = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                       {locationMatrixData.locations.map(loc => {
                         const locName = loc.key === NO_LOCATION_KEY ? t('stats.noLocation') : loc.key;
-                        const kingName = locationMatrixData.kings.get(loc.key);
-                        const loserName = locationMatrixData.losers.get(loc.key);
                         const locPlayers = locationMatrixRows
                           .map(r => {
                             const cell = r.cells.get(loc.key);
                             return cell && cell.games > 0 ? { playerName: r.playerName, ...cell } : null;
                           })
                           .filter((p): p is NonNullable<typeof p> => p !== null)
-                          .sort((a, b) => b.profit - a.profit);
+                          .sort((a, b) => locationMetric === 'total' ? b.profit - a.profit : b.avg - a.avg);
 
                         if (locPlayers.length === 0) return null;
 
                         return (
                           <div
                             key={loc.key}
+                            data-location-card={loc.key}
                             style={{
                               background: 'var(--surface)',
                               borderRadius: '8px',
@@ -4942,17 +5163,41 @@ const StatisticsScreen = () => {
                                 <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text)' }}>📍 {locName}</span>
                                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>({loc.games} {t('stats.locationGames')})</span>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem' }}>
-                                {kingName && <span title={`מלך המיקום: ${kingName}`}>👑 {kingName}</span>}
-                                {loserName && <span title={`מקום אחרון: ${loserName}`} style={{ opacity: 0.85 }}>💀 {loserName}</span>}
-                              </div>
+                              <button
+                                type="button"
+                                data-share-btn="true"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleShareSpecificLocationCard(loc.key, locName);
+                                }}
+                                disabled={sharingSpecificCardKey === loc.key}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  fontSize: '0.65rem',
+                                  padding: '0.2rem 0.5rem',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  color: 'var(--text-muted)',
+                                  border: '1px solid rgba(255,255,255,0.12)',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                title={t('common.share')}
+                              >
+                                {sharingSpecificCardKey === loc.key ? t('common.capturing') : t('common.share')}
+                              </button>
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                              {locPlayers.map((p, idx) => {
+                              {locPlayers.map((p) => {
                                 const isMe = identityName && p.playerName === identityName;
-                                const isKing = kingName === p.playerName;
-                                const isLoser = loserName === p.playerName;
+                                const isKing = p.rank === 1;
+                                const isLoser = locationMatrixData.losers.get(loc.key) === p.playerName;
+                                const val = locationMetric === 'total' ? p.profit : p.avg;
+                                const valRounded = Math.round(val);
+
                                 return (
                                   <div
                                     key={p.playerName}
@@ -4965,6 +5210,8 @@ const StatisticsScreen = () => {
                                       games: p.games,
                                       wins: p.wins,
                                       winRate: p.winRate,
+                                      rank: p.rank,
+                                      totalInLoc: p.totalInLoc,
                                       isKing,
                                       isLoser,
                                       gameList: p.gameList,
@@ -4984,29 +5231,52 @@ const StatisticsScreen = () => {
                                   >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: '16px', textAlign: 'center' }}>
-                                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
+                                        {p.rank === 1 ? '🥇' : isLoser ? '💀' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : `${p.rank}.`}
                                       </span>
-                                      <span style={{ fontWeight: isMe ? 700 : 500, color: isMe ? 'var(--primary)' : 'var(--text)' }}>
-                                        {p.playerName}
+                                      <span
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPlayerLocationSummary({ playerName: p.playerName });
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                                        style={{
+                                          fontWeight: isMe ? 700 : 600,
+                                          color: isMe ? 'var(--primary)' : 'var(--text)',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                        }}
+                                        title={t('stats.playerLocationSummaryHint')}
+                                      >
+                                        <span>{p.playerName}</span>
+                                        <span style={{ fontSize: '0.55rem', opacity: 0.5 }}>📊</span>
                                       </span>
-                                      {isKing && <span>👑</span>}
-                                      {isLoser && <span>💀</span>}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
                                         {p.games} {t('stats.locationGames')}
+                                        {locationMetric === 'total' && (
+                                          <>
+                                            <span style={{ opacity: 0.5, margin: '0 0.2rem' }}>·</span>
+                                            <span dir="ltr" style={{ fontWeight: 500 }}>
+                                              {p.avg > 0 ? `+${cleanNumber(Math.round(p.avg))}` : p.avg < 0 ? `-${cleanNumber(Math.round(Math.abs(p.avg)))}` : '0'}
+                                            </span>
+                                          </>
+                                        )}
                                       </span>
                                       <span style={{
                                         fontWeight: 700,
-                                        color: p.profit > 0 ? 'var(--success)' : p.profit < 0 ? '#ef4444' : 'var(--text)',
+                                        color: valRounded > 0 ? 'var(--success)' : valRounded < 0 ? '#ef4444' : 'var(--text)',
                                         minWidth: '55px',
                                         textAlign: 'end',
                                       }}>
                                         <span dir="ltr">
-                                          {p.profit > 0
-                                            ? `+${cleanNumber(Math.round(p.profit))}`
-                                            : p.profit < 0
-                                            ? `-${cleanNumber(Math.round(Math.abs(p.profit)))}`
+                                          {valRounded > 0
+                                            ? `+${cleanNumber(valRounded)}`
+                                            : valRounded < 0
+                                            ? `-${cleanNumber(Math.round(Math.abs(valRounded)))}`
                                             : '0'}
                                         </span>
                                       </span>
@@ -5022,7 +5292,7 @@ const StatisticsScreen = () => {
                   )}
                 </div>
               )}
-              {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && (
+              {locationMatrixData.locations.length > 0 && locationMatrixRows.length > 0 && locationViewMode === 'matrix' && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                   <button
                     onClick={handleShareLocationMatrix}
@@ -6229,10 +6499,69 @@ const StatisticsScreen = () => {
                   📍 {locationCellDetails.locationName}
                 </div>
                 <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  {locationCellDetails.playerName}
-                  {locationCellDetails.isKing && <span title="מלך המיקום">👑</span>}
+                  <span
+                    onClick={() => {
+                      const pName = locationCellDetails.playerName;
+                      setLocationCellDetails(null);
+                      setPlayerLocationSummary({ playerName: pName });
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                    onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                    style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                    title={t('stats.playerLocationSummaryHint')}
+                  >
+                    <span>{locationCellDetails.playerName}</span>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>📊</span>
+                  </span>
+                  {locationCellDetails.rank === 1 && <span title="מקום 1">🥇</span>}
                   {locationCellDetails.isLoser && <span title="מקום אחרון במיקום">💀</span>}
                 </h3>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '12px',
+                  background: locationCellDetails.rank === 1
+                    ? 'rgba(234, 179, 8, 0.18)'
+                    : locationCellDetails.rank === 2
+                    ? 'rgba(156, 163, 175, 0.18)'
+                    : locationCellDetails.rank === 3
+                    ? 'rgba(217, 119, 6, 0.18)'
+                    : locationCellDetails.isLoser
+                    ? 'rgba(239, 68, 68, 0.18)'
+                    : 'rgba(255, 255, 255, 0.07)',
+                  color: locationCellDetails.rank === 1
+                    ? '#facc15'
+                    : locationCellDetails.rank === 2
+                    ? '#e5e7eb'
+                    : locationCellDetails.rank === 3
+                    ? '#fb923c'
+                    : locationCellDetails.isLoser
+                    ? '#f87171'
+                    : 'var(--text-muted)',
+                  border: `1px solid ${
+                    locationCellDetails.rank === 1
+                      ? 'rgba(234, 179, 8, 0.35)'
+                      : locationCellDetails.rank === 2
+                      ? 'rgba(156, 163, 175, 0.35)'
+                      : locationCellDetails.rank === 3
+                      ? 'rgba(217, 119, 6, 0.35)'
+                      : locationCellDetails.isLoser
+                      ? 'rgba(239, 68, 68, 0.35)'
+                      : 'rgba(255, 255, 255, 0.12)'
+                  }`,
+                  marginTop: '0.35rem',
+                }}>
+                  <span>
+                    {locationCellDetails.rank === 1 ? '🥇' : locationCellDetails.isLoser ? '💀' : locationCellDetails.rank === 2 ? '🥈' : locationCellDetails.rank === 3 ? '🥉' : '🏅'}
+                  </span>
+                  <span>
+                    {t('stats.locationRankOf', { rank: locationCellDetails.rank, total: locationCellDetails.totalInLoc })}
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
@@ -6358,6 +6687,441 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Player Multi-Location Summary Modal */}
+      {playerLocationSummary && playerSummaryData && (
+        <div
+          className="modal-overlay"
+          onClick={() => setPlayerLocationSummary(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '0.75rem',
+          }}
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              borderRadius: '14px',
+              padding: '1rem',
+              maxWidth: '430px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.65rem' }}>
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>
+                  {t('stats.locationSummary')}
+                </div>
+                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>
+                  {playerSummaryData.playerName}
+                </h3>
+                {/* Aggregate Badges - Single Line */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'nowrap',
+                  gap: '0.35rem',
+                  marginTop: '0.35rem',
+                  whiteSpace: 'nowrap',
+                  overflowX: 'auto',
+                }}>
+                  <span style={{
+                    fontSize: '0.66rem',
+                    padding: '0.12rem 0.4rem',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.07)',
+                    color: 'var(--text)',
+                    fontWeight: 500,
+                    flexShrink: 0,
+                  }}>
+                    📍 {playerSummaryData.venues.length}
+                  </span>
+                  <span style={{
+                    fontSize: '0.66rem',
+                    padding: '0.12rem 0.4rem',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.07)',
+                    color: 'var(--text)',
+                    fontWeight: 500,
+                    flexShrink: 0,
+                  }}>
+                    🎮 {playerSummaryData.totalGames}
+                  </span>
+                  <span style={{
+                    fontSize: '0.66rem',
+                    padding: '0.12rem 0.4rem',
+                    borderRadius: '8px',
+                    background: playerSummaryData.totalProfit > 0 ? 'rgba(16, 185, 129, 0.15)' : playerSummaryData.totalProfit < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.07)',
+                    color: playerSummaryData.totalProfit > 0 ? 'var(--success)' : playerSummaryData.totalProfit < 0 ? '#ef4444' : 'var(--text)',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontWeight: 500, opacity: 0.85, fontSize: '0.62rem' }}>{t('common.total')}: </span>
+                    <span dir="ltr">
+                      {playerSummaryData.totalProfit > 0
+                        ? `+${cleanNumber(playerSummaryData.totalProfit)} ₪`
+                        : playerSummaryData.totalProfit < 0
+                        ? `-${cleanNumber(Math.abs(playerSummaryData.totalProfit))} ₪`
+                        : '0 ₪'}
+                    </span>
+                  </span>
+                  <span style={{
+                    fontSize: '0.66rem',
+                    padding: '0.12rem 0.4rem',
+                    borderRadius: '8px',
+                    background: playerSummaryData.overallAvg > 0 ? 'rgba(16, 185, 129, 0.15)' : playerSummaryData.overallAvg < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.07)',
+                    color: playerSummaryData.overallAvg > 0 ? 'var(--success)' : playerSummaryData.overallAvg < 0 ? '#ef4444' : 'var(--text)',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontWeight: 500, opacity: 0.85, fontSize: '0.62rem' }}>{t('stats.playerAvgCol')}: </span>
+                    <span dir="ltr">
+                      {playerSummaryData.overallAvg > 0
+                        ? `+${cleanNumber(Math.round(playerSummaryData.overallAvg))} ₪`
+                        : playerSummaryData.overallAvg < 0
+                        ? `-${cleanNumber(Math.round(Math.abs(playerSummaryData.overallAvg)))} ₪`
+                        : '0 ₪'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPlayerLocationSummary(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1,
+                  padding: '0.2rem',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+
+            {/* Key Insights Highlight Cards - Clean 2 Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '0.4rem',
+              marginBottom: '0.65rem',
+            }}>
+              {/* Card 1: Best Location (המבצר if profit > 0, or ההפסד המזערי if profit <= 0) */}
+              {playerSummaryData.bestVenue && (
+                <div style={{
+                  background: playerSummaryData.bestVenue.profit > 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(148, 163, 184, 0.08)',
+                  border: `1px solid ${playerSummaryData.bestVenue.profit > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(148, 163, 184, 0.25)'}`,
+                  borderRadius: '8px',
+                  padding: '0.45rem',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    fontSize: '0.65rem',
+                    color: playerSummaryData.bestVenue.profit > 0 ? 'var(--success)' : 'var(--text-muted)',
+                    fontWeight: 600,
+                  }}>
+                    <span>{playerSummaryData.bestVenue.profit > 0 ? '🏰' : '🛡️'}</span>
+                    <span>{playerSummaryData.bestVenue.profit > 0 ? t('stats.playerBestLocation') : t('stats.playerLowestLossLocation')}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {playerSummaryData.bestVenue.name}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem', fontSize: '0.68rem' }}>
+                    <span style={{ color: playerSummaryData.bestVenue.profit > 0 ? 'var(--success)' : playerSummaryData.bestVenue.profit < 0 ? '#ef4444' : 'var(--text)', fontWeight: 700 }}>
+                      <span dir="ltr">
+                        {playerSummaryData.bestVenue.profit > 0
+                          ? `+${cleanNumber(playerSummaryData.bestVenue.profit)} ₪`
+                          : `${cleanNumber(playerSummaryData.bestVenue.profit)} ₪`}
+                      </span>
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}>
+                      {playerSummaryData.bestVenue.rank === 1 ? '🥇' : `#${playerSummaryData.bestVenue.rank}`} · {playerSummaryData.bestVenue.games} {t('stats.locationGames')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Card 2: Lowest Location (הנאחס if profit < 0, or הפחות רווחי if profit >= 0) */}
+              {playerSummaryData.worstVenue && playerSummaryData.venues.length > 1 && (
+                <div style={{
+                  background: playerSummaryData.worstVenue.profit < 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(148, 163, 184, 0.08)',
+                  border: `1px solid ${playerSummaryData.worstVenue.profit < 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(148, 163, 184, 0.25)'}`,
+                  borderRadius: '8px',
+                  padding: '0.45rem',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    fontSize: '0.65rem',
+                    color: playerSummaryData.worstVenue.profit < 0 ? '#f87171' : 'var(--text-muted)',
+                    fontWeight: 600,
+                  }}>
+                    <span>{playerSummaryData.worstVenue.profit < 0 ? '⚡' : '📉'}</span>
+                    <span>{playerSummaryData.worstVenue.profit < 0 ? t('stats.playerWorstLocation') : t('stats.playerLowestProfitableLocation')}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {playerSummaryData.worstVenue.name}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem', fontSize: '0.68rem' }}>
+                    <span style={{ color: playerSummaryData.worstVenue.profit < 0 ? '#ef4444' : playerSummaryData.worstVenue.profit > 0 ? 'var(--success)' : 'var(--text)', fontWeight: 700 }}>
+                      <span dir="ltr">
+                        {playerSummaryData.worstVenue.profit > 0
+                          ? `+${cleanNumber(playerSummaryData.worstVenue.profit)} ₪`
+                          : `${cleanNumber(playerSummaryData.worstVenue.profit)} ₪`}
+                      </span>
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}>
+                      {playerSummaryData.worstVenue.isLoser ? '💀' : playerSummaryData.worstVenue.rank === 1 ? '🥇' : `#${playerSummaryData.worstVenue.rank}`} · {playerSummaryData.worstVenue.games} {t('stats.locationGames')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Home vs Outside (Away) Impact Sentence */}
+            {(() => {
+              const { homeVsAway } = playerSummaryData;
+              if (homeVsAway.hasHomeGames && homeVsAway.hasAwayGames) {
+                const homeAvgStr = homeVsAway.homeAvg > 0 ? `+${cleanNumber(homeVsAway.homeAvg)} ₪` : homeVsAway.homeAvg < 0 ? `-${cleanNumber(Math.abs(homeVsAway.homeAvg))} ₪` : '0 ₪';
+                const awayAvgStr = homeVsAway.awayAvg > 0 ? `+${cleanNumber(homeVsAway.awayAvg)} ₪` : homeVsAway.awayAvg < 0 ? `-${cleanNumber(Math.abs(homeVsAway.awayAvg))} ₪` : '0 ₪';
+
+                if (homeVsAway.diff >= 30) {
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.55rem',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.22)',
+                      borderRadius: '8px',
+                      marginBottom: '0.55rem',
+                      fontSize: '0.68rem',
+                      color: 'var(--text)',
+                      lineHeight: 1.35,
+                    }}>
+                      <span style={{ fontSize: '0.85rem' }}>🏠</span>
+                      <span>
+                        מרוויח יותר בבית (<span dir="ltr" style={{ color: 'var(--success)', fontWeight: 700 }}>{homeAvgStr}</span> ממוצע) לעומת בחוץ (<span dir="ltr" style={{ color: homeVsAway.awayAvg > 0 ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>{awayAvgStr}</span>).
+                      </span>
+                    </div>
+                  );
+                } else if (homeVsAway.diff <= -30) {
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.55rem',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.22)',
+                      borderRadius: '8px',
+                      marginBottom: '0.55rem',
+                      fontSize: '0.68rem',
+                      color: 'var(--text)',
+                      lineHeight: 1.35,
+                    }}>
+                      <span style={{ fontSize: '0.85rem' }}>🚗</span>
+                      <span>
+                        מצליח יותר בחוץ (<span dir="ltr" style={{ color: homeVsAway.awayAvg > 0 ? 'var(--success)' : '#ef4444', fontWeight: 700 }}>{awayAvgStr}</span> ממוצע) לעומת בבית (<span dir="ltr" style={{ color: homeVsAway.homeAvg > 0 ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>{homeAvgStr}</span>).
+                      </span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.55rem',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '8px',
+                      marginBottom: '0.55rem',
+                      fontSize: '0.68rem',
+                      color: 'var(--text)',
+                      lineHeight: 1.35,
+                    }}>
+                      <span style={{ fontSize: '0.85rem' }}>⚖️</span>
+                      <span>
+                        ביצועים דומים בבית ובחוץ (ממוצע <span dir="ltr" style={{ fontWeight: 600 }}>{homeAvgStr}</span> בבית מול <span dir="ltr" style={{ fontWeight: 600 }}>{awayAvgStr}</span> בחוץ).
+                      </span>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+
+            {/* Breakdown Table Header */}
+            <div style={{
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              color: 'var(--text-muted)',
+              marginBottom: '0.35rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>השוואת מיקומים</span>
+              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.7 }}>לחץ על שורה לרשימת משחקים</span>
+            </div>
+
+            {/* Venues Table */}
+            <div style={{ overflowY: 'auto', flex: 1, maxHeight: '35vh', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+                    <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.35rem 0.45rem' }}>{t('stats.playerLocationCol')}</th>
+                    <th style={{ textAlign: 'center', padding: '0.35rem 0.25rem' }}>{t('stats.playerRankCol')}</th>
+                    <th style={{ textAlign: 'center', padding: '0.35rem 0.25rem' }}>{t('stats.playerGamesCol')}</th>
+                    <th style={{ textAlign: 'center', padding: '0.35rem 0.35rem' }}>{t('stats.playerProfitCol')}</th>
+                    <th style={{ textAlign: 'center', padding: '0.35rem 0.25rem' }}>{t('stats.playerAvgCol')}</th>
+                    <th style={{ textAlign: 'center', padding: '0.35rem 0.25rem' }}>{t('stats.playerWinRateCol')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playerSummaryData.venues.map(v => (
+                    <tr
+                      key={v.key}
+                      onClick={() => {
+                        setPlayerLocationSummary(null);
+                        setLocationCellDetails({
+                          playerName: playerSummaryData.playerName,
+                          locationName: v.name,
+                          locationKey: v.key,
+                          profit: v.profit,
+                          avg: v.avg,
+                          games: v.games,
+                          wins: v.wins,
+                          winRate: v.winRate,
+                          rank: v.rank,
+                          totalInLoc: v.totalInLoc,
+                          isKing: v.isKing,
+                          isLoser: v.isLoser,
+                          gameList: v.gameList,
+                        });
+                      }}
+                      style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      title={`צפה במשחקים של ${playerSummaryData.playerName} ב${v.name}`}
+                    >
+                      <td style={{ padding: '0.35rem 0.45rem', fontWeight: 600, color: 'var(--text)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span>📍</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '90px' }}>
+                            {v.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.35rem 0.25rem' }}>
+                        <span style={{
+                          fontSize: '0.62rem',
+                          fontWeight: 600,
+                          padding: '0.1rem 0.35rem',
+                          borderRadius: '8px',
+                          background: v.rank === 1
+                            ? 'rgba(234, 179, 8, 0.15)'
+                            : v.rank === 2
+                            ? 'rgba(156, 163, 175, 0.15)'
+                            : v.rank === 3
+                            ? 'rgba(217, 119, 6, 0.15)'
+                            : v.isLoser
+                            ? 'rgba(239, 68, 68, 0.15)'
+                            : 'rgba(255,255,255,0.04)',
+                          color: v.rank === 1
+                            ? '#facc15'
+                            : v.rank === 2
+                            ? '#e5e7eb'
+                            : v.rank === 3
+                            ? '#fb923c'
+                            : v.isLoser
+                            ? '#f87171'
+                            : 'var(--text-muted)',
+                        }}>
+                          {v.rank === 1 ? '🥇' : v.rank === 2 ? '🥈' : v.rank === 3 ? '🥉' : v.isLoser ? '💀' : ''} {v.rank}/{v.totalInLoc}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.35rem 0.25rem', color: 'var(--text-muted)' }}>
+                        {v.games}
+                      </td>
+                      <td style={{
+                        textAlign: 'center',
+                        padding: '0.35rem 0.35rem',
+                        fontWeight: 700,
+                        color: v.profit > 0 ? 'var(--success)' : v.profit < 0 ? '#ef4444' : 'var(--text)',
+                        background: v.profit > 0 ? 'rgba(16, 185, 129, 0.08)' : v.profit < 0 ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                      }}>
+                        <span dir="ltr">
+                          {v.profit > 0
+                            ? `+${cleanNumber(v.profit)}`
+                            : v.profit < 0
+                            ? `-${cleanNumber(Math.abs(v.profit))}`
+                            : '0'}
+                        </span>
+                      </td>
+                      <td style={{
+                        textAlign: 'center',
+                        padding: '0.35rem 0.25rem',
+                        fontWeight: 600,
+                        color: v.avg > 0 ? 'var(--success)' : v.avg < 0 ? '#ef4444' : 'var(--text)',
+                        background: v.avg > 0 ? 'rgba(16, 185, 129, 0.05)' : v.avg < 0 ? 'rgba(239, 68, 68, 0.05)' : 'transparent',
+                      }}>
+                        <span dir="ltr">
+                          {v.avg > 0
+                            ? `+${cleanNumber(Math.round(v.avg))}`
+                            : v.avg < 0
+                            ? `-${cleanNumber(Math.round(Math.abs(v.avg)))}`
+                            : '0'}
+                        </span>
+                      </td>
+                      <td style={{
+                        textAlign: 'center',
+                        padding: '0.35rem 0.25rem',
+                        fontWeight: 600,
+                        color: v.winRate >= 50 ? 'var(--success)' : v.winRate > 0 ? '#ef4444' : 'var(--text-muted)',
+                      }}>
+                        {v.winRate.toFixed(0)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -223,7 +223,7 @@ export function hideForCapture(...elements: (HTMLElement | null | undefined)[]):
 export const captureAndSplit = async (
   element: HTMLElement,
   baseName: string,
-  options?: { scale?: number; backgroundColor?: string }
+  options?: { scale?: number; backgroundColor?: string; width?: number; windowWidth?: number }
 ): Promise<File[]> => {
   const { default: html2canvas } = await import('html2canvas');
   const scale = options?.scale ?? 2;
@@ -238,6 +238,8 @@ export const captureAndSplit = async (
       scale,
       useCORS: true,
       logging: false,
+      ...(options?.width ? { width: options.width } : {}),
+      ...(options?.windowWidth ? { windowWidth: options.windowWidth } : {}),
     });
   } finally {
     restore();

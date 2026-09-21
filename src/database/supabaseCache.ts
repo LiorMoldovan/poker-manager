@@ -37,7 +37,10 @@ function toGame(row: Record<string, unknown>): Game {
     status: row.status as Game['status'],
     createdAt: row.created_at as string,
   };
-  if (row.location) game.location = row.location as string;
+  if (row.location) {
+    const loc = (row.location as string).trim();
+    game.location = loc === 'מקלט ליכטר' ? 'מקלט' : (row.location as string);
+  }
   if (row.chip_gap != null) game.chipGap = Number(row.chip_gap);
   if (row.chip_gap_per_player != null) game.chipGapPerPlayer = Number(row.chip_gap_per_player);
   if (row.ai_summary) game.aiSummary = row.ai_summary as string;
@@ -86,22 +89,34 @@ function toChipValue(row: Record<string, unknown>): ChipValue {
 }
 
 function toSettings(row: Record<string, unknown>): Settings {
+  const rawLocs = (row.locations as string[]) || [];
+  const locations = Array.from(new Set(rawLocs.map(l => l.trim() === 'מקלט ליכטר' ? 'מקלט' : l)));
   const s: Settings = {
     rebuyValue: Number(row.rebuy_value),
     chipsPerRebuy: Number(row.chips_per_rebuy),
     minTransfer: Number(row.min_transfer),
     gameNightDays: (row.game_night_days as number[]) || [4, 6],
-    locations: (row.locations as string[]) || [],
+    locations,
     blockedTransfers: (row.blocked_transfers as Settings['blockedTransfers']) || [],
   };
   // location_addresses (migration 094) — name→address map. Tolerate the
   // key being missing on older cache snapshots / pre-094 reads.
   if (row.location_addresses && typeof row.location_addresses === 'object') {
-    s.locationAddresses = row.location_addresses as Record<string, string>;
+    const addresses = { ...(row.location_addresses as Record<string, string>) };
+    if (addresses['מקלט ליכטר']) {
+      if (!addresses['מקלט']) addresses['מקלט'] = addresses['מקלט ליכטר'];
+      delete addresses['מקלט ליכטר'];
+    }
+    s.locationAddresses = addresses;
   }
   // location_notes (migration 095) — name→free-text arrival details map.
   if (row.location_notes && typeof row.location_notes === 'object') {
-    s.locationNotes = row.location_notes as Record<string, string>;
+    const notes = { ...(row.location_notes as Record<string, string>) };
+    if (notes['מקלט ליכטר']) {
+      if (!notes['מקלט']) notes['מקלט'] = notes['מקלט ליכטר'];
+      delete notes['מקלט ליכטר'];
+    }
+    s.locationNotes = notes;
   }
   if (row.gemini_api_key) s.geminiApiKey = row.gemini_api_key as string;
   if (row.elevenlabs_api_key) s.elevenlabsApiKey = row.elevenlabs_api_key as string;
@@ -235,7 +250,9 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     confirmedAt: (row.confirmed_at as string | null) ?? null,
     confirmedGameId: (row.confirmed_game_id as string | null) ?? null,
     note: (row.note as string | null) ?? null,
-    defaultLocation: (row.default_location as string | null) ?? null,
+    defaultLocation: row.default_location
+      ? ((row.default_location as string).trim() === 'מקלט ליכטר' ? 'מקלט' : (row.default_location as string))
+      : null,
     allowMaybe: row.allow_maybe !== false,
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
     votingLockedAt: (row.voting_locked_at as string | null) ?? null,
@@ -263,7 +280,10 @@ function toPendingForecast(row: Record<string, unknown>): PendingForecast {
   if (row.pre_game_teaser) pf.preGameTeaser = row.pre_game_teaser as string;
   if (row.ai_model) pf.aiModel = row.ai_model as string;
   if (row.published != null) pf.published = row.published as boolean;
-  if (row.location) pf.location = row.location as string;
+  if (row.location) {
+    const loc = (row.location as string).trim();
+    pf.location = loc === 'מקלט ליכטר' ? 'מקלט' : (row.location as string);
+  }
   return pf;
 }
 
@@ -303,7 +323,10 @@ function gameToRow(g: Game, groupId: string): Record<string, unknown> {
   //   - undefined locally  ⇒  not loaded yet  ⇒  omit (preserve DB)
   //   - empty string/null  ⇒  user cleared    ⇒  send null
   //   - real value         ⇒  send value
-  if (g.location !== undefined) row.location = g.location || null;
+  if (g.location !== undefined) {
+    const loc = g.location ? g.location.trim() : null;
+    row.location = loc === 'מקלט ליכטר' ? 'מקלט' : loc;
+  }
   if (g.chipGap !== undefined) row.chip_gap = g.chipGap ?? null;
   if (g.chipGapPerPlayer !== undefined) row.chip_gap_per_player = g.chipGapPerPlayer ?? null;
   if (g.aiSummary !== undefined) row.ai_summary = g.aiSummary || null;
@@ -350,20 +373,34 @@ function chipValueToRow(cv: ChipValue, groupId: string) {
 }
 
 function settingsToRow(s: Settings, groupId: string) {
+  const normLocations = s.locations
+    ? Array.from(new Set(s.locations.map(l => l.trim() === 'מקלט ליכטר' ? 'מקלט' : l)))
+    : s.locations;
+  const normAddresses = s.locationAddresses ? { ...s.locationAddresses } : {};
+  if (normAddresses['מקלט ליכטר']) {
+    if (!normAddresses['מקלט']) normAddresses['מקלט'] = normAddresses['מקלט ליכטר'];
+    delete normAddresses['מקלט ליכטר'];
+  }
+  const normNotes = s.locationNotes ? { ...s.locationNotes } : {};
+  if (normNotes['מקלט ליכטר']) {
+    if (!normNotes['מקלט']) normNotes['מקלט'] = normNotes['מקלט ליכטר'];
+    delete normNotes['מקלט ליכטר'];
+  }
+
   return {
     group_id: groupId,
     rebuy_value: s.rebuyValue,
     chips_per_rebuy: s.chipsPerRebuy,
     min_transfer: s.minTransfer,
     game_night_days: s.gameNightDays,
-    locations: s.locations,
+    locations: normLocations,
     // location_addresses (migration 094). Send '{}' rather than null so
     // the column always holds a valid object; PostgREST on-conflict only
     // touches it when present, matching the locations/blocked_transfers
     // pattern above.
-    location_addresses: s.locationAddresses ?? {},
+    location_addresses: normAddresses,
     // location_notes (migration 095) — same pattern as addresses above.
-    location_notes: s.locationNotes ?? {},
+    location_notes: normNotes,
     blocked_transfers: s.blockedTransfers,
     gemini_api_key: s.geminiApiKey || null,
     elevenlabs_api_key: s.elevenlabsApiKey || null,

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.34.1';
+export const APP_VERSION = '6.35.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.35.0',
+    date: '2026-09-21',
+    changes: [
+      '📤 Share button per location card',
+      '🔍 Richer player location summary popup',
+      '📊 Metric picker switched to dropdown',
+      '📍 Venue name normalized to shelter',
+    ],
+  },
   {
     version: '6.34.1',
     date: '2026-09-21',
