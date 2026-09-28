@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.35.0';
+export const APP_VERSION = '6.36.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.36.0',
+    date: '2026-09-28',
+    changes: [
+      '📍 Distinct shelter venues for Lichter and Herzog',
+      '🏛️ Backfilled locations for historical game nights',
+    ],
+  },
   {
     version: '6.35.0',
     date: '2026-09-21',

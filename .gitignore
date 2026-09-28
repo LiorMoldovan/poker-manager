@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 
 # Build output
@@ -41,3 +41,8 @@ scripts/settlelab/out/
 
 # Cursor MCP config (contains Supabase PAT)
 .cursor/mcp.json
+
+# Scratch files & analysis
+scratch/
+WhatsApp*.txt
+

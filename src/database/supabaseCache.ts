@@ -38,8 +38,7 @@ function toGame(row: Record<string, unknown>): Game {
     createdAt: row.created_at as string,
   };
   if (row.location) {
-    const loc = (row.location as string).trim();
-    game.location = loc === 'מקלט ליכטר' ? 'מקלט' : (row.location as string);
+    game.location = (row.location as string).trim();
   }
   if (row.chip_gap != null) game.chipGap = Number(row.chip_gap);
   if (row.chip_gap_per_player != null) game.chipGapPerPlayer = Number(row.chip_gap_per_player);
@@ -90,7 +89,7 @@ function toChipValue(row: Record<string, unknown>): ChipValue {
 
 function toSettings(row: Record<string, unknown>): Settings {
   const rawLocs = (row.locations as string[]) || [];
-  const locations = Array.from(new Set(rawLocs.map(l => l.trim() === 'מקלט ליכטר' ? 'מקלט' : l)));
+  const locations = Array.from(new Set(rawLocs.map(l => l.trim())));
   const s: Settings = {
     rebuyValue: Number(row.rebuy_value),
     chipsPerRebuy: Number(row.chips_per_rebuy),
@@ -102,21 +101,11 @@ function toSettings(row: Record<string, unknown>): Settings {
   // location_addresses (migration 094) — name→address map. Tolerate the
   // key being missing on older cache snapshots / pre-094 reads.
   if (row.location_addresses && typeof row.location_addresses === 'object') {
-    const addresses = { ...(row.location_addresses as Record<string, string>) };
-    if (addresses['מקלט ליכטר']) {
-      if (!addresses['מקלט']) addresses['מקלט'] = addresses['מקלט ליכטר'];
-      delete addresses['מקלט ליכטר'];
-    }
-    s.locationAddresses = addresses;
+    s.locationAddresses = { ...(row.location_addresses as Record<string, string>) };
   }
   // location_notes (migration 095) — name→free-text arrival details map.
   if (row.location_notes && typeof row.location_notes === 'object') {
-    const notes = { ...(row.location_notes as Record<string, string>) };
-    if (notes['מקלט ליכטר']) {
-      if (!notes['מקלט']) notes['מקלט'] = notes['מקלט ליכטר'];
-      delete notes['מקלט ליכטר'];
-    }
-    s.locationNotes = notes;
+    s.locationNotes = { ...(row.location_notes as Record<string, string>) };
   }
   if (row.gemini_api_key) s.geminiApiKey = row.gemini_api_key as string;
   if (row.elevenlabs_api_key) s.elevenlabsApiKey = row.elevenlabs_api_key as string;
@@ -251,7 +240,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     confirmedGameId: (row.confirmed_game_id as string | null) ?? null,
     note: (row.note as string | null) ?? null,
     defaultLocation: row.default_location
-      ? ((row.default_location as string).trim() === 'מקלט ליכטר' ? 'מקלט' : (row.default_location as string))
+      ? (row.default_location as string).trim()
       : null,
     allowMaybe: row.allow_maybe !== false,
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
@@ -281,8 +270,7 @@ function toPendingForecast(row: Record<string, unknown>): PendingForecast {
   if (row.ai_model) pf.aiModel = row.ai_model as string;
   if (row.published != null) pf.published = row.published as boolean;
   if (row.location) {
-    const loc = (row.location as string).trim();
-    pf.location = loc === 'מקלט ליכטר' ? 'מקלט' : (row.location as string);
+    pf.location = (row.location as string).trim();
   }
   return pf;
 }
@@ -324,8 +312,7 @@ function gameToRow(g: Game, groupId: string): Record<string, unknown> {
   //   - empty string/null  ⇒  user cleared    ⇒  send null
   //   - real value         ⇒  send value
   if (g.location !== undefined) {
-    const loc = g.location ? g.location.trim() : null;
-    row.location = loc === 'מקלט ליכטר' ? 'מקלט' : loc;
+    row.location = g.location ? g.location.trim() : null;
   }
   if (g.chipGap !== undefined) row.chip_gap = g.chipGap ?? null;
   if (g.chipGapPerPlayer !== undefined) row.chip_gap_per_player = g.chipGapPerPlayer ?? null;
@@ -374,18 +361,10 @@ function chipValueToRow(cv: ChipValue, groupId: string) {
 
 function settingsToRow(s: Settings, groupId: string) {
   const normLocations = s.locations
-    ? Array.from(new Set(s.locations.map(l => l.trim() === 'מקלט ליכטר' ? 'מקלט' : l)))
+    ? Array.from(new Set(s.locations.map(l => l.trim())))
     : s.locations;
   const normAddresses = s.locationAddresses ? { ...s.locationAddresses } : {};
-  if (normAddresses['מקלט ליכטר']) {
-    if (!normAddresses['מקלט']) normAddresses['מקלט'] = normAddresses['מקלט ליכטר'];
-    delete normAddresses['מקלט ליכטר'];
-  }
   const normNotes = s.locationNotes ? { ...s.locationNotes } : {};
-  if (normNotes['מקלט ליכטר']) {
-    if (!normNotes['מקלט']) normNotes['מקלט'] = normNotes['מקלט ליכטר'];
-    delete normNotes['מקלט ליכטר'];
-  }
 
   return {
     group_id: groupId,
