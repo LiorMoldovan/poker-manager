@@ -1430,55 +1430,86 @@ const StatisticsScreen = () => {
     const allGames = getAllGames().filter(g => passesGameFilter(g, dateFilter, locationFilter));
     const allGamePlayers = getAllGamePlayers();
     const settings = getSettings();
-    const gameIds = new Set(allGames.map(g => g.id));
+    const gameMap = new Map(allGames.map(g => [g.id, g]));
+
+    // A game has rebuy data iff at least one player rebought (> 1 buy-in).
+    // Legacy games without rebuy tracking have all players at rebuys <= 1.
+    const gameIdsWithData = new Set<string>();
+    for (const gp of allGamePlayers) {
+      if (!gameMap.has(gp.gameId)) continue;
+      if (gp.rebuys > 1) {
+        gameIdsWithData.add(gp.gameId);
+      }
+    }
 
     const playerMap = new Map<string, {
+      playerId: string;
       playerName: string;
       gamesPlayed: number;
+      gamesWithData: number;
       totalBuyins: number;
-      maxBuyinsInGame: number;
+      totalRebuysOnly: number;
+      maxRebuysInGame: number;
       maxBuyinsDate: string;
       totalInvested: number;
       totalProfit: number;
+      avgRebuys: number;
     }>();
 
     for (const gp of allGamePlayers) {
-      if (!gameIds.has(gp.gameId)) continue;
-      const game = allGames.find(g => g.id === gp.gameId);
+      if (!gameMap.has(gp.gameId)) continue;
+      const game = gameMap.get(gp.gameId);
       if (!game) continue;
+
+      const hasData = gameIdsWithData.has(gp.gameId);
+      const rebuysInGame = hasData ? Math.max(0, gp.rebuys - 1) : 0;
 
       const existing = playerMap.get(gp.playerId);
       if (existing) {
         existing.gamesPlayed++;
+        if (hasData) {
+          existing.gamesWithData++;
+          existing.totalRebuysOnly += rebuysInGame;
+        }
         existing.totalBuyins += gp.rebuys;
         existing.totalInvested += gp.rebuys * settings.rebuyValue;
         existing.totalProfit += gp.profit;
-        if (gp.rebuys > existing.maxBuyinsInGame) {
-          existing.maxBuyinsInGame = gp.rebuys;
+        if (rebuysInGame > existing.maxRebuysInGame) {
+          existing.maxRebuysInGame = rebuysInGame;
           existing.maxBuyinsDate = game.date || game.createdAt;
         }
       } else {
         const currentPlayer = players.find(p => p.id === gp.playerId);
         playerMap.set(gp.playerId, {
+          playerId: gp.playerId,
           playerName: currentPlayer?.name || gp.playerName,
           gamesPlayed: 1,
+          gamesWithData: hasData ? 1 : 0,
           totalBuyins: gp.rebuys,
-          maxBuyinsInGame: gp.rebuys,
+          totalRebuysOnly: rebuysInGame,
+          maxRebuysInGame: rebuysInGame,
           maxBuyinsDate: game.date || game.createdAt,
           totalInvested: gp.rebuys * settings.rebuyValue,
           totalProfit: gp.profit,
+          avgRebuys: 0,
         });
       }
     }
 
+    // Average refers ONLY to games with rebuy data (per user requirement)
+    for (const p of playerMap.values()) {
+      p.avgRebuys = p.gamesWithData > 0 ? p.totalRebuysOnly / p.gamesWithData : 0;
+    }
+
     // Return rebuy data for ALL players who played in the period.
-    // `rebuyTableData` applies the visibility filter at consumer time
-    // (driven by the global toggle, or the per-table override). This
-    // is what lets the local override widen back to inactive players
-    // without re-iterating game data.
+    // Sorted by average rebuys (descending), then total rebuys, then games with data.
     return Array.from(playerMap.values())
       .filter(p => p.gamesPlayed > 0)
-      .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
+      .sort((a, b) => {
+        if (b.avgRebuys !== a.avgRebuys) return b.avgRebuys - a.avgRebuys;
+        if (b.totalRebuysOnly !== a.totalRebuysOnly) return b.totalRebuysOnly - a.totalRebuysOnly;
+        return b.gamesWithData - a.gamesWithData;
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tablePeriodOverrides.rebuy, stats, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, locationFilterKey]);
 
@@ -4730,12 +4761,6 @@ const StatisticsScreen = () => {
                     </thead>
                     <tbody>
                       {rebuyTableData.map((player, index) => {
-                        // Every buy-in figure here excludes the mandatory first
-                        // buy-in of each game, so avg / חוזרות / max all count
-                        // the same thing.
-                        const totalRebuysOnly = Math.max(0, player.totalBuyins - player.gamesPlayed);
-                        const avgRebuys = player.gamesPlayed > 0 ? totalRebuysOnly / player.gamesPlayed : 0;
-                        const maxRebuysInGame = Math.max(0, player.maxBuyinsInGame - 1);
                         const isMe = identityName && player.playerName === identityName;
                         return (
                           <tr 
@@ -4759,27 +4784,36 @@ const StatisticsScreen = () => {
                               padding: '0.3rem 0.2rem',
                               fontWeight: '600'
                             }}>
-                              {avgRebuys.toFixed(1)}
+                              {player.avgRebuys.toFixed(1)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem',
                               color: 'var(--text-muted)'
                             }}>
-                              {fmtBuyinsCell(totalRebuysOnly)}
+                              {fmtBuyinsCell(player.totalRebuysOnly)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem'
                             }}>
-                              {fmtBuyinsCell(maxRebuysInGame)}
+                              {fmtBuyinsCell(player.maxRebuysInGame)}
                             </td>
                             <td style={{ 
                               textAlign: 'center', 
                               padding: '0.3rem 0.2rem',
                               color: 'var(--text-muted)'
                             }}>
-                              {player.gamesPlayed}
+                              {player.gamesWithData < player.gamesPlayed ? (
+                                <span title={language === 'he' ? `${player.gamesWithData} משחקים עם נתונים מתוך ${player.gamesPlayed} בסך הכל` : `${player.gamesWithData} games with data out of ${player.gamesPlayed} total`}>
+                                  {player.gamesWithData}
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.7, marginInlineStart: '0.15rem' }}>
+                                    ({player.gamesPlayed})
+                                  </span>
+                                </span>
+                              ) : (
+                                player.gamesPlayed
+                              )}
                             </td>
                           </tr>
                         );

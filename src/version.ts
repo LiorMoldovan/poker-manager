@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.36.0';
+export const APP_VERSION = '6.37.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.37.0',
+    date: '2026-09-29',
+    changes: [
+      '📊 Rebuy avg based on data games only',
+      '⚠️ Rebuy missing-data note updated',
+      '🏛️ Historical locations and chips backfill',
+    ],
+  },
   {
     version: '6.36.0',
     date: '2026-09-28',

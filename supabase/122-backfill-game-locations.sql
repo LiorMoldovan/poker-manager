@@ -78,4 +78,10 @@ UPDATE games SET location = 'ליאור' WHERE id = '35aa071c-824f-4a96-b94c-44b
 UPDATE games SET location = 'סגל' WHERE id = 'cf85dc51-b3da-4dcc-951e-f23bc6d2f163'; -- 2025-12-06 (סגל: הערב 21:00 אצלי פנקס 7 כפר סבא)
 UPDATE games SET location = 'ליכטר' WHERE id = 'dba7ad12-e029-4e34-99ff-a0bad722c495'; -- 2025-12-13 (אייל: 20:45 אצל ליכטר)
 
+-- ── 4. Verified pre-chat games ──────────────────────────────────────────────
+UPDATE games SET location = 'ליאור' WHERE id = '308f0ffd-88e0-4cb5-9e00-bfbe52a124d9'; -- 2022-10-08 (ליאור המארח הקבוע היחיד שהשתתף)
+UPDATE games SET location = 'אייל' WHERE id = '410b0f43-8397-455b-99e3-e1d1829d75eb'; -- 2024-01-11 (אייל המארח הקבוע היחיד שהשתתף)
+UPDATE games SET location = 'מור' WHERE id = 'c4cd59fb-4e07-430b-8f80-9c10814918fc'; -- 2024-10-24 (אירוח אצל מור ואבי ברמת גן, פיצות אבי)
+
 -- ============================================================================
+
