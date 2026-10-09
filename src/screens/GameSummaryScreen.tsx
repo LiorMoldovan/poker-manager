@@ -11,6 +11,7 @@ import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSett
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import { isCareerGameMilestone } from '../utils/milestones';
+import { detectGameNightRecords } from '../utils/gameRecords';
 import { canUserGenerateAI } from '../utils/aiEligibility';
 import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
@@ -595,8 +596,10 @@ const GameSummaryScreen = () => {
     const actualGameDate = new Date(game.date);
     const periodMonth = actualGameDate.getMonth() + 1;
     const periodYear = actualGameDate.getFullYear();
-    const periodStart = new Date(periodYear, periodMonth <= 6 ? 0 : 6, 1);
-    const periodLabel = formatHebrewHalf(periodMonth <= 6 ? 1 : 2, periodYear);
+    const isFirstHalf = periodMonth <= 6;
+    const periodStart = new Date(periodYear, isFirstHalf ? 0 : 6, 1);
+    const periodEnd = new Date(periodYear, isFirstHalf ? 5 : 11, isFirstHalf ? 30 : 31, 23, 59, 59);
+    const periodLabel = formatHebrewHalf(isFirstHalf ? 1 : 2, periodYear);
 
     // --- Tonight's game highlights ---
     const pLabel = periodLabel;
@@ -652,15 +655,29 @@ const GameSummaryScreen = () => {
 
       const periodGames = cachedAllGames.filter(g => {
         if (g.status !== 'completed' || g.id === gameId) return false;
-        return new Date(g.date || g.createdAt) >= periodStart;
+        const d = new Date(g.date || g.createdAt);
+        return d >= periodStart && d <= periodEnd;
       });
-      const periodGameIds = new Set(periodGames.map(g => g.id));
-      const periodPrevGP = previousGP.filter(gp => periodGameIds.has(gp.gameId));
+
+      // Multi-scope, verified records & active streaks detector
+      const detectedRecordsResult = detectGameNightRecords({
+        game,
+        tonightPlayers: sortedPlayers.map(p => ({
+          playerId: p.playerId,
+          playerName: p.playerName,
+          profit: p.profit,
+          rebuys: p.rebuys,
+        })),
+        allGames: cachedAllGames,
+        allGamePlayers: allGP,
+        allPlayers: getAllPlayers(),
+        periodStart,
+        periodEnd,
+        periodLabel: pLabel,
+        rebuyValue: settings2.rebuyValue,
+      });
 
       // Collect candidates per highlight type
-      const periodBestWins: { name: string; profit: number }[] = [];
-      const periodWorstLosses: { name: string; profit: number }[] = [];
-      const streaks: { name: string; streak: number; type: 'win' | 'loss' }[] = [];
       const upsets: { name: string; wp: number; type: 'win' | 'loss' }[] = [];
       const periodMilestones: { name: string; num: number }[] = [];
       const careerMilestones: { name: string; num: number }[] = [];
@@ -676,27 +693,6 @@ const GameSummaryScreen = () => {
       for (const player of sortedPlayers) {
         const pStats = periodStats.find(s => s.playerId === player.playerId);
         const allTimeStats = allStats.find(s => s.playerId === player.playerId);
-        const playerPeriodPrevGames = periodPrevGP.filter(gp => gp.playerId === player.playerId);
-
-        if (player.profit > 0 && playerPeriodPrevGames.length >= 1) {
-          const prevBestWin = Math.max(0, ...playerPeriodPrevGames.map(gp => gp.profit));
-          if (player.profit > prevBestWin && prevBestWin > 0) {
-            periodBestWins.push({ name: player.playerName, profit: player.profit });
-          }
-        }
-
-        if (player.profit < 0 && playerPeriodPrevGames.length >= 1) {
-          const prevWorstLoss = Math.min(0, ...playerPeriodPrevGames.map(gp => gp.profit));
-          if (player.profit < prevWorstLoss && prevWorstLoss < 0) {
-            periodWorstLosses.push({ name: player.playerName, profit: player.profit });
-          }
-        }
-
-        if (pStats && pStats.currentStreak >= 4) {
-          streaks.push({ name: player.playerName, streak: pStats.currentStreak, type: 'win' });
-        } else if (pStats && pStats.currentStreak <= -4) {
-          streaks.push({ name: player.playerName, streak: Math.abs(pStats.currentStreak), type: 'loss' });
-        }
 
         if (pStats && pStats.gamesPlayed >= 4) {
           const wp = Math.round(pStats.winPercentage);
@@ -773,24 +769,14 @@ const GameSummaryScreen = () => {
 
       // --- Build combined entries ---
 
-      if (periodBestWins.length > 0) {
-        // PERSONAL best-in-period, NOT a group record. Label must say
-        // "אישי" so the AI never upgrades it into a group/period record
-        // (e.g. a player's best H2 win is not "the H2 win record").
-        const parts = periodBestWins.map(w => `${w.name} (\u200E+${cleanNumber(w.profit)})`);
-        bank.push({ emoji: '🏆', label: `שיא אישי — נצחון ב${pLabel}`, detail: parts.join(', '), priority: 2 });
+      // Add all verified broken/equaled records across all scopes
+      for (const rec of detectedRecordsResult.recordsBroken) {
+        bank.push({ emoji: rec.emoji, label: rec.label, detail: rec.detail, priority: rec.priority });
       }
-      if (periodWorstLosses.length > 0) {
-        const parts = periodWorstLosses.map(w => `${w.name} (${formatCurrency(w.profit)})`);
-        bank.push({ emoji: '📉', label: `שיא אישי — הפסד ב${pLabel}`, detail: parts.join(', '), priority: 3 });
-      }
-      if (streaks.length > 0) {
-        streaks.sort((a, b) => b.streak - a.streak);
-        const parts = streaks.map(s => {
-          const label = s.type === 'win' ? 'נצחונות' : 'הפסדים';
-          return `${s.name} — ${s.streak} ${label} ברצף`;
-        });
-        bank.push({ emoji: streaks[0].type === 'win' ? '🔥' : '❄️', label: 'רצף', detail: parts.join(', '), priority: 2 });
+
+      // Add notable active streaks (truthful baseline comparison)
+      for (const strk of detectedRecordsResult.notableStreaks) {
+        bank.push({ emoji: strk.type === 'win' ? '🔥' : '❄️', label: 'רצף פעיל', detail: strk.detail, priority: 2 });
       }
       if (upsets.length > 0) {
         const parts = upsets.map(u => {
@@ -846,38 +832,6 @@ const GameSummaryScreen = () => {
         bank.push({ emoji: '🥇', label: `מוביל ${pLabel}`, detail: `${leader.playerName} — \u200E+${cleanNumber(leader.totalProfit)}`, priority: 2 });
       }
 
-      // --- Global records ---
-
-      const historicalMaxRebuys = previousGP.length > 0 ? Math.max(...previousGP.map(gp => gp.rebuys)) : 0;
-      if (maxRebuys > historicalMaxRebuys && historicalMaxRebuys > 0) {
-        bank.push({ emoji: '📛', label: 'שיא קבוצתי — קניות', detail: `${rebuyKings[0].playerName} עם ${maxRebuys} (היה ${historicalMaxRebuys})`, priority: 1 });
-      }
-
-      const bigWinner = sortedPlayers[0];
-      const historicalMaxProfit = previousGP.length > 0 ? Math.max(0, ...previousGP.map(gp => gp.profit)) : 0;
-      if (bigWinner && bigWinner.profit > 0 && bigWinner.profit > historicalMaxProfit && historicalMaxProfit > 0) {
-        bank.push({ emoji: '🌟', label: 'שיא קבוצתי — נצחון', detail: `${bigWinner.playerName} \u200E+${cleanNumber(bigWinner.profit)} (היה \u200E+${cleanNumber(historicalMaxProfit)})`, priority: 1 });
-      }
-
-      const allCompletedGames = cachedAllGames.filter(g => g.status === 'completed' && g.id !== gameId);
-      let historicalMaxPot = 0;
-      for (const g of allCompletedGames) {
-        const gPlayers = allGP.filter(gp => gp.gameId === g.id);
-        const pot = gPlayers.reduce((sum, gp) => sum + gp.rebuys, 0) * settings2.rebuyValue;
-        if (pot > historicalMaxPot) historicalMaxPot = pot;
-      }
-      if (tonightsPot > historicalMaxPot && historicalMaxPot > 0) {
-        bank.push({ emoji: '🏦', label: 'שיא קבוצתי — קופה', detail: `${cleanNumber(tonightsPot)} (היה ${cleanNumber(historicalMaxPot)})`, priority: 1 });
-      }
-
-      if (periodPrevGP.length > 0) {
-        const periodMaxProfit = Math.max(0, ...periodPrevGP.map(gp => gp.profit));
-        const topWinner = sortedPlayers[0];
-        if (topWinner && topWinner.profit > 0 && topWinner.profit > periodMaxProfit && periodMaxProfit > 0) {
-          bank.push({ emoji: '🌟', label: `שיא ${pLabel} — נצחון`, detail: `${topWinner.playerName} \u200E+${cleanNumber(topWinner.profit)} (היה \u200E+${cleanNumber(periodMaxProfit)})`, priority: 1 });
-        }
-      }
-
       // --- All-time Top 20 single night wins entry ---
       const allTimeWins = previousGP
         .filter(gp => gp.profit > 0)
@@ -904,7 +858,9 @@ const GameSummaryScreen = () => {
         const personalThreshold = personalTop.length >= 10 ? personalTop[9] : 0;
         if (player.profit > personalThreshold && personalTop.length >= 10) {
           const personalRank = personalTop.filter(p => p > player.profit).length + 1;
-          bank.push({ emoji: '⭐', label: 'שיא אישי Top 10', detail: `${player.playerName} — הנצחון #${personalRank} הגדול שלו (\u200E+${cleanNumber(player.profit)})`, priority: 2 });
+          if (personalRank > 1) {
+            bank.push({ emoji: '⭐', label: 'שיא אישי Top 10', detail: `${player.playerName} — הנצחון #${personalRank} הגדול שלו (\u200E+${cleanNumber(player.profit)})`, priority: 2 });
+          }
         }
       }
 
@@ -920,7 +876,9 @@ const GameSummaryScreen = () => {
         const worstThreshold = worstTop.length >= 10 ? worstTop[9] : 0;
         if (player.profit < worstThreshold && worstTop.length >= 10) {
           const lossRank = worstTop.filter(p => p < player.profit).length + 1;
-          bank.push({ emoji: '💀', label: 'שיא אישי הפסד Top 10', detail: `${player.playerName} — ההפסד #${lossRank} הגדול שלו (\u200E${cleanNumber(player.profit)})`, priority: 2 });
+          if (lossRank > 1) {
+            bank.push({ emoji: '💀', label: 'שיא אישי הפסד Top 10', detail: `${player.playerName} — ההפסד #${lossRank} הגדול שלו (\u200E${cleanNumber(player.profit)})`, priority: 2 });
+          }
         }
       }
 
@@ -1087,7 +1045,7 @@ const GameSummaryScreen = () => {
         if (h.label.includes('שיא') || h.label.includes('Top 20') || h.label.includes('Top 10')) {
           aiRecords.push(`${h.emoji} ${h.label}: ${h.detail}`);
         }
-        if (h.label === 'רצף') {
+        if (h.label === 'רצף' || h.label === 'רצף פעיל') {
           aiStreaks.push(h.detail);
         }
         if (h.label === 'הפתעות') {
@@ -1191,15 +1149,6 @@ const GameSummaryScreen = () => {
         aiRankingShifts.push(...detectBigPasses(yearStatsForPass, yearGamesCount, `טבלת ${periodYear}`));
         aiRankingShifts.push(...detectBigPasses(allTimeStatsForPass, allGamesCount, 'טבלת כל הזמנים'));
 
-        for (const tp of sortedPlayers) {
-          const st = allTimeStatsForPass.find(s => s.playerId === tp.playerId);
-          if (!st) continue;
-          if (st.currentStreak >= 5) {
-            aiStreaks.push(`${tp.playerName} — רצף פעיל של ${st.currentStreak} נצחונות (כל הזמנים)`);
-          } else if (st.currentStreak <= -5) {
-            aiStreaks.push(`${tp.playerName} — רצף פעיל של ${Math.abs(st.currentStreak)} הפסדים (כל הזמנים)`);
-          }
-        }
       } catch {}
 
       // Count games in period (for "game #X")
@@ -1331,7 +1280,7 @@ const GameSummaryScreen = () => {
           if (h.label.includes('שיא') || h.label.includes('Top 20') || h.label.includes('Top 10')) {
             recordsBroken.push(`${h.emoji} ${h.label}: ${h.detail}`);
           }
-          if (h.label === 'רצף') notableStreaks.push(h.detail);
+          if (h.label === 'רצף' || h.label === 'רצף פעיל') notableStreaks.push(h.detail);
           if (h.label === 'הפתעות') upsets.push(h.detail);
         }
         // Lightweight ranking-shift recompute (mirrors the AI block).

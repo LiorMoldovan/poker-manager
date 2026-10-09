@@ -5304,7 +5304,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     | 'scheduleDefaultMaybeHoldHours'
     | 'scheduleDefaultTime' | 'scheduleDefaultAllowMaybe'
     | 'scheduleAutoCreateEnabled' | 'scheduleAutoCreateDay'
-    | 'scheduleAutoCreateTime'
+    | 'scheduleAutoCreateTime' | 'scheduleAutoCreatedAt'
   >>;
   const persist = async (next: Patch) => {
     saveSettings({ ...getSettings(), ...next });
@@ -5409,17 +5409,26 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
 
   const handleAutoCreateEnabled = (checked: boolean) => {
     setAutoCreateEnabled(checked);
-    void persist({ scheduleAutoCreateEnabled: checked });
+    void persist({
+      scheduleAutoCreateEnabled: checked,
+      ...(checked ? { scheduleAutoCreatedAt: new Date().toISOString() } : {}),
+    });
   };
 
   const handleAutoCreateDay = (day: number) => {
     setAutoCreateDay(day);
-    void persist({ scheduleAutoCreateDay: day });
+    void persist({
+      scheduleAutoCreateDay: day,
+      scheduleAutoCreatedAt: new Date().toISOString(),
+    });
   };
 
   const handleAutoCreateTime = (next: string) => {
     setAutoCreateTime(next);
-    void persist({ scheduleAutoCreateTime: next });
+    void persist({
+      scheduleAutoCreateTime: next,
+      scheduleAutoCreatedAt: new Date().toISOString(),
+    });
   };
 
   const rowStyle: React.CSSProperties = {
