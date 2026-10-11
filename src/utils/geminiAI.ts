@@ -781,11 +781,13 @@ const retryMissingForecastText = async (
 ${cards}${buildRejectionBlock(missingNames, rejectionByName)}
 
 לכל שחקן:
-• highlight — כותרת קצרה (3-6 מילים), חייבת להתאים במדויק לכיוון החיזוי הנעול: חיובי (רווח) → כותרת על הצלחה/עלייה/פריצה; שלילי (הפסד) → כותרת על אתגר/סכנה/מגננה (אסור כותרת מנצחת כמו "בדרך לניצחון" או "מוביל"!)
-• sentence — משפט אחד בעברית (20-40 מילים) שמהווה נימוק רציונלי שמסביר ומחזק את החיזוי המספרי הנעול (🔒):
-  - בחיזוי חיובי: ספק הסבר רציונלי שמנמק למה הוא צפוי להרוויח (מומנטום, פורמה עדיפה, עליונות במצ'אפ, יציבות).
-  - בחיזוי שלילי: ספק הסבר רציונלי שמנמק למה הוא צפוי להפסיד/להתקשות (שולחן קשוח, לחץ הגנתי, רצף שלילי, ירידה בכושר).
-  - שילוב של 2-3 מספרים אמיתיים מהכרטיס כגורמים הסיבתיים לחיזוי.
+• highlight — כותרת קצרה (3-6 מילים), חייבת להתאים במדויק לכיוון החיזוי הנעול: חיובי (רווח) → כותרת על הצלחה/עלייה/פריצה; שלילי (הפסד) → כותרת על אתגר/סכנה/מגננה (אסור כותרת מנצחת כמו "בדרך לניצחון" מול חיזוי שלילי!).
+• sentence — משפט אחד בעברית (20-40 מילים) של פרשנות ספורט איכותית המתחברת לכיוון החיזוי הנעול (🔒) דרך הזווית העלילתית (🎯):
+  - בחיזוי חיובי: תאר עמדת כוח, מומנטום חיובי, יתרון פסיכולוגי, עליונות במצ'אפ או יציבות שמובילים להצלחה.
+  - בחיזוי שלילי: תאר לחץ הגנתי, שולחן קשוח, נוכחות נמסיס/יריב קשה, ירידה בכושר או צורך במשחק מבוקר.
+  - שילוב של 2-3 מספרים אמיתיים מהכרטיס כעוגנים עובדתיים.
+• אפס מטא-טקסט: אסור בהחלט לכתוב "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מצדיק את הצפי" וכדומה! כתוב פרשנות פוקר טבעית בלבד.
+• שחקן מארח (🏠): חובה לנתח כשחקן פוקר מלא לפי נתוניו והאתגרים שלו בשולחן — עובדת האירוח היא רק רקע, אסור שתחליף ניתוח פוקר!
 • אסור להזכיר את מספר החיזוי עצמו במשפט; אסור "הערב/היום/הלילה" או תאריך — השתמש ב"הפעם", "במשחק הקרוב".
 • שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים.
 • כל ממוצע, דירוג או שיא חייב לנקוב בתקופה שלו: "טבלת <תקופה>" היא חצי שנה, "היסטוריה כוללת" ו"שיא אישי כל הזמנים" הם כל הזמנים.
@@ -1668,40 +1670,47 @@ export const generateAIForecasts = async (
   // trivia while the very same card carried "5 behind 8th place". A ranking
   // gap is direction-neutral — it reads equally well as a charge or as a last
   // stand — so only the framing ever needed to move.
-  type AngleType = 'streak' | 'ranking_battle' | 'defending' | 'comeback' | 'milestone' | 'form' | 'big_last_game' | 'dark_horse' | 'newcomer' | 'default';
+  type AngleType = 'rivalry' | 'streak' | 'ranking_battle' | 'defending' | 'form' | 'big_last_game' | 'comeback' | 'milestone' | 'dark_horse' | 'newcomer' | 'default';
   type ToneType = 'confident' | 'edge' | 'tilt' | 'underdog';
+
+  const isHostPlayer = (pName: string, loc?: string): boolean => {
+    if (!loc || !pName) return false;
+    const cleanLoc = loc.trim().replace(/^אצל\s+/i, '');
+    return cleanLoc === pName.trim() || loc.includes(pName.trim()) || pName.includes(cleanLoc);
+  };
 
   const angleUsed = new Map<AngleType, number>();
   // ranking_battle and defending are both "a number separates you from X", so
-  // they share one budget rather than getting three slots each. Given six gap
-  // facts the model writes six sentences of identical shape — every one of
-  // them "פער של N שקלים בלבד" — which reads as monotonous as the career
-  // trivia it replaced. Capping the pair pushes the overflow onto streaks,
-  // form and comebacks, which are still stakes but different sentences.
+  // they share one budget rather than getting three slots each. Capped strictly at 2
+  // across the table so other players get rivalries, streaks, form, and comebacks.
   const GAP_ANGLES: AngleType[] = ['ranking_battle', 'defending'];
-  const gapBudget = players.length <= 6 ? 2 : 3;
+  const gapBudget = 2;
   const gapUsed = () => GAP_ANGLES.reduce((sum, a) => sum + (angleUsed.get(a) || 0), 0);
-  const angleCap = (a: AngleType): number =>
-    a === 'milestone' ? (players.length <= 6 ? 2 : 3) : (players.length <= 6 ? 1 : 2);
+  const angleCap = (a: AngleType): number => {
+    if (a === 'rivalry') return 3;
+    if (a === 'streak') return 2;
+    if (a === 'milestone') return 2;
+    return 2;
+  };
 
   // Tone is a pure function of the locked prediction and nothing else.
   const toneFor = (prediction: number): { tone: ToneType; toneHint: string } => {
     const n = `${prediction >= 0 ? '\u200E+' : ''}${prediction}`;
     if (prediction >= 40) return {
       tone: 'confident',
-      toneHint: `חיזוי רווח משמעותי (${n} ש״ח): חובה לנמק רציונלית מה מעניק לו יתרון ועליונות הפעם (כושר, מומנטום, עליונות במצ'אפ). כותרת חיובית מובהקת!`
+      toneHint: `מגמה חיובית חזקה (${n} ש״ח): הצג עמדת כוח, שליטה או מומנטום מובהק. כותרת של עוצמה/עלייה. (אפס מטא-טקסט!)`
     };
     if (prediction > 0) return {
       tone: 'edge',
-      toneHint: `חיזוי רווח מתון (${n} ש״ח): חובה לנמק רציונלית יתרון קל ומדוד בקרב שקול (עמדת זינוק, יציבות, נטייה חיובית קלה). כותרת חיובית מתונה!`
+      toneHint: `מגמה חיובית מתונה (${n} ש״ח): הצג יתרון טקטי קל בקרב שקול. כותרת חיובית מתונה. (אפס מטא-טקסט!)`
     };
     if (prediction > -40) return {
       tone: 'tilt',
-      toneHint: `חיזוי הפסד מתון (${n} ש״ח): חובה לנמק רציונלית את האתגר והקושי (שולחן תחרותי, לחץ צמוד, צורך בזהירות). כותרת של אתגר/זהירות!`
+      toneHint: `מגמת אתגר מתונה (${n} ש״ח): הצג לחץ הגנתי, שולחן קשוח או צורך בערנות. כותרת של זהירות/אתגר. (אפס מטא-טקסט!)`
     };
     return {
       tone: 'underdog',
-      toneHint: `חיזוי הפסד משמעותי (${n} ש״ח): חובה לנמק רציונלית את הקושי וההפסד הצפוי (רצף שלילי, יריבים קשים בשולחן, סכנת נפילה). כותרת של סכנה/מבחן קשה, אסור בשום אופן חגיגת הצלחה!`
+      toneHint: `מגמת קושי משמעותית (${n} ש״ח): הצג מבחן בלימה קשוח או סכנת נפילה. כותרת של אתגר/מבחן קשה, בלי חגיגת ניצחון. (אפס מטא-טקסט!)`
     };
   };
 
@@ -1733,6 +1742,54 @@ export const generateAIForecasts = async (
     const prediction = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
     const isPositive = prediction > 0;
 
+    // Check for head-to-head rivalry or nemesis with tonight's opponents
+    const h2hCandidates = h2hResults
+      .filter(h => (h.a === p.name || h.b === p.name) && h.sharedGames >= 3)
+      .map(h => {
+        const isA = h.a === p.name;
+        const oppName = isA ? h.b : h.a;
+        const myWins = isA ? h.aWins : h.bWins;
+        const oppWins = isA ? h.bWins : h.aWins;
+        const myProfit = isA ? h.aTotalProfit : h.bTotalProfit;
+        const oppProfit = isA ? h.bTotalProfit : h.aTotalProfit;
+        const myConsec = isA ? h.aConsecutiveWins : h.bConsecutiveWins;
+        const oppConsec = isA ? h.bConsecutiveWins : h.aConsecutiveWins;
+        const profitDiff = myProfit - oppProfit;
+
+        let priority = 0;
+        let descPositive = '';
+        let descNegative = '';
+
+        if (myConsec >= 2) {
+          priority = 3;
+          descPositive = `שליטה מול ${oppName} עם ${myConsec} נצחונות רצופים במפגשים ביניהם — עליונות מנטלית וביטחון גבוה בשולחן`;
+          descNegative = `רצף של ${myConsec} נצחונות על ${oppName} עומד למבחן מול יריב שנחוש לנקום`;
+        } else if (oppConsec >= 2) {
+          priority = 3;
+          descPositive = `הזדמנות לשבור רצף של ${oppConsec} הפסדים מול ${oppName} — נחישות למהפך במצ'אפ הישיר`;
+          descNegative = `מוקש מול ${oppName} (${oppConsec} נצחונות רצופים ליריבו) — יריב קשוח שמקשה עליו בשולחן`;
+        } else if (Math.abs(profitDiff) >= 150) {
+          priority = 2;
+          if (profitDiff > 0) {
+            descPositive = `מאזן כספי עדיף מול ${oppName} (פער של ${Math.round(profitDiff)} שקלים ביניהם) — עמדת כוח במפגשים המשותפים`;
+            descNegative = `הובלה כספית מול ${oppName} שמועמדת לצמצום מול שולחן אגרסיבי`;
+          } else {
+            descPositive = `הזדמנות לצמצם פער כספי מול ${oppName} (בפיגור ${Math.abs(Math.round(profitDiff))} שקלים) — מוטיבציה גבוהה להתאוששות`;
+            descNegative = `פער כספי קשה מול ${oppName} (${Math.abs(Math.round(profitDiff))} שקלים לרעתו) — מצ'אפ מאתגר במיוחד`;
+          }
+        } else if (h.sharedGames >= 5 && Math.abs(myWins - oppWins) <= 1) {
+          priority = 1;
+          descPositive = `קרב צמוד מול ${oppName} (${myWins}:${oppWins} במשחקים ביניהם) — הזדמנות לשבור שוויון ולהכריע את היריבות`;
+          descNegative = `מאבק צמוד ומתוח מול ${oppName} (${myWins}:${oppWins}) — קרב מתיש שמחייב זהירות`;
+        }
+
+        return { oppName, priority, descPositive, descNegative };
+      })
+      .filter(c => c.priority > 0)
+      .sort((a, b) => b.priority - a.priority);
+
+    const topRivalry = h2hCandidates[0];
+
     const canUse = (a: AngleType) =>
       GAP_ANGLES.includes(a) ? gapUsed() < gapBudget : (angleUsed.get(a) || 0) < angleCap(a);
     const assign = (a: AngleType, hint: string) => {
@@ -1745,68 +1802,71 @@ export const generateAIForecasts = async (
     // ever overridden by the prediction — that is the tone's job.
     const isNewPlayer = p.gamesPlayed === 0 || p.gameHistory.length === 0;
     if (isNewPlayer) {
-      assign('newcomer', `שחקן חדש לגמרי — אין נתונים היסטוריים. נמק את החיזוי (${prediction >= 0 ? 'רווח' : 'הפסד'}) דרך אי-הוודאות של כניסה ראשונה לשולחן`);
+      assign('newcomer', `שחקן חדש לגמרי — אין נתונים היסטוריים. כניסה ראשונה ומסקרנת לשולחן`);
     } else if (isLandmarkGameTonight) {
       assign('milestone', isPositive
-        ? `המשחק ה-${careerGameTarget} בקריירה ← ציון הדרך והניסיון המצטבר מנמקים את החיזוי החיובי לרווח`
-        : `המשחק ה-${careerGameTarget} בקריירה ← הלחץ סביב משחק היובל והשולחן הקשוח מנמקים את החיזוי להפסד/אתגר`);
+        ? `המשחק ה-${careerGameTarget} בקריירה — מעמד חגיגי וניסיון מצטבר שדוחפים אותו להפגין דומיננטיות בשולחן`
+        : `המשחק ה-${careerGameTarget} בקריירה — לחץ סביב הציפיות במשחק ציון הדרך שמחייב משמעת ומשחק מבוקר`);
+    } else if (topRivalry && topRivalry.priority >= 3 && canUse('rivalry')) {
+      assign('rivalry', isPositive ? topRivalry.descPositive : topRivalry.descNegative);
     } else if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
       if (p.currentStreak > 0) {
         assign('streak', isPositive
-          ? `רצף ${p.currentStreak} נצחונות פעיל ← מומנטום וביטחון עצמי גבוה מנמקים ומחזקים את החיזוי לרווח המשכי`
-          : `רצף ${p.currentStreak} נצחונות פעיל ← אך השולחן קשוח והחיזוי מנבא בלימה ותיקון סטטיסטי שמסכנים את הרצף`);
+          ? `רצף מרשים של ${p.currentStreak} נצחונות — ביטחון עצמי גבוה ומומנטום דורס שמעניקים לו שליטה פסיכולוגית בשולחן`
+          : `רצף של ${p.currentStreak} נצחונות ניצב בסכנה מול שולחן אגרסיבי — רמת קושי גבוהה שמסכנת את המומנטום`);
       } else {
         assign('streak', isPositive
-          ? `רצף ${Math.abs(p.currentStreak)} הפסדים ← החיזוי מסמן נקודת מפנה ופוטנציאל התאוששות לרווח אחרי הבצורת`
-          : `רצף ${Math.abs(p.currentStreak)} הפסדים ← הבצורת והירידה בביטחון מנמקות ומחזקות את החיזוי השלילי להמשך הקושי`);
+          ? `התאוששות מרצף של ${Math.abs(p.currentStreak)} הפסדים — זיהוי הזדמנות לשבירת הבצורת ופתיחת דף חדש`
+          : `בצורת מתמשכת של ${Math.abs(p.currentStreak)} הפסדים — לחץ מצטבר וקושי לייצר מומנטום חיובי מול יריבים חדים`);
       }
     } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
       assign('ranking_battle', isPositive
-        ? `פער של ${gapToAbove} שקלים בלבד מ${nb.above.name} (מקום ${halfRank - 1}) בטבלת ${currentPeriodLabel} ← המוטיבציה והעוצמה לסגור את הפער מנמקות את החיזוי לרווח`
-        : `פער של ${gapToAbove} שקלים מ${nb.above.name} (מקום ${halfRank - 1}) בטבלת ${currentPeriodLabel} ← הקושי לפרוץ והתחרות הצמודה מנמקים מדוע החיזוי צופה לו הפסד/בלימה`);
+        ? `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name} (פער של ${gapToAbove} שקלים בלבד) — עמדת תקיפה נחושה לעקיפה וטיפוס`
+        : `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name} (פער של ${gapToAbove} שקלים) — קושי לצמצם את המרחק מול הגנה עיקשת של יריבו`);
     } else if (gapToBelow <= 150 && gapToBelow > 0 && nb?.below && canUse('defending')) {
       assign('defending', isPositive
-        ? `יתרון של ${gapToBelow} שקלים מעל ${nb.below.name} (מקום ${halfRank + 1}) בטבלת ${currentPeriodLabel} ← עמדת ההובלה והשליטה מנמקות את החיזוי להגדלת הפער ורווח`
-        : `יתרון שביר של ${gapToBelow} שקלים מעל ${nb.below.name} (מקום ${halfRank + 1}) בטבלת ${currentPeriodLabel} ← הלחץ מרודף שנושף בעורפו מנמק את החיזוי להפסד וסכנה`);
+        ? `הגנה על מקום ${halfRank} ביתרון של ${gapToBelow} שקלים מעל ${nb.below.name} — שליטה בשולחן ועמדת הובלה שמבצרת את מעמדו`
+        : `הגנה שברירית על מקום ${halfRank} (יתרון של ${gapToBelow} שקלים בלבד על ${nb.below.name}) — לחץ הגנתי כבד וסכנת הידרדרות`);
+    } else if (topRivalry && canUse('rivalry')) {
+      assign('rivalry', isPositive ? topRivalry.descPositive : topRivalry.descNegative);
     } else if (nearMilestone && canUse('milestone')) {
       const dist = nearMilestone - Math.round(p.totalProfit);
       assign('milestone', isPositive
-        ? `מרחק ${dist} שקלים מרף ${nearMilestone} רווח מצטבר ← התקרבות ליעד מעניקה דרייב שמנמק את החיזוי לרווח`
-        : `מרחק ${dist} שקלים מרף ${nearMilestone} רווח מצטבר ← הלחץ סביב הרף מנמק מדוע החיזוי צופה לו ערב מאתגר`);
+        ? `מרחק של ${dist} שקלים בלבד מרף ${nearMilestone} שקלים רווח מצטבר — דרייב חזק לחציית היעד`
+        : `מרחק של ${dist} שקלים מרף ${nearMilestone} שקלים רווח מצטבר — לחץ כבד סביב הרף שמקשה על ביצועים שקטים`);
     } else if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900 && canUse('comeback')) {
       assign('comeback', isPositive
-        ? `חזרה אחרי ${p.daysSinceLastGame} ימים ← רעננות ורעב לשולחן מנמקים את החיזוי החיובי לרווח`
-        : `חזרה אחרי ${p.daysSinceLastGame} ימים ← חלודת שולחן מול שחקנים בקצב שבועי מנמקת את החיזוי השלילי`);
+        ? `קאמבק לשולחן אחרי ${p.daysSinceLastGame} ימים — רעב מחודש ורעננות מנטלית מול חברים ותיקים`
+        : `חזרה לשולחן אחרי ${p.daysSinceLastGame} ימים — חלודת שולחן מול יריבים שנמצאים בכושר משחק שבועי רציף`);
     } else if (currentHalfGames.length >= 3 && Math.abs(periodAvg - allTimeAvg) > 20 && canUse('form')) {
       assign('form', isPositive
-        ? `ממוצע חזק של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים ב${currentPeriodLabel} ← כושר שיא ועקביות שמנמקים את החיזוי לרווח`
-        : `ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים ב${currentPeriodLabel} ← חולשה בכושר החציוני או ירידה ביציבות מנמקות את החיזוי השלילי`);
+        ? `כושר שיא ב${currentPeriodLabel} עם ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים — יציבות מרשימה שמציבה אותו בעמדת יתרון מובהקת`
+        : `קשיי יציבות ב${currentPeriodLabel} עם ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים — ירידה בחדות שמעמידה אותו במבחן בלימה מאתגר`);
     } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
-      const wonLast = lastGameProfit > 0;
       assign('big_last_game', isPositive
-        ? `משחק אחרון מוצלח (${wonLast ? '+' : ''}${Math.round(lastGameProfit)} ש״ח) ← רוח גבית וביטחון שמנמקים את החיזוי לרווח נוסף`
-        : `משחק אחרון קשה (${wonLast ? '+' : ''}${Math.round(lastGameProfit)} ש״ח) ← משקעי המשחק הקודם מנמקים את החיזוי השלילי`);
+        ? `רוח גבית חזקה מניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם — תנופה מורלית שמאפשרת לו להכתיב את הקצב`
+        : `משקעים מהפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם — צורך בזהירות מוגברת כדי להימנע מנפילה חוזרת`);
     } else if (p.avgProfit < -5 && periodAvg > 10 && canUse('dark_horse')) {
       assign('dark_horse', isPositive
-        ? `שיפור ניכר ב${currentPeriodLabel} (ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}) לעומת העבר ← שינוי המגמה מנמק את החיזוי לרווח`
-        : `היסטוריה שלילית וקשיים בעבר ← החיזוי צופה חזרה לקשיים המוכרים`);
+        ? `שיפור ניכר ב${currentPeriodLabel} (ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}) לעומת העבר — מגמת עלייה מעודדת שמייצרת הזדמנות`
+        : `היסטוריה שלילית וקשיים בעבר מול השולחן — מבחן מורכב להתמודדות עם לחצי המשחק`);
     } else {
-      if (nb?.above) {
+      if (lastGameProfit !== 0) {
         assign('default', isPositive
-          ? `${nb.above.gap} שקלים מאחורי ${nb.above.name} בטבלת ${currentPeriodLabel} ← פוטנציאל סגירת פער שמנמק את החיזוי לרווח`
-          : `${nb.above.gap} שקלים מאחורי ${nb.above.name} בטבלת ${currentPeriodLabel} ← פער מאתגר שמנמק את החיזוי השלילי`);
+          ? `משחק קודם מוצלח (${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)} שקלים) — תנופה טובה לפתיחה`
+          : `משחק קודם קשה (${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)} שקלים) — צורך במשחק מבוקר וזהיר`);
+      } else if (nb?.above) {
+        assign('default', isPositive
+          ? `מרחק של ${nb.above.gap} שקלים מ${nb.above.name} בטבלת ${currentPeriodLabel} — יעד מוגדר לעקיפה`
+          : `מרחק של ${nb.above.gap} שקלים מ${nb.above.name} בטבלת ${currentPeriodLabel} — אתגר צמצום פער מול יריב עיקש`);
       } else if (nb?.below) {
         assign('default', isPositive
-          ? `יתרון של ${nb.below.gap} שקלים מעל ${nb.below.name} בטבלת ${currentPeriodLabel} ← יציבות שמנמקת את החיזוי לרווח`
-          : `יתרון של ${nb.below.gap} שקלים מעל ${nb.below.name} בטבלת ${currentPeriodLabel} ← לחץ הגנתי שמנמק את החיזוי השלילי`);
-      } else if (lastGameProfit !== 0) {
-        assign('default', isPositive
-          ? `משחק קודם על ${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)} שקלים ← מומנטום שמנמק את החיזוי החיובי`
-          : `משחק קודם על ${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)} שקלים ← קושי שמנמק את החיזוי השלילי`);
+          ? `יתרון של ${nb.below.gap} שקלים על ${nb.below.name} בטבלת ${currentPeriodLabel} — עמדת הובלה יציבה`
+          : `יתרון של ${nb.below.gap} שקלים על ${nb.below.name} בטבלת ${currentPeriodLabel} — לחץ צמוד שמחייב שמירה על המקום`);
       } else {
         assign('default', isPositive
-          ? `${p.gamesPlayed} משחקים ו-${winRate}% נצחונות בכל הזמנים ← ניסיון ויציבות שמנמקים חיזוי חיובי`
-          : `${p.gamesPlayed} משחקים ו-${winRate}% נצחונות בכל הזמנים ← תנאי שולחן קשים שמנמקים חיזוי שלילי`);
+          ? `${p.gamesPlayed} משחקי קריירה ו-${winRate}% נצחונות — ניסיון מוכח ויציבות בשולחן`
+          : `${p.gamesPlayed} משחקי קריירה ו-${winRate}% נצחונות — שולחן תחרותי שמציב רף גבוה`);
       }
     }
   });
@@ -1911,15 +1971,18 @@ export const generateAIForecasts = async (
         lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
       }
     }
-    lines.push(`🔒 חיזוי מספרי נעול: ${suggestion >= 0 ? '\u200E+' : ''}${suggestion} (${suggestion > 0 ? 'רווח צפוי' : suggestion < 0 ? 'הפסד צפוי' : 'מאוזן'}) — אל תציין את המספר עצמו בטקסט!`);
-    lines.push(`💡 נימוק רציונלי נדרש לחיזוי: ${angle?.angleHint || ''}`);
-    lines.push(`🎭 מסגור וטון מחייבים: ${angle?.toneHint || ''}`);
+    const isHost = isHostPlayer(p.name, location);
+    if (isHost) {
+      lines.push(`🏠 שחקן מארח: שים לב! חובה מוחלטת לנתח אותו כשחקן פוקר מלא על פי כל נתוניו (דירוג, רצף, יריבויות, כושר)! עובדת האירוח היא לכל היותר תבלין קל ברקע (כמו "במגרש הביתי"), ואסור בשום אופן שתחליף ניתוח פוקר מקצועי ועמוק.`);
+    }
+    lines.push(`🔒 כיוון החיזוי הנעול: ${suggestion >= 0 ? '\u200E+' : ''}${suggestion} (${suggestion > 0 ? 'מגמת רווח' : suggestion < 0 ? 'מגמת הפסד/אתגר' : 'מאוזן'}) — אסור לנקוב במספר עצמו בטקסט!`);
+    lines.push(`🎯 זווית עלילתית למשפט: ${angle?.angleHint || ''}`);
+    lines.push(`🎭 טון ומסגור: ${angle?.toneHint || ''}`);
 
     console.log(`🔍 ${p.name}: angle=${angle?.angle}, tone=${angle?.tone}, suggestion=${suggestion >= 0 ? '+' : ''}${suggestion}`);
 
     const card = lines.join('\n');
     playerCardByName.set(p.name, card);
-    return card;
   }).join('\n\n');
 
   // Build period context for the prompt
@@ -1981,7 +2044,8 @@ ${traitBlock}${surpriseText}
 
 תוכן:
 • לקט את העובדות הכי מעניינות, מצחיקות ומפתיעות מכל הנתונים: רצפים, יריבויות, שיאים, חזרות, אבני דרך, קרבות דירוג
-• שלב את כל השחקנים בעלילה: מי שמוביל, מי שרודף, מי שמגן, מי שנמצא ביריבות ראש-בראש, ומי שמגיע לחולל מהפך${locationInsightsText ? `\n• יש תובנות מיקום (🏠) למעלה — שלב אותן רק אם הן מעניינות, מצחיקות או ציניות. אל תזכיר מיקום סתם כי הוא קיים` : ''}
+• שלב את כל השחקנים בעלילה: מי שמוביל, מי שרודף, מי שמגן, מי שנמצא ביריבות ראש-בראש, ומי שמגיע לחולל מהפך
+• המארח בשולחן: אם אחד השחקנים מארח${location ? ` (${location})` : ''}, הוא דמות פוקר מרכזית בעלילה בדיוק כמו כולם! שלב אותו כשחקן פוקר מלא לפי נתוניו, רצפיו והאתגרים שלו בשולחן, ולא רק כמי שמעמיד את הבית.${locationInsightsText ? `\n• תובנות מיקום (🏠): שלב אותן רק אם הן מעניינות ומפתיעות. אל תזכיר מיקום סתם כעובדה יבשה.` : ''}
 • העדף סיפורים ויריבויות על פני סטטיסטיקות יבשות
 • אם יש מידע על הרכב חוזר (🔄) — זה חומר מצוין לטיזר! ציין שזה הרכב שכבר שיחק יחד, מי שלט בפעמים הקודמות, מי תמיד ברווח/הפסד בהרכב הזה. אם זה הרכב חדש (🆕) — ציין שזו פעם ראשונה
 • לא לחזור על עובדות שיופיעו ב-sentence של שחקנים ספציפיים — פזר חומר שונה
@@ -2000,40 +2064,39 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 📝 לכל שחקן: highlight (כותרת, 3-6 מילים) + sentence (משפט אחד, 20-40 מילים)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-חיבור רציונלי מחייב בין החיזוי המספרי לטקסט (קריטי — חובה מוחלטת!):
-המשפט והכותרת אינם סתם תיאור כללי, אלא ההסבר והנימוק הרציונלי שעומד מאחורי התחזית המספרית הנעולה!
-השחקן שקורא את המשפט חייב להבין בדיוק *למה* המודל חוזה לו רווח או הפסד:
+חיבור עלילתי אורגני לכיוון החיזוי (טבעי, מעניין ונטול מטא-טקסט):
+כל שחקן מקבל משפט פוקר חי, מעניין ומנומק שמבוסס על הנתונים שלו ומתחבר לכיוון הערב.
+השחקן שקורא מבין באופן טבעי מה עומד לקרות סביבו:
 
-1. כשהחיזוי חיובי (רווח צפוי, פלוס):
-   המשפט חייב לספק הסבר רציונלי שמחזק ומצדיק את הרווח הצפוי — למשל: מומנטום חזק, ממוצע חציון עדיף, יתרון ראש-בראש מול יריב נוכחי בשולחן, מוטיבציה לסגירת פער מתוך עמדת כוח, או יציבות מוכחת.
-   הכותרת (highlight) חייבת לשקף ציפייה לרווח, ביצור מעמד, פריצה או הזדמנות לעלייה.
-   איסור: אסור לתאר אותו כספונסר, כמי שנמצא במשבר או כמי שצפוי להפסיד/להתרסק!
+1. כיוון רווח (פלוס):
+   המשפט מתאר עמדת כוח, יתרון פסיכולוגי, מומנטום חיובי, עליונות במצ'אפ מול יריב, או יציבות שמובילים אותו להצלחה.
+   הכותרת (highlight) משקפת פריצה, טיפוס, ביצור מעמד או עוצמה בשולחן.
+   איסור: אל תתאר אותו כמי שמתקשה, כספונסר או כמי שנמצא במשבר.
 
-2. כשהחיזוי שלילי (הפסד צפוי, מינוס):
-   המשפט חייב לספק הסבר רציונלי שמחזק ומסביר את הקושי וההפסד הצפוי — למשל: שולחן קשוח ועמוס יריבים עיקשים, נוכחות נמסיס מהעבר, רצף שלילי מתמשך, לחץ הגנתי מול שחקנים שנמצאים בשיא הכושר, או ירידה בפורמה.
-   הכותרת (highlight) חייבת לשקף אתגר קשה, סכנת ירידה, מגננה תחת לחץ, או מבחן בלימה.
-   איסור: אסור לחגוג ניצחון או לטעון שהוא הולך להרוויח, לנצח או לעקוף!
+2. כיוון הפסד/אתגר (מינוס):
+   המשפט מתאר לחץ הגנתי, שולחן רודף ואגרסיבי, נוכחות נמסיס/יריב קשה, ירידה ביציבות, או מאבק הישרדות.
+   הכותרת (highlight) משקפת מבחן קשה, זהירות, סכנת נפילה או לחץ כבד.
+   איסור: אל תחגוג ניצחון או פריצה אופטימית.
 
-3. עוצמת ההסבר מותאמת לגודל המספר:
-   • חיזוי חד (מעל 40+ או מתחת ל-40-): נימוק רציונלי משמעותי ועוצמתי שמצדיק פער גדול.
-   • חיזוי מתון וצמוד (בין 1 ל-39, או בין 1- ל-39-): נימוק של קרב שקול עם יתרון או חיסרון קל בלבד.
+3. אפס מטא-טקסט וביטויי מודל (אילוץ קריטי — ללא פשרות!):
+   אסור בהחלט להשתמש בביטויי מטא כגון: "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מה שמסביר את התחזית", "מצדיק את הצפי", "לפי המודל" וכדומה!
+   כתוב אך ורק כפרשן ספורט פנימי של השולחן. העלילה, הנתונים והיריבויות מדברים בעד עצמם ומעבירים את המסר באופן עקיף, חכם ומרתק.
+   דוגמה מעולה (חיובי): "אחרי שסגר פער של 28 שקלים מדן בטבלת החציון ומחזיק במומנטום של שני נצחונות, גיא מגיע בעמדת זינוק מעולה להשתלט על השולחן"
+   דוגמה מעולה (שלילי): "עם יתרון שברירי של 15 שקלים בלבד על קובי ושולחן שנושף בעורפו, אבירם ניצב בפני מבחן בלימה קשוח שדורש ממנו ערנות שיא"
 
-4. מה הופך משפט לטוב — מבחן הקשר הסיבתי:
-   המשפט מחבר את הנתון הזז (פער בטבלה, רצף, ממוצע חציון, נמסיס/יריבות) כגורם הסיבתי שמסביר את התחזית.
-   טוב (חיזוי חיובי): "הפער של 28 שקלים מדן מאן בטבלת החציון יחד עם מומנטום של שני נצחונות מעניקים לו עמדת זינוק מצוינת לעקיפה ורווח"
-   טוב (חיזוי שלילי): "היתרון השביר של 15 שקלים על קובי מעמיד אותו בלחץ הגנתי כבד מול שולחן אגרסיבי, מה שמסביר את התחזית המאתגרת"
+4. גיוון וערך מוסף — כל שחקן מקבל זווית שונה ומבנה אחר:
+   • אין שתי כותרות דומות ואין שני משפטים עם אותו מבנה.
+   • לכל שחקן נבחרה זווית עלילתית (🎯): יריבות ראש-בראש (🥊/⚔️), רצף פעיל (🔥), מאבק דירוג (🏆), כושר חציוני (⭐), משחק קודם, או הגנה.
+   • אל תחזור על אותם ביטויים שחוקים ("מגיע רעב", "נחוש להוכיח", "הזדמנות פז", "X שקלים בלבד"). גוון בניסוחים ובנקודות המבט.
+   • כל שחקן מקבל אותה רמת השקעה ואיכות, מראשון השחקנים ועד האחרון. משפט קצר מ-20 מילים לא מתקבל.
 
-גיוון — הקבוצה קוראת את זה כל שבוע:
-• כל שחקן מקבל סוג נתון אחר ומבנה משפט אחר. אין שתי כותרות דומות.
-• הימנע מהתבניות השחוקות שכבר מיצינו: "מגיע רעב", "נחוש להוכיח", "הזדמנות פז/מושלמת", "לשבור את המומנטום השלילי", "הסטטיסטיקה לצידו".
-• גם הדגשת הקרבה משתנה. אם כל הפערים מנוסחים "X שקלים בלבד", כל השחקנים נשמעים אותו דבר — גוון בין "מפריד", "נושף בעורפו", "במרחק", "מחזיק יתרון של", וניסוח ישיר בלי מילת הדגשה.
-• מילות הפלאה ("מדהים", "אדיר", "מטורף", "פנומנלי", "מרשים") רק מעל קנה המידה (📏). מתחתיו — נסח עובדתית. 3 נצחונות ברצף או ניצחון של 70 שקלים הם נתון טוב, לא מדהים.
-• כל שחקן מקבל את אותה רמת תשומת לב, כולל האחרון ברשימה. משפט קצר מ-20 מילים לא מתקבל.
+5. שחקן מארח (🏠):
+   אם שחקן הוא המארח, חובה לנתח אותו לעומק כשחקן פוקר מלא על פי נתוניו, ביצועיו, יריביו ומעמדו בטבלה בדיוק כמו כל שחקן אחר!
+   עובדת היותו המארח היא לכל היותר תבלין קל (כמו "מגרש ביתי" או "שומר על הבית"), ואסור בשום אופן שתחליף ניתוח פוקר עשיר ומדויק.
 
 מה לא נכנס לטקסט:
 • מספר החיזוי הנעול — הוא מוצג בכרטיס בנפרד.
 • המאזן המצטבר השלילי של שחקן ("סה\"כ ‎-807") — אף אחד לא רוצה לקרוא כמה הוא במינוס אי־פעם. מספרי ראש-בראש מ-📖 דווקא כן: הם סיפור בין שניים, לא כרטיס ציונים.
-• שחקן חדש — כתוב שהוא חדש. אל תמציא לו סטטיסטיקות.
 • שחקן חדש — כתוב שהוא חדש. אל תמציא לו סטטיסטיקות.
 
 ━━━ דיוק: לכל מספר יש תקופה ━━━
@@ -2482,6 +2545,29 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
             }
           }
         }
+
+        // ========== 6d. STRIP META-COMMENTARY ABOUT PREDICTION ==========
+        const metaCommentaryPatterns = [
+          /(?:,\s*)?(?:ו?זה|ו?זאת|דבר ש|מה ש)?\s*(?:מסביר|מחזק|מנמק|מצדיק)\s*את\s*(?:התחזית|החיזוי|המספר|הצפי)[^.,!?]*/g,
+          /(?:,\s*)?(?:ומסביר|ומחזק|ומנמק|ומצדיק)\s*(?:מדוע|למה)\s*(?:התחזית|החיזוי|המודל)[^.,!?]*/g,
+          /(?:,\s*)?(?:ו?זה|ו?זאת)\s*(?:ההסבר|הנימוק|הסיבה)\s*ל(?:תחזית|חיזוי)[^.,!?]*/g,
+        ];
+        for (const pattern of metaCommentaryPatterns) {
+          if (pattern.test(correctedSentence)) {
+            errorDetails.push('meta_text: stripped meta-commentary about prediction');
+            correctedSentence = correctedSentence.replace(pattern, '').trim();
+          }
+        }
+        correctedSentence = correctedSentence
+          .replace(/,\s*\./g, '.')
+          .replace(/,\s*,/g, ',')
+          .replace(/\s+/g, ' ')
+          .replace(/\.\s*\./g, '.')
+          .replace(/\s+[למבהוכש][-−]?\s*\./g, '.')
+          .replace(/\s+[למבהוכש][-−]?\s*$/g, '')
+          .replace(/\s+(?:של|את|על|עם|כי|גם|אם|או|כש|אחרי|לפני|בשביל|כדי)\s*\./g, '.')
+          .replace(/\s+(?:של|את|על|עם|כי|גם|אם|או|כש|אחרי|לפני|בשביל|כדי)\s*$/g, '')
+          .trim();
         
         // ========== 7. TEXT-NUMBER CONSISTENCY CHECK ==========
         // Detect optimistic / pessimistic tone vs locked prediction (Hebrew — expand beyond verbs)
@@ -2660,27 +2746,27 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           const nbFallback = halfNeighbourhood(player.name);
           if (predictedProfit > 0) {
             if (nbFallback?.above && nbFallback.above.gap > 0) {
-              correctedSentence = `הפער של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מעניק לו מוטיבציה ורוח גבית לסגירת המרחק והשגת רווח`;
+              correctedSentence = `הפער של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מעניק לו מטרה ברורה ודחיפה חזקה לעקיפה בצמרת`;
             } else if (nbFallback?.below && nbFallback.below.gap > 0) {
-              correctedSentence = `יתרון של ${nbFallback.below.gap} שקלים מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מעניק לו עמדת שליטה שמנמקת את החיזוי החיובי`;
+              correctedSentence = `יתרון של ${nbFallback.below.gap} שקלים מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מעניק לו עמדת שליטה וביטחון להמשיך להוביל`;
             } else if (actualStreak >= 2) {
-              correctedSentence = `מומנטום של ${actualStreak} נצחונות ברצף מספק לו ביטחון ויציבות בשולחן, ומצדיק את תחזית הרווח הפעם`;
+              correctedSentence = `מומנטום חזק של ${actualStreak} נצחונות ברצף מספק לו רוח גבית ועליונות פסיכולוגית מול השולחן`;
             } else if (lastGameProfit > 0) {
-              correctedSentence = `ניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם מספק לו מומנטום חיובי להמשך צבירת רווחים`;
+              correctedSentence = `ניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם מייצר תנופה חיובית ומציב אותו בעמדת זינוק מעולה`;
             } else {
-              correctedSentence = `יציבות מתמשכת ונתוני פתיחה חיוביים מעניקים לו יתרון יחסי בשולחן שמנמק את החיזוי החיובי`;
+              correctedSentence = `יציבות מתמשכת ונתוני פתיחה טובים מעניקים לו יתרון טקטי בעל פוטנציאל להכריע קופות חשובות`;
             }
           } else {
             if (nbFallback?.below && nbFallback.below.gap > 0) {
-              correctedSentence = `יתרון שביר של ${nbFallback.below.gap} שקלים בלבד מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מציב אותו בלחץ הגנתי שמסביר את התחזית המאתגרת`;
+              correctedSentence = `יתרון שביר של ${nbFallback.below.gap} שקלים בלבד מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מציב אותו תחת לחץ הגנתי מול שולחן רודף`;
             } else if (nbFallback?.above && nbFallback.above.gap > 0) {
-              correctedSentence = `מרחק של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מול שולחן צפוף וקשוח מנמק את התחזית השלילית`;
+              correctedSentence = `מרחק של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מחייב אותו לתמרן בזהירות מול תחרות עיקשת`;
             } else if (actualStreak <= -2) {
-              correctedSentence = `רצף של ${Math.abs(actualStreak)} הפסדים ממשיך להכביד ומסביר מדוע התחזית צופה לו ערב מאתגר`;
+              correctedSentence = `רצף של ${Math.abs(actualStreak)} הפסדים מכביד על הביטחון ומציב בפניו מבחן התאוששות מורכב`;
             } else if (lastGameProfit < 0) {
-              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי להימנע מבור נוסף`;
+              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי למנוע הידרדרות נוספת`;
             } else {
-              correctedSentence = `תנאי שולחן תחרותיים ומאבק צמוד מול יריבים עיקשים מנמקים את החיזוי השלילי למשחק הקרוב`;
+              correctedSentence = `תנאי שולחן תחרותיים ומאבק צמוד מול יריבים אגרסיביים דורשים ממנו ריכוז שיא וערנות מוגברת`;
             }
           }
           // errorDetails was collected at a dozen sites and never read, so a
@@ -3251,6 +3337,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
   אסור בשום אופן להשמיט אף שחקן — כולם שיחקו הערב, וכולם חייבים להופיע בסיכום!
   מי שסיים גבוה או נמוך במיוחד מקבל יותר מאזכור חולף, ומי שבאמצע משתלב עם תוצאתו או חלקו במשחק.
   בצע בדיקה עצמית לפני סיום לוודא שאין אף שחקן מהרשימה שהושמט!
+• המארח כשחקן פוקר מן המניין: אם אחד המשתתפים אירח את המשחק הערב${payload.location ? ` (אצל ${payload.location})` : ''}, התייחס אליו בסיכום כשחקן פוקר מלא על פי תוצאתו (רווח/הפסד, קניות, מהלכים והשפעה על הטבלה) בדיוק כמו שאר השחקנים! אסור להסתפק בציון עובדת היותו המארח כסיכום של חלקו במשחק.
 
 מבנה ואורך:
 - 3 פסקאות (שורה ריקה ביניהן), 140-190 מילים סה״כ${periodEndingLines.length > 0 ? ` — ובנוסף הפסקאות התקופתיות` : ''}
