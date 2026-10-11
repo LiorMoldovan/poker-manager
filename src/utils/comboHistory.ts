@@ -33,6 +33,10 @@ export interface ComboNearMatch {
   differingPlayerNames: string[];
   gamesPlayedTogether: number;
   coreCount: number;
+  gamesThisYear: number;
+  gamesThisHalf: number;
+  lastPlayedDateStr?: string;
+  monthsSinceLastPlayed?: number;
 }
 
 export interface ComboHistory {
@@ -41,6 +45,10 @@ export interface ComboHistory {
   previousGames: ComboGameResult[];
   playerStats: ComboPlayerStat[];
   totalGamesWithCombo: number;
+  gamesThisYear: number;
+  gamesThisHalf: number;
+  lastPlayedDateStr?: string;
+  monthsSinceLastPlayed?: number;
   playerCount: number;
   playerNames: string[];
   uniqueWinners: string[];
@@ -51,15 +59,107 @@ export interface ComboHistory {
   spanDays: number;
 }
 
+export function formatComboDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+export function formatMonthsAgo(months: number): string {
+  if (months === 0) return 'החודש';
+  if (months === 1) return 'לפני כחודש';
+  if (months === 2) return 'לפני כחודשיים';
+  if (months >= 24) return 'לפני כשנתיים';
+  return `לפני כ-${months} חודשים`;
+}
+
+function computeTimeBreakdown(games: { date: string }[], refDate: Date = new Date()) {
+  if (!games || games.length === 0) {
+    return {
+      gamesThisYear: 0,
+      gamesThisHalf: 0,
+      lastPlayedDateStr: undefined,
+      monthsSinceLastPlayed: undefined,
+    };
+  }
+
+  const sorted = [...games].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const refYear = refDate.getFullYear();
+  const refHalf = refDate.getMonth() < 6 ? 1 : 2;
+
+  let gamesThisYear = 0;
+  let gamesThisHalf = 0;
+
+  for (const g of sorted) {
+    const d = new Date(g.date);
+    if (d.getFullYear() === refYear) {
+      gamesThisYear++;
+      const gHalf = d.getMonth() < 6 ? 1 : 2;
+      if (gHalf === refHalf) {
+        gamesThisHalf++;
+      }
+    }
+  }
+
+  const lastGame = sorted[sorted.length - 1];
+  const lastDate = new Date(lastGame.date);
+  const lastPlayedDateStr = formatComboDate(lastGame.date);
+  const monthsSinceLastPlayed = Math.max(
+    0,
+    (refDate.getFullYear() - lastDate.getFullYear()) * 12 + (refDate.getMonth() - lastDate.getMonth())
+  );
+
+  return {
+    gamesThisYear,
+    gamesThisHalf,
+    lastPlayedDateStr,
+    monthsSinceLastPlayed,
+  };
+}
+
+export function formatTimeAttribution(
+  allTimeCount: number,
+  gamesThisYear: number,
+  gamesThisHalf: number,
+  lastPlayedDateStr?: string,
+  monthsSinceLastPlayed?: number,
+  refYear: number = new Date().getFullYear()
+): string {
+  if (allTimeCount <= 0) return '';
+  if (allTimeCount === 1 && lastPlayedDateStr) {
+    const ago = monthsSinceLastPlayed !== undefined ? ` (${formatMonthsAgo(monthsSinceLastPlayed)})` : '';
+    return `פעם אחת בלבד בעבר (בתאריך ${lastPlayedDateStr}${ago})`;
+  }
+
+  let detail = '';
+  if (gamesThisYear === 0) {
+    const lastInfo = lastPlayedDateStr
+      ? `לא נפגשו יחד ב-${refYear}! פעם אחרונה שישבו יחד: ${lastPlayedDateStr}${monthsSinceLastPlayed !== undefined ? ` (${formatMonthsAgo(monthsSinceLastPlayed)})` : ''}`
+      : `אף לא פעם אחת ב-${refYear}!`;
+    detail = `בכל הזמנים (${lastInfo})`;
+  } else {
+    const halfInfo = gamesThisHalf > 0 ? `, מתוכם ${gamesThisHalf} בחציון הנוכחי` : '';
+    const lastInfo = lastPlayedDateStr ? `; פעם אחרונה: ${lastPlayedDateStr}` : '';
+    detail = `בכל הזמנים (מתוכם ${gamesThisYear} ב-${refYear}${halfInfo}${lastInfo})`;
+  }
+
+  return `${allTimeCount} פעמים ${detail}`;
+}
+
 /**
  * Get combo history for a set of player IDs.
  * Looks at all completed games and finds those with the exact same player set.
  * @param currentPlayerIds - The player IDs in the current game
  * @param excludeGameId - Optional game ID to exclude (the current game)
+ * @param referenceDate - Optional reference date for time attribution (defaults to current date or excluded game date)
  */
 export function getComboHistory(
   currentPlayerIds: string[],
-  excludeGameId?: string
+  excludeGameId?: string,
+  referenceDate?: string | Date
 ): ComboHistory {
   const sortedIds = [...currentPlayerIds].sort();
   const comboKey = sortedIds.join('|');
@@ -67,6 +167,9 @@ export function getComboHistory(
   const allGames = getAllGames().filter(g => g.status === 'completed' && g.id !== excludeGameId);
   const allGP = getAllGamePlayers();
   const allPlayers = getAllPlayers();
+
+  const excludedGame = excludeGameId ? allGames.find(g => g.id === excludeGameId) : undefined;
+  const refDate = referenceDate ? new Date(referenceDate) : (excludedGame?.date ? new Date(excludedGame.date) : new Date());
 
   const playerMap: Record<string, string> = {};
   allPlayers.forEach(p => { playerMap[p.id] = p.name; });
@@ -92,58 +195,68 @@ export function getComboHistory(
   if (matchingGames.length === 0) {
     let nearCombo: ComboNearMatch | undefined = undefined;
     const N = sortedIds.length;
-    const gamePlayerSets: Set<string>[] = [];
+    const gamePlayerSets: { game: Game; pids: Set<string> }[] = [];
     for (const game of allGames) {
       const gps = gpByGame[game.id];
       if (gps) {
-        gamePlayerSets.push(new Set(gps.map(gp => gp.playerId)));
+        gamePlayerSets.push({ game, pids: new Set(gps.map(gp => gp.playerId)) });
       }
     }
 
     if (N >= 5) {
-      let bestNMinus1: { coreIds: string[]; diffId: string; count: number } | null = null;
+      let bestNMinus1: { coreIds: string[]; diffId: string; count: number; games: Game[] } | null = null;
       let maxNMinus1Count = 0;
       for (let i = 0; i < N; i++) {
         const subset = sortedIds.filter((_, idx) => idx !== i);
-        let count = 0;
-        for (const gSet of gamePlayerSets) {
-          if (subset.every(id => gSet.has(id))) count++;
+        const matchedGames: Game[] = [];
+        for (const item of gamePlayerSets) {
+          if (subset.every(id => item.pids.has(id))) matchedGames.push(item.game);
         }
-        if (count > maxNMinus1Count) {
-          maxNMinus1Count = count;
-          bestNMinus1 = { coreIds: subset, diffId: sortedIds[i], count };
+        if (matchedGames.length > maxNMinus1Count) {
+          maxNMinus1Count = matchedGames.length;
+          bestNMinus1 = { coreIds: subset, diffId: sortedIds[i], count: matchedGames.length, games: matchedGames };
         }
       }
 
       if (bestNMinus1 && bestNMinus1.count >= 2) {
+        const timeBd = computeTimeBreakdown(bestNMinus1.games, refDate);
         nearCombo = {
           corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
           differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
           gamesPlayedTogether: bestNMinus1.count,
           coreCount: N - 1,
+          gamesThisYear: timeBd.gamesThisYear,
+          gamesThisHalf: timeBd.gamesThisHalf,
+          lastPlayedDateStr: timeBd.lastPlayedDateStr,
+          monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
         };
       } else if (N >= 7) {
-        let bestNMinus2: { coreIds: string[]; diffIds: string[]; count: number } | null = null;
+        let bestNMinus2: { coreIds: string[]; diffIds: string[]; count: number; games: Game[] } | null = null;
         let maxNMinus2Count = 0;
         for (let i = 0; i < N; i++) {
           for (let j = i + 1; j < N; j++) {
             const subset = sortedIds.filter((_, idx) => idx !== i && idx !== j);
-            let count = 0;
-            for (const gSet of gamePlayerSets) {
-              if (subset.every(id => gSet.has(id))) count++;
+            const matchedGames: Game[] = [];
+            for (const item of gamePlayerSets) {
+              if (subset.every(id => item.pids.has(id))) matchedGames.push(item.game);
             }
-            if (count > maxNMinus2Count) {
-              maxNMinus2Count = count;
-              bestNMinus2 = { coreIds: subset, diffIds: [sortedIds[i], sortedIds[j]], count };
+            if (matchedGames.length > maxNMinus2Count) {
+              maxNMinus2Count = matchedGames.length;
+              bestNMinus2 = { coreIds: subset, diffIds: [sortedIds[i], sortedIds[j]], count: matchedGames.length, games: matchedGames };
             }
           }
         }
         if (bestNMinus2 && bestNMinus2.count >= 4) {
+          const timeBd = computeTimeBreakdown(bestNMinus2.games, refDate);
           nearCombo = {
             corePlayerNames: bestNMinus2.coreIds.map(id => playerMap[id] || id),
             differingPlayerNames: bestNMinus2.diffIds.map(id => playerMap[id] || id),
             gamesPlayedTogether: bestNMinus2.count,
             coreCount: N - 2,
+            gamesThisYear: timeBd.gamesThisYear,
+            gamesThisHalf: timeBd.gamesThisHalf,
+            lastPlayedDateStr: timeBd.lastPlayedDateStr,
+            monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
           };
         }
       }
@@ -155,6 +268,10 @@ export function getComboHistory(
       previousGames: [],
       playerStats: [],
       totalGamesWithCombo: 0,
+      gamesThisYear: 0,
+      gamesThisHalf: 0,
+      lastPlayedDateStr: undefined,
+      monthsSinceLastPlayed: undefined,
       playerCount: sortedIds.length,
       playerNames,
       uniqueWinners: [],
@@ -251,12 +368,17 @@ export function getComboHistory(
 
   const dates = matchingGames.map(m => new Date(m.game.date).getTime());
   const spanDays = Math.round((Math.max(...dates) - Math.min(...dates)) / (1000 * 60 * 60 * 24));
+  const exactTimeBd = computeTimeBreakdown(matchingGames.map(m => m.game), refDate);
 
   return {
     isFirstTime: false,
     previousGames,
     playerStats,
     totalGamesWithCombo: numGames,
+    gamesThisYear: exactTimeBd.gamesThisYear,
+    gamesThisHalf: exactTimeBd.gamesThisHalf,
+    lastPlayedDateStr: exactTimeBd.lastPlayedDateStr,
+    monthsSinceLastPlayed: exactTimeBd.monthsSinceLastPlayed,
     playerCount: sortedIds.length,
     playerNames,
     uniqueWinners,
@@ -277,17 +399,31 @@ export function buildComboHistoryText(combo: ComboHistory): string {
       const nc = combo.nearCombo;
       const coreNames = nc.corePlayerNames.join(', ');
       const diffNames = nc.differingPlayerNames.join(', ');
+      const timeStr = formatTimeAttribution(
+        nc.gamesPlayedTogether,
+        nc.gamesThisYear,
+        nc.gamesThisHalf,
+        nc.lastPlayedDateStr,
+        nc.monthsSinceLastPlayed
+      );
       if (nc.coreCount === combo.playerCount - 1) {
-        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בעבר, כשאליהם מצטרף הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
+        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם מצטרף הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
       } else {
-        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${nc.gamesPlayedTogether} משחקים משותפים בעבר, כשאליהם מצטרפים הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
+        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם מצטרפים הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
       }
     }
     return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${combo.playerNames.join(', ')}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;
   }
 
   const lines: string[] = [];
-  lines.push(`🔄 הרכב חוזר! בדיוק אותם ${combo.playerCount} שחקנים שיחקו יחד ${combo.totalGamesWithCombo} פעמים בעבר.`);
+  const timeStr = formatTimeAttribution(
+    combo.totalGamesWithCombo,
+    combo.gamesThisYear,
+    combo.gamesThisHalf,
+    combo.lastPlayedDateStr,
+    combo.monthsSinceLastPlayed
+  );
+  lines.push(`🔄 הרכב חוזר! בדיוק אותם ${combo.playerCount} שחקנים שיחקו יחד ${timeStr}.`);
 
   for (const game of combo.previousGames) {
     const dateStr = formatComboDate(game.date);
@@ -320,13 +456,4 @@ export function buildComboHistoryText(combo: ComboHistory): string {
   }
 
   return lines.join('\n');
-}
-
-function formatComboDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
 }

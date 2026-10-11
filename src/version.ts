@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.7';
+export const APP_VERSION = '6.38.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.8',
+    date: '2026-10-11',
+    changes: [
+      '🚫 Banned repetitive all-time money gaps',
+      '🎯 Prioritize streak records and rank battles',
+      '⏱️ Clear period attribution for veteran core',
+      '✨ Smart optional veteran core teaser mentions',
+    ],
+  },
   {
     version: '6.38.7',
     date: '2026-10-11',

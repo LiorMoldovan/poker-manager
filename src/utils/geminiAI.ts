@@ -1133,30 +1133,21 @@ export const generateAIForecasts = async (
     }
   }
 
-  // === STORYLINE TYPE 6: Nemesis (profit gap in shared games) ===
-  // "הרוויח" only fits a positive total; the stronger side of a pair can still
-  // be down overall, which produced "סגל הרוויח סה\"כ -547". The verb now
-  // follows the sign, and the framing stays on the gap between the two rather
-  // than on either man's running balance.
-  // Capped and de-duplicated like the other pair types. Uncapped it filled
-  // five of the eight storylines a night with the same sentence shape, which
-  // is the surest way to get eight interchangeable forecasts back.
-  const nemesisNamed = new Set<string>();
-  const nemesisPairs = h2hResults
-    .filter(h => h.sharedGames >= 4 && Math.abs(h.aTotalProfit - h.bTotalProfit) >= 200)
-    .sort((a, b) => Math.abs(b.aTotalProfit - b.bTotalProfit) - Math.abs(a.aTotalProfit - a.bTotalProfit));
-  for (const h of nemesisPairs) {
-    const profitGap = h.aTotalProfit - h.bTotalProfit;
-    const stronger = profitGap > 0 ? h.a : h.b;
-    const weaker = profitGap > 0 ? h.b : h.a;
-    if (nemesisNamed.has(stronger) || nemesisNamed.has(weaker)) continue;
-    nemesisNamed.add(stronger);
-    nemesisNamed.add(weaker);
-    const strongerTotal = Math.round(profitGap > 0 ? h.aTotalProfit : h.bTotalProfit);
-    const weakerTotal = Math.round(profitGap > 0 ? h.bTotalProfit : h.aTotalProfit);
-    const said = (v: number) => v >= 0 ? `הרוויח ‎+${v}` : `הפסיד ${v}`;
-    storylines.push(`💸 נמסיס: ב-${h.sharedGames} משחקים משותפים, ${stronger} ${said(strongerTotal)} ואילו ${weaker} ${said(weakerTotal)} — פער של ${Math.abs(Math.round(profitGap))}`);
-    if (nemesisNamed.size >= 4) break;
+  // === STORYLINE TYPE 6: Sporting dominance in shared games (sporting record, zero money gaps) ===
+  const h2hSportingNamed = new Set<string>();
+  const h2hDominancePairs = h2hResults
+    .filter(h => h.sharedGames >= 4 && Math.abs(h.aWins - h.bWins) >= 2)
+    .sort((a, b) => (Math.abs(b.aWins - b.bWins) / b.sharedGames) - (Math.abs(a.aWins - a.bWins) / a.sharedGames));
+  for (const h of h2hDominancePairs) {
+    const stronger = h.aWins > h.bWins ? h.a : h.b;
+    const weaker = h.aWins > h.bWins ? h.b : h.a;
+    if (h2hSportingNamed.has(stronger) || h2hSportingNamed.has(weaker)) continue;
+    h2hSportingNamed.add(stronger);
+    h2hSportingNamed.add(weaker);
+    const strongerWins = Math.max(h.aWins, h.bWins);
+    const weakerWins = Math.min(h.aWins, h.bWins);
+    storylines.push(`🥊 עליונות ספורטיבית: במפגשים ביניהם בכל הזמנים (${h.sharedGames} משחקים), ${stronger} מוביל במאזן ${strongerWins}:${weakerWins} מול ${weaker}`);
+    if (h2hSportingNamed.size >= 4) break;
   }
 
   // === STORYLINE TYPE 7: H2H win streak ===
@@ -1254,18 +1245,6 @@ export const generateAIForecasts = async (
     }
   }
 
-  // === STORYLINE TYPE 14: Money magnet (biggest contributor to tonight's group) ===
-  const totalContributions = players.filter(p => p.gamesPlayed >= 3).map(p => {
-    let contributed = 0;
-    for (const h of h2hResults) {
-      if (h.a === p.name) contributed += h.aTotalProfit;
-      else if (h.b === p.name) contributed += h.bTotalProfit;
-    }
-    return { name: p.name, contributed: Math.round(contributed) };
-  }).sort((a, b) => a.contributed - b.contributed);
-  if (totalContributions.length >= 2 && totalContributions[0].contributed < -150) {
-    storylines.push(`🧲 ספונסר: ${totalContributions[0].name} בסה"כ ${totalContributions[0].contributed} במשחקים משותפים עם השחקנים המשתתפים, בעוד ${totalContributions[totalContributions.length - 1].name} הרוויח \u200E+${totalContributions[totalContributions.length - 1].contributed}`);
-  }
 
   // === STORYLINE TYPE 15: Hot/cold group trend ===
   const groupLast3 = players.filter(p => p.gameHistory.length >= 3);
@@ -1764,11 +1743,8 @@ export const generateAIForecasts = async (
         const oppName = isA ? h.b : h.a;
         const myWins = isA ? h.aWins : h.bWins;
         const oppWins = isA ? h.bWins : h.aWins;
-        const myProfit = isA ? h.aTotalProfit : h.bTotalProfit;
-        const oppProfit = isA ? h.bTotalProfit : h.aTotalProfit;
         const myConsec = isA ? h.aConsecutiveWins : h.bConsecutiveWins;
         const oppConsec = isA ? h.bConsecutiveWins : h.aConsecutiveWins;
-        const profitDiff = myProfit - oppProfit;
 
         let priority = 0;
         let descPositive = '';
@@ -1782,14 +1758,14 @@ export const generateAIForecasts = async (
           priority = 3;
           descPositive = `הזדמנות לשבור רצף של ${oppConsec} הפסדים מול ${oppName} — נחישות למהפך במצ'אפ הישיר`;
           descNegative = `מוקש מול ${oppName} (${oppConsec} נצחונות רצופים ליריבו) — יריב קשוח שמקשה עליו בשולחן`;
-        } else if (Math.abs(profitDiff) >= 150) {
+        } else if (h.sharedGames >= 4 && Math.abs(myWins - oppWins) >= 2) {
           priority = 2;
-          if (profitDiff > 0) {
-            descPositive = `מאזן כספי עדיף מול ${oppName} (פער של ${Math.round(profitDiff)} שקלים ביניהם) — עמדת כוח במפגשים המשותפים`;
-            descNegative = `הובלה כספית מול ${oppName} שמועמדת לצמצום מול שולחן אגרסיבי`;
+          if (myWins > oppWins) {
+            descPositive = `עליונות ספורטיבית מול ${oppName} (מאזן ${myWins}:${oppWins} ב-${h.sharedGames} מפגשים ביניהם) — ביטחון גבוה במצ'אפ הישיר`;
+            descNegative = `מאזן עדיף מול ${oppName} (${myWins}:${oppWins}) שעומד למבחן מול יריב שנחוש להגיב`;
           } else {
-            descPositive = `הזדמנות לצמצם פער כספי מול ${oppName} (בפיגור ${Math.abs(Math.round(profitDiff))} שקלים) — מוטיבציה גבוהה להתאוששות`;
-            descNegative = `פער כספי קשה מול ${oppName} (${Math.abs(Math.round(profitDiff))} שקלים לרעתו) — מצ'אפ מאתגר במיוחד`;
+            descPositive = `הזדמנות לצמצם מאזן נחות מול ${oppName} (${oppWins}:${myWins} לרעתו) — מוטיבציה גבוהה במפגש הישיר`;
+            descNegative = `מאזן קשה מול ${oppName} (${oppWins}:${myWins} לרעתו ב-${h.sharedGames} משחקים) — יריב עיקש שמקשה עליו בשולחן`;
           }
         } else if (h.sharedGames >= 5 && Math.abs(myWins - oppWins) <= 1) {
           priority = 1;
@@ -1975,18 +1951,62 @@ export const generateAIForecasts = async (
       if (allTimeRank > 0 && allTimeRank <= 3) {
         lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
       }
+      // Proximity to career streaks
+      const careerStreaks = (() => {
+        const chrono = [...p.gameHistory].reverse();
+        let maxWin = 0;
+        let maxLoss = 0;
+        let curW = 0;
+        let curL = 0;
+        for (const g of chrono) {
+          if (g.profit > 0) {
+            curW++; curL = 0;
+            if (curW > maxWin) maxWin = curW;
+          } else if (g.profit < 0) {
+            curL++; curW = 0;
+            if (curL > maxLoss) maxLoss = curL;
+          } else {
+            curW = 0; curL = 0;
+          }
+        }
+        return { maxWin, maxLoss };
+      })();
+
+      if (actualStreak >= 2) {
+        if (actualStreak >= careerStreaks.maxWin && careerStreaks.maxWin >= 2) {
+          lines.push(`🏆 שיא קריירה אישי! רצף של ${actualStreak} נצחונות — הרצף הטוב ביותר בקריירה שלו!`);
+        } else if (actualStreak === careerStreaks.maxWin - 1 && careerStreaks.maxWin >= 3) {
+          lines.push(`🎯 קרוב לשיא אישי: רצף של ${actualStreak} נצחונות — מרחק ניצחון אחד מהשוואת שיא הקריירה (${careerStreaks.maxWin} נצחונות רצופים)!`);
+        }
+      } else if (actualStreak <= -2) {
+        const absStreak = Math.abs(actualStreak);
+        if (absStreak >= careerStreaks.maxLoss && careerStreaks.maxLoss >= 2) {
+          lines.push(`⚠️ שיא שפל אישי בקריירה: רצף של ${absStreak} הפסדים — הבצורת הארוכה ביותר שלו אי פעם!`);
+        } else if (absStreak === careerStreaks.maxLoss - 1 && careerStreaks.maxLoss >= 3) {
+          lines.push(`⚠️ קרוב לשפל אישי: רצף של ${absStreak} הפסדים — מרחק הפסד אחד מהשוואת שיא ההפסדים בקריירה (${careerStreaks.maxLoss} הפסדים)!`);
+        }
+      }
+
       if (nb?.above && nb.above.gap > 0) {
-        lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name})`);
+        if (nb.above.gap <= 80) {
+          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name}) (⚔️ קרב עקיפה ריאלי: פיגור קטן של ${nb.above.gap} שקלים בלבד — ניצחון הערב עשוי לחולל עקיפה מיידית וטיפוס בדירוג!)`);
+        } else {
+          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name})`);
+        }
       }
       if (nb?.below && nb.below.gap > 0) {
-        lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name})`);
+        if (nb.below.gap <= 80) {
+          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name}) (🛡️ הגנה שברירית על מקום ${nb.rank}: יתרון של ${nb.below.gap} שקלים בלבד — סכנת עקיפה מיידית כבר הערב!)`);
+        } else {
+          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name})`);
+        }
       }
       if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900) {
         lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
       }
     }
 
-    // Directional head-to-head matchup facts against tonight's opponents
+    // Directional head-to-head matchup facts against tonight's opponents (SPORTING ONLY — zero all-time money gaps)
     const playerH2H = h2hResults
       .filter(h => (h.a === p.name || h.b === p.name) && h.sharedGames >= 2)
       .map(h => {
@@ -1994,17 +2014,13 @@ export const generateAIForecasts = async (
         const oppName = isA ? h.b : h.a;
         const myWins = isA ? h.aWins : h.bWins;
         const oppWins = isA ? h.bWins : h.aWins;
-        const myProfit = isA ? h.aTotalProfit : h.bTotalProfit;
-        const oppProfit = isA ? h.bTotalProfit : h.aTotalProfit;
         const myConsec = isA ? h.aConsecutiveWins : h.bConsecutiveWins;
         const oppConsec = isA ? h.bConsecutiveWins : h.aConsecutiveWins;
-        const profitGap = myProfit - oppProfit;
         return {
           oppName,
           sharedGames: h.sharedGames,
           myWins,
           oppWins,
-          profitGap,
           myConsec,
           oppConsec,
         };
@@ -2012,16 +2028,15 @@ export const generateAIForecasts = async (
 
     if (suggestion < 0) {
       const toughMatchups = playerH2H.filter(m =>
-        m.oppWins > m.myWins || m.profitGap <= -80 || m.oppConsec >= 2
-      ).sort((a, b) => a.profitGap - b.profitGap);
+        m.oppConsec >= 2 || (m.sharedGames >= 4 && m.oppWins > m.myWins)
+      ).sort((a, b) => (b.oppConsec - a.oppConsec) || ((b.oppWins - b.myWins) - (a.oppWins - a.myWins)));
 
       if (toughMatchups.length > 0) {
         const topTough = toughMatchups.slice(0, 2).map(m => {
           if (m.oppConsec >= 2) return `ספג ${m.oppConsec} הפסדים רצופים מול ${m.oppName}`;
-          if (m.profitGap <= -100) return `בפיגור של ${Math.abs(Math.round(m.profitGap))} שקלים מול ${m.oppName}`;
-          return `מאזן שלילי של ${m.oppWins}:${m.myWins} לרעתו מול ${m.oppName}`;
+          return `מאזן שלילי של ${m.oppWins}:${m.myWins} לרעתו מול ${m.oppName} (${m.sharedGames} משחקים ביניהם)`;
         }).join('; ');
-        lines.push(`⚠️ מצ'אפים קשים מול שחקני הערב: ${topTough}`);
+        lines.push(`⚠️ מצ'אפים קשים מול שחקני הערב (ספורטיבי): ${topTough}`);
       }
 
       if (actualStreak >= 2) {
@@ -2031,16 +2046,15 @@ export const generateAIForecasts = async (
       }
     } else if (suggestion > 0) {
       const favorableMatchups = playerH2H.filter(m =>
-        m.myWins > m.oppWins || m.profitGap >= 80 || m.myConsec >= 2
-      ).sort((a, b) => b.profitGap - a.profitGap);
+        m.myConsec >= 2 || (m.sharedGames >= 4 && m.myWins > m.oppWins)
+      ).sort((a, b) => (b.myConsec - a.myConsec) || ((b.myWins - b.oppWins) - (a.myWins - a.oppWins)));
 
       if (favorableMatchups.length > 0) {
         const topFav = favorableMatchups.slice(0, 2).map(m => {
-          if (m.myConsec >= 2) return `מחזיק ברצף של ${m.myConsec} נצחונות על ${m.oppName}`;
-          if (m.profitGap >= 100) return `מוביל בפער של ${Math.round(m.profitGap)} שקלים מול ${m.oppName}`;
-          return `מאזן עדיף של ${m.myWins}:${m.oppWins} לטובתו מול ${m.oppName}`;
+          if (m.myConsec >= 2) return `מחזיק ברצף של ${m.myConsec} נצחונות ישירים על ${m.oppName}`;
+          return `מאזן עדיף של ${m.myWins}:${m.oppWins} לטובתו מול ${m.oppName} (${m.sharedGames} משחקים ביניהם)`;
         }).join('; ');
-        lines.push(`🔥 יתרונות ומצ'אפים חיוביים הערב: ${topFav}`);
+        lines.push(`🔥 יתרונות ומצ'אפים חיוביים הערב (ספורטיבי): ${topFav}`);
       }
     }
 
@@ -2120,9 +2134,16 @@ ${traitBlock}${surpriseText}
 • לקט את העובדות הכי מעניינות, מצחיקות ומפתיעות מכל הנתונים: רצפים, יריבויות, שיאים, חזרות, אבני דרך, קרבות דירוג
 • שלב את כל השחקנים בעלילה: מי שמוביל, מי שרודף, מי שמגן, מי שנמצא ביריבות ראש-בראש, ומי שמגיע לחולל מהפך
 • המארח בשולחן: אם אחד השחקנים מארח${location ? ` (${location})` : ''}, הוא דמות פוקר מרכזית בעלילה בדיוק כמו כולם! שלב אותו כשחקן פוקר מלא לפי נתוניו, רצפיו והאתגרים שלו בשולחן, ולא רק כמי שמעמיד את הבית.${locationInsightsText ? `\n• תובנות מיקום (🏠): שלב אותן רק אם הן מעניינות ומפתיעות. אל תזכיר מיקום סתם כעובדה יבשה.` : ''}
-• העדף סיפורים ויריבויות על פני סטטיסטיקות יבשות
-• שילוב גרעין השולחן הוותיק בפתיח (חובה!): אם מוצג מידע על גרעין שולחן ותיק (🔄 - למשל 6 מתוך 8 שחקנים שחלקו 15 משחקים בעבר), חובה לפתוח את הטיזר או לשלב בו במפורש את העובדה הזו! למשל: לציין את השלד המרכזי הוותיק ששיחק יחד המון פעמים, לצד השחקנים שמצטרפים אליהם הפעם לטרוף את הקלפים. לעולם אל תטען בטעות שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק! רק אם מופיע "הרכב חדש באמת" (🆕) ללא שום גרעין ותיק, ציין שזה הרכב חדש לחלוטין.
-• לא לחזור על עובדות שיופיעו ב-sentence של שחקנים ספציפיים — פזר חומר שונה
+• שילוב גרעין שולחן ותיק והרכב השחקנים (אפשרי אך לא חובה! מניעת כפילות מול הכרטיס הייעודי):
+  באפליקציה כבר מוצג כרטיס UI ייעודי ומפורט של "גרעין השולחן" (עם שמות השחקנים, כמות המפגשים ותאריכים).
+  לכן, אזכור גרעין השולחן בטיזר הוא **אפשרי אך אינו חובה**:
+  1. 🚫 מניעת כפילות: אל תחזור סתם על אותם מספרים יבשים ושמות שמופיעים בכרטיס הייעודי ("השלד של 6 מתוך 8 נפגש 15 פעמים בעבר...").
+  2. 💡 שלב רק אם זה תורם לעלילה ולדרמה: אם בחרת לשלב את גרעין השולחן בטיזר, עשה זאת בצורה חכמה כצבע עלילתי ולא כדיווח סטטיסטי יבש:
+     - למשל: איחוד מרגש אחרי חודשים ארוכים שלא ישבו יחד, או הדינמיקה שבה השחקנים המצטרפים מגיעים לשבור את ההרגלים של החבורה הוותיקה שמכירה כל בלוף.
+  3. ⏱️ ייחוס זמן מדויק: אם אתה מזכיר את ההיסטוריה של ההרכב, חובה לציין במפורש את התקופה (למשל "בכל הזמנים", "השנה", "לראשונה מזה X חודשים") — לעולם אל תזרוק מספר ללא ייחוס זמן ברור!
+  4. ⚠️ דיוק מול הרכב חדש:
+     - לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק.
+     - רק אם מופיע במפורש "הרכב חדש באמת" (🆕) ללא שום גרעין — אפשר לציין שמדובר בהרכב בכורה.
 • חשוב מאוד: הטיזר נשלח מספר ימים לפני המשחק! אסור לכתוב "הלילה", "הערב", "היום" או לציין תאריך/יום ספציפי. השתמש ב"הפעם", "במשחק הבא", "במשחק הקרוב" וכדומה. זה חל על הטיזר וגם על ה-sentence של כל שחקן
 
 אורך:
@@ -2138,11 +2159,15 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 📝 לכל שחקן: highlight (כותרת חדה, 3-5 מילים) + sentence (פסקה קולעת, ממוקדת וספורטיבית, כ-35–55 מילים, 2–3 משפטים בלבד):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-חיבור עלילתי ונתוני הדוק לכיוון החיזוי (מדויק, חד, ממוקד על 2–3 נתונים ונטול מטא-טקסט):
+חיבור עלילתי ונתוני הדוק לכיוון החיזוי (מדויק, חד, ממוקד על תובנות פיקנטיות ונטול מטא-טקסט):
 כל שחקן מקבל פסקת ניתוח פוקר קולעת, מדויקת ומהודקת (35–55 מילים בלבד! לא ארוכה ומייגעת).
 בחר 2 או 3 נתונים משמעותיים ובולטים בלבד מכרטיס השחקן, ובנה עליהם את הפסקה (2–3 משפטים זורמים):
-1. נתון 1: מצב נוכחי, מומנטום, רצף או מעמד בטבלה.
-2. נתון 2: הנימוק הנתוני המרכזי שמסביר את כיוון הערב — מצ'אפ H2H ישיר מול יריב בערב (מאזן נצחונות, פער כספי או רצף ישיר), פער נקודות בטבלה, או נתון בית/חוץ.
+1. נתון 1: מצב נוכחי, מומנטום, רצף פעיל או מעמד בטבלה.
+2. נתון 2 — הנימוק הנתוני המרכזי שמסביר את כיוון הערב. תעדוף עליון לתובנות פיקנטיות שמעניינות את השחקנים:
+   • 🏆/🎯 קרבה לשיא אישי או תקופתי: שחקן שנמצא ברצף נצחונות ומתקרב לשבירת או השוואת שיא הקריירה שלו (למשל: רצף של 3 נצחונות, מרחק ניצחון אחד מהשוואת שיא הקריירה שעומד על 4!), רצף בצורת שמאיים על שיא שלילי אישי, או שיא רווח תקופתי.
+   • ⚔️/🛡️ קרב עקיפה ריאלי / הגנה בדירוג עקב פער קטן: פער קטן של 10–80 שקלים בלבד בטבלת החציון מול יריב שנוכח הערב בשולחן — הזדמנות לעקיפה מיידית ושינוי מיקום כבר הערב (לשחקן חיובי), או הגנה שברירית על המקום מפני עקיפה (לשחקן שלילי).
+   • 🔥/⚠️ מצ'אפ ראש-בראש ספורטיבי ישיר (מאזן או רצף — ספורטיבי בלבד!): רצף נצחונות ישיר מול יריב בשולחן (למשל: "מחזיק ברצף של 3 נצחונות רצופים על X במפגשים ביניהם"), או מאזן נצחונות/הפסדים עדיף (5:1 במפגשים ביניהם).
+   • 🎯 אבני דרך ופיקנטריה: משחק קריירה עגול (המשחק ה-50 או ה-100), קאמבק אחרי היעדרות ארוכה, או מאזן מיוחד אצל המארח.
 3. מסקנה / מבחן טקטי: משפט סיום שקושר את הנתונים ישירות לכיוון התחזית (רווח = ניצול עמדת כוח והמשך דומיננטיות; הפסד = בלימת נפילה, זהירות טקטית ומאבק בשולחן קשוח).
 
 1. כיוון רווח (פלוס):
@@ -2179,8 +2204,10 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
    עובדת היותו המארח היא לכל היותר תבלין קל (כמו "מגרש ביתי" או "שומר על הבית"), ואסור בשום אופן שתחליף ניתוח פוקר עשיר ומדויק.
 
 מה לא נכנס לטקסט:
+• 🚫 איסור מוחלט על פער כספי מצטבר כל-זמני מול שחקן אחר ("מחזיק ביתרון של 2,914 ₪ על פיליפ בכל הזמנים" / "מוביל בפער של X שקלים על Y") — אסור בתכלית האיסור!
+  זהו פרט שולי, יבש, חסר עניין ומשעמם שחוזר על עצמו. שחקנים רוצים לשמוע על ספורטיביות (רצף נצחונות ישיר, מאזן מפגשים), קרבות דירוג קרובים בטבלה, או קרבה לשיאי קריירה — לעולם לא פער כספי מצטבר היסטורי של מאות או אלפי שקלים!
 • מספר החיזוי הנעול — הוא מוצג בכרטיס בנפרד.
-• המאזן המצטבר השלילי של שחקן ("סה\"כ ‎-807") — אף אחד לא רוצה לקרוא כמה הוא במינוס אי־פעם. מספרי ראש-בראש מ-📖 דווקא כן: הם סיפור בין שניים, לא כרטיס ציונים.
+• המאזן המצטבר השלילי של שחקן ("סה\"כ ‎-807") — אף אחד לא רוצה לקרוא כמה הוא במינוס אי־פעם. מספרי ראש-בראש ספורטיביים (מאזן נצחונות או רצף ישיר מ-📖) דווקא כן: הם סיפור בין שניים, לא כרטיס ציונים.
 • שחקן חדש — כתוב שהוא חדש. אל תמציא לו סטטיסטיקות.
 
 ━━━ דיוק: לכל מספר יש תקופה ━━━

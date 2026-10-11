@@ -1329,17 +1329,25 @@ const NewGameScreen = () => {
           if (comboSnapshot.nearCombo) {
             const nc = comboSnapshot.nearCombo;
             const diffNames = nc.differingPlayerNames.join(', ');
+            const currentYear = new Date().getFullYear();
+            const timeCtx = nc.gamesThisYear === 0
+              ? (nc.lastPlayedDateStr ? ` (אף לא פעם אחת ב-${currentYear}! מאז ${nc.lastPlayedDateStr})` : ` (0 ב-${currentYear})`)
+              : ` (מתוכם ${nc.gamesThisYear} ב-${currentYear})`;
             return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08)); border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.85rem; color: #e2e8f0;">
-              <span style="font-size: 1rem;">🔄</span> <strong style="color: #60a5fa;">גרעין שולחן ותיק (${nc.coreCount}/${comboSnapshot.playerCount}):</strong> ${nc.corePlayerNames.join(', ')} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בעבר, בתוספת ${diffNames}.
+              <span style="font-size: 1rem;">🔄</span> <strong style="color: #60a5fa;">גרעין שולחן ותיק (${nc.coreCount}/${comboSnapshot.playerCount}):</strong> ${nc.corePlayerNames.join(', ')} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בכל הזמנים${timeCtx}, בתוספת ${diffNames}.
             </div>`;
           }
           return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.85rem; color: #e2e8f0;">
             <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboSnapshot.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
           </div>`;
         }
+        const currentYear = new Date().getFullYear();
+        const returningTimeCtx = comboSnapshot.gamesThisYear > 0
+          ? `, מתוכם ${comboSnapshot.gamesThisYear} ב-${currentYear}`
+          : comboSnapshot.lastPlayedDateStr ? `, מאז ${comboSnapshot.lastPlayedDateStr}` : '';
         const headerHtml = `<div style="margin-bottom: 0.75rem;">
             <div style="font-size: 0.88rem; color: #e2e8f0;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong></div>
-            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboSnapshot.totalGamesWithCombo + 1} שאותם ${comboSnapshot.playerCount} שחקנים נפגשים</div>
+            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboSnapshot.totalGamesWithCombo + 1} שאותם ${comboSnapshot.playerCount} שחקנים נפגשים (${comboSnapshot.totalGamesWithCombo} פעמים בכל הזמנים${returningTimeCtx})</div>
           </div>`;
 
         if (comboSnapshot.totalGamesWithCombo === 1) {
@@ -2752,7 +2760,7 @@ const NewGameScreen = () => {
                           <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
                           <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({comboHistory.nearCombo.coreCount} מתוך {comboHistory.playerCount} שחקנים)</strong>
                           <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                            {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בעבר, כשאליהם מצטרף הערב {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
+                            {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בכל הזמנים {comboHistory.nearCombo.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${comboHistory.nearCombo.lastPlayedDateStr})` : `(מתוכם ${comboHistory.nearCombo.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם מצטרף הערב {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
                           </div>
                         </div>
                       ) : (
@@ -2771,7 +2779,8 @@ const NewGameScreen = () => {
                             <strong style={{ color: '#fbbf24' }}>{t('newGame.returningCombo')}</strong>
                           </div>
                           <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                            {t('newGame.comboTimes', { count: comboHistory.totalGamesWithCombo + 1, players: comboHistory.playerCount })}
+                            {t('newGame.comboTimes', { count: comboHistory.totalGamesWithCombo + 1, players: comboHistory.playerCount })}{' '}
+                            ({comboHistory.totalGamesWithCombo} פעמים בכל הזמנים{comboHistory.gamesThisYear > 0 ? `, מתוכם ${comboHistory.gamesThisYear} ב-${new Date().getFullYear()}` : comboHistory.lastPlayedDateStr ? `, פעם אחרונה: ${comboHistory.lastPlayedDateStr}` : ''})
                           </div>
                         </div>
 

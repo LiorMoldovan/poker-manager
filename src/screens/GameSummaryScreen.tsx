@@ -2337,7 +2337,7 @@ const GameSummaryScreen = () => {
                       🔄 גרעין שולחן ותיק ({comboHistory.nearCombo.coreCount} מתוך {comboHistory.playerCount} שחקנים)
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                      {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בעבר, כשאליהם הצטרפו {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
+                      {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בכל הזמנים {comboHistory.nearCombo.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${comboHistory.nearCombo.lastPlayedDateStr})` : `(מתוכם ${comboHistory.nearCombo.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם הצטרפו {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
                     </div>
                   </div>
                 ) : (
@@ -2352,7 +2352,7 @@ const GameSummaryScreen = () => {
                   marginBottom: '0.75rem',
                   fontWeight: 600,
                 }}>
-                  אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo} פעמים
+                  אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo} פעמים בכל הזמנים {comboHistory.gamesThisYear > 0 ? `(מתוכם ${comboHistory.gamesThisYear} ב-${new Date().getFullYear()})` : comboHistory.lastPlayedDateStr ? `(פעם אחרונה: ${comboHistory.lastPlayedDateStr})` : ''}
                 </div>
 
                 {/* Player leaderboard for this combo */}
