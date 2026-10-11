@@ -11,7 +11,7 @@ import { forceRefreshPlayersFromDb, forceRefreshPollsFromDb } from '../database/
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
-import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
+import { getComboHistory, buildComboHistoryText, ComboHistory, formatTimeAttribution, formatHebrewNames } from '../utils/comboHistory';
 import AIProgressBar from '../components/AIProgressBar';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { canUserGenerateAI } from '../utils/aiEligibility';
@@ -1333,8 +1333,22 @@ const NewGameScreen = () => {
             const timeCtx = nc.gamesThisYear === 0
               ? (nc.lastPlayedDateStr ? ` (אף לא פעם אחת ב-${currentYear}! מאז ${nc.lastPlayedDateStr})` : ` (0 ב-${currentYear})`)
               : ` (מתוכם ${nc.gamesThisYear} ב-${currentYear})`;
+            const afmHtml = nc.almostFullMatch ? (() => {
+              const afm = nc.almostFullMatch;
+              const afmDiff = formatHebrewNames(afm.differingPlayerNames);
+              const afmTimeStr = formatTimeAttribution(
+                afm.gamesPlayedTogether,
+                afm.gamesThisYear,
+                afm.gamesThisHalf,
+                afm.lastPlayedDateStr,
+                afm.monthsSinceLastPlayed
+              );
+              return `<div style="font-size: 0.78rem; color: #38bdf8; margin-top: 0.35rem; border-top: 1px solid rgba(59, 130, 246, 0.2); padding-top: 0.35rem;">
+                💡 <strong>בנוסף:</strong> ${afm.coreCount} מתוך ${comboSnapshot.playerCount} השחקנים (ללא ${afmDiff}) כבר שיחקו יחד ${afmTimeStr}.
+              </div>`;
+            })() : '';
             return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08)); border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.85rem; color: #e2e8f0;">
-              <span style="font-size: 1rem;">🔄</span> <strong style="color: #60a5fa;">גרעין שולחן ותיק (${nc.coreCount}/${comboSnapshot.playerCount}):</strong> ${nc.corePlayerNames.join(', ')} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בכל הזמנים${timeCtx}, בתוספת ${diffNames}.
+              <span style="font-size: 1rem;">🔄</span> <strong style="color: #60a5fa;">גרעין שולחן ותיק (${nc.coreCount}/${comboSnapshot.playerCount}):</strong> ${nc.corePlayerNames.join(', ')} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בכל הזמנים${timeCtx}, בתוספת ${diffNames}.${afmHtml}
             </div>`;
           }
           return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.85rem; color: #e2e8f0;">
@@ -1345,9 +1359,24 @@ const NewGameScreen = () => {
         const returningTimeCtx = comboSnapshot.gamesThisYear > 0
           ? `, מתוכם ${comboSnapshot.gamesThisYear} ב-${currentYear}`
           : comboSnapshot.lastPlayedDateStr ? `, מאז ${comboSnapshot.lastPlayedDateStr}` : '';
+        const lcHtml = comboSnapshot.largerCore ? (() => {
+          const lc = comboSnapshot.largerCore;
+          const lcDiff = formatHebrewNames(lc.differingPlayerNames);
+          const lcTimeStr = formatTimeAttribution(
+            lc.gamesPlayedTogether,
+            lc.gamesThisYear,
+            lc.gamesThisHalf,
+            lc.lastPlayedDateStr,
+            lc.monthsSinceLastPlayed
+          );
+          return `<div style="font-size: 0.76rem; color: #38bdf8; margin-top: 0.35rem; border-top: 1px solid rgba(251, 191, 36, 0.2); padding-top: 0.35rem;">
+            💡 <strong>עומק היסטורי:</strong> ${lc.coreCount} מתוך ${comboSnapshot.playerCount} השחקנים (ללא ${lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.
+          </div>`;
+        })() : '';
         const headerHtml = `<div style="margin-bottom: 0.75rem;">
             <div style="font-size: 0.88rem; color: #e2e8f0;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong></div>
             <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboSnapshot.totalGamesWithCombo + 1} שאותם ${comboSnapshot.playerCount} שחקנים נפגשים (${comboSnapshot.totalGamesWithCombo} פעמים בכל הזמנים${returningTimeCtx})</div>
+            ${lcHtml}
           </div>`;
 
         if (comboSnapshot.totalGamesWithCombo === 1) {
@@ -2773,6 +2802,28 @@ const NewGameScreen = () => {
                             <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
                               {nc.corePlayerNames.join(', ')} שיחקו יחד {nc.gamesPlayedTogether} פעמים בכל הזמנים {nc.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${nc.lastPlayedDateStr})` : `(מתוכם ${nc.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם {joinVerb} הערב {formattedDiffering}.
                             </div>
+                            {nc.almostFullMatch && (() => {
+                              const afm = nc.almostFullMatch;
+                              const afmDiff = formatHebrewNames(afm.differingPlayerNames);
+                              const afmTimeStr = formatTimeAttribution(
+                                afm.gamesPlayedTogether,
+                                afm.gamesThisYear,
+                                afm.gamesThisHalf,
+                                afm.lastPlayedDateStr,
+                                afm.monthsSinceLastPlayed
+                              );
+                              return (
+                                <div style={{
+                                  fontSize: '0.78rem',
+                                  color: '#38bdf8',
+                                  marginTop: '0.4rem',
+                                  borderTop: '1px solid rgba(59, 130, 246, 0.2)',
+                                  paddingTop: '0.4rem',
+                                }}>
+                                  💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })() : (
@@ -2794,6 +2845,28 @@ const NewGameScreen = () => {
                             {t('newGame.comboTimes', { count: comboHistory.totalGamesWithCombo + 1, players: comboHistory.playerCount })}{' '}
                             ({comboHistory.totalGamesWithCombo} פעמים בכל הזמנים{comboHistory.gamesThisYear > 0 ? `, מתוכם ${comboHistory.gamesThisYear} ב-${new Date().getFullYear()}` : comboHistory.lastPlayedDateStr ? `, פעם אחרונה: ${comboHistory.lastPlayedDateStr}` : ''})
                           </div>
+                          {comboHistory.largerCore && (() => {
+                            const lc = comboHistory.largerCore;
+                            const lcDiff = formatHebrewNames(lc.differingPlayerNames);
+                            const lcTimeStr = formatTimeAttribution(
+                              lc.gamesPlayedTogether,
+                              lc.gamesThisYear,
+                              lc.gamesThisHalf,
+                              lc.lastPlayedDateStr,
+                              lc.monthsSinceLastPlayed
+                            );
+                            return (
+                              <div style={{
+                                fontSize: '0.76rem',
+                                color: '#38bdf8',
+                                marginTop: '0.35rem',
+                                borderTop: '1px solid rgba(251, 191, 36, 0.2)',
+                                paddingTop: '0.35rem',
+                              }}>
+                                💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {comboHistory.totalGamesWithCombo === 1 ? (

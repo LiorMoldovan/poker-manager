@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.13';
+export const APP_VERSION = '6.38.14';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.14',
+    date: '2026-10-11',
+    changes: [
+      '🔄 Highlight almost-full N-1 matchups in core',
+      '👑 Returning combo depth for seasoned sub-cores',
+      '🎭 Allow full-table reunion phrasing when returning',
+    ],
+  },
   {
     version: '6.38.13',
     date: '2026-10-11',

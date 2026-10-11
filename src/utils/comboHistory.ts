@@ -28,7 +28,7 @@ export interface ComboGameResult {
   results: { playerName: string; profit: number; rebuys: number }[];
 }
 
-export interface ComboNearMatch {
+export interface ComboAlmostFullMatch {
   corePlayerNames: string[];
   differingPlayerNames: string[];
   gamesPlayedTogether: number;
@@ -39,9 +39,22 @@ export interface ComboNearMatch {
   monthsSinceLastPlayed?: number;
 }
 
+export interface ComboNearMatch {
+  corePlayerNames: string[];
+  differingPlayerNames: string[];
+  gamesPlayedTogether: number;
+  coreCount: number;
+  gamesThisYear: number;
+  gamesThisHalf: number;
+  lastPlayedDateStr?: string;
+  monthsSinceLastPlayed?: number;
+  almostFullMatch?: ComboAlmostFullMatch;
+}
+
 export interface ComboHistory {
   isFirstTime: boolean;
   nearCombo?: ComboNearMatch;
+  largerCore?: ComboAlmostFullMatch;
   previousGames: ComboGameResult[];
   playerStats: ComboPlayerStat[];
   totalGamesWithCombo: number;
@@ -218,20 +231,8 @@ export function getComboHistory(
         }
       }
 
-      if (bestNMinus1 && bestNMinus1.count >= 2) {
-        const timeBd = computeTimeBreakdown(bestNMinus1.games, refDate);
-        nearCombo = {
-          corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
-          differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
-          gamesPlayedTogether: bestNMinus1.count,
-          coreCount: N - 1,
-          gamesThisYear: timeBd.gamesThisYear,
-          gamesThisHalf: timeBd.gamesThisHalf,
-          lastPlayedDateStr: timeBd.lastPlayedDateStr,
-          monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
-        };
-      } else if (N >= 7) {
-        let bestNMinus2: { coreIds: string[]; diffIds: string[]; count: number; games: Game[] } | null = null;
+      let bestNMinus2: { coreIds: string[]; diffIds: string[]; count: number; games: Game[] } | null = null;
+      if (N >= 7) {
         let maxNMinus2Count = 0;
         for (let i = 0; i < N; i++) {
           for (let j = i + 1; j < N; j++) {
@@ -246,19 +247,65 @@ export function getComboHistory(
             }
           }
         }
-        if (bestNMinus2 && bestNMinus2.count >= 4) {
-          const timeBd = computeTimeBreakdown(bestNMinus2.games, refDate);
-          nearCombo = {
-            corePlayerNames: bestNMinus2.coreIds.map(id => playerMap[id] || id),
-            differingPlayerNames: bestNMinus2.diffIds.map(id => playerMap[id] || id),
-            gamesPlayedTogether: bestNMinus2.count,
-            coreCount: N - 2,
-            gamesThisYear: timeBd.gamesThisYear,
-            gamesThisHalf: timeBd.gamesThisHalf,
-            lastPlayedDateStr: timeBd.lastPlayedDateStr,
-            monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
+      }
+
+      const hasN1 = !!(bestNMinus1 && bestNMinus1.count >= 1);
+      const hasN2 = !!(bestNMinus2 && bestNMinus2.count >= 4);
+      // Prefer N-2 as the primary veteran core only when it has significantly more history
+      // (e.g. 15 games vs 1 game, or at least 2.5x the games of N-1).
+      const preferN2 = hasN2 && (!hasN1 || (bestNMinus1!.count <= 2 && bestNMinus2!.count >= 6) || (bestNMinus2!.count >= bestNMinus1!.count * 2.5));
+
+      if (preferN2 && bestNMinus2) {
+        const timeBd2 = computeTimeBreakdown(bestNMinus2.games, refDate);
+        let almostFullMatch: ComboAlmostFullMatch | undefined = undefined;
+        if (hasN1 && bestNMinus1) {
+          const timeBd1 = computeTimeBreakdown(bestNMinus1.games, refDate);
+          almostFullMatch = {
+            corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
+            differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
+            gamesPlayedTogether: bestNMinus1.count,
+            coreCount: N - 1,
+            gamesThisYear: timeBd1.gamesThisYear,
+            gamesThisHalf: timeBd1.gamesThisHalf,
+            lastPlayedDateStr: timeBd1.lastPlayedDateStr,
+            monthsSinceLastPlayed: timeBd1.monthsSinceLastPlayed,
           };
         }
+        nearCombo = {
+          corePlayerNames: bestNMinus2.coreIds.map(id => playerMap[id] || id),
+          differingPlayerNames: bestNMinus2.diffIds.map(id => playerMap[id] || id),
+          gamesPlayedTogether: bestNMinus2.count,
+          coreCount: N - 2,
+          gamesThisYear: timeBd2.gamesThisYear,
+          gamesThisHalf: timeBd2.gamesThisHalf,
+          lastPlayedDateStr: timeBd2.lastPlayedDateStr,
+          monthsSinceLastPlayed: timeBd2.monthsSinceLastPlayed,
+          almostFullMatch,
+        };
+      } else if (hasN1 && bestNMinus1) {
+        const timeBd = computeTimeBreakdown(bestNMinus1.games, refDate);
+        nearCombo = {
+          corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
+          differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
+          gamesPlayedTogether: bestNMinus1.count,
+          coreCount: N - 1,
+          gamesThisYear: timeBd.gamesThisYear,
+          gamesThisHalf: timeBd.gamesThisHalf,
+          lastPlayedDateStr: timeBd.lastPlayedDateStr,
+          monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
+        };
+      } else if (hasN2 && bestNMinus2) {
+        const timeBd2 = computeTimeBreakdown(bestNMinus2.games, refDate);
+        nearCombo = {
+          corePlayerNames: bestNMinus2.coreIds.map(id => playerMap[id] || id),
+          differingPlayerNames: bestNMinus2.diffIds.map(id => playerMap[id] || id),
+          gamesPlayedTogether: bestNMinus2.count,
+          coreCount: N - 2,
+          gamesThisYear: timeBd2.gamesThisYear,
+          gamesThisHalf: timeBd2.gamesThisHalf,
+          lastPlayedDateStr: timeBd2.lastPlayedDateStr,
+          monthsSinceLastPlayed: timeBd2.monthsSinceLastPlayed,
+        };
       }
     }
 
@@ -370,8 +417,49 @@ export function getComboHistory(
   const spanDays = Math.round((Math.max(...dates) - Math.min(...dates)) / (1000 * 60 * 60 * 24));
   const exactTimeBd = computeTimeBreakdown(matchingGames.map(m => m.game), refDate);
 
+  // Check if an N-1 sub-core has significantly more history together (e.g. 7 players played 10 times vs 1 full-table match)
+  let largerCore: ComboAlmostFullMatch | undefined = undefined;
+  if (sortedIds.length >= 6) {
+    let bestNMinus1: { coreIds: string[]; diffId: string; count: number; games: Game[] } | null = null;
+    let maxNMinus1Count = 0;
+    const gamePlayerSets: { game: Game; pids: Set<string> }[] = [];
+    for (const game of allGames) {
+      const gps = gpByGame[game.id];
+      if (gps) {
+        gamePlayerSets.push({ game, pids: new Set(gps.map(gp => gp.playerId)) });
+      }
+    }
+    for (let i = 0; i < sortedIds.length; i++) {
+      const subset = sortedIds.filter((_, idx) => idx !== i);
+      const matchedGames: Game[] = [];
+      for (const item of gamePlayerSets) {
+        if (subset.every(id => item.pids.has(id))) matchedGames.push(item.game);
+      }
+      if (matchedGames.length > maxNMinus1Count) {
+        maxNMinus1Count = matchedGames.length;
+        bestNMinus1 = { coreIds: subset, diffId: sortedIds[i], count: matchedGames.length, games: matchedGames };
+      }
+    }
+
+    if (bestNMinus1 && bestNMinus1.count >= numGames + 3) {
+      const timeBd = computeTimeBreakdown(bestNMinus1.games, refDate);
+      largerCore = {
+        corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
+        differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
+        gamesPlayedTogether: bestNMinus1.count,
+        coreCount: sortedIds.length - 1,
+        gamesThisYear: timeBd.gamesThisYear,
+        gamesThisHalf: timeBd.gamesThisHalf,
+        lastPlayedDateStr: timeBd.lastPlayedDateStr,
+        monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
+      };
+    }
+  }
+
   return {
     isFirstTime: false,
+    nearCombo: undefined,
+    largerCore,
     previousGames,
     playerStats,
     totalGamesWithCombo: numGames,
@@ -390,14 +478,14 @@ export function getComboHistory(
   };
 }
 
-function formatHebrewNames(names: string[]): string {
+export function formatHebrewNames(names: string[]): string {
   if (names.length === 0) return '';
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} ו${names[1]}`;
   return `${names.slice(0, -1).join(', ')} ו${names[names.length - 1]}`;
 }
 
-function getJoinVerb(names: string[]): string {
+export function getJoinVerb(names: string[]): string {
   if (names.length > 1) {
     const allFemale = names.every(n => isPlayerFemale(n));
     return allFemale ? 'מצטרפות' : 'מצטרפים';
@@ -428,7 +516,21 @@ export function buildComboHistoryText(combo: ComboHistory): string {
       if (nc.coreCount === combo.playerCount - 1) {
         return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השולחן נפגש לפני ${nc.monthsSinceLastPlayed ? `${nc.monthsSinceLastPlayed} חודשים` : 'תקופה זו'} — היסטוריית המפגשים שייכת אך ורק לשלד של ${nc.coreCount} השחקנים.`;
       } else {
-        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השחקנים או כל השולחן נפגשו בעבר.`;
+        let text = `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}.`;
+        if (nc.almostFullMatch) {
+          const afm = nc.almostFullMatch;
+          const afmDiff = formatHebrewNames(afm.differingPlayerNames);
+          const afmTimeStr = formatTimeAttribution(
+            afm.gamesPlayedTogether,
+            afm.gamesThisYear,
+            afm.gamesThisHalf,
+            afm.lastPlayedDateStr,
+            afm.monthsSinceLastPlayed
+          );
+          text += ` בנוסף: ${afm.coreCount} מתוך ${combo.playerCount} השחקנים (כולם למעט ${afmDiff}) כבר שיחקו יחד ${afmTimeStr}.`;
+        }
+        text += ` חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השחקנים או כל השולחן נפגשו בעבר.`;
+        return text;
       }
     }
     return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${formatHebrewNames(combo.playerNames)}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;
@@ -443,6 +545,19 @@ export function buildComboHistoryText(combo: ComboHistory): string {
     combo.monthsSinceLastPlayed
   );
   lines.push(`🔄 הרכב חוזר! בדיוק אותם ${combo.playerCount} שחקנים שיחקו יחד ${timeStr}.`);
+
+  if (combo.largerCore) {
+    const lc = combo.largerCore;
+    const lcDiff = formatHebrewNames(lc.differingPlayerNames);
+    const lcTimeStr = formatTimeAttribution(
+      lc.gamesPlayedTogether,
+      lc.gamesThisYear,
+      lc.gamesThisHalf,
+      lc.lastPlayedDateStr,
+      lc.monthsSinceLastPlayed
+    );
+    lines.push(`  💡 עומק היסטורי: ${lc.coreCount} מתוך ${combo.playerCount} השחקנים (כולם למעט ${lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.`);
+  }
 
   for (const game of combo.previousGames) {
     const dateStr = formatComboDate(game.date);

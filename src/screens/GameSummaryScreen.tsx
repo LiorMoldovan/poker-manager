@@ -9,7 +9,7 @@ import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf, formatChips } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
-import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
+import { getComboHistory, buildComboHistoryText, ComboHistory, formatTimeAttribution, formatHebrewNames } from '../utils/comboHistory';
 import { isCareerGameMilestone } from '../utils/milestones';
 import { detectGameNightRecords } from '../utils/gameRecords';
 import { canUserGenerateAI } from '../utils/aiEligibility';
@@ -2339,6 +2339,28 @@ const GameSummaryScreen = () => {
                     <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
                       {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בכל הזמנים {comboHistory.nearCombo.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${comboHistory.nearCombo.lastPlayedDateStr})` : `(מתוכם ${comboHistory.nearCombo.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם הצטרפו {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
                     </div>
+                    {comboHistory.nearCombo.almostFullMatch && (() => {
+                      const afm = comboHistory.nearCombo.almostFullMatch;
+                      const afmDiff = formatHebrewNames(afm.differingPlayerNames);
+                      const afmTimeStr = formatTimeAttribution(
+                        afm.gamesPlayedTogether,
+                        afm.gamesThisYear,
+                        afm.gamesThisHalf,
+                        afm.lastPlayedDateStr,
+                        afm.monthsSinceLastPlayed
+                      );
+                      return (
+                        <div style={{
+                          fontSize: '0.78rem',
+                          color: '#38bdf8',
+                          marginTop: '0.35rem',
+                          borderTop: '1px solid rgba(59, 130, 246, 0.2)',
+                          paddingTop: '0.35rem',
+                        }}>
+                          💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div>זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה שיחקו יחד!</div>
@@ -2354,6 +2376,26 @@ const GameSummaryScreen = () => {
                 }}>
                   אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo} פעמים בכל הזמנים {comboHistory.gamesThisYear > 0 ? `(מתוכם ${comboHistory.gamesThisYear} ב-${new Date().getFullYear()})` : comboHistory.lastPlayedDateStr ? `(פעם אחרונה: ${comboHistory.lastPlayedDateStr})` : ''}
                 </div>
+                {comboHistory.largerCore && (() => {
+                  const lc = comboHistory.largerCore;
+                  const lcDiff = formatHebrewNames(lc.differingPlayerNames);
+                  const lcTimeStr = formatTimeAttribution(
+                    lc.gamesPlayedTogether,
+                    lc.gamesThisYear,
+                    lc.gamesThisHalf,
+                    lc.lastPlayedDateStr,
+                    lc.monthsSinceLastPlayed
+                  );
+                  return (
+                    <div style={{
+                      fontSize: '0.76rem',
+                      color: '#38bdf8',
+                      marginBottom: '0.75rem',
+                    }}>
+                      💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — {lcTimeStr}.
+                    </div>
+                  );
+                })()}
 
                 {/* Player leaderboard for this combo */}
                 <div style={{
