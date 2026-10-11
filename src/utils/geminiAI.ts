@@ -675,9 +675,9 @@ const retryMissingForecastText = async (
 ${cards}${buildRejectionBlock(missingNames, rejectionByName)}
 
 לכל שחקן:
-• highlight — כותרת קצרה (3-6 מילים), העובדה הכי מעניינת
+• highlight — כותרת קצרה (3-6 מילים), חייבת להתאים במדויק לכיוון החיזוי הנעול: חיובי (רווח) → כותרת על הצלחה/עלייה; שלילי (הפסד) → כותרת על אתגר/סכנה (אסור כותרת מנצחת כמו "בדרך לניצחון" או "מוביל"!)
 • sentence — משפט אחד בעברית (20-40 מילים) עם 2-3 מספרים אמיתיים מהכרטיס
-• הטון חייב להתאים לכיוון ולעוצמה של החיזוי הנעול (🔒): חיובי → בטוח/חוגג, שלילי → אתגר/עקיצה חברית או עידוד-קאמבק שמכיר שהוא מתחת, בלי השפלה. בחיזוי שלילי אסור למסגר סביב הצלחה/מומנטום/ניצחון מהעבר — זה סותר את המספר
+• הטון חייב להתאים לכיוון ולעוצמה של החיזוי הנעול (🔒): חיובי → בטוח/ציפייה לרווח, שלילי → אתגר/עקיצה חברית או עידוד-קאמבק שמכיר בסכנת הפסד. בחיזוי שלילי אסור בהחלט לטעון שהוא ינצח, ירוויח או יעקוף, ואסור למסגר סביב מומנטום/ניצחון מהעבר — זה סותר לחלוטין את מספר החיזוי!
 • אסור להזכיר את מספר החיזוי במשפט; אסור "הערב/היום/הלילה" או תאריך — השתמש ב"הפעם", "במשחק הקרוב"
 • שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים
 • כל ממוצע, דירוג או שיא חייב לנקוב בתקופה שלו: "טבלת <תקופה>" היא חצי שנה, "היסטוריה כוללת" ו"שיא אישי כל הזמנים" הם כל הזמנים
@@ -1610,11 +1610,13 @@ export const generateAIForecasts = async (
 
     const gapToBelow = nb?.below ? nb.below.gap : 999;
 
+    const prediction = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
+    const isPositive = prediction > 0;
+
     const canUse = (a: AngleType) =>
       GAP_ANGLES.includes(a) ? gapUsed() < gapBudget : (angleUsed.get(a) || 0) < angleCap(a);
     const assign = (a: AngleType, hint: string) => {
       angleUsed.set(a, (angleUsed.get(a) || 0) + 1);
-      const prediction = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
       const { tone, toneHint } = toneFor(prediction);
       playerAngles.push({ name: p.name, angle: a, angleHint: hint, tone, toneHint });
     };
@@ -1627,39 +1629,63 @@ export const generateAIForecasts = async (
     } else if (isLandmarkGameTonight) {
       assign('milestone', `הערב הוא המשחק ה-${careerGameTarget} שלו בקריירה ← אבן דרך שקורית פעם ב-50 משחקים, כתוב עליה`);
     } else if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
-      const dir = p.currentStreak > 0 ? `${p.currentStreak} נצחונות ברצף` : `${Math.abs(p.currentStreak)} הפסדים ברצף`;
-      assign('streak', `${dir} ← מה עוד ערב כזה יעשה למקום שלו בטבלת ${currentPeriodLabel}`);
-    } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
-      assign('ranking_battle', `${gapToAbove} מאחורי ${nb.above.name} (מקום ${halfRank - 1}) בטבלת ${currentPeriodLabel} ← ערב טוב = עקיפה`);
-    } else if (gapToBelow <= 150 && gapToBelow > 0 && nb?.below && canUse('defending')) {
-      // Deliberately valence-neutral: "his place is in danger" pushed an
-      // anxious framing even onto players the model was told to write
-      // confidently, and produced gloomy headlines on strong positive
-      // predictions. The fact is the gap; the mood belongs to 🎭 טון.
-      assign('defending', `מחזיק ${gapToBelow} מעל ${nb.below.name} (מקום ${halfRank + 1}) בטבלת ${currentPeriodLabel} ← זה מה שעומד על הפרק עבורו`);
-    } else if (nearMilestone && canUse('milestone')) {
-      assign('milestone', `${nearMilestone - Math.round(p.totalProfit)} מרף ${nearMilestone} רווח מצטבר בכל הזמנים ← אבן הדרך בהישג יד`);
-    } else if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900 && canUse('comeback')) {
-      assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים ← מה זז בטבלת ${currentPeriodLabel} בזמן שנעדר`);
-    } else if (currentHalfGames.length >= 3 && Math.abs(periodAvg - allTimeAvg) > 20 && canUse('form')) {
-      const dir = periodAvg > allTimeAvg ? 'פורמה עולה' : 'פורמה יורדת';
-      assign('form', `${dir}: ממוצע ${periodAvg >= 0 ? '\u200E+' : ''}${periodAvg} ב${currentPeriodLabel} מול ${allTimeAvg >= 0 ? '\u200E+' : ''}${allTimeAvg} בכל הזמנים ← השוואת המגמה`);
-    } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
-      assign('big_last_game', `המשחק האחרון: ${lastGameProfit >= 0 ? '\u200E+' : ''}${Math.round(lastGameProfit)} ← מה התוצאה הזו עשתה לדירוג שלו`);
-    } else if (p.avgProfit < -5 && periodAvg > 10 && canUse('dark_horse')) {
-      assign('dark_horse', `היסטוריה כוללת שלילית אבל פורמה חיובית ב${currentPeriodLabel} ← שינוי המגמה`);
-    } else {
-      // Nothing sharp left. Reach for the nearest thing with a consequence
-      // before settling for games-played and win%, which are true every week
-      // and interesting in none of them.
-      if (nb?.above) {
-        assign('default', `${nb.above.gap} מאחורי ${nb.above.name} בטבלת ${currentPeriodLabel} ← בנה על הפער הזה`);
-      } else if (nb?.below) {
-        assign('default', `מחזיק ${nb.below.gap} מעל ${nb.below.name} בטבלת ${currentPeriodLabel} ← בנה על ההגנה על המקום`);
-      } else if (lastGameProfit !== 0) {
-        assign('default', `המשחק האחרון: ${lastGameProfit >= 0 ? '\u200E+' : ''}${Math.round(lastGameProfit)} ← בנה על התוצאה האחרונה`);
+      if (p.currentStreak > 0) {
+        assign('streak', isPositive
+          ? `${p.currentStreak} נצחונות ברצף ← החיזוי לטובתו להמשך המומנטום בטבלת ${currentPeriodLabel}`
+          : `${p.currentStreak} נצחונות ברצף ← אך החיזוי נגדו הפעם, הרצף בסכנת שבירה ממשית`);
       } else {
-        assign('default', `${p.gamesPlayed} משחקים, ${winRate}% נצחונות בכל הזמנים ← אין נתון חד יותר הפעם; השתמש בזה כרקע בלבד`);
+        assign('streak', isPositive
+          ? `${Math.abs(p.currentStreak)} הפסדים ברצף ← החיזוי לטובתו הפעם, הזדמנות מצוינת לשבור את הבצורת`
+          : `${Math.abs(p.currentStreak)} הפסדים ברצף ← והחיזוי נגדו, סכנה שהרצף השלילי ימשיך להכביד`);
+      }
+    } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
+      assign('ranking_battle', isPositive
+        ? `${gapToAbove} מאחורי ${nb.above.name} (מקום ${halfRank - 1}) בטבלת ${currentPeriodLabel} ← החיזוי לטובתו ומאפשר לו לסגור את הפער ולעקוף`
+        : `${gapToAbove} מאחורי ${nb.above.name} (מקום ${halfRank - 1}) בטבלת ${currentPeriodLabel} ← החיזוי נגדו הפעם ומקשה מאוד על סגירת הפער`);
+    } else if (gapToBelow <= 150 && gapToBelow > 0 && nb?.below && canUse('defending')) {
+      assign('defending', isPositive
+        ? `מחזיק ${gapToBelow} מעל ${nb.below.name} (מקום ${halfRank + 1}) בטבלת ${currentPeriodLabel} ← החיזוי לטובתו להגדלת הפער וביצור המקום`
+        : `מחזיק ${gapToBelow} מעל ${nb.below.name} (מקום ${halfRank + 1}) בטבלת ${currentPeriodLabel} ← החיזוי נגדו, המקום שלו בסכנה ממשית מול הרודף`);
+    } else if (nearMilestone && canUse('milestone')) {
+      const dist = nearMilestone - Math.round(p.totalProfit);
+      assign('milestone', isPositive
+        ? `${dist} מרף ${nearMilestone} רווח מצטבר בכל הזמנים ← החיזוי לטובתו, אבן הדרך בהישג יד הערב`
+        : `${dist} מרף ${nearMilestone} רווח מצטבר בכל הזמנים ← החיזוי נגדו הפעם, אבן הדרך תצטרך כנראה לחכות`);
+    } else if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900 && canUse('comeback')) {
+      assign('comeback', isPositive
+        ? `חוזר אחרי ${p.daysSinceLastGame} ימים ← והחיזוי מעניק לו רוח גבית לקאמבק מוצלח בטבלת ${currentPeriodLabel}`
+        : `חוזר אחרי ${p.daysSinceLastGame} ימים ← החיזוי נגדו, חזרה לא פשוטה אל מול הקצב של השולחן`);
+    } else if (currentHalfGames.length >= 3 && Math.abs(periodAvg - allTimeAvg) > 20 && canUse('form')) {
+      const isRising = periodAvg > allTimeAvg;
+      assign('form', isPositive
+        ? `${isRising ? 'פורמה חיובית' : 'ממוצע נמוך בד"כ'} (ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg} ב${currentPeriodLabel}) ← החיזוי לטובתו לערב מוצלח`
+        : `${isRising ? 'למרות פורמה חיובית' : 'פורמה יורדת'} (ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg} ב${currentPeriodLabel}) ← החיזוי נגדו ומסמן ערב מאתגר`);
+    } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
+      const wonLast = lastGameProfit > 0;
+      assign('big_last_game', isPositive
+        ? `המשחק האחרון (${wonLast ? '+' : ''}${Math.round(lastGameProfit)}) ← החיזוי לטובתו ומסמן המשך חיובי`
+        : `המשחק האחרון (${wonLast ? '+' : ''}${Math.round(lastGameProfit)}) ← החיזוי נגדו, יצטרך להיזהר שלא להסתבך`);
+    } else if (p.avgProfit < -5 && periodAvg > 10 && canUse('dark_horse')) {
+      assign('dark_horse', isPositive
+        ? `היסטוריה כוללת שלילית אבל פורמה חיובית ב${currentPeriodLabel} ← החיזוי תומך בשינוי המגמה`
+        : `היסטוריה כוללת שלילית ופורמה חיובית ב${currentPeriodLabel} ← אך החיזוי נגדו, מבחן קשה לשינוי המגמה`);
+    } else {
+      if (nb?.above) {
+        assign('default', isPositive
+          ? `${nb.above.gap} מאחורי ${nb.above.name} בטבלת ${currentPeriodLabel} ← החיזוי לטובתו לסגירת הפער`
+          : `${nb.above.gap} מאחורי ${nb.above.name} בטבלת ${currentPeriodLabel} ← החיזוי נגדו, יתקשה לסגור את הפער הפעם`);
+      } else if (nb?.below) {
+        assign('default', isPositive
+          ? `מחזיק ${nb.below.gap} מעל ${nb.below.name} בטבלת ${currentPeriodLabel} ← החיזוי לטובתו להגדלת היתרון`
+          : `מחזיק ${nb.below.gap} מעל ${nb.below.name} בטבלת ${currentPeriodLabel} ← החיזוי נגדו, סכנה לאיבוד היתרון`);
+      } else if (lastGameProfit !== 0) {
+        assign('default', isPositive
+          ? `המשחק האחרון (${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)}) ← החיזוי לטובתו הערב`
+          : `המשחק האחרון (${lastGameProfit > 0 ? '+' : ''}${Math.round(lastGameProfit)}) ← החיזוי נגדו הערב`);
+      } else {
+        assign('default', isPositive
+          ? `${p.gamesPlayed} משחקים, ${winRate}% נצחונות בכל הזמנים ← החיזוי לטובתו לערב חיובי`
+          : `${p.gamesPlayed} משחקים, ${winRate}% נצחונות בכל הזמנים ← החיזוי נגדו, ערב מאתגר לפניו`);
       }
     }
   });
@@ -1863,8 +1889,9 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • 🎯 הנושא הוא העובדה שהכי זזה עבורו הערב. בנה עליה את המשפט.
 • 🎭 הטון נגזר מהחיזוי הנעול בלבד.
 השניים בלתי תלויים. אותה עובדה נקראת גם כהסתערות וגם כקרב מאסף — הנושא לא משתנה בגלל החיזוי, רק המסגור.
-בטון underdog: אל תחגוג מומנטום או ניצחון עבר כאילו הוא נמשך הערב. ניצחון קודם הוא עובדה היסטורית — אם אתה מזכיר אותו, גשר אליו ("אבל", "עדיין", "הפעם").
-הכותרת והמשפט תמיד באותו כיוון.
+בטון underdog (חיזוי שלילי): אל תחגוג מומנטום או ניצחון עבר כאילו הוא נמשך הערב. אסור לטעון שהוא ינצח, ירוויח או יעקוף, אלא להדגיש את האתגר או החשש מאיבוד מקום.
+בטון confident/edge (חיזוי חיובי): אסור לתאר אותו כספונסר או כמי שצפוי לקרוס/להפסיד, אלא להדגיש הזדמנות לעלייה, ביצור מעמד או מומנטום.
+הכותרת (highlight) והמשפט (sentence) תמיד באותו כיוון וחייבים להתאים במדויק לסימן החיזוי (פלוס/מינוס).
 
 גיוון — הקבוצה קוראת את זה כל שבוע:
 • כל שחקן מקבל סוג נתון אחר ומבנה משפט אחר. אין שתי כותרות דומות.
@@ -2359,48 +2386,54 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
         const hasHedge = hedgeWords.test(correctedSentence);
         
-        // Negative prediction: block celebratory tone. A sentence that names the
-        // forecast itself ("אך החיזוי השלילי...") is not mismatched — it is the
-        // contrast we asked for. The old magnitude cap ignored the hedge below
-        // -55 and so discarded precisely the best-written negative sentences,
-        // replacing rich period-scoped text with canned filler.
-        if (predictedProfit <= -25 && hasOptimistic && !hasPessimistic && !hasHedge) {
+        // Negative prediction: block celebratory tone or claims of victory.
+        const claimsVictory = /(?:הולך לנצח|ינצח|בדרך לניצחון|ניצחון נוסף|עוד ניצחון|ערב ירוק|יעקוף את|ירוויח הערב|יחגוג הערב|ימשיך לנצח|ימשיך את הרצף)/.test(correctedSentence);
+        if (predictedProfit < 0 && (claimsVictory || (hasOptimistic && !hasPessimistic)) && !hasHedge) {
           errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit} — replacing`);
           correctedSentence = '';
         }
-        if (predictedProfit >= 35 && hasPessimistic && !hasOptimistic) {
+
+        // Positive prediction: block defeatist tone or claims of loss.
+        const claimsDefeat = /(?:הולך להפסיד|יפסיד|עוד הפסד|ערב שחור|יקרוס|יתרסק|ספונסר הערב|יספוג הפסד|ימשיך להפסיד)/.test(correctedSentence);
+        if (predictedProfit > 0 && (claimsDefeat || (hasPessimistic && !hasOptimistic)) && !hasHedge) {
           errorDetails.push(`tone_mismatch: pessimistic text but predicted \u200E+${predictedProfit} — replacing`);
           correctedSentence = '';
         }
 
         // ========== 7b. HIGHLIGHT VS LOCKED PREDICTION ==========
         const hl = correctedHighlight;
-        // Bare "ניצחון" used to live in this list, which flagged any headline
-        // that referenced a past win — something the prompt explicitly allows
-        // an underdog to do as long as it bridges. Only celebratory framing
-        // genuinely contradicts a negative prediction.
         const successImageryInHighlight = [
-          'גלים', 'הצלחה', 'רוכב', 'בפסגה', 'שורף', 'בוער', 'דומיננט', 'מלכות', 'כובש', 'מוביל את הערב',
-          'מלך הערב', 'שולט בערב', 'נושא גביע', 'בשיא הכושר',
-          'מומנטום', 'רוח גבית',
+          'גלים', 'הצלחה', 'רוכב', 'בפסגה', 'לפסגה', 'שורף', 'בוער', 'דומיננט', 'מלכות', 'כובש', 'מוביל',
+          'מלך הערב', 'שולט', 'נושא גביע', 'בשיא הכושר', 'מומנטום', 'רוח גבית',
+          'נצחון', 'ניצחון', 'מנצח', 'מנצחת', 'לנצח', 'ערב ירוק', 'עקיפה', 'זינוק', 'חוגג', 'עלייה',
+          'ממשיך לנצח', 'רצף מנצח', 'דריסה', 'דורס'
         ];
-        const doomImageryInHighlight = ['ייאוש', 'אסון', 'טובע', 'טביעה', 'נכשל', 'חור שחור'];
-        // A replaced headline still sits next to seven written ones, so it has
-        // to name this player's actual stake rather than fall back to a
-        // generic "מקום N — צריך להתאושש" that fits anyone on any week.
+        const doomImageryInHighlight = [
+          'ייאוש', 'אסון', 'טובע', 'טביעה', 'נכשל', 'כישלון', 'קריסה', 'חור שחור',
+          'הפסד', 'מפסיד', 'להפסיד', 'ספונסר', 'נפילה', 'נופל', 'שחור', 'התרסקות', 'מתרסק', 'בור',
+          'סכנת התדרדרות', 'ערב שחור'
+        ];
+
         const stakeHighlight = (): string => {
           const nbH = halfNeighbourhood(player.name);
-          if (nbH?.above && nbH.above.gap > 0) return `במרחק ${nbH.above.gap} מ${nbH.above.name}`;
-          if (nbH?.below && nbH.below.gap > 0) return `מגן על מקום ${rankTonight}`;
-          if (actualStreak <= -3) return `מחפש לשבור את הרצף`;
-          if (actualStreak >= 3) return `רצף ${actualStreak} על הכף`;
-          return `מקום ${rankTonight} בטבלת ${currentPeriodLabel}`;
+          if (predictedProfit < 0) {
+            if (nbH?.below && nbH.below.gap > 0) return `מגן על מקום ${rankTonight}`;
+            if (nbH?.above && nbH.above.gap > 0) return `פער מ${nbH.above.name}`;
+            if (actualStreak >= 3) return `רצף ${actualStreak} בסכנה`;
+            return `מבחן קשה הערב`;
+          } else {
+            if (nbH?.above && nbH.above.gap > 0) return `במרחק ${nbH.above.gap} מ${nbH.above.name}`;
+            if (actualStreak <= -3) return `מחפש לשבור את הרצף`;
+            if (actualStreak >= 2) return `רצף ${actualStreak} נמשך`;
+            return `הזדמנות לעלייה`;
+          }
         };
+
         if (predictedProfit < 0 && successImageryInHighlight.some(m => hl.includes(m))) {
-          errorDetails.push('highlight_sign: success imagery with negative prediction');
+          errorDetails.push(`highlight_sign: success imagery with negative prediction (${predictedProfit})`);
           correctedHighlight = stakeHighlight();
-        } else if (predictedProfit >= 40 && doomImageryInHighlight.some(m => hl.includes(m))) {
-          errorDetails.push('highlight_sign: doom imagery with strong positive prediction');
+        } else if (predictedProfit > 0 && doomImageryInHighlight.some(m => hl.includes(m))) {
+          errorDetails.push(`highlight_sign: doom imagery with positive prediction (+${predictedProfit})`);
           correctedHighlight = stakeHighlight();
         }
         

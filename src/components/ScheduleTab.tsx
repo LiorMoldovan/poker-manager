@@ -2445,10 +2445,11 @@ type ShareTokens = {
 // pinned-date override + ✅-only-at-target semantics.
 
 function ShareDateCompetitionStrip({
-  poll, dateStats, confirmedDateId, t, tokens,
+  poll, dateStats, playerById, confirmedDateId, t, tokens,
 }: {
   poll: GamePoll;
   dateStats: Map<string, DateStat>;
+  playerById: Map<string, Player>;
   // When set, this date is treated as the leader regardless of the
   // yes-count tie-break. Used for confirmed-below-target polls so the
   // locked-in date stays highlighted with ✅ even if a runner-up has
@@ -2528,6 +2529,7 @@ function ShareDateCompetitionStrip({
           const isConfirmedHere = confirmedDateId === d.id;
           const isDisabled = !!d.disabledAt;
           const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
+          const yesVoters = isDisabled ? [] : s.voters.filter(v => v.response === 'yes');
           return (
             // data-share-split lets the rasterised image splitter cut
             // between strip rows when a long-date list pushes the
@@ -2535,8 +2537,8 @@ function ShareDateCompetitionStrip({
             // anchor here the splitter would default to a flat-pixel
             // boundary which can land mid-row and chop a date off.
             <div key={d.id} data-share-split="true" style={{
-              display: 'flex', flexDirection: 'column', gap: 6,
-              padding: '8px 12px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+              padding: '10px 14px',
               borderRadius: 10,
               borderInlineStart: (isLeader && !isDisabled)
                 ? `4px solid ${ACCENT_GREEN}`
@@ -2609,6 +2611,42 @@ function ShareDateCompetitionStrip({
                     backgroundPosition: 'right center',
                     borderRadius: 999,
                   }} />
+                </div>
+              )}
+              {/* Confirmed players chips */}
+              {yesVoters.length > 0 && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+                  marginTop: 6, paddingTop: 4,
+                }}>
+                  <span style={{
+                    fontSize: 18, fontWeight: 700, color: ACCENT_GREEN,
+                    padding: '4px 12px', borderRadius: 999,
+                    background: `${ACCENT_GREEN}22`,
+                    border: `1px solid ${ACCENT_GREEN}55`,
+                    letterSpacing: 0.3,
+                  }}>
+                    ✓ {t('schedule.share.confirmedVoters')} · {yesVoters.length}
+                  </span>
+                  {yesVoters.map(v => {
+                    const name = playerById.get(v.playerId)?.name || '—';
+                    return (
+                      <span
+                        key={`yes-${d.id}-${v.playerId}`}
+                        style={{
+                          fontSize: 22, color: '#6ee7b7',
+                          padding: '5px 14px', borderRadius: 12,
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          border: '1px solid rgba(16, 185, 129, 0.40)',
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {name}
+                        {v.isProxy && <span style={{ color: '#eab308', fontSize: 16 }}>★</span>}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2720,6 +2758,7 @@ function PollShareInvitationBody({
         <ShareDateCompetitionStrip
           poll={poll}
           dateStats={dateStats}
+          playerById={playerById}
           confirmedDateId={null}
           t={t}
           tokens={tokens}
@@ -2746,9 +2785,9 @@ function PollShareInvitationBody({
           // Group voters by response in display order yes → maybe → no.
           // Empty groups are filtered at render time.
           const voterGroups: { resp: RsvpResponse; color: string; tint: string; symbol: string; label: string; rows: VoterRow[] }[] = [
-            { resp: 'yes',   color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.voters.yes'),   rows: s.voters.filter(v => v.response === 'yes') },
-            { resp: 'maybe', color: '#eab308',    tint: 'rgba(234, 179, 8, 0.10)',  symbol: '?', label: t('schedule.voters.maybe'), rows: s.voters.filter(v => v.response === 'maybe') },
-            { resp: 'no',    color: '#f87171',    tint: 'rgba(239, 68, 68, 0.08)',  symbol: '✕', label: t('schedule.voters.no'),    rows: s.voters.filter(v => v.response === 'no') },
+            { resp: 'yes',   color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.share.confirmedVoters'), rows: s.voters.filter(v => v.response === 'yes') },
+            { resp: 'maybe', color: '#eab308',    tint: 'rgba(234, 179, 8, 0.10)',  symbol: '?', label: t('schedule.voters.maybe'),           rows: s.voters.filter(v => v.response === 'maybe') },
+            { resp: 'no',    color: '#f87171',    tint: 'rgba(239, 68, 68, 0.08)',  symbol: '✕', label: t('schedule.voters.no'),              rows: s.voters.filter(v => v.response === 'no') },
           ];
           return (
             <div
@@ -2836,16 +2875,18 @@ function PollShareInvitationBody({
                         </span>
                         {g.rows.map(v => {
                           const name = playerById.get(v.playerId)?.name || '—';
+                          const isYes = g.resp === 'yes';
                           return (
                             <span
                               key={`${g.resp}-${v.playerId}`}
                               style={{
-                                fontSize: 24, color: TEXT,
+                                fontSize: 24,
+                                color: isYes ? '#6ee7b7' : TEXT,
                                 padding: '7px 18px', borderRadius: 14,
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: `1px solid ${BORDER}`,
+                                background: isYes ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                                border: isYes ? '1px solid rgba(16, 185, 129, 0.40)' : `1px solid ${BORDER}`,
                                 display: 'inline-flex', alignItems: 'center', gap: 7,
-                                fontWeight: 500,
+                                fontWeight: isYes ? 600 : 500,
                               }}>
                               {name}
                               {v.isProxy && <span style={{ color: '#eab308', fontSize: 18 }}>★</span>}
@@ -2864,25 +2905,7 @@ function PollShareInvitationBody({
       </>
       )}
 
-      {/* Multi-date polls: skip the per-date voter chip walls (they
-          ballooned the share past WhatsApp's slice budget) and replace
-          with a CTA pointing recipients to the app for full voter
-          details. The competition strip above already carries the
-          per-date count breakdown so recipients see the standings at a
-          glance — only the per-name list lives in-app. */}
-      {isMultiDate && (
-        <div style={{
-          marginTop: 4,
-          padding: '18px 24px',
-          background: 'rgba(59, 130, 246, 0.08)',
-          border: `1px dashed ${ACCENT_BLUE}66`,
-          borderRadius: 14,
-          fontSize: 24, fontWeight: 600, color: TEXT, lineHeight: 1.5,
-          textAlign: 'center',
-        }}>
-          {t('schedule.share.viewVotersInApp')}
-        </div>
-      )}
+
 
       {/* Pending regular players who haven't voted yet */}
       <SharePendingPermanents

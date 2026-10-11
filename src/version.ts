@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.2';
+export const APP_VERSION = '6.38.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.3',
+    date: '2026-10-11',
+    changes: [
+      '🗳️ Confirmed voters in poll share card',
+      '🟢 Green chips for confirmed poll voters',
+      '🔮 Forecast text matches prediction direction',
+      '🛡️ Block contradictory winning/losing forecast tone',
+    ],
+  },
   {
     version: '6.38.2',
     date: '2026-10-11',
