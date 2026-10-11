@@ -1943,6 +1943,12 @@ export const generateAIForecasts = async (
         lines.push(`⭐ טבלת ${periodLabel}: ${rankText}${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}${periodBestText}`);
       }
       lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}`);
+      const careerGameTarget = nextCareerGameMilestone(p.gamesPlayed);
+      if (careerGameTarget - p.gamesPlayed === 1) {
+        lines.push(`🎮 אבן דרך חגיגית הערב: המשחק ה-${careerGameTarget} בקריירה ${p.isFemale ? 'שלה' : 'שלו'}! (מעמד מיוחד וציון דרך היסטורי)`);
+      } else if (careerGameTarget - p.gamesPlayed <= 3 && careerGameTarget - p.gamesPlayed > 1) {
+        lines.push(`🎮 קרוב לאבן דרך: עוד ${careerGameTarget - p.gamesPlayed} משחקים למשחק ה-${careerGameTarget} בקריירה`);
+      }
       if (p.bestWin > 0 && p.gamesPlayed >= 10) {
         const lastIsAllTimeBest = !!lastGame
           && Math.round(lastGame.profit) === Math.round(p.bestWin);

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.9';
+export const APP_VERSION = '6.38.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.10',
+    date: '2026-10-11',
+    changes: [
+      '🎮 Explicit landmark career games in forecast cards',
+      '🎯 Highlight milestone proximity across career games',
+    ],
+  },
   {
     version: '6.38.9',
     date: '2026-10-11',
