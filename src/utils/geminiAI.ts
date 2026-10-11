@@ -670,6 +670,31 @@ const isPlayerMentioned = (text: string, playerName: string): boolean => {
 };
 
 /**
+ * Automatically cleans common Hebrew LLM grammatical errors:
+ * 1. "רצף של ניצחון/הפסד אחד" -> A single game is never a streak!
+ * 2. "מצטרף אליהם X ו-Y" -> If multiple players join, verb must be plural ("מצטרפים אליהם").
+ */
+const sanitizeHebrewGrammar = (text: string): string => {
+  if (!text) return '';
+  return text
+    // A single win/loss is not a streak
+    .replace(/(?:ב)?רצף של (?:ניצחון|נצחון) (?:אחד|בודד|יחיד)/g, 'אחרי ניצחון במשחק הקודם')
+    .replace(/(?:ב)?רצף של הפסד (?:אחד|בודד|יחיד)/g, 'אחרי הפסד במשחק הקודם')
+    .replace(/(?:ב)?רצף של משחק אחד/g, 'משחק בודד')
+    .replace(/(?:ב)?רצף של 1 (?:נצחונות|ניצחונות)/g, 'ניצחון במשחק הקודם')
+    .replace(/(?:ב)?רצף של 1 הפסדים/g, 'הפסד במשחק הקודם')
+    .replace(/ברצף של 1\b/g, 'אחרי משחק אחד')
+    .replace(/רצף של 1\b/g, 'משחק בודד')
+    // Plural verb agreement when multiple players join a lineup
+    .replace(/מצטרף אליהם ([^,.!?]+ ו[^,.!?]+)/g, 'מצטרפים אליהם $1')
+    .replace(/כשאליהם מצטרף ([^,.!?]+ ו[^,.!?]+)/g, 'כשאליהם מצטרפים $1')
+    .replace(/מצטרף לשולחן ([^,.!?]+ ו[^,.!?]+)/g, 'מצטרפים לשולחן $1')
+    .replace(/כשלשולחן מצטרף ([^,.!?]+ ו[^,.!?]+)/g, 'כשלשולחן מצטרפים $1')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+/**
  * Programmatic check to ensure preGameTeaser mentions 100% of participants.
  * If any player is missing, repairs the teaser via AI or appends them seamlessly.
  */
@@ -679,7 +704,7 @@ const ensureTeaserMentionsAllPlayers = async (
   apiKey: string,
 ): Promise<string> => {
   const missing = players.filter(p => !isPlayerMentioned(teaser, p.name));
-  if (missing.length === 0) return teaser;
+  if (missing.length === 0) return sanitizeHebrewGrammar(teaser);
 
   console.log(`⚠️ preGameTeaser missed ${missing.length} player(s):`, missing.map(p => p.name).join(', '));
 
@@ -693,8 +718,21 @@ const ensureTeaserMentionsAllPlayers = async (
 דרישות ברזל:
 1. חובה מוחלטת שכל ${players.length} השחקנים יופיעו בשמם המלא בטקסט הסופי!
 2. שמור על סגנון הכתיבה ורציפות הטיזר המקורי.
-3. אל תשתמש במילים "הערב/היום/הלילה" — השתמש ב"הפעם", "במשחק הקרוב".
-4. החזר אך ורק את טקסט הטיזר המעודכן (ללא שום הקדמות, מרכאות או תגיות).`;
+3. דקדוק: כשיותר משחקן אחד מצטרף לשולחן, כתוב "מצטרפים אליהם" ברבים. איסור מוחלט על "רצף של ניצחון אחד".
+4. אל תשתמש במילים "הערב/היום/הלילה" — השתמש ב"הפעם", "במשחק הקרוב".
+5. החזר אך ורק את טקסט הטיזר המעודכן (ללא שום הקדמות, מרכאות או תגיות).`;
+
+  const formatAppendPlayers = (pls: PlayerForecastData[]) => {
+    const isFem = pls.length === 1 && isPlayerFemale(pls[0].name);
+    const verb = pls.length === 1 ? (isFem ? 'תשחק' : 'ישחק') : 'ישחקו';
+    const rel = pls.length === 1 ? (isFem ? 'שמוסיפה' : 'שמוסיף') : 'שמוסיפים';
+    const namesStr = pls.length === 1
+      ? pls[0].name
+      : pls.length === 2
+      ? `${pls[0].name} ו${pls[1].name}`
+      : `${pls.slice(0, -1).map(p => p.name).join(', ')} ו${pls[pls.length - 1].name}`;
+    return ` יחד איתם בשולחן ${verb} ${namesStr}, ${rel} עוד עניין ומתח למפגש.`;
+  };
 
   try {
     const { text } = await callWithFallback({
@@ -712,15 +750,13 @@ const ensureTeaserMentionsAllPlayers = async (
     const stillMissing = players.filter(p => !isPlayerMentioned(cleaned, p.name));
     if (stillMissing.length === 0) {
       console.log('✅ preGameTeaser repaired: all players now included');
-      return cleaned;
+      return sanitizeHebrewGrammar(cleaned);
     }
     console.warn(`⚠️ preGameTeaser AI repair still missed: ${stillMissing.map(p => p.name).join(', ')}`);
-    const appendText = ` יחד איתם בשולחן ישחקו ${stillMissing.map(p => p.name).join(' ו-')}, שמוסיפים עוד עניין ומתח למפגש.`;
-    return cleaned + appendText;
+    return sanitizeHebrewGrammar(cleaned + formatAppendPlayers(stillMissing));
   } catch (err) {
     console.warn('⚠️ Teaser repair call failed, appending missing players manually:', err);
-    const appendText = ` יחד איתם בשולחן ישחקו ${missing.map(p => p.name).join(' ו-')}, שמוסיפים עוד עניין ומתח למפגש.`;
-    return teaser + appendText;
+    return sanitizeHebrewGrammar(teaser + formatAppendPlayers(missing));
   }
 };
 
@@ -740,7 +776,7 @@ ${periodContext ? `אירוע: ${periodContext}\n` : ''}${comboHistoryText ? `ה
 
 דרישות ברזל:
 1. חובה מוחלטת להזכיר את כל ${players.length} השחקנים בשמם המלא: ${players.map(p => p.name).join(', ')}!
-2. אם מופיע גרעין שולחן ותיק של שחקנים ששיחקו יחד בעבר, שלב זאת במפורש בפתיח עם השחקנים שמצטרפים אליהם. לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק!
+2. אם מופיע גרעין שולחן ותיק של שחקנים ששיחקו יחד בעבר, שלב זאת במפורש בפתיח עם השחקנים שמצטרפים אליהם. לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק! (דקדוק: אם מצטרפים 2 שחקנים ומעלה, כתוב "מצטרפים אליהם" ברבים; איסור מוחלט על "רצף של ניצחון אחד"!).
 3. שלב אותם בעלילה ובמתח לקראת המשחק.
 4. אל תשתמש במילים "הערב/היום/הלילה" (הטיזר נקרא מראש — השתמש ב"הפעם", "במשחק הקרוב").
 5. החזר אך ורק את טקסט הטיזר (פסקה אחת רציפה).`;
@@ -758,7 +794,8 @@ ${periodContext ? `אירוע: ${periodContext}\n` : ''}${comboHistoryText ? `ה
       .replace(/^#{1,3}\s+/gm, '')
       .replace(/^["']|["']$/g, '')
       .trim();
-    return ensureTeaserMentionsAllPlayers(cleaned, players, apiKey);
+    const withAllPlayers = await ensureTeaserMentionsAllPlayers(cleaned, players, apiKey);
+    return sanitizeHebrewGrammar(withAllPlayers);
   } catch (e) {
     console.warn('⚠️ Fallback teaser generation failed:', e);
     return `השולחן מוכן לקראת מפגש מרתק בהשתתפות ${players.map(p => p.name).join(', ')} — כולם מגיעים להילחם על מקומם ולהשפיע על הטבלה.`;
@@ -1878,14 +1915,12 @@ export const generateAIForecasts = async (
       : 'שחקן חדש - אין היסטוריה';
     
     const actualStreak = p.currentStreak;
-    let streakText = '';
-    if (actualStreak >= 3) streakText = `🔥 ${actualStreak} נצחונות ברצף!`;
-    else if (actualStreak <= -3) streakText = `${Math.abs(actualStreak)} הפסדים ברצף`;
-    else if (actualStreak === 2) streakText = `2 נצחונות ברצף`;
-    else if (actualStreak === -2) streakText = `2 הפסדים ברצף`;
-    else if (actualStreak === 1) streakText = `ניצח אחרון`;
-    else if (actualStreak === -1) streakText = `הפסיד אחרון`;
-    else streakText = 'אין רצף';
+    let streakLine = '';
+    if (actualStreak >= 3) streakLine = `רצף פעיל: 🔥 ${actualStreak} נצחונות ברצף!`;
+    else if (actualStreak <= -3) streakLine = `רצף פעיל: ${Math.abs(actualStreak)} הפסדים ברצף`;
+    else if (actualStreak === 2) streakLine = `רצף פעיל: 2 נצחונות ברצף`;
+    else if (actualStreak === -2) streakLine = `רצף פעיל: 2 הפסדים ברצף`;
+    else streakLine = `רצף פעיל: אין רצף (משחק יחיד אינו רצף! אסור לכתוב "רצף של ניצחון/הפסד אחד")`;
 
     const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
     const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
@@ -1920,7 +1955,7 @@ export const generateAIForecasts = async (
       lines.push(`🆕 שחקן חדש! אין היסטוריית משחקים. אין נתונים סטטיסטיים.`);
     } else {
       lines.push(`משחק אחרון: ${lastGameResult} (${lastGame?.date || 'N/A'})`);
-      lines.push(`רצף: ${streakText}`);
+      lines.push(streakLine);
       // Both "best win" figures are carried, each stapled to the period it
       // belongs to, because they routinely disagree and the model can't tell
       // them apart on its own: it once billed a +379 last game as a plain
@@ -2174,6 +2209,9 @@ ${traitBlock}${surpriseText}
   4. ⚠️ דיוק מול הרכב חדש:
      - לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק.
      - רק אם מופיע במפורש "הרכב חדש באמת" (🆕) ללא שום גרעין — אפשר לציין שמדובר בהרכב בכורה.
+  5. 🗣️ דקדוק עברי והתאמת פועל:
+     - כאשר שני שחקנים או יותר מצטרפים לשלד, חובה לכתוב ברבים: "מצטרפים אליהם X ו-Y" (ולא "מצטרף"). אם שחקנית אחת מצטרפת: "מצטרפת". אם שחקן אחד: "מצטרף".
+     - 🚫 איסור מוחלט על "רצף של ניצחון אחד" / "רצף של הפסד אחד": משחק יחיד אינו רצף! רצף קיים אך ורק מ-2 משחקים ומעלה.
 • חשוב מאוד: הטיזר נשלח מספר ימים לפני המשחק! אסור לכתוב "הלילה", "הערב", "היום" או לציין תאריך/יום ספציפי. השתמש ב"הפעם", "במשחק הבא", "במשחק הקרוב" וכדומה. זה חל על הטיזר וגם על ה-sentence של כל שחקן
 
 אורך:
@@ -2233,9 +2271,15 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
    • אל תחזור על אותם ביטויים שחוקים ("מגיע רעב", "נחוש להוכיח", "הזדמנות פז", "X שקלים בלבד"). גוון בניסוחים ובנקודות המבט.
    • כל שחקן מקבל אותה רמת השקעה ואיכות, מראשון השחקנים ועד האחרון.
 
-5. שחקן מארח (🏠):
+6. שחקן מארח (🏠):
    אם שחקן הוא המארח, חובה לנתח אותו לעומק כשחקן פוקר מלא על פי נתוניו, ביצועיו, יריביו ומעמדו בטבלה בדיוק כמו כל שחקן אחר!
    עובדת היותו המארח היא לכל היותר תבלין קל (כמו "מגרש ביתי" או "שומר על הבית"), ואסור בשום אופן שתחליף ניתוח פוקר עשיר ומדויק.
+
+7. דקדוק עברי מושלם ואיסור על "רצף של משחק אחד":
+   • 🚫 איסור מוחלט על "רצף של ניצחון אחד" / "רצף של הפסד אחד": משחק יחיד אינו רצף! רצף מוגדר אך ורק מ-2 משחקים ומעלה (שני נצחונות רצופים ומעלה או שני הפסדים רצופים ומעלה). אם שחקן ניצח או הפסיד רק במשחק האחרון שלו, כתוב "ניצח במשחק הקודם", "מגיע לאחר הפסד" — ולעולם אל תשתמש במילה "רצף" לתוצאה בודדת!
+   • 🗣️ התאמת פועל ליחיד/רבים: כאשר נושא המשפט כולל שני שחקנים או יותר, חובה להשתמש בפועל ברבים! למשל: "מצטרפים אליהם קובי ודן" (ולא "מצטרף").
+   • ⚧️ התאמת מגדר קפדנית: שחקן שמסומן בכרטיס כ-(זכר) יתואר בלשון זכר בלבד (הוא, ניצח, שיחק, שלו); שחקנית שמסומנת כ-(נקבה) תתואר בלשון נקבה בלבד (היא, ניצחה, שיחקה, שלה).
+   • 🔢 שמות מספרים: השתמש בספרות ליד שמות עצם (למשל "2 נצחונות", "3 משחקים", "150 שקלים") כדי להבטיח דיוק דקדוקי מוחלט.
 
 מה לא נכנס לטקסט:
 • 🚫 איסור מוחלט על פער כספי מצטבר כל-זמני מול שחקן אחר ("מחזיק ביתרון של 2,914 ₪ על פיליפ בכל הזמנים" / "מוביל בפער של X שקלים על Y") — אסור בתכלית האיסור!
@@ -2393,6 +2437,9 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           preGameTeaser = await generateMissingTeaser(players, chosenStyle, periodContextText, apiKey, comboHistoryText);
         } else if (preGameTeaser) {
           preGameTeaser = await ensureTeaserMentionsAllPlayers(preGameTeaser, players, apiKey);
+        }
+        if (preGameTeaser) {
+          preGameTeaser = sanitizeHebrewGrammar(preGameTeaser);
         }
       } catch (parseError) {
         // Truncated JSON and malformed JSON both land here, but they need
@@ -2894,6 +2941,8 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         }
 
         // ========== FINAL CLEANUP ==========
+        correctedSentence = sanitizeHebrewGrammar(correctedSentence);
+        correctedHighlight = sanitizeHebrewGrammar(correctedHighlight);
         // Remove any orphaned fragments at sentence end (prepositions, connectives)
         correctedSentence = correctedSentence
           .replace(/\s+[למבהוכש][-−]?\s*\./g, '.')

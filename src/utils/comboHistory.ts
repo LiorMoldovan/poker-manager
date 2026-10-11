@@ -1,4 +1,4 @@
-import { getAllGames, getAllGamePlayers, getAllPlayers } from '../database/storage';
+import { getAllGames, getAllGamePlayers, getAllPlayers, isPlayerFemale } from '../database/storage';
 import { Game, GamePlayer } from '../types';
 
 export interface ComboPlayerStat {
@@ -390,6 +390,24 @@ export function getComboHistory(
   };
 }
 
+function formatHebrewNames(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} ו${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} ו${names[names.length - 1]}`;
+}
+
+function getJoinVerb(names: string[]): string {
+  if (names.length > 1) {
+    const allFemale = names.every(n => isPlayerFemale(n));
+    return allFemale ? 'מצטרפות' : 'מצטרפים';
+  }
+  if (names.length === 1 && isPlayerFemale(names[0])) {
+    return 'מצטרפת';
+  }
+  return 'מצטרף';
+}
+
 /**
  * Build a Hebrew text block describing combo history for AI prompts.
  */
@@ -397,8 +415,9 @@ export function buildComboHistoryText(combo: ComboHistory): string {
   if (combo.isFirstTime) {
     if (combo.nearCombo) {
       const nc = combo.nearCombo;
-      const coreNames = nc.corePlayerNames.join(', ');
-      const diffNames = nc.differingPlayerNames.join(', ');
+      const coreNames = formatHebrewNames(nc.corePlayerNames);
+      const diffNames = formatHebrewNames(nc.differingPlayerNames);
+      const joinVerb = getJoinVerb(nc.differingPlayerNames);
       const timeStr = formatTimeAttribution(
         nc.gamesPlayedTogether,
         nc.gamesThisYear,
@@ -407,12 +426,12 @@ export function buildComboHistoryText(combo: ComboHistory): string {
         nc.monthsSinceLastPlayed
       );
       if (nc.coreCount === combo.playerCount - 1) {
-        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם מצטרף הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
+        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
       } else {
-        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם מצטרפים הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
+        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
       }
     }
-    return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${combo.playerNames.join(', ')}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;
+    return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${formatHebrewNames(combo.playerNames)}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;
   }
 
   const lines: string[] = [];

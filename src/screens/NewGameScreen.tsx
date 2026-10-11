@@ -5,7 +5,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame, getAllPolls } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame, getAllPolls, isPlayerFemale } from '../database/storage';
 import { showToast } from '../components/Toast';
 import { forceRefreshPlayersFromDb, forceRefreshPollsFromDb } from '../database/supabaseCache';
 import { cleanNumber } from '../utils/calculations';
@@ -2755,15 +2755,27 @@ const NewGameScreen = () => {
                     textAlign: isRTL ? 'right' : 'left',
                   }}>
                     {comboHistory.isFirstTime ? (
-                      comboHistory.nearCombo ? (
-                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
-                          <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
-                          <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({comboHistory.nearCombo.coreCount} מתוך {comboHistory.playerCount} שחקנים)</strong>
-                          <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                            {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בכל הזמנים {comboHistory.nearCombo.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${comboHistory.nearCombo.lastPlayedDateStr})` : `(מתוכם ${comboHistory.nearCombo.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם מצטרף הערב {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
+                      comboHistory.nearCombo ? (() => {
+                        const nc = comboHistory.nearCombo;
+                        const diffPlayers = nc.differingPlayerNames;
+                        const joinVerb = diffPlayers.length > 1
+                          ? (diffPlayers.every(n => isPlayerFemale(n)) ? 'מצטרפות' : 'מצטרפים')
+                          : (diffPlayers.length === 1 && isPlayerFemale(diffPlayers[0]) ? 'מצטרפת' : 'מצטרף');
+                        const formattedDiffering = diffPlayers.length === 2
+                          ? `${diffPlayers[0]} ו${diffPlayers[1]}`
+                          : diffPlayers.length > 2
+                          ? `${diffPlayers.slice(0, -1).join(', ')} ו${diffPlayers[diffPlayers.length - 1]}`
+                          : diffPlayers.join(', ');
+                        return (
+                          <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                            <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
+                            <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({nc.coreCount} מתוך {comboHistory.playerCount} שחקנים)</strong>
+                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                              {nc.corePlayerNames.join(', ')} שיחקו יחד {nc.gamesPlayedTogether} פעמים בכל הזמנים {nc.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${nc.lastPlayedDateStr})` : `(מתוכם ${nc.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם {joinVerb} הערב {formattedDiffering}.
+                            </div>
                           </div>
-                        </div>
-                      ) : (
+                        );
+                      })() : (
                         <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
                           <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
                           <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}

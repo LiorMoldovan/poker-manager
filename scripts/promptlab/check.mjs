@@ -161,6 +161,16 @@ for (const f of readdirSync(OUT).filter(x => x.endsWith('.result.json'))) {
     failures++;
     console.log(`FAIL  ${f}\n      "+-" sign collision in shipped text — "${sign[0]}"`);
   }
+  const singleGameStreak = text.match(/(?:ב)?רצף של (?:ניצחון|נצחון|הפסד|משחק) (?:אחד|בודד|יחיד)/);
+  if (singleGameStreak) {
+    failures++;
+    console.log(`FAIL  ${f}\n      single-game streak claimed — "${singleGameStreak[0]}"`);
+  }
+  const badJoinVerb = text.match(/(?:כשאליהם|כשלשולחן|מצטרף אליהם|מצטרף לשולחן)\s+[^,.!?]+\s+ו[^,.!?]+/);
+  if (badJoinVerb) {
+    failures++;
+    console.log(`FAIL  ${f}\n      singular join verb for multiple players — "${badJoinVerb[0]}"`);
+  }
   if (Array.isArray(parsed)) {
     const canned = parsed.filter(p => CANNED.test(p.sentence)).map(p => p.name);
     if (canned.length) {

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.10';
+export const APP_VERSION = '6.38.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.11',
+    date: '2026-10-11',
+    changes: [
+      '🗣️ Plural verb agreement for joining players',
+      '🚫 Ban single-game streak phrasing across AI',
+      '✨ Hebrew grammar sanitization on generated text',
+    ],
+  },
   {
     version: '6.38.10',
     date: '2026-10-11',
