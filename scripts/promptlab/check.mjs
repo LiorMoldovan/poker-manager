@@ -171,6 +171,16 @@ for (const f of readdirSync(OUT).filter(x => x.endsWith('.result.json'))) {
     failures++;
     console.log(`FAIL  ${f}\n      singular join verb for multiple players — "${badJoinVerb[0]}"`);
   }
+  const blimaHits = [...text.matchAll(/מבחן בלימה/g)];
+  if (blimaHits.length > 1) {
+    failures++;
+    console.log(`FAIL  ${f}\n      repetitive "מבחן בלימה" across ${blimaHits.length} players`);
+  }
+  const falseReunion = text.match(/(?:לראשונה|פעם ראשונה)\s+מזה\s+\d+\s+חודשים\s+ש(?:כל\s+)?השחקנים\s+נפגשים/);
+  if (falseReunion) {
+    failures++;
+    console.log(`FAIL  ${f}\n      teaser claims whole table met X months ago — "${falseReunion[0]}"`);
+  }
   if (Array.isArray(parsed)) {
     const canned = parsed.filter(p => CANNED.test(p.sentence)).map(p => p.name);
     if (canned.length) {

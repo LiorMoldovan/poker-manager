@@ -426,9 +426,9 @@ export function buildComboHistoryText(combo: ComboHistory): string {
         nc.monthsSinceLastPlayed
       );
       if (nc.coreCount === combo.playerCount - 1) {
-        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
+        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השולחן נפגש לפני ${nc.monthsSinceLastPlayed ? `${nc.monthsSinceLastPlayed} חודשים` : 'תקופה זו'} — היסטוריית המפגשים שייכת אך ורק לשלד של ${nc.coreCount} השחקנים.`;
       } else {
-        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
+        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השחקנים או כל השולחן נפגשו בעבר.`;
       }
     }
     return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${formatHebrewNames(combo.playerNames)}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;

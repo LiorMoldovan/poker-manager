@@ -690,94 +690,42 @@ const sanitizeHebrewGrammar = (text: string): string => {
     .replace(/כשאליהם מצטרף ([^,.!?]+ ו[^,.!?]+)/g, 'כשאליהם מצטרפים $1')
     .replace(/מצטרף לשולחן ([^,.!?]+ ו[^,.!?]+)/g, 'מצטרפים לשולחן $1')
     .replace(/כשלשולחן מצטרף ([^,.!?]+ ו[^,.!?]+)/g, 'כשלשולחן מצטרפים $1')
+    // Prevent false whole-table reunion claims when only the core played together
+    .replace(/(?:לראשונה|פעם ראשונה)\s+מזה\s+(\d+)\s+חודשים\s+ש(?:כל\s+)?השחקנים\s+נפגשים/g, 'לראשונה מזה $1 חודשים שהשלד המרכזי נפגש')
+    .replace(/אחרי\s+(\d+)\s+חודשים\s+ש(?:כל\s+)?השחקנים\s+לא\s+נפגשו/g, 'אחרי $1 חודשים שהשלד המרכזי לא ישב יחד')
     .replace(/\s+/g, ' ')
     .trim();
 };
 
 /**
- * Programmatic check to ensure preGameTeaser mentions 100% of participants.
- * If any player is missing, repairs the teaser via AI or appends them seamlessly.
+ * Post-processes preGameTeaser with Hebrew grammar sanitization.
+ * Player names are NOT forcefully enumerated into the teaser (each player has their own card).
  */
 const ensureTeaserMentionsAllPlayers = async (
   teaser: string,
-  players: PlayerForecastData[],
-  apiKey: string,
+  _players: PlayerForecastData[],
+  _apiKey: string,
 ): Promise<string> => {
-  const missing = players.filter(p => !isPlayerMentioned(teaser, p.name));
-  if (missing.length === 0) return sanitizeHebrewGrammar(teaser);
-
-  console.log(`⚠️ preGameTeaser missed ${missing.length} player(s):`, missing.map(p => p.name).join(', '));
-
-  const prompt = `הטיזר הבא נכתב לפתיחת ערב פוקר, אך השמיט בטעות ${missing.length} שחקנים: ${missing.map(p => p.name).join(', ')}.
-הרשימה המלאה של כל שחקני הערב: ${players.map(p => p.name).join(', ')}.
-
-הטיזר הנוכחי:
-"${teaser}"
-
-ערוך או השלם את הטיזר כך שישלב בצורה חלקה, טבעית וזורמת את כל השחקנים החסרים (${missing.map(p => p.name).join(', ')}).
-דרישות ברזל:
-1. חובה מוחלטת שכל ${players.length} השחקנים יופיעו בשמם המלא בטקסט הסופי!
-2. שמור על סגנון הכתיבה ורציפות הטיזר המקורי.
-3. דקדוק: כשיותר משחקן אחד מצטרף לשולחן, כתוב "מצטרפים אליהם" ברבים. איסור מוחלט על "רצף של ניצחון אחד".
-4. אל תשתמש במילים "הערב/היום/הלילה" — השתמש ב"הפעם", "במשחק הקרוב".
-5. החזר אך ורק את טקסט הטיזר המעודכן (ללא שום הקדמות, מרכאות או תגיות).`;
-
-  const formatAppendPlayers = (pls: PlayerForecastData[]) => {
-    const isFem = pls.length === 1 && isPlayerFemale(pls[0].name);
-    const verb = pls.length === 1 ? (isFem ? 'תשחק' : 'ישחק') : 'ישחקו';
-    const rel = pls.length === 1 ? (isFem ? 'שמוסיפה' : 'שמוסיף') : 'שמוסיפים';
-    const namesStr = pls.length === 1
-      ? pls[0].name
-      : pls.length === 2
-      ? `${pls[0].name} ו${pls[1].name}`
-      : `${pls.slice(0, -1).map(p => p.name).join(', ')} ו${pls[pls.length - 1].name}`;
-    return ` יחד איתם בשולחן ${verb} ${namesStr}, ${rel} עוד עניין ומתח למפגש.`;
-  };
-
-  try {
-    const { text } = await callWithFallback({
-      prompt,
-      apiKey,
-      maxOutputTokens: 2048,
-      label: 'Teaser-player-repair',
-    });
-    const cleaned = text
-      .replace(/\*\*/g, '')
-      .replace(/\*/g, '')
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^["']|["']$/g, '')
-      .trim();
-    const stillMissing = players.filter(p => !isPlayerMentioned(cleaned, p.name));
-    if (stillMissing.length === 0) {
-      console.log('✅ preGameTeaser repaired: all players now included');
-      return sanitizeHebrewGrammar(cleaned);
-    }
-    console.warn(`⚠️ preGameTeaser AI repair still missed: ${stillMissing.map(p => p.name).join(', ')}`);
-    return sanitizeHebrewGrammar(cleaned + formatAppendPlayers(stillMissing));
-  } catch (err) {
-    console.warn('⚠️ Teaser repair call failed, appending missing players manually:', err);
-    return sanitizeHebrewGrammar(teaser + formatAppendPlayers(missing));
-  }
+  return sanitizeHebrewGrammar(teaser);
 };
 
 /**
  * Fallback teaser generator when AI response lacked preGameTeaser entirely.
  */
 const generateMissingTeaser = async (
-  players: PlayerForecastData[],
+  _players: PlayerForecastData[],
   styleDesc: string,
   periodContext: string,
   apiKey: string,
   comboHistoryText?: string,
 ): Promise<string> => {
-  const prompt = `אתה ${styleDesc}. כתוב טיזר טרום-משחק קצר ומרתק (40-90 מילים) לפתיחת ערב פוקר.
+  const prompt = `אתה ${styleDesc}. כתוב טיזר טרום-משחק קצר ומרתק (40-80 מילים) לפתיחת ערב פוקר.
 ${periodContext ? `אירוע: ${periodContext}\n` : ''}${comboHistoryText ? `היסטוריית הרכב: ${comboHistoryText}\n` : ''}
-רשימת כל שחקני הערב (${players.length} שחקנים): ${players.map(p => p.name).join(', ')}.
 
-דרישות ברזל:
-1. חובה מוחלטת להזכיר את כל ${players.length} השחקנים בשמם המלא: ${players.map(p => p.name).join(', ')}!
-2. אם מופיע גרעין שולחן ותיק של שחקנים ששיחקו יחד בעבר, שלב זאת במפורש בפתיח עם השחקנים שמצטרפים אליהם. לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק! (דקדוק: אם מצטרפים 2 שחקנים ומעלה, כתוב "מצטרפים אליהם" ברבים; איסור מוחלט על "רצף של ניצחון אחד"!).
-3. שלב אותם בעלילה ובמתח לקראת המשחק.
+דרישות:
+1. התמקד בסיפורים המרכזיים של הערב, ביריבויות ובטבלה. אין צורך למנות את כל השחקנים (לכל שחקן יש כרטיס אישי משלו).
+2. אם מופיע גרעין ותיק אך ההרכב המלא מעולם לא נפגש, אסור לטעון שכל השולחן נפגש בעבר או לפני תקופה מסוימת! עדיף להתמקד בעלילה ובמשחק עצמו.
+3. דקדוק: כשיותר משחקן אחד מצטרף לשולחן, כתוב "מצטרפים אליהם" ברבים. איסור מוחלט על "רצף של ניצחון אחד".
 4. אל תשתמש במילים "הערב/היום/הלילה" (הטיזר נקרא מראש — השתמש ב"הפעם", "במשחק הקרוב").
 5. החזר אך ורק את טקסט הטיזר (פסקה אחת רציפה).`;
 
@@ -794,11 +742,10 @@ ${periodContext ? `אירוע: ${periodContext}\n` : ''}${comboHistoryText ? `ה
       .replace(/^#{1,3}\s+/gm, '')
       .replace(/^["']|["']$/g, '')
       .trim();
-    const withAllPlayers = await ensureTeaserMentionsAllPlayers(cleaned, players, apiKey);
-    return sanitizeHebrewGrammar(withAllPlayers);
+    return sanitizeHebrewGrammar(cleaned);
   } catch (e) {
     console.warn('⚠️ Fallback teaser generation failed:', e);
-    return `השולחן מוכן לקראת מפגש מרתק בהשתתפות ${players.map(p => p.name).join(', ')} — כולם מגיעים להילחם על מקומם ולהשפיע על הטבלה.`;
+    return `השולחן מוכן לקראת מפגש מרתק — כולם מגיעים להילחם על מקומם ולהשפיע על הטבלה.`;
   }
 };
 
@@ -1844,7 +1791,7 @@ export const generateAIForecasts = async (
       } else {
         assign('streak', isPositive
           ? `התאוששות מרצף של ${Math.abs(p.currentStreak)} הפסדים — זיהוי הזדמנות לשבירת הבצורת וחזרה למסלול הנצחונות`
-          : `המשך לחץ ושחיקה מרצף של ${Math.abs(p.currentStreak)} הפסדים — המומנטום השלילי והיריבים הקשים צפויים להמשיך לגבות מחיר כספי בשולחן, כשהמאבק הוא על בלימה ומזעור נזקים בלבד ללא שום הבטחה לשבירת בצורת`);
+          : `המשך לחץ ושחיקה מרצף של ${Math.abs(p.currentStreak)} הפסדים — המומנטום השלילי והיריבים הקשים צפויים להמשיך לגבות מחיר כספי בשולחן, כשהמאבק הוא על זהירות מרבית והגבלת הפסדים מול שולחן מאתגר ללא שום הבטחה לשבירת בצורת`);
       }
     } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
       assign('ranking_battle', isPositive
@@ -1868,7 +1815,7 @@ export const generateAIForecasts = async (
     } else if (currentHalfGames.length >= 3 && Math.abs(periodAvg - allTimeAvg) > 20 && canUse('form')) {
       assign('form', isPositive
         ? `כושר שיא ב${currentPeriodLabel} עם ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים — יציבות מרשימה שמציבה אותו בעמדת יתרון מובהקת`
-        : `קשיי יציבות ב${currentPeriodLabel} עם ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים — ירידה בחדות שמעמידה אותו במבחן בלימה מאתגר`);
+        : `קשיי יציבות ב${currentPeriodLabel} עם ממוצע של ${periodAvg >= 0 ? '+' : ''}${periodAvg} שקלים — ירידה בחדות שמאלצת אותו לשחק באופן שקול ומבוקר כדי לא להידרדר`);
     } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
       assign('big_last_game', isPositive
         ? `רוח גבית חזקה מניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם — תנופה מורלית שמאפשרת לו להכתיב את הקצב`
@@ -2190,34 +2137,26 @@ ${traitBlock}${surpriseText}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 הטיזר הוא הלב של חוויית הפתיחה. זהו טקסט אחד רציף בעברית שמספר את הסיפור של הערב הזה.
 
-דרישות ברזל — שחקנים ואזכורים (אילוץ מרכזי ללא פשרות!):
-• חובה מוחלטת להזכיר את כל ${players.length} השחקנים בשמם המלא: ${players.map(p => p.name).join(', ')}!
-  אסור בשום אופן להשמיט אף שחקן — כולם רוצים וצריכים לראות את עצמם בטיזר.
-  בצע בדיקה עצמית לפני שאתה מסיים לוודא שכל אחד ואחד מ-${players.length} השחקנים הוזכר בשמו!
+דרישות שחקנים ואזכורים בטיזר:
+• הטיזר הוא פתיח סיפורי ואווירתי — התמקד בסיפורים המרכזיים של הערב (המובילים, היריבויות החמות, המארח, או קרבות הדירוג הקרובים).
+• 🚫 אל תמנה את כל שחקני השולחן בטיזר! זהו בזבוז מקום מיותר (כל שחקן מקבל כרטיס ומשפט אישי משלו ממש מתחת לטיזר). הזכר רק את השחקנים המרכזיים שסביבם נבנה הסיפור (3–5 שחקנים).
 
 תוכן:
-• לקט את העובדות הכי מעניינות, מצחיקות ומפתיעות מכל הנתונים: רצפים, יריבויות, שיאים, חזרות, אבני דרך, קרבות דירוג
-• שלב את כל השחקנים בעלילה: מי שמוביל, מי שרודף, מי שמגן, מי שנמצא ביריבות ראש-בראש, ומי שמגיע לחולל מהפך
+• לקט את העובדות הכי מעניינות, מצחיקות ומפתיעות מכל הנתונים: רצפים, יריבויות, שיאים, חזרות, אבני דרך, קרבות דירוג.
 • המארח בשולחן: אם אחד השחקנים מארח${location ? ` (${location})` : ''}, הוא דמות פוקר מרכזית בעלילה בדיוק כמו כולם! שלב אותו כשחקן פוקר מלא לפי נתוניו, רצפיו והאתגרים שלו בשולחן, ולא רק כמי שמעמיד את הבית.${locationInsightsText ? `\n• תובנות מיקום (🏠): שלב אותן רק אם הן מעניינות ומפתיעות. אל תזכיר מיקום סתם כעובדה יבשה.` : ''}
-• שילוב גרעין שולחן ותיק והרכב השחקנים (אפשרי אך לא חובה! מניעת כפילות מול הכרטיס הייעודי):
-  באפליקציה כבר מוצג כרטיס UI ייעודי ומפורט של "גרעין השולחן" (עם שמות השחקנים, כמות המפגשים ותאריכים).
-  לכן, אזכור גרעין השולחן בטיזר הוא **אפשרי אך אינו חובה**:
-  1. 🚫 מניעת כפילות: אל תחזור סתם על אותם מספרים יבשים ושמות שמופיעים בכרטיס הייעודי ("השלד של 6 מתוך 8 נפגש 15 פעמים בעבר...").
-  2. 💡 שלב רק אם זה תורם לעלילה ולדרמה: אם בחרת לשלב את גרעין השולחן בטיזר, עשה זאת בצורה חכמה כצבע עלילתי ולא כדיווח סטטיסטי יבש:
-     - למשל: איחוד מרגש אחרי חודשים ארוכים שלא ישבו יחד, או הדינמיקה שבה השחקנים המצטרפים מגיעים לשבור את ההרגלים של החבורה הוותיקה שמכירה כל בלוף.
-  3. ⏱️ ייחוס זמן מדויק: אם אתה מזכיר את ההיסטוריה של ההרכב, חובה לציין במפורש את התקופה (למשל "בכל הזמנים", "השנה", "לראשונה מזה X חודשים") — לעולם אל תזרוק מספר ללא ייחוס זמן ברור!
-  4. ⚠️ דיוק מול הרכב חדש:
-     - לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק.
-     - רק אם מופיע במפורש "הרכב חדש באמת" (🆕) ללא שום גרעין — אפשר לציין שמדובר בהרכב בכורה.
-  5. 🗣️ דקדוק עברי והתאמת פועל:
-     - כאשר שני שחקנים או יותר מצטרפים לשלד, חובה לכתוב ברבים: "מצטרפים אליהם X ו-Y" (ולא "מצטרף"). אם שחקנית אחת מצטרפת: "מצטרפת". אם שחקן אחד: "מצטרף".
-     - 🚫 איסור מוחלט על "רצף של ניצחון אחד" / "רצף של הפסד אחד": משחק יחיד אינו רצף! רצף קיים אך ורק מ-2 משחקים ומעלה.
+• ⚠️ הרכב השולחן והגרעין הוותיק (כרטיס ה-UI כבר מציג זאת בנפרד!):
+  באפליקציה יש כרטיס UI ייעודי ומדויק שמוצג לצד הטיזר ("גרעין שולחן ותיק" / "הרכב חוזר").
+  לכן, עדיף בהחלט **שלא להזכיר נתוני הרכב, חודשים או היסטוריית מפגשים בטיזר**, כדי לא ליצור כפילויות מיותרות או סתירות מול הכרטיס הייעודי!
+  התמקד במקום זאת במתח, ביריבויות, בכושר הנוכחי ובטבלת הדירוג.
+  אם בכל זאת אתה מתייחס להרכב:
+  1. 🚫 איסור מוחלט על סתירה: אם מופיע שזהו הרכב שלא שיחק יחד במלואו (יש גרעין ותיק של שחקנים ושחקנים שמצטרפים אליהם), חל איסור מוחלט לטעון ש"כל השחקנים נפגשים אחרי X חודשים"! בדיוק ההרכב הזה מעולם לא שיחק יחד. הנתון של X חודשים שייך אך ורק לגרעין השחקנים, לא לכל השולחן!
+  2. 🚫 אל תמציא איחוד כולל: לעולם אל תטען ששחקנים שנפגשים לראשונה בהרכב הזה "מתאחדים מחדש".
+  3. 🗣️ דקדוק עברי והתאמת פועל: כאשר שני שחקנים או יותר מצטרפים לשלד, חובה לכתוב ברבים: "מצטרפים אליהם X ו-Y" (ולא "מצטרף"). אם שחקנית אחת מצטרפת: "מצטרפת". אם שחקן אחד: "מצטרף".
+  4. 🚫 איסור מוחלט על "רצף של ניצחון אחד" / "רצף של הפסד אחד": משחק יחיד אינו רצף! רצף קיים אך ורק מ-2 משחקים ומעלה.
 • חשוב מאוד: הטיזר נשלח מספר ימים לפני המשחק! אסור לכתוב "הלילה", "הערב", "היום" או לציין תאריך/יום ספציפי. השתמש ב"הפעם", "במשחק הבא", "במשחק הקרוב" וכדומה. זה חל על הטיזר וגם על ה-sentence של כל שחקן
 
 אורך:
-• יחסי לכמות החומר המעניין — יותר שחקנים ויותר סיפורים = טקסט ארוך יותר
-• טווח: 50-130 מילים (מספיק מקום להזכיר את כל ${players.length} השחקנים באופן טבעי)
-• לעולם לא ארוך יותר מסך כל ה-sentences של השחקנים ביחד
+• 40-80 מילים (פסקה אחת מהודקת, קולחת ומסקרנת).
 ${hasMajorPeriod ? `
 📅 אירוע תקופתי — פסקה ייעודית נוספת:
 ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מחצית/שנה חדשה מתחילה! הוסף פסקה קצרה שפותחת את העידן החדש — מה מצופה, מי מועמד להוביל, מה השאיפות` : ''}${periodMarkers?.isLastGameOfHalf || periodMarkers?.isLastGameOfYear ? `• מחצית/שנה נגמרת! הוסף פסקה קצרה שמסכמת — מי הוביל, מה היו הרגעים הגדולים, מה נשאר פתוח` : ''}
@@ -2263,12 +2202,13 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
    אסור בהחלט להשתמש בביטויי מטא כגון: "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מה שמסביר את התחזית", "מצדיק את הצפי", "לפי המודל" וכדומה!
    כתוב אך ורק כפרשן ספורט פנימי של השולחן. העלילה, הנתונים והיריבויות מדברים בעד עצמם ומעבירים את המסר באופן עקיף, חכם ומרתק.
    דוגמה מעולה (חיובי): "אחרי שסגר פער של 28 שקלים מדן בטבלת החציון ומחזיק במומנטום של שני נצחונות, גיא מגיע בעמדת זינוק מעולה להשתלט על השולחן. המאזן העדיף שלו מול יריבי הערב והשליטה בקצב מעניקים לו יתרון פסיכולוגי ברור בדרך לפריצה נוספת."
-   דוגמה מעולה (שלילי): "עם יתרון שברירי של 15 שקלים בלבד על קובי ושולחן שנושף בעורפו, אבירם ניצב בפני מבחן בלימה קשוח שדורש ממנו ערנות שיא. מאזן שלילי מול שחקני המפתח בשולחן מעמיד אותו בעמדת מגננה, והוא יצטרך להימנע מהרפתקאות כדי לא להידרדר."
+   דוגמה מעולה (שלילי): "עם יתרון שברירי של 15 שקלים בלבד על קובי ושולחן שנושף בעורפו, אבירם ניצב בעמדת מגננה שמחייבת זהירות טקטית מרבית. מאזן נחות מול שחקני המפתח בשולחן הופך כל טעות לקריטית, והוא יצטרך להימנע מהרפתקאות כדי להגן על מעמדו בטבלה."
 
 5. גיוון וערך מוסף — כל שחקן מקבל זווית שונה ומבנה אחר:
    • אין שתי כותרות דומות ואין שני משפטים עם אותו מבנה.
    • לכל שחקן נבחרה זווית עלילתית (🎯): יריבות ראש-בראש (🥊/⚔️), רצף פעיל (🔥), מאבק דירוג (🏆), כושר חציוני (⭐), משחק קודם, או הגנה.
    • אל תחזור על אותם ביטויים שחוקים ("מגיע רעב", "נחוש להוכיח", "הזדמנות פז", "X שקלים בלבד"). גוון בניסוחים ובנקודות המבט.
+   • 🚫 מניעת חזרתיות על ביטויי מפתח: אסור להשתמש באותו ביטוי (כגון "מבחן בלימה", "עמדת מגננה", "מזעור נזקים", "מאבק שחיקה") אצל יותר משחקן אחד באותו ערב! לכל שחקן יש אפיון ייחודי ואוצר מילים שונה לחלוטין.
    • כל שחקן מקבל אותה רמת השקעה ואיכות, מראשון השחקנים ועד האחרון.
 
 6. שחקן מארח (🏠):
@@ -2501,8 +2441,11 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       // model what to avoid instead of re-rolling the same dice.
       let discarded: { name: string; reasons: string[] }[] = [];
 
-      const factCheckPass = (list: ForecastResult[]): ForecastResult[] => list.map(forecast => {
-        const player = players.find(p => p.name === forecast.name);
+      const factCheckPass = (list: ForecastResult[]): ForecastResult[] => {
+        let blimaSentenceCount = 0;
+        let blimaHighlightCount = 0;
+        return list.map(forecast => {
+          const player = players.find(p => p.name === forecast.name);
         if (!player) return forecast;
         
         // Get actual year data
@@ -2825,7 +2768,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
               .replace(/בנקודת\s*קצה\s*הדורשת\s*שינוי\s*כיוון\s*מיידי/g, 'תחת לחץ שחיקה מתמשך')
               .replace(/(?:שינוי|לשנות)\s*כיוון\s*מיידי/g, 'זהירות טקטית מרבית')
               .replace(/נקודת\s*מפנה/g, 'מבחן הגנתי')
-              .replace(/הזדמנות\s*לקאמבק/g, 'מבחן בלימה')
+              .replace(/הזדמנות\s*לקאמבק/g, 'מאבק שחיקה')
               .replace(/יציאה\s*לדרך\s*חדשה/g, 'משמעת הגנתית')
               .replace(/\s+/g, ' ').trim();
           }
@@ -2943,6 +2886,30 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         // ========== FINAL CLEANUP ==========
         correctedSentence = sanitizeHebrewGrammar(correctedSentence);
         correctedHighlight = sanitizeHebrewGrammar(correctedHighlight);
+
+        // Deduplicate repetitive negative buzzwords ("מבחן בלימה", "עמדת מגננה") across players
+        if (/מבחן בלימה/.test(correctedSentence)) {
+          if (blimaSentenceCount >= 1) {
+            const blimaAlts = ['מאבק שחיקה', 'קרב הגנתי', 'משמעת טקטית', 'אתגר התאוששות', 'צורך בייצוב השורות'];
+            const alt = blimaAlts[(blimaSentenceCount - 1) % blimaAlts.length];
+            correctedSentence = correctedSentence
+              .replace(/במבחן בלימה(?:\s+(?:קשוח|מאתגר))?/g, `ב${alt}`)
+              .replace(/מבחן בלימה(?:\s+(?:קשוח|מאתגר))?/g, alt);
+            errorDetails.push(`dedup: replaced duplicate "מבחן בלימה" with "${alt}"`);
+          }
+          blimaSentenceCount++;
+        }
+        if (/מבחן בלימה/.test(correctedHighlight)) {
+          if (blimaHighlightCount >= 1) {
+            const hAlts = ['מאבק שחיקה', 'קרב הגנתי', 'ייצוב השורות', 'משמעת הגנתית'];
+            const alt = hAlts[(blimaHighlightCount - 1) % hAlts.length];
+            correctedHighlight = correctedHighlight
+              .replace(/במבחן בלימה/g, `ב${alt}`)
+              .replace(/מבחן בלימה/g, alt);
+          }
+          blimaHighlightCount++;
+        }
+
         // Remove any orphaned fragments at sentence end (prepositions, connectives)
         correctedSentence = correctedSentence
           .replace(/\s+[למבהוכש][-−]?\s*\./g, '.')
@@ -2988,7 +2955,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
             } else if (actualStreak <= -2) {
               correctedSentence = `רצף של ${Math.abs(actualStreak)} הפסדים מכביד על מעמדו וצפוי להמשיך להכביד עליו גם הערב. מול שולחן קשוח, עיקר המאבק שלו יהיה בלימת הידרדרות נוספת ומזעור נזקים.`;
             } else if (lastGameProfit < 0) {
-              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי למנוע הידרדרות נוספת. תנאי השולחן התחרותיים הערב מעמידים בפניו אתגר בלימה לא פשוט.`;
+              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי למנוע הידרדרות נוספת. תנאי השולחן התחרותיים הערב מעמידים בפניו אתגר הגנתי לא פשוט.`;
             } else {
               correctedSentence = `תנאי שולחן תחרותיים ומאבק צמוד מול יריבים אגרסיביים דורשים ממנו ריכוז שיא וערנות מוגברת. מול לחץ מתמיד בשולחן, עליו לפעול בזהירות כדי לעבור את הערב בשלום.`;
             }
@@ -3007,6 +2974,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           highlight: correctedHighlight
         };
       });
+    };
       
       forecasts = factCheckPass(forecasts);
 
