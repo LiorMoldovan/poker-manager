@@ -2233,6 +2233,7 @@ interface PollShareCardProps {
   poll: GamePoll;
   dateStats: Map<string, DateStat>;
   playerById: Map<string, Player>;
+  players?: Player[];
   confirmedDate: GamePollDate | undefined;
   confirmedPlayers: Player[];
   // App origin (e.g. https://poker-manager.vercel.app). Used in the
@@ -2248,7 +2249,8 @@ interface PollShareCardProps {
   hasGuestTier?: boolean;
 }
 
-export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t, hasGuestTier = true }: PollShareCardProps) {
+export function PollShareCard({ mode, poll, dateStats, playerById, players, confirmedDate, confirmedPlayers, appUrl, t, hasGuestTier = true }: PollShareCardProps) {
+  const allPlayers = players ?? Array.from(playerById.values());
   // Shared visual tokens
   const BG_OUTER = '#0f172a';        // slate-900 — page background
   const BG_CARD = '#1e293b';         // slate-800 — card surface
@@ -2375,6 +2377,7 @@ export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate
             poll={poll}
             dateStats={dateStats}
             playerById={playerById}
+            players={allPlayers}
             bestYes={bestYes}
             targetPct={targetPct}
             appUrl={appUrl}
@@ -2617,11 +2620,12 @@ function ShareDateCompetitionStrip({
 }
 
 function PollShareInvitationBody({
-  poll, dateStats, playerById, bestYes, targetPct, appUrl, t, tokens, hasGuestTier = true,
+  poll, dateStats, playerById, players, bestYes, targetPct, appUrl, t, tokens, hasGuestTier = true,
 }: {
   poll: GamePoll;
   dateStats: Map<string, DateStat>;
   playerById: Map<string, Player>;
+  players: Player[];
   bestYes: number;
   targetPct: number;
   // App origin URL — appended as a plain-text footnote so recipients
@@ -2880,6 +2884,14 @@ function PollShareInvitationBody({
         </div>
       )}
 
+      {/* Pending regular players who haven't voted yet */}
+      <SharePendingPermanents
+        poll={poll}
+        players={players}
+        tokens={tokens}
+        t={t}
+      />
+
       {poll.note && (
         <div style={{
           marginTop: 22, padding: '20px 26px',
@@ -2930,6 +2942,139 @@ function PollShareInvitationBody({
         </div>
       )}
     </>
+  );
+}
+
+// ─── SharePendingPermanents ───────────────────────────
+// Renders the list of regular (permanent) players who haven't yet voted on
+// this poll into the WhatsApp share card. Shows them as styled chips so recipients
+// in WhatsApp can see at a glance who is still expected to answer.
+// If all regulars have already cast a vote, renders a clean success badge.
+function SharePendingPermanents({
+  poll,
+  players,
+  tokens,
+  t,
+}: {
+  poll: GamePoll;
+  players: Player[];
+  tokens: ShareTokens;
+  t: PollShareCardProps['t'];
+}) {
+  const { TEXT } = tokens;
+  const activeDates = poll.dates.filter(d => !d.disabledAt);
+  const targetDateIds = poll.confirmedDateId
+    ? [poll.confirmedDateId]
+    : (activeDates.length ? activeDates.map(d => d.id) : poll.dates.map(d => d.id));
+  const answered = new Set(
+    poll.votes.filter(v => targetDateIds.includes(v.dateId)).map(v => v.playerId)
+  );
+  const permanents = players.filter(p => p.type === 'permanent');
+  if (permanents.length === 0) return null;
+
+  const pending = permanents
+    .filter(p => !answered.has(p.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+
+  if (pending.length === 0) {
+    return (
+      <div
+        data-share-split="true"
+        style={{
+          marginTop: 20,
+          padding: '16px 24px',
+          background: 'rgba(16, 185, 129, 0.08)',
+          border: '1px solid rgba(16, 185, 129, 0.28)',
+          borderRadius: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          fontSize: 22,
+          fontWeight: 700,
+          color: '#34d399',
+        }}
+      >
+        <span style={{ fontSize: 24 }}>✅</span>
+        <span>{t('schedule.share.allPermanentsVoted')}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-share-split="true"
+      style={{
+        marginTop: 20,
+        padding: '20px 26px',
+        background: 'rgba(15, 23, 42, 0.55)',
+        border: '1px dashed rgba(239, 68, 68, 0.35)',
+        borderRadius: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 16,
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          fontSize: 24,
+          fontWeight: 700,
+          color: TEXT,
+        }}>
+          <span style={{ fontSize: 24 }}>⏳</span>
+          <span>{t('schedule.share.pendingPermanents')}</span>
+        </div>
+        <span
+          style={{
+            padding: '6px 16px',
+            borderRadius: 999,
+            fontSize: 20,
+            fontWeight: 700,
+            background: 'rgba(239, 68, 68, 0.16)',
+            color: '#f87171',
+            border: '1px solid rgba(239, 68, 68, 0.40)',
+            letterSpacing: 0.2,
+          }}
+        >
+          {pending.length}
+        </span>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 10,
+      }}>
+        {pending.map(p => (
+          <span
+            key={p.id}
+            style={{
+              fontSize: 24,
+              color: '#fca5a5',
+              padding: '7px 18px',
+              borderRadius: 14,
+              background: 'rgba(239, 68, 68, 0.14)',
+              border: '1px solid rgba(239, 68, 68, 0.45)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ color: '#f87171', fontSize: 18 }}>•</span>
+            {p.name}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

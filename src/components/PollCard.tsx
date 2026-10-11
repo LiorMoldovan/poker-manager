@@ -1500,6 +1500,7 @@ export default function PollCard(props: PollCardProps) {
               poll={poll}
               dateStats={dateStats}
               playerById={playerById}
+              players={players}
               confirmedDate={confirmedDate}
               confirmedPlayers={confirmedPlayers}
               appUrl={typeof window !== 'undefined' ? window.location.origin : undefined}
