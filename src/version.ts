@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.8';
+export const APP_VERSION = '6.38.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.9',
+    date: '2026-10-11',
+    changes: [
+      '🏆 Multi-scope records across career, year, half',
+      '⏱️ Clear scope attribution on all records',
+      '🎯 Highlights streak proximity across scopes',
+    ],
+  },
   {
     version: '6.38.8',
     date: '2026-10-11',

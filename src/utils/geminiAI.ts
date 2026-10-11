@@ -1951,9 +1951,9 @@ export const generateAIForecasts = async (
       if (allTimeRank > 0 && allTimeRank <= 3) {
         lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
       }
-      // Proximity to career streaks
-      const careerStreaks = (() => {
-        const chrono = [...p.gameHistory].reverse();
+      // Streak and record calculations across scopes (career all-time, annual 2026, half-year)
+      const computeMaxStreak = (games: typeof p.gameHistory) => {
+        const chrono = [...games].reverse();
         let maxWin = 0;
         let maxLoss = 0;
         let curW = 0;
@@ -1970,20 +1970,44 @@ export const generateAIForecasts = async (
           }
         }
         return { maxWin, maxLoss };
-      })();
+      };
+
+      const careerStreaks = computeMaxStreak(p.gameHistory);
+      const thisYearGamesList = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+      const yearStreaks = computeMaxStreak(thisYearGamesList);
+      const periodStreaks = computeMaxStreak(periodGames);
 
       if (actualStreak >= 2) {
         if (actualStreak >= careerStreaks.maxWin && careerStreaks.maxWin >= 2) {
-          lines.push(`🏆 שיא קריירה אישי! רצף של ${actualStreak} נצחונות — הרצף הטוב ביותר בקריירה שלו!`);
+          lines.push(`🏆 שיא קריירה אישי בכל הזמנים! רצף של ${actualStreak} נצחונות — הרצף הטוב ביותר בכל הקריירה שלו אי פעם!`);
         } else if (actualStreak === careerStreaks.maxWin - 1 && careerStreaks.maxWin >= 3) {
-          lines.push(`🎯 קרוב לשיא אישי: רצף של ${actualStreak} נצחונות — מרחק ניצחון אחד מהשוואת שיא הקריירה (${careerStreaks.maxWin} נצחונות רצופים)!`);
+          lines.push(`🎯 קרוב לשיא כל הזמנים: רצף של ${actualStreak} נצחונות — מרחק ניצחון אחד בלבד מהשוואת שיא הקריירה בכל הזמנים (${careerStreaks.maxWin} נצחונות רצופים)!`);
+        } else if (actualStreak >= yearStreaks.maxWin && yearStreaks.maxWin >= 2 && thisYearGamesList.length >= 4 && careerStreaks.maxWin > yearStreaks.maxWin) {
+          lines.push(`🔥 שיא שנתי ב-${currentYear}: רצף של ${actualStreak} נצחונות — הרצף הטוב ביותר שלו ב-${currentYear}!`);
+        } else if (actualStreak === yearStreaks.maxWin - 1 && yearStreaks.maxWin >= 3 && thisYearGamesList.length >= 4 && careerStreaks.maxWin > yearStreaks.maxWin) {
+          lines.push(`🎯 קרוב לשיא שנתי ב-${currentYear}: רצף של ${actualStreak} נצחונות — מרחק ניצחון אחד מהשוואת השיא שלו ב-${currentYear} (${yearStreaks.maxWin} נצחונות)!`);
+        } else if (actualStreak >= periodStreaks.maxWin && periodStreaks.maxWin >= 2 && periodGames.length >= 4 && yearStreaks.maxWin > periodStreaks.maxWin) {
+          lines.push(`⭐ שיא חציוני ב${periodLabel}: רצף של ${actualStreak} נצחונות — הרצף הטוב ביותר שלו ב${periodLabel}!`);
         }
       } else if (actualStreak <= -2) {
         const absStreak = Math.abs(actualStreak);
         if (absStreak >= careerStreaks.maxLoss && careerStreaks.maxLoss >= 2) {
-          lines.push(`⚠️ שיא שפל אישי בקריירה: רצף של ${absStreak} הפסדים — הבצורת הארוכה ביותר שלו אי פעם!`);
+          lines.push(`⚠️ שיא שפל אישי בכל הזמנים: רצף של ${absStreak} הפסדים — בצורת ההפסדים הארוכה ביותר בקריירה שלו אי פעם!`);
         } else if (absStreak === careerStreaks.maxLoss - 1 && careerStreaks.maxLoss >= 3) {
-          lines.push(`⚠️ קרוב לשפל אישי: רצף של ${absStreak} הפסדים — מרחק הפסד אחד מהשוואת שיא ההפסדים בקריירה (${careerStreaks.maxLoss} הפסדים)!`);
+          lines.push(`⚠️ קרוב לשפל כל הזמנים: רצף של ${absStreak} הפסדים — מרחק הפסד אחד בלבד מהשוואת שיא השפל בכל הזמנים (${careerStreaks.maxLoss} הפסדים)!`);
+        } else if (absStreak >= yearStreaks.maxLoss && yearStreaks.maxLoss >= 2 && thisYearGamesList.length >= 4 && careerStreaks.maxLoss > yearStreaks.maxLoss) {
+          lines.push(`⚠️ שיא שלילי שנתי ב-${currentYear}: רצף של ${absStreak} הפסדים — הרצף השלילי הארוך ביותר שלו ב-${currentYear}!`);
+        }
+      }
+
+      if (thisYearGamesList.length >= 4) {
+        const thisYearWins = thisYearGamesList.filter(g => g.profit > 0);
+        const yearBest = thisYearWins.length >= 2 ? Math.max(...thisYearWins.map(g => g.profit)) : 0;
+        const lastIsYearBest = !!lastGame
+          && thisYearGamesList.some(g => g.gameId === lastGame.gameId)
+          && Math.round(lastGame.profit) === Math.round(yearBest);
+        if (yearBest > 0 && p.bestWin > 0 && Math.round(yearBest) < Math.round(p.bestWin)) {
+          lines.push(`הניצחון הגדול ביותר ב-${currentYear}: \u200E+${Math.round(yearBest)}${lastIsYearBest ? ' ← נקבע במשחק האחרון!' : ''}`);
         }
       }
 
@@ -2164,7 +2188,11 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 בחר 2 או 3 נתונים משמעותיים ובולטים בלבד מכרטיס השחקן, ובנה עליהם את הפסקה (2–3 משפטים זורמים):
 1. נתון 1: מצב נוכחי, מומנטום, רצף פעיל או מעמד בטבלה.
 2. נתון 2 — הנימוק הנתוני המרכזי שמסביר את כיוון הערב. תעדוף עליון לתובנות פיקנטיות שמעניינות את השחקנים:
-   • 🏆/🎯 קרבה לשיא אישי או תקופתי: שחקן שנמצא ברצף נצחונות ומתקרב לשבירת או השוואת שיא הקריירה שלו (למשל: רצף של 3 נצחונות, מרחק ניצחון אחד מהשוואת שיא הקריירה שעומד על 4!), רצף בצורת שמאיים על שיא שלילי אישי, או שיא רווח תקופתי.
+   • 🏆/🎯 קרבה לשיא אישי או תקופתי (חובה עם ייחוס זמן מפורש!): שחקן שנמצא ברצף נצחונות ומתקרב לשבירת או השוואת שיא:
+     - שיא קריירה בכל הזמנים: רצף נצחונות היסטורי (למשל: רצף של 3 נצחונות, מרחק ניצחון אחד מהשוואת שיא כל הזמנים של 4 נצחונות רצופים!).
+     - שיא שנתי ב-${currentYear}: רצף עונתי של נצחונות (למשל: הרצף הטוב ביותר שלו ב-${currentYear}, או הניצחון הגדול שלו ב-${currentYear}).
+     - שיא חציוני: רצף נצחונות בחציון הנוכחי, או הניצחון הגדול ביותר ב${currentPeriodLabel} (במיוחד אם מסומן "← נקבע במשחק האחרון!").
+     - רצף בצורת שמאיים על שיא שלילי אישי בכל הזמנים או ב-${currentYear}.
    • ⚔️/🛡️ קרב עקיפה ריאלי / הגנה בדירוג עקב פער קטן: פער קטן של 10–80 שקלים בלבד בטבלת החציון מול יריב שנוכח הערב בשולחן — הזדמנות לעקיפה מיידית ושינוי מיקום כבר הערב (לשחקן חיובי), או הגנה שברירית על המקום מפני עקיפה (לשחקן שלילי).
    • 🔥/⚠️ מצ'אפ ראש-בראש ספורטיבי ישיר (מאזן או רצף — ספורטיבי בלבד!): רצף נצחונות ישיר מול יריב בשולחן (למשל: "מחזיק ברצף של 3 נצחונות רצופים על X במפגשים ביניהם"), או מאזן נצחונות/הפסדים עדיף (5:1 במפגשים ביניהם).
    • 🎯 אבני דרך ופיקנטריה: משחק קריירה עגול (המשחק ה-50 או ה-100), קאמבק אחרי היעדרות ארוכה, או מאזן מיוחד אצל המארח.
@@ -2210,10 +2238,13 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • המאזן המצטבר השלילי של שחקן ("סה\"כ ‎-807") — אף אחד לא רוצה לקרוא כמה הוא במינוס אי־פעם. מספרי ראש-בראש ספורטיביים (מאזן נצחונות או רצף ישיר מ-📖) דווקא כן: הם סיפור בין שניים, לא כרטיס ציונים.
 • שחקן חדש — כתוב שהוא חדש. אל תמציא לו סטטיסטיקות.
 
-━━━ דיוק: לכל מספר יש תקופה ━━━
-מספר בלי תקופה נקרא כאילו הוא כל-זמני, וזו הטעיה.
-• ⭐ "טבלת <תקופה>" = חצי שנה. "היסטוריה כוללת", "דירוג כללי", "שיא אישי כל הזמנים" = כל הזמנים. אל תערבב ביניהם.
-• "שיא" בלי תקופה צמודה = השיא הכל-זמני בלבד. לניצחון הגדול של המחצית כתוב "שיא חציוני של 379" או "הניצחון הגדול שלו בחציון שני" — לא "שיא של 379".
+━━━ דיוק: לכל שיא או מספר חובה להצמיד ייחוס תקופה ברור! ━━━
+חובה מוחלטת להבחין בין 3 סוגי שיאים ולהשתמש בייחוס המדויק:
+1. 🌟 שיא כל הזמנים: מותר להשתמש ב"שיא כל הזמנים", "שיא קריירה", "הניצחון הגדול ביותר אי פעם" או "הרצף הארוך בקריירה" אך ורק אם מופיע בכרטיס במפורש כשיא כל הזמנים!
+2. 📅 שיא שנתי (ב-${currentYear}): חובה לציין במפורש "שיא שנתי ב-${currentYear}", "הרצף הטוב ביותר שלו ב-${currentYear}", או "הניצחון הגדול ביותר שלו השנה".
+3. ⭐ שיא חציוני (ב${currentPeriodLabel}): חובה לציין במפורש "שיא חציוני", "בחציון הנוכחי", או "הניצחון הגדול שלו ב${currentPeriodLabel}".
+🚫 איסור מוחלט על שימוש במילה "שיא" בלי שם התקופה צמוד אליה! קורא שרואה "שיא של 379 שקלים" או "רצף שיא" מניח שזה שיא כל הזמנים ההיסטורי של השחקן, וזו הטעיה אם זה שיא חציוני או שנתי.
+🎯 פיקנטיות וקרבה לשיא: אם השחקן קרוב לשבירת או השוואת שיא (מרחק ניצחון אחד משיא כל הזמנים / שיא שנתי / שיא חציון), או קבע שיא במשחק האחרון ("← נקבע במשחק האחרון!") — זוהי נקודת שיא עלילתית מרתקת, הדגש אותה עם ייחוס התקופה המדויק!
 • תוצאה טובה במשחק האחרון היא תוצאה, לא שיא — אלא אם מסומן "← נקבע במשחק האחרון!".
 • 🏅 "מצטייני הערב" הם הטובים מבין משתתפי הערב בלבד, לא שיאי קבוצה.
 • דירוג: מקום 1 = הכי טוב. "מוביל" = מקום 1, "רודף" = מנסה לעלות, "שומר" = מגן על מקומו.
