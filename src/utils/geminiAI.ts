@@ -183,14 +183,14 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
             const rlHeaders = readRateLimitHeaders(response);
             recordRateLimit(config.model, rlHeaders, errMsg);
             if (!fallbackFrom) fallbackFrom = config.model;
-            continue;
+            break;
           }
           if (response.status === 404 || response.status === 503) {
             if (!fallbackFrom) fallbackFrom = config.model;
-            continue;
+            break;
           }
           if (response.status === 400 && errMsg.includes('API key')) throw new Error('INVALID_API_KEY');
-          continue;
+          break;
         }
 
         const data = await response.json();
@@ -732,16 +732,18 @@ const generateMissingTeaser = async (
   styleDesc: string,
   periodContext: string,
   apiKey: string,
+  comboHistoryText?: string,
 ): Promise<string> => {
   const prompt = `אתה ${styleDesc}. כתוב טיזר טרום-משחק קצר ומרתק (40-90 מילים) לפתיחת ערב פוקר.
-${periodContext ? `אירוע: ${periodContext}\n` : ''}
+${periodContext ? `אירוע: ${periodContext}\n` : ''}${comboHistoryText ? `היסטוריית הרכב: ${comboHistoryText}\n` : ''}
 רשימת כל שחקני הערב (${players.length} שחקנים): ${players.map(p => p.name).join(', ')}.
 
 דרישות ברזל:
 1. חובה מוחלטת להזכיר את כל ${players.length} השחקנים בשמם המלא: ${players.map(p => p.name).join(', ')}!
-2. שלב אותם בעלילה ובמתח לקראת המשחק.
-3. אל תשתמש במילים "הערב/היום/הלילה" (הטיזר נקרא מראש — השתמש ב"הפעם", "במשחק הקרוב").
-4. החזר אך ורק את טקסט הטיזר (פסקה אחת רציפה).`;
+2. אם מופיע גרעין שולחן ותיק של שחקנים ששיחקו יחד בעבר, שלב זאת במפורש בפתיח עם השחקנים שמצטרפים אליהם. לעולם אל תטען שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק!
+3. שלב אותם בעלילה ובמתח לקראת המשחק.
+4. אל תשתמש במילים "הערב/היום/הלילה" (הטיזר נקרא מראש — השתמש ב"הפעם", "במשחק הקרוב").
+5. החזר אך ורק את טקסט הטיזר (פסקה אחת רציפה).`;
 
   try {
     const { text } = await callWithFallback({
@@ -781,12 +783,12 @@ const retryMissingForecastText = async (
 ${cards}${buildRejectionBlock(missingNames, rejectionByName)}
 
 לכל שחקן:
-• highlight — כותרת קצרה (3-6 מילים), חייבת להתאים במדויק לכיוון החיזוי הנעול: חיובי (רווח) → כותרת על הצלחה/עלייה/פריצה; שלילי (הפסד) → כותרת על אתגר/סכנה/מגננה (אסור כותרת מנצחת כמו "בדרך לניצחון" מול חיזוי שלילי!).
-• sentence — משפט אחד בעברית (20-40 מילים) של פרשנות ספורט איכותית המתחברת לכיוון החיזוי הנעול (🔒) דרך הזווית העלילתית (🎯):
-  - בחיזוי חיובי: תאר עמדת כוח, מומנטום חיובי, יתרון פסיכולוגי, עליונות במצ'אפ או יציבות שמובילים להצלחה.
-  - בחיזוי שלילי: תאר לחץ הגנתי, שולחן קשוח, נוכחות נמסיס/יריב קשה, ירידה בכושר או צורך במשחק מבוקר.
-  - שילוב של 2-3 מספרים אמיתיים מהכרטיס כעוגנים עובדתיים.
-• אפס מטא-טקסט: אסור בהחלט לכתוב "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מצדיק את הצפי" וכדומה! כתוב פרשנות פוקר טבעית בלבד.
+• highlight — כותרת קצרה וקולעת (3-5 מילים), חייבת להתאים במדויק לכיוון החיזוי הנעול: חיובי (רווח) → כותרת על הצלחה/עלייה/פריצה; שלילי (הפסד) → כותרת על אתגר/סכנה/מגננה (אסור בשום אופן כותרת מנצחת מול חיזוי שלילי!).
+• sentence — פסקה קולעת, ממוקדת וספורטיבית (כ-35–55 מילים בלבד, 2–3 משפטים) של פרשנות פוקר חדה המתחברת ישירות לכיוון החיזוי הנעול (🔒):
+  - בחר 2 או 3 נתונים משמעותיים ובולטים בלבד מכרטיס השחקן (מומנטום/רצף, מצ'אפ H2H ישיר מול יריב בערב, פער כספי או מעמד בטבלה).
+  - שקף בצורה ברורה את כיוון החיזוי: רווח = עוצמה, עמדת כוח והמשך תנופה; הפסד = בלימת נפילה, זהירות טקטית ומאבק בשולחן קשוח.
+  - 10,000% דיוק עובדתי: כל נתון ומספר חייב להגיע מכרטיס השחקן!
+• אפס מטא-טקסט: אסור בהחלט לכתוב "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מצדיק את הצפי", "לפי המודל" וכדומה! כתוב פרשנות ספורט טבעית בלבד.
 • שחקן מארח (🏠): חובה לנתח כשחקן פוקר מלא לפי נתוניו והאתגרים שלו בשולחן — עובדת האירוח היא רק רקע, אסור שתחליף ניתוח פוקר!
 • אסור להזכיר את מספר החיזוי עצמו במשפט; אסור "הערב/היום/הלילה" או תאריך — השתמש ב"הפעם", "במשחק הקרוב".
 • שחקן חדש → כתוב שהוא חדש, אל תמציא מספרים.
@@ -1620,9 +1622,21 @@ export const generateAIForecasts = async (
   console.log(`📏 Strength scores: ${[...strengthScores].sort((a, b) => b.score - a.score).map(s => `${s.name}(${Math.round(s.score)})`).join(' > ')}`);
   console.log(`🎯 Assigned order: ${orderedPlayers.map(s => s.name).join(' > ')}`);
 
-  const surpriseNames = new Set(selectedSurprises.map(s => s.name));
-  const surpriseText = selectedSurprises.length > 0 
-    ? `\n🎲 הפתעות (שחקנים אלו מסומנים כהפתעה — הטון שלהם צריך לשקף את זה):\n` + selectedSurprises.map(s => `- ${s.name}: ${s.description}`).join('\n')
+  const validSurprises = selectedSurprises.filter(s => {
+    const sug = playerSuggestions.find(p => p.name === s.name)?.suggested || 0;
+    if (s.type === 'streak_breaker') {
+      const pl = players.find(p => p.name === s.name);
+      if (!pl) return false;
+      return pl.currentStreak < 0 ? sug > 0 : sug < 0;
+    }
+    if (s.type === 'underdog_rise' || s.type === 'breakout' || s.type === 'dark_horse') return sug > 0;
+    if (s.type === 'top_dog_fall') return sug < 0;
+    return true;
+  });
+
+  const surpriseNames = new Set(validSurprises.map(s => s.name));
+  const surpriseText = validSurprises.length > 0 
+    ? `\n🎲 הפתעות (שחקנים אלו מסומנים כהפתעה — הטון שלהם צריך לשקף את זה):\n` + validSurprises.map(s => `- ${s.name}: ${s.description}`).join('\n')
     : '';
   
   // Pre-calculate year profit for all players to sort by 2026 ranking
@@ -1698,19 +1712,19 @@ export const generateAIForecasts = async (
     const n = `${prediction >= 0 ? '\u200E+' : ''}${prediction}`;
     if (prediction >= 40) return {
       tone: 'confident',
-      toneHint: `מגמה חיובית חזקה (${n} ש״ח): הצג עמדת כוח, שליטה או מומנטום מובהק. כותרת של עוצמה/עלייה. (אפס מטא-טקסט!)`
+      toneHint: `מגמה חיובית חזקה (${n} ש״ח): הצג עמדת כוח, שליטה, יתרון במצ'אפים הישירים או מומנטום מובהק. כותרת ופסקה של עוצמה/עלייה. (אפס מטא-טקסט!)`
     };
     if (prediction > 0) return {
       tone: 'edge',
-      toneHint: `מגמה חיובית מתונה (${n} ש״ח): הצג יתרון טקטי קל בקרב שקול. כותרת חיובית מתונה. (אפס מטא-טקסט!)`
+      toneHint: `מגמה חיובית מתונה (${n} ש״ח): הצג יתרון טקטי, עליונות קלה במצ'אפים או הזדמנות פריצה בקרב שקול. כותרת ופסקה חיוביות. (אפס מטא-טקסט!)`
     };
     if (prediction > -40) return {
       tone: 'tilt',
-      toneHint: `מגמת אתגר מתונה (${n} ש״ח): הצג לחץ הגנתי, שולחן קשוח או צורך בערנות. כותרת של זהירות/אתגר. (אפס מטא-טקסט!)`
+      toneHint: `מגמת אתגר והפסד מתון (${n} ש״ח): חובה לשקף לחץ הגנתי, שולחן קשוח או יריבים שמקשים עליו שצפויים לקחת ממנו מחיר כספי. כותרת ופסקה של זהירות/אתגר/ספיגה, ללא שום אופטימיות או דיבור על קאמבק/שבירת בצורת. (אפס מטא-טקסט!)`
     };
     return {
       tone: 'underdog',
-      toneHint: `מגמת קושי משמעותית (${n} ש״ח): הצג מבחן בלימה קשוח או סכנת נפילה. כותרת של אתגר/מבחן קשה, בלי חגיגת ניצחון. (אפס מטא-טקסט!)`
+      toneHint: `מגמת קושי והפסד מובהק (${n} ש״ח): חובה לשקף הפסד כספי צפוי, שחיקה, מצ'אפים קשים או המשך רצף שלילי שיגבו ממנו מחיר כספי הערב. המאבק של השחקן הוא על מזעור נזקים ובלימת הידרדרות בלבד! איסור מוחלט על ביטויי אופטימיות, קאמבק, שינוי כיוון, נקודת מפנה או "שבירת בצורת"! (אפס מטא-טקסט!)`
     };
   };
 
@@ -1816,8 +1830,8 @@ export const generateAIForecasts = async (
           : `רצף של ${p.currentStreak} נצחונות ניצב בסכנה מול שולחן אגרסיבי — רמת קושי גבוהה שמסכנת את המומנטום`);
       } else {
         assign('streak', isPositive
-          ? `התאוששות מרצף של ${Math.abs(p.currentStreak)} הפסדים — זיהוי הזדמנות לשבירת הבצורת ופתיחת דף חדש`
-          : `בצורת מתמשכת של ${Math.abs(p.currentStreak)} הפסדים — לחץ מצטבר וקושי לייצר מומנטום חיובי מול יריבים חדים`);
+          ? `התאוששות מרצף של ${Math.abs(p.currentStreak)} הפסדים — זיהוי הזדמנות לשבירת הבצורת וחזרה למסלול הנצחונות`
+          : `המשך לחץ ושחיקה מרצף של ${Math.abs(p.currentStreak)} הפסדים — המומנטום השלילי והיריבים הקשים צפויים להמשיך לגבות מחיר כספי בשולחן, כשהמאבק הוא על בלימה ומזעור נזקים בלבד ללא שום הבטחה לשבירת בצורת`);
       }
     } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
       assign('ranking_battle', isPositive
@@ -1971,18 +1985,78 @@ export const generateAIForecasts = async (
         lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
       }
     }
+
+    // Directional head-to-head matchup facts against tonight's opponents
+    const playerH2H = h2hResults
+      .filter(h => (h.a === p.name || h.b === p.name) && h.sharedGames >= 2)
+      .map(h => {
+        const isA = h.a === p.name;
+        const oppName = isA ? h.b : h.a;
+        const myWins = isA ? h.aWins : h.bWins;
+        const oppWins = isA ? h.bWins : h.aWins;
+        const myProfit = isA ? h.aTotalProfit : h.bTotalProfit;
+        const oppProfit = isA ? h.bTotalProfit : h.aTotalProfit;
+        const myConsec = isA ? h.aConsecutiveWins : h.bConsecutiveWins;
+        const oppConsec = isA ? h.bConsecutiveWins : h.aConsecutiveWins;
+        const profitGap = myProfit - oppProfit;
+        return {
+          oppName,
+          sharedGames: h.sharedGames,
+          myWins,
+          oppWins,
+          profitGap,
+          myConsec,
+          oppConsec,
+        };
+      });
+
+    if (suggestion < 0) {
+      const toughMatchups = playerH2H.filter(m =>
+        m.oppWins > m.myWins || m.profitGap <= -80 || m.oppConsec >= 2
+      ).sort((a, b) => a.profitGap - b.profitGap);
+
+      if (toughMatchups.length > 0) {
+        const topTough = toughMatchups.slice(0, 2).map(m => {
+          if (m.oppConsec >= 2) return `ספג ${m.oppConsec} הפסדים רצופים מול ${m.oppName}`;
+          if (m.profitGap <= -100) return `בפיגור של ${Math.abs(Math.round(m.profitGap))} שקלים מול ${m.oppName}`;
+          return `מאזן שלילי של ${m.oppWins}:${m.myWins} לרעתו מול ${m.oppName}`;
+        }).join('; ');
+        lines.push(`⚠️ מצ'אפים קשים מול שחקני הערב: ${topTough}`);
+      }
+
+      if (actualStreak >= 2) {
+        lines.push(`⚠️ רצף של ${actualStreak} נצחונות ניצב בסכנת שבירה ממשית הערב מול שולחן קשוח — חובה להדגיש את סכנת קטיעת הרצף והלחץ ההגנתי, ואסור בשום אופן לחגוג ניצחון או לתאר כמי שבדרך לניצחון!`);
+      } else if (actualStreak <= -2) {
+        lines.push(`⚠️ רצף שלילי של ${Math.abs(actualStreak)} הפסדים — המומנטום השלילי והמצ'אפים צפויים להמשיך להכביד עליו ולגבות מחיר כספי; הטקסט חייב לשקף המשך שחיקה והגנה, ואסור בשום אופן להבטיח מהפך, שינוי כיוון או "שבירת בצורת"!`);
+      }
+    } else if (suggestion > 0) {
+      const favorableMatchups = playerH2H.filter(m =>
+        m.myWins > m.oppWins || m.profitGap >= 80 || m.myConsec >= 2
+      ).sort((a, b) => b.profitGap - a.profitGap);
+
+      if (favorableMatchups.length > 0) {
+        const topFav = favorableMatchups.slice(0, 2).map(m => {
+          if (m.myConsec >= 2) return `מחזיק ברצף של ${m.myConsec} נצחונות על ${m.oppName}`;
+          if (m.profitGap >= 100) return `מוביל בפער של ${Math.round(m.profitGap)} שקלים מול ${m.oppName}`;
+          return `מאזן עדיף של ${m.myWins}:${m.oppWins} לטובתו מול ${m.oppName}`;
+        }).join('; ');
+        lines.push(`🔥 יתרונות ומצ'אפים חיוביים הערב: ${topFav}`);
+      }
+    }
+
     const isHost = isHostPlayer(p.name, location);
     if (isHost) {
       lines.push(`🏠 שחקן מארח: שים לב! חובה מוחלטת לנתח אותו כשחקן פוקר מלא על פי כל נתוניו (דירוג, רצף, יריבויות, כושר)! עובדת האירוח היא לכל היותר תבלין קל ברקע (כמו "במגרש הביתי"), ואסור בשום אופן שתחליף ניתוח פוקר מקצועי ועמוק.`);
     }
-    lines.push(`🔒 כיוון החיזוי הנעול: ${suggestion >= 0 ? '\u200E+' : ''}${suggestion} (${suggestion > 0 ? 'מגמת רווח' : suggestion < 0 ? 'מגמת הפסד/אתגר' : 'מאוזן'}) — אסור לנקוב במספר עצמו בטקסט!`);
-    lines.push(`🎯 זווית עלילתית למשפט: ${angle?.angleHint || ''}`);
+    lines.push(`🔒 כיוון החיזוי הנעול: ${suggestion >= 0 ? '\u200E+' : ''}${suggestion} (${suggestion > 0 ? 'מגמת רווח / עמדת כוח' : suggestion < 0 ? 'מגמת הפסד / מבחן קושי והגנה' : 'מאוזן'}) — אסור לנקוב במספר עצמו בטקסט!`);
+    lines.push(`🎯 זווית עלילתית לפסקה: ${angle?.angleHint || ''}`);
     lines.push(`🎭 טון ומסגור: ${angle?.toneHint || ''}`);
 
     console.log(`🔍 ${p.name}: angle=${angle?.angle}, tone=${angle?.tone}, suggestion=${suggestion >= 0 ? '+' : ''}${suggestion}`);
 
     const card = lines.join('\n');
     playerCardByName.set(p.name, card);
+    return card;
   }).join('\n\n');
 
   // Build period context for the prompt
@@ -2047,7 +2121,7 @@ ${traitBlock}${surpriseText}
 • שלב את כל השחקנים בעלילה: מי שמוביל, מי שרודף, מי שמגן, מי שנמצא ביריבות ראש-בראש, ומי שמגיע לחולל מהפך
 • המארח בשולחן: אם אחד השחקנים מארח${location ? ` (${location})` : ''}, הוא דמות פוקר מרכזית בעלילה בדיוק כמו כולם! שלב אותו כשחקן פוקר מלא לפי נתוניו, רצפיו והאתגרים שלו בשולחן, ולא רק כמי שמעמיד את הבית.${locationInsightsText ? `\n• תובנות מיקום (🏠): שלב אותן רק אם הן מעניינות ומפתיעות. אל תזכיר מיקום סתם כעובדה יבשה.` : ''}
 • העדף סיפורים ויריבויות על פני סטטיסטיקות יבשות
-• אם יש מידע על הרכב חוזר (🔄) — זה חומר מצוין לטיזר! ציין שזה הרכב שכבר שיחק יחד, מי שלט בפעמים הקודמות, מי תמיד ברווח/הפסד בהרכב הזה. אם זה הרכב חדש (🆕) — ציין שזו פעם ראשונה
+• שילוב גרעין השולחן הוותיק בפתיח (חובה!): אם מוצג מידע על גרעין שולחן ותיק (🔄 - למשל 6 מתוך 8 שחקנים שחלקו 15 משחקים בעבר), חובה לפתוח את הטיזר או לשלב בו במפורש את העובדה הזו! למשל: לציין את השלד המרכזי הוותיק ששיחק יחד המון פעמים, לצד השחקנים שמצטרפים אליהם הפעם לטרוף את הקלפים. לעולם אל תטען בטעות שכל השולחן נפגש בפעם הראשונה כשיש גרעין ותיק! רק אם מופיע "הרכב חדש באמת" (🆕) ללא שום גרעין ותיק, ציין שזה הרכב חדש לחלוטין.
 • לא לחזור על עובדות שיופיעו ב-sentence של שחקנים ספציפיים — פזר חומר שונה
 • חשוב מאוד: הטיזר נשלח מספר ימים לפני המשחק! אסור לכתוב "הלילה", "הערב", "היום" או לציין תאריך/יום ספציפי. השתמש ב"הפעם", "במשחק הבא", "במשחק הקרוב" וכדומה. זה חל על הטיזר וגם על ה-sentence של כל שחקן
 
@@ -2061,34 +2135,44 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • הפסקה הזו מעבר לטיזר הרגיל, לא במקומו` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 לכל שחקן: highlight (כותרת, 3-6 מילים) + sentence (משפט אחד, 20-40 מילים)
+📝 לכל שחקן: highlight (כותרת חדה, 3-5 מילים) + sentence (פסקה קולעת, ממוקדת וספורטיבית, כ-35–55 מילים, 2–3 משפטים בלבד):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-חיבור עלילתי אורגני לכיוון החיזוי (טבעי, מעניין ונטול מטא-טקסט):
-כל שחקן מקבל משפט פוקר חי, מעניין ומנומק שמבוסס על הנתונים שלו ומתחבר לכיוון הערב.
-השחקן שקורא מבין באופן טבעי מה עומד לקרות סביבו:
+חיבור עלילתי ונתוני הדוק לכיוון החיזוי (מדויק, חד, ממוקד על 2–3 נתונים ונטול מטא-טקסט):
+כל שחקן מקבל פסקת ניתוח פוקר קולעת, מדויקת ומהודקת (35–55 מילים בלבד! לא ארוכה ומייגעת).
+בחר 2 או 3 נתונים משמעותיים ובולטים בלבד מכרטיס השחקן, ובנה עליהם את הפסקה (2–3 משפטים זורמים):
+1. נתון 1: מצב נוכחי, מומנטום, רצף או מעמד בטבלה.
+2. נתון 2: הנימוק הנתוני המרכזי שמסביר את כיוון הערב — מצ'אפ H2H ישיר מול יריב בערב (מאזן נצחונות, פער כספי או רצף ישיר), פער נקודות בטבלה, או נתון בית/חוץ.
+3. מסקנה / מבחן טקטי: משפט סיום שקושר את הנתונים ישירות לכיוון התחזית (רווח = ניצול עמדת כוח והמשך דומיננטיות; הפסד = בלימת נפילה, זהירות טקטית ומאבק בשולחן קשוח).
 
 1. כיוון רווח (פלוס):
-   המשפט מתאר עמדת כוח, יתרון פסיכולוגי, מומנטום חיובי, עליונות במצ'אפ מול יריב, או יציבות שמובילים אותו להצלחה.
+   הפסקה מתארת עמדת כוח, יתרונות במצ'אפים מול שחקני הערב, מומנטום חיובי, שליטה פסיכולוגית או יציבות שמובילים להצלחה.
    הכותרת (highlight) משקפת פריצה, טיפוס, ביצור מעמד או עוצמה בשולחן.
-   איסור: אל תתאר אותו כמי שמתקשה, כספונסר או כמי שנמצא במשבר.
+   איסור מוחלט: אל תתאר אותו כמי שמתקשה, כספונסר או כמי שנמצא במגננה ונפילה.
 
-2. כיוון הפסד/אתגר (מינוס):
-   המשפט מתאר לחץ הגנתי, שולחן רודף ואגרסיבי, נוכחות נמסיס/יריב קשה, ירידה ביציבות, או מאבק הישרדות.
-   הכותרת (highlight) משקפת מבחן קשה, זהירות, סכנת נפילה או לחץ כבד.
-   איסור: אל תחגוג ניצחון או פריצה אופטימית.
+2. כיוון הפסד/אתגר (מינוס — צפי להפסד כספי!):
+   הפסקה חייבת להרגיש בבירור כמו תחזית להפסד! היא מנמקת מדוע השחקן צפוי להפסיד ולשלם מחיר כספי הערב: שולחן קשוח, מצ'אפים ישירים שבהם הוא נחות, מומנטום שלילי שממשיך לשחוק אותו, או לחץ הגנתי כבד.
+   הטקסט משקף מאבק שחיקה ומזעור נזקים בלבד — התמודדות שמטרתה למנוע קריסה עמוקה יותר.
+   הכותרת (highlight) משקפת מבחן קשה, לחץ כבד, סכנת נפילה או מאבק שחיקה (למשל: "מאבק שחיקה מול מוקשים", "לחץ כבד במבחן הגנתי", "סכנת שחיקה נוספת").
+   🚫 איסורים מוחלטים למספר שלילי (ללא פשרות!):
+   • אסור בשום אופן להבטיח מהפך או לכתוב ביטויים כמו: "לשבור את הבצורת", "שבירת בצורת", "הזדמנות לקאמבק", "שינוי כיוון", "נקודת מפנה", "יציאה לדרך חדשה" או "לנצל הזדמנויות לשבירת הרצף"! (ביטויי שבירת בצורת מותרים אך ורק לשחקן עם תחזית חיובית!).
+   • אסור לחגוג ניצחון או לתאר אותו כמועמד לנצח.
 
-3. אפס מטא-טקסט וביטויי מודל (אילוץ קריטי — ללא פשרות!):
+3. דרישת דיוק ברזל: 10,000% דיוק עובדתי!
+   כל מספר, שם, מאזן ורצף שמופיעים בפסקה חייבים להגיע ב-100% מתוך כרטיס השחקן!
+   אסור בתכלית האיסור להמציא נתונים, לנחש יריבויות שלא קיימות, או לעוות מספרים.
+
+4. אפס מטא-טקסט וביטויי מודל (אילוץ קריטי — ללא פשרות!):
    אסור בהחלט להשתמש בביטויי מטא כגון: "וזה מסביר את התחזית", "זה מחזק את המספר", "מנמק את החיזוי", "מה שמסביר את התחזית", "מצדיק את הצפי", "לפי המודל" וכדומה!
    כתוב אך ורק כפרשן ספורט פנימי של השולחן. העלילה, הנתונים והיריבויות מדברים בעד עצמם ומעבירים את המסר באופן עקיף, חכם ומרתק.
-   דוגמה מעולה (חיובי): "אחרי שסגר פער של 28 שקלים מדן בטבלת החציון ומחזיק במומנטום של שני נצחונות, גיא מגיע בעמדת זינוק מעולה להשתלט על השולחן"
-   דוגמה מעולה (שלילי): "עם יתרון שברירי של 15 שקלים בלבד על קובי ושולחן שנושף בעורפו, אבירם ניצב בפני מבחן בלימה קשוח שדורש ממנו ערנות שיא"
+   דוגמה מעולה (חיובי): "אחרי שסגר פער של 28 שקלים מדן בטבלת החציון ומחזיק במומנטום של שני נצחונות, גיא מגיע בעמדת זינוק מעולה להשתלט על השולחן. המאזן העדיף שלו מול יריבי הערב והשליטה בקצב מעניקים לו יתרון פסיכולוגי ברור בדרך לפריצה נוספת."
+   דוגמה מעולה (שלילי): "עם יתרון שברירי של 15 שקלים בלבד על קובי ושולחן שנושף בעורפו, אבירם ניצב בפני מבחן בלימה קשוח שדורש ממנו ערנות שיא. מאזן שלילי מול שחקני המפתח בשולחן מעמיד אותו בעמדת מגננה, והוא יצטרך להימנע מהרפתקאות כדי לא להידרדר."
 
-4. גיוון וערך מוסף — כל שחקן מקבל זווית שונה ומבנה אחר:
+5. גיוון וערך מוסף — כל שחקן מקבל זווית שונה ומבנה אחר:
    • אין שתי כותרות דומות ואין שני משפטים עם אותו מבנה.
    • לכל שחקן נבחרה זווית עלילתית (🎯): יריבות ראש-בראש (🥊/⚔️), רצף פעיל (🔥), מאבק דירוג (🏆), כושר חציוני (⭐), משחק קודם, או הגנה.
    • אל תחזור על אותם ביטויים שחוקים ("מגיע רעב", "נחוש להוכיח", "הזדמנות פז", "X שקלים בלבד"). גוון בניסוחים ובנקודות המבט.
-   • כל שחקן מקבל אותה רמת השקעה ואיכות, מראשון השחקנים ועד האחרון. משפט קצר מ-20 מילים לא מתקבל.
+   • כל שחקן מקבל אותה רמת השקעה ואיכות, מראשון השחקנים ועד האחרון.
 
 5. שחקן מארח (🏠):
    אם שחקן הוא המארח, חובה לנתח אותו לעומק כשחקן פוקר מלא על פי נתוניו, ביצועיו, יריביו ומעמדו בטבלה בדיוק כמו כל שחקן אחר!
@@ -2242,7 +2326,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         // Ensure preGameTeaser exists and mentions 100% of the participants
         if (!preGameTeaser && players.length > 0) {
           console.log('⚠️ preGameTeaser missing from AI response, generating teaser...');
-          preGameTeaser = await generateMissingTeaser(players, chosenStyle, periodContextText, apiKey);
+          preGameTeaser = await generateMissingTeaser(players, chosenStyle, periodContextText, apiKey, comboHistoryText);
         } else if (preGameTeaser) {
           preGameTeaser = await ensureTeaserMentionsAllPlayers(preGameTeaser, players, apiKey);
         }
@@ -2610,15 +2694,38 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const hasHedge = hedgeWords.test(correctedSentence);
         
         // Negative prediction: block celebratory tone or claims of victory.
-        const claimsVictory = /(?:הולך לנצח|ינצח|בדרך לניצחון|ניצחון נוסף|עוד ניצחון|ערב ירוק|יעקוף את|ירוויח הערב|יחגוג הערב|ימשיך לנצח|ימשיך את הרצף)/.test(correctedSentence);
-        if (predictedProfit < 0 && (claimsVictory || (hasOptimistic && !hasPessimistic)) && !hasHedge) {
+        const claimsVictory = /(?:הולך לנצח|ינצח|בדרך לניצחון|ניצחון נוסף|עוד ניצחון|ערב ירוק|יעקוף את|ירוויח הערב|יחגוג הערב|ימשיך לנצח|ימשיך את הרצף|להשלים ניצחון|להבטיח ניצחון|בדרך לרצף|לשמור על המומנטום|בדרך לפסגה|בדרך לעוד ניצחון|ישלים ניצחון|יבטיח ניצחון|מומנטום אדיר|רצף היסטורי)/.test(correctedSentence);
+        if (predictedProfit < 0 && claimsVictory) {
+          errorDetails.push(`tone_mismatch: optimistic text (claims victory) but predicted ${predictedProfit} — replacing`);
+          correctedSentence = '';
+        } else if (predictedProfit < 0 && (hasOptimistic && !hasPessimistic) && !hasHedge) {
           errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit} — replacing`);
           correctedSentence = '';
         }
 
+        // Negative prediction: block turnaround / drought-breaking / comeback promises
+        if (predictedProfit < 0 && correctedSentence) {
+          const turnaroundMatches = /(?:ולנסות\s*)?(?:לנצל\s*הזדמנויות\s*(?:ל|של\s*)?)?(?:שבירת|לשבור)\s*את?\s*ה?בצורת|בנקודת\s*קצה\s*הדורשת\s*שינוי\s*כיוון\s*מיידי|נקודת\s*מפנה|הזדמנות\s*לקאמבק|שינוי\s*כיוון\s*מיידי|יציאה\s*לדרך\s*חדשה/.test(correctedSentence);
+          if (turnaroundMatches) {
+            errorDetails.push(`turnaround_on_negative: turnaround phrasing with negative prediction (${predictedProfit}) — repairing`);
+            correctedSentence = correctedSentence
+              .replace(/(?:ולנסות\s*)?לנצל\s*הזדמנויות\s*(?:ל|של\s*)?שבירת\s*ה?בצורת/g, 'ולנסות למזער נזקים כספיים נוספים')
+              .replace(/(?:לשבור|שבירת|לשבירת)\s*את?\s*ה?בצורת/g, 'למזער נזקים')
+              .replace(/בנקודת\s*קצה\s*הדורשת\s*שינוי\s*כיוון\s*מיידי/g, 'תחת לחץ שחיקה מתמשך')
+              .replace(/(?:שינוי|לשנות)\s*כיוון\s*מיידי/g, 'זהירות טקטית מרבית')
+              .replace(/נקודת\s*מפנה/g, 'מבחן הגנתי')
+              .replace(/הזדמנות\s*לקאמבק/g, 'מבחן בלימה')
+              .replace(/יציאה\s*לדרך\s*חדשה/g, 'משמעת הגנתית')
+              .replace(/\s+/g, ' ').trim();
+          }
+        }
+
         // Positive prediction: block defeatist tone or claims of loss.
-        const claimsDefeat = /(?:הולך להפסיד|יפסיד|עוד הפסד|ערב שחור|יקרוס|יתרסק|ספונסר הערב|יספוג הפסד|ימשיך להפסיד)/.test(correctedSentence);
-        if (predictedProfit > 0 && (claimsDefeat || (hasPessimistic && !hasOptimistic)) && !hasHedge) {
+        const claimsDefeat = /(?:הולך להפסיד|יפסיד|עוד הפסד|ערב שחור|יקרוס|יתרסק|ספונסר הערב|יספוג הפסד|ימשיך להפסיד|בדרך להפסד|ימשיך את רצף ההפסדים)/.test(correctedSentence);
+        if (predictedProfit > 0 && claimsDefeat) {
+          errorDetails.push(`tone_mismatch: pessimistic text (claims defeat) but predicted \u200E+${predictedProfit} — replacing`);
+          correctedSentence = '';
+        } else if (predictedProfit > 0 && (hasPessimistic && !hasOptimistic) && !hasHedge) {
           errorDetails.push(`tone_mismatch: pessimistic text but predicted \u200E+${predictedProfit} — replacing`);
           correctedSentence = '';
         }
@@ -2627,7 +2734,8 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const hl = correctedHighlight;
         const successImageryInHighlight = [
           'גלים', 'הצלחה', 'רוכב', 'בפסגה', 'לפסגה', 'שורף', 'בוער', 'דומיננט', 'מלכות', 'כובש', 'מוביל',
-          'מלך הערב', 'שולט', 'נושא גביע', 'בשיא הכושר', 'מומנטום', 'רוח גבית',
+          'מלך הערב', 'שולט', 'נושא גביע', 'בשיא הכושר', 'מומנטום', 'רוח גבית', 'לוהט', 'רצף היסטורי',
+          'בדרך לרצף', 'בדרך לניצחון', 'להשלים ניצחון', 'רצף נצחונות', 'מומנטום לוהט',
           'נצחון', 'ניצחון', 'מנצח', 'מנצחת', 'לנצח', 'ערב ירוק', 'עקיפה', 'זינוק', 'חוגג', 'עלייה',
           'ממשיך לנצח', 'רצף מנצח', 'דריסה', 'דורס'
         ];
@@ -2640,20 +2748,21 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const stakeHighlight = (): string => {
           const nbH = halfNeighbourhood(player.name);
           if (predictedProfit < 0) {
+            if (actualStreak >= 2) return `רצף ${actualStreak} בסכנה`;
+            if (actualStreak <= -3) return `מאבק שחיקה ובלימה`;
             if (nbH?.below && nbH.below.gap > 0) return `מגן על מקום ${rankTonight}`;
             if (nbH?.above && nbH.above.gap > 0) return `פער מ${nbH.above.name}`;
-            if (actualStreak >= 3) return `רצף ${actualStreak} בסכנה`;
             return `מבחן קשה הערב`;
           } else {
+            if (actualStreak >= 2) return `רצף ${actualStreak} נמשך`;
             if (nbH?.above && nbH.above.gap > 0) return `במרחק ${nbH.above.gap} מ${nbH.above.name}`;
             if (actualStreak <= -3) return `מחפש לשבור את הרצף`;
-            if (actualStreak >= 2) return `רצף ${actualStreak} נמשך`;
             return `הזדמנות לעלייה`;
           }
         };
 
-        if (predictedProfit < 0 && successImageryInHighlight.some(m => hl.includes(m))) {
-          errorDetails.push(`highlight_sign: success imagery with negative prediction (${predictedProfit})`);
+        if (predictedProfit < 0 && (successImageryInHighlight.some(m => hl.includes(m)) || /(?:בצורת|שבירת|קאמבק|מהפך|שינוי\s*כיוון)/.test(hl))) {
+          errorDetails.push(`highlight_sign: success or turnaround imagery with negative prediction (${predictedProfit})`);
           correctedHighlight = stakeHighlight();
         } else if (predictedProfit > 0 && doomImageryInHighlight.some(m => hl.includes(m))) {
           errorDetails.push(`highlight_sign: doom imagery with positive prediction (+${predictedProfit})`);
@@ -2746,27 +2855,29 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
           const nbFallback = halfNeighbourhood(player.name);
           if (predictedProfit > 0) {
             if (nbFallback?.above && nbFallback.above.gap > 0) {
-              correctedSentence = `הפער של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מעניק לו מטרה ברורה ודחיפה חזקה לעקיפה בצמרת`;
+              correctedSentence = `הפער של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מעניק לו מטרה ברורה ודחיפה חזקה לעקיפה בצמרת. עם נתוני פתיחה יציבים ומשמעת בשולחן, הוא מגיע בעמדת זינוק מעולה לבסס עליונות.`;
             } else if (nbFallback?.below && nbFallback.below.gap > 0) {
-              correctedSentence = `יתרון של ${nbFallback.below.gap} שקלים מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מעניק לו עמדת שליטה וביטחון להמשיך להוביל`;
+              correctedSentence = `יתרון של ${nbFallback.below.gap} שקלים מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מעניק לו עמדת שליטה וביטחון להמשיך להוביל. עם שליטה בקצב ומשחק מחושב, יש לו הזדמנות מצוינת להגדיל את הפער.`;
             } else if (actualStreak >= 2) {
-              correctedSentence = `מומנטום חזק של ${actualStreak} נצחונות ברצף מספק לו רוח גבית ועליונות פסיכולוגית מול השולחן`;
+              correctedSentence = `מומנטום חזק של ${actualStreak} נצחונות ברצף מספק לו רוח גבית ועליונות פסיכולוגית מול השולחן. הכושר החיובי מאפשר לו להכתיב את מהלכי המשחק ולהמשיך בקו הדומיננטי.`;
             } else if (lastGameProfit > 0) {
-              correctedSentence = `ניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם מייצר תנופה חיובית ומציב אותו בעמדת זינוק מעולה`;
+              correctedSentence = `ניצחון של \u200E+${Math.round(lastGameProfit)} שקלים במשחק הקודם מייצר תנופה חיובית ומציב אותו בעמדת זינוק מעולה. הנתונים מראים יציבות וחדות שיכולות להכריע קופות משמעותיות הערב.`;
             } else {
-              correctedSentence = `יציבות מתמשכת ונתוני פתיחה טובים מעניקים לו יתרון טקטי בעל פוטנציאל להכריע קופות חשובות`;
+              correctedSentence = `יציבות מתמשכת ונתוני פתיחה טובים מעניקים לו יתרון טקטי בעל פוטנציאל להכריע קופות חשובות. מדובר בהזדמנות טובה לתרגם את הניסיון לעמדת כוח בשולחן.`;
             }
           } else {
             if (nbFallback?.below && nbFallback.below.gap > 0) {
-              correctedSentence = `יתרון שביר של ${nbFallback.below.gap} שקלים בלבד מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מציב אותו תחת לחץ הגנתי מול שולחן רודף`;
+              correctedSentence = `יתרון שביר של ${nbFallback.below.gap} שקלים בלבד מעל ${nbFallback.below.name} בטבלת ${currentPeriodLabel} מציב אותו תחת לחץ הגנתי מול שולחן רודף. שורת מצ'אפים קשוחים תחייב אותו למשמעת טקטית גבוהה כדי למנוע הידרדרות.`;
             } else if (nbFallback?.above && nbFallback.above.gap > 0) {
-              correctedSentence = `מרחק של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מחייב אותו לתמרן בזהירות מול תחרות עיקשת`;
+              correctedSentence = `מרחק של ${nbFallback.above.gap} שקלים מ${nbFallback.above.name} בטבלת ${currentPeriodLabel} מחייב אותו לתמרן בזהירות מול תחרות עיקשת. מול יריבים אגרסיביים בשולחן, הוא יידרש למשחק שקול ומבוקר כדי לצלוח את המפגש.`;
+            } else if (actualStreak >= 2) {
+              correctedSentence = `רצף של ${actualStreak} נצחונות ניצב בסכנה חמורה מול הרכב לוחמני שמחפש לעצור את המומנטום שלו. השולחן ידרוש ממנו זהירות מרבית וקריאת מצבים מדויקת כדי לשרוד את הלחץ.`;
             } else if (actualStreak <= -2) {
-              correctedSentence = `רצף של ${Math.abs(actualStreak)} הפסדים מכביד על הביטחון ומציב בפניו מבחן התאוששות מורכב`;
+              correctedSentence = `רצף של ${Math.abs(actualStreak)} הפסדים מכביד על מעמדו וצפוי להמשיך להכביד עליו גם הערב. מול שולחן קשוח, עיקר המאבק שלו יהיה בלימת הידרדרות נוספת ומזעור נזקים.`;
             } else if (lastGameProfit < 0) {
-              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי למנוע הידרדרות נוספת`;
+              correctedSentence = `הפסד של ${Math.abs(Math.round(lastGameProfit))} שקלים במשחק הקודם יחייב אותו למשחק זהיר במיוחד כדי למנוע הידרדרות נוספת. תנאי השולחן התחרותיים הערב מעמידים בפניו אתגר בלימה לא פשוט.`;
             } else {
-              correctedSentence = `תנאי שולחן תחרותיים ומאבק צמוד מול יריבים אגרסיביים דורשים ממנו ריכוז שיא וערנות מוגברת`;
+              correctedSentence = `תנאי שולחן תחרותיים ומאבק צמוד מול יריבים אגרסיביים דורשים ממנו ריכוז שיא וערנות מוגברת. מול לחץ מתמיד בשולחן, עליו לפעול בזהירות כדי לעבור את הערב בשלום.`;
             }
           }
           // errorDetails was collected at a dozen sites and never read, so a

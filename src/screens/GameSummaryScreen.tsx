@@ -2328,10 +2328,21 @@ const GameSummaryScreen = () => {
                 color: '#e2e8f0',
                 padding: '0.75rem',
                 borderRadius: '10px',
-                background: '#1e2e28',
-                border: '1px solid #1f5c35',
+                background: comboHistory.nearCombo ? '#1e293b' : '#1e2e28',
+                border: `1px solid ${comboHistory.nearCombo ? '#3b82f6' : '#1f5c35'}`,
               }}>
-                זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה שיחקו יחד!
+                {comboHistory.nearCombo ? (
+                  <div>
+                    <div style={{ fontWeight: 600, color: '#60a5fa', marginBottom: '0.25rem' }}>
+                      🔄 גרעין שולחן ותיק ({comboHistory.nearCombo.coreCount} מתוך {comboHistory.playerCount} שחקנים)
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בעבר, כשאליהם הצטרפו {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
+                    </div>
+                  </div>
+                ) : (
+                  <div>זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה שיחקו יחד!</div>
+                )}
               </div>
             ) : (
               <div style={{ direction: isRTL ? 'rtl' : 'ltr', textAlign: isRTL ? 'right' : 'left' }}>

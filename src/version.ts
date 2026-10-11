@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.5';
+export const APP_VERSION = '6.38.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,24 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.7',
+    date: '2026-10-11',
+    changes: [
+      '🎯 Negative forecasts enforce damage control',
+      '🚫 Banned turnaround language on losses',
+      '🛡️ Synchronized forecast surprises with signs',
+    ],
+  },
+  {
+    version: '6.38.6',
+    date: '2026-10-11',
+    changes: [
+      '🎯 Forecast tone matches prediction direction',
+      '📝 Richer data-grounded player forecast stories',
+      '🔄 Smart veteran lineup core detection',
+    ],
+  },
   {
     version: '6.38.5',
     date: '2026-10-11',

@@ -28,8 +28,16 @@ export interface ComboGameResult {
   results: { playerName: string; profit: number; rebuys: number }[];
 }
 
+export interface ComboNearMatch {
+  corePlayerNames: string[];
+  differingPlayerNames: string[];
+  gamesPlayedTogether: number;
+  coreCount: number;
+}
+
 export interface ComboHistory {
   isFirstTime: boolean;
+  nearCombo?: ComboNearMatch;
   previousGames: ComboGameResult[];
   playerStats: ComboPlayerStat[];
   totalGamesWithCombo: number;
@@ -82,8 +90,68 @@ export function getComboHistory(
   const playerNames = sortedIds.map(id => playerMap[id] || id);
 
   if (matchingGames.length === 0) {
+    let nearCombo: ComboNearMatch | undefined = undefined;
+    const N = sortedIds.length;
+    const gamePlayerSets: Set<string>[] = [];
+    for (const game of allGames) {
+      const gps = gpByGame[game.id];
+      if (gps) {
+        gamePlayerSets.push(new Set(gps.map(gp => gp.playerId)));
+      }
+    }
+
+    if (N >= 5) {
+      let bestNMinus1: { coreIds: string[]; diffId: string; count: number } | null = null;
+      let maxNMinus1Count = 0;
+      for (let i = 0; i < N; i++) {
+        const subset = sortedIds.filter((_, idx) => idx !== i);
+        let count = 0;
+        for (const gSet of gamePlayerSets) {
+          if (subset.every(id => gSet.has(id))) count++;
+        }
+        if (count > maxNMinus1Count) {
+          maxNMinus1Count = count;
+          bestNMinus1 = { coreIds: subset, diffId: sortedIds[i], count };
+        }
+      }
+
+      if (bestNMinus1 && bestNMinus1.count >= 2) {
+        nearCombo = {
+          corePlayerNames: bestNMinus1.coreIds.map(id => playerMap[id] || id),
+          differingPlayerNames: [playerMap[bestNMinus1.diffId] || bestNMinus1.diffId],
+          gamesPlayedTogether: bestNMinus1.count,
+          coreCount: N - 1,
+        };
+      } else if (N >= 7) {
+        let bestNMinus2: { coreIds: string[]; diffIds: string[]; count: number } | null = null;
+        let maxNMinus2Count = 0;
+        for (let i = 0; i < N; i++) {
+          for (let j = i + 1; j < N; j++) {
+            const subset = sortedIds.filter((_, idx) => idx !== i && idx !== j);
+            let count = 0;
+            for (const gSet of gamePlayerSets) {
+              if (subset.every(id => gSet.has(id))) count++;
+            }
+            if (count > maxNMinus2Count) {
+              maxNMinus2Count = count;
+              bestNMinus2 = { coreIds: subset, diffIds: [sortedIds[i], sortedIds[j]], count };
+            }
+          }
+        }
+        if (bestNMinus2 && bestNMinus2.count >= 4) {
+          nearCombo = {
+            corePlayerNames: bestNMinus2.coreIds.map(id => playerMap[id] || id),
+            differingPlayerNames: bestNMinus2.diffIds.map(id => playerMap[id] || id),
+            gamesPlayedTogether: bestNMinus2.count,
+            coreCount: N - 2,
+          };
+        }
+      }
+    }
+
     return {
       isFirstTime: true,
+      nearCombo,
       previousGames: [],
       playerStats: [],
       totalGamesWithCombo: 0,
@@ -205,7 +273,17 @@ export function getComboHistory(
  */
 export function buildComboHistoryText(combo: ComboHistory): string {
   if (combo.isFirstTime) {
-    return `🆕 הרכב חדש: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${combo.playerNames.join(', ')})`;
+    if (combo.nearCombo) {
+      const nc = combo.nearCombo;
+      const coreNames = nc.corePlayerNames.join(', ');
+      const diffNames = nc.differingPlayerNames.join(', ');
+      if (nc.coreCount === combo.playerCount - 1) {
+        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בעבר, כשאליהם מצטרף הערב ${diffNames}. שימו לב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא, אך השלד המרכזי מנוסה מאוד.`;
+      } else {
+        return `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${nc.gamesPlayedTogether} משחקים משותפים בעבר, כשאליהם מצטרפים הערב ${diffNames}. בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא.`;
+      }
+    }
+    return `🆕 הרכב חדש באמת: זו הפעם הראשונה שבדיוק ${combo.playerCount} השחקנים האלה משחקים יחד! (${combo.playerNames.join(', ')}) — אין שום גרעין של ${combo.playerCount - 1} שחקנים שנפגש בעבר.`;
   }
 
   const lines: string[] = [];

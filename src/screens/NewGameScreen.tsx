@@ -1326,6 +1326,13 @@ const NewGameScreen = () => {
       const buildComboScreenshotHtml = (): string => {
         if (!comboSnapshot) return '';
         if (comboSnapshot.isFirstTime) {
+          if (comboSnapshot.nearCombo) {
+            const nc = comboSnapshot.nearCombo;
+            const diffNames = nc.differingPlayerNames.join(', ');
+            return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08)); border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.85rem; color: #e2e8f0;">
+              <span style="font-size: 1rem;">🔄</span> <strong style="color: #60a5fa;">גרעין שולחן ותיק (${nc.coreCount}/${comboSnapshot.playerCount}):</strong> ${nc.corePlayerNames.join(', ')} שיחקו יחד ${nc.gamesPlayedTogether} פעמים בעבר, בתוספת ${diffNames}.
+            </div>`;
+          }
           return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.85rem; color: #e2e8f0;">
             <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboSnapshot.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
           </div>`;
@@ -2732,17 +2739,29 @@ const NewGameScreen = () => {
                     marginBottom: '1.25rem',
                     borderRadius: '12px',
                     background: comboHistory.isFirstTime
-                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))'
+                      ? (comboHistory.nearCombo
+                          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08))'
+                          : 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))')
                       : 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08))',
-                    border: `1px solid ${comboHistory.isFirstTime ? 'rgba(34, 197, 94, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
+                    border: `1px solid ${comboHistory.isFirstTime ? (comboHistory.nearCombo ? 'rgba(59, 130, 246, 0.3)' : 'rgba(34, 197, 94, 0.3)') : 'rgba(251, 191, 36, 0.3)'}`,
                     textAlign: isRTL ? 'right' : 'left',
                   }}>
                     {comboHistory.isFirstTime ? (
-                      <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
-                        <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
-                        <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}
-                        {t('newGame.newComboIntro', { count: comboHistory.playerCount })}
-                      </div>
+                      comboHistory.nearCombo ? (
+                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                          <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
+                          <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({comboHistory.nearCombo.coreCount} מתוך {comboHistory.playerCount} שחקנים)</strong>
+                          <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                            {comboHistory.nearCombo.corePlayerNames.join(', ')} שיחקו יחד {comboHistory.nearCombo.gamesPlayedTogether} פעמים בעבר, כשאליהם מצטרף הערב {comboHistory.nearCombo.differingPlayerNames.join(', ')}.
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                          <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
+                          <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}
+                          {t('newGame.newComboIntro', { count: comboHistory.playerCount })}
+                        </div>
+                      )
                     ) : (
                       <div>
                         {/* Header */}

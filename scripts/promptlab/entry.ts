@@ -150,6 +150,12 @@ const rosterOf = (gameId: string) => rows.filter(r => r.gameId === gameId).map(r
 
 const SCENARIOS: { id: string; label: string; names: string[]; location?: string; markers?: any }[] = [
   {
+    id: 'S0-upcoming',
+    label: 'Upcoming game on 17/10 at ליכטר',
+    names: ['אייל', 'ליכטר', 'ליאור', 'פיליפ', 'חרדון', 'סגל', 'קובי', 'דן מאן'],
+    location: 'ליכטר',
+  },
+  {
     id: 'S1-regulars',
     label: 'Standard 8-player night at אייל (the real 03/09 roster)',
     names: rosterOf('5169e81d-ea09-4eca-a915-fe616f30ef26'),
@@ -182,11 +188,13 @@ const SCENARIOS: { id: string; label: string; names: string[]; location?: string
 ];
 
 async function runForecasts() {
-  for (const sc of SCENARIOS) {
+  const filter = process.env.SCENARIO;
+  const list = filter ? SCENARIOS.filter(s => s.id === filter) : SCENARIOS;
+  for (const sc of list) {
     const names = [...new Set(sc.names)].filter(n => nameToId.has(n));
     const players = forecastDataFor(names);
     const combo = getComboHistory(names.map(n => nameToId.get(n)!));
-    const comboText = combo.totalGamesWithCombo > 1 ? buildComboHistoryText(combo) : undefined;
+    const comboText = buildComboHistoryText(combo);
     // Location insights are derived inside generateAIForecasts; passing them
     // in here as well would duplicate the whole 🏠 block in the prompt.
     setCaptureLabel(sc.id);
@@ -264,8 +272,13 @@ async function runSummaries() {
 
 (async () => {
   console.log(isLive() ? '🔑 LIVE mode (GEMINI_API_KEY set)' : '📝 DRY mode — capturing prompts only');
-  await runForecasts();
-  await runSummaries();
+  const sc = process.env.SCENARIO;
+  if (!sc || !sc.startsWith('S6') && !sc.startsWith('S7')) {
+    await runForecasts();
+  }
+  if (!sc || sc.startsWith('S6') || sc.startsWith('S7')) {
+    await runSummaries();
+  }
 
   // One file per call. A scenario can emit several (model fallback, plus the
   // retry pass for players the first response skipped), so index them or the

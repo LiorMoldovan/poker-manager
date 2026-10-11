@@ -17,7 +17,7 @@ const CHECKS = [
 // Every card ends at its subject line. Without that cut the final card
 // swallows the trailing rules block, which mentions the record labels itself
 // and then trips the thin-history check on whichever player happens to be last.
-const cards = t => t.split('══ ').slice(1).map(c => c.split('🎯 נושא המשפט')[0]);
+const cards = t => t.split('══ ').slice(1).map(c => c.split(/🎯 (?:נושא המשפט|זווית עלילתית (?:למשפט|לפסקה))/)[0]);
 
 // Rank/gap self-consistency: every "<gap> ahead of place N (name)" must agree
 // with that player's own "מקום #N" line in the same prompt.
