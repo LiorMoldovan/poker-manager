@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.17';
+export const APP_VERSION = '6.38.18';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.18',
+    date: '2026-10-18',
+    changes: [
+      '📱 התאמת ממשק תזכורות סקר למובייל',
+      '🎯 תפריט נגלל מעוצב לבחירת מועד תזכורת',
+      '🧹 ביטול כפילות שעת תזכורת בהגדרות',
+      '📋 איחוד שורת סטטוס מסירה בהיסטוריית פוש',
+      '🧹 הסרת תגיות מיותרות בהיסטוריית פוש',
+    ],
+  },
   {
     version: '6.38.17',
     date: '2026-10-18',

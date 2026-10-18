@@ -19,6 +19,7 @@ import { formatHebrewHalf } from '../utils/calculations';
 import { useTranslation } from '../i18n';
 import { ToggleSwitch } from './ToggleSwitch';
 import { NumericInput } from './NumericInput';
+import { StyledSelect, type StyledSelectOption } from './StyledSelect';
 import type { TranslationKey } from '../i18n/translations';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { usePermissions } from '../App';
@@ -5459,7 +5460,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [defaultMaybeHold, setDefaultMaybeHold] = useState<number>(initial.scheduleDefaultMaybeHoldHours ?? 48);
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
   const [defaultAllowMaybe, setDefaultAllowMaybe] = useState<boolean>(initial.scheduleDefaultAllowMaybe !== false);
-  const [reminderEveningTime, setReminderEveningTime] = useState<string>(initial.scheduleReminderEveningTime ?? '18:00');
   const [reminders, setReminders] = useState<PollReminderRule[]>(() => {
     if (Array.isArray(initial.scheduleRemindersConfig) && initial.scheduleRemindersConfig.length > 0) {
       return initial.scheduleRemindersConfig;
@@ -5479,6 +5479,18 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [newDays, setNewDays] = useState<number>(1);
   const [newTime, setNewTime] = useState<string>('18:00');
   const [newLabel, setNewLabel] = useState<string>('');
+
+  const daysOptions = useMemo<StyledSelectOption<string>[]>(() => [
+    { value: '0', label: t('schedule.config.daysBefore0') },
+    { value: '1', label: t('schedule.config.daysBefore1') },
+    { value: '2', label: t('schedule.config.daysBefore2') },
+    { value: '3', label: t('schedule.config.daysBefore3') },
+  ], [t]);
+
+  const kindOptions = useMemo<StyledSelectOption<string>[]>(() => [
+    { value: 'reminder_no_vote', label: t('schedule.config.reminderKindNoVote') },
+    { value: 'reminder_maybe', label: t('schedule.config.reminderKindMaybe') },
+  ], [t]);
 
   // Auto-create-poll schedule (migration 050). Default off; the day +
   // time fields stay editable even when disabled so admins can pre-fill
@@ -5500,7 +5512,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       setDefaultMaybeHold(fresh.scheduleDefaultMaybeHoldHours ?? 48);
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
       setDefaultAllowMaybe(fresh.scheduleDefaultAllowMaybe !== false);
-      setReminderEveningTime(fresh.scheduleReminderEveningTime ?? '18:00');
       if (Array.isArray(fresh.scheduleRemindersConfig) && fresh.scheduleRemindersConfig.length > 0) {
         setReminders(fresh.scheduleRemindersConfig);
       }
@@ -5623,13 +5634,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     void persist({ scheduleDefaultAllowMaybe: checked });
   };
 
-  const handleReminderEveningTime = (next: string) => {
-    setReminderEveningTime(next);
-    const updated = reminders.map(r => r.id === 'no_vote_evening' ? { ...r, time: next } : r);
-    setReminders(updated);
-    void persist({ scheduleReminderEveningTime: next, scheduleRemindersConfig: updated });
-  };
-
   const handleToggleReminder = (ruleId: string, checked: boolean) => {
     const updated = reminders.map(r => r.id === ruleId ? { ...r, enabled: checked } : r);
     setReminders(updated);
@@ -5639,9 +5643,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const handleReminderTimeChange = (ruleId: string, nextTime: string) => {
     const updated = reminders.map(r => r.id === ruleId ? { ...r, time: nextTime } : r);
     setReminders(updated);
-    if (ruleId === 'no_vote_evening') {
-      setReminderEveningTime(nextTime);
-    }
     void persist({
       scheduleRemindersConfig: updated,
       ...(ruleId === 'no_vote_evening' ? { scheduleReminderEveningTime: nextTime } : {}),
@@ -5659,16 +5660,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     const updated = reminders.filter(r => r.id !== ruleId);
     setReminders(updated);
     void persist({ scheduleRemindersConfig: updated });
-  };
-
-  const handleResetReminders = () => {
-    setReminders(DEFAULT_POLL_REMINDERS);
-    setReminderEveningTime('18:00');
-    void persist({
-      scheduleRemindersConfig: DEFAULT_POLL_REMINDERS,
-      scheduleReminderEveningTime: '18:00',
-      scheduleReminderNoonTime: '12:00',
-    });
   };
 
   const handleCreateReminder = () => {
@@ -5916,17 +5907,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             </div>
           </div>
         )}
-        <div>
-          <div
-            title={t('schedule.config.reminderEveningHelper')}
-            style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}
-          >
-            ⏰ {t('schedule.config.reminderEveningTime')}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <Time24Picker value={reminderEveningTime} onChange={handleReminderEveningTime} />
-          </div>
-        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text)' }}>
@@ -5947,22 +5927,6 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             {t('schedule.config.remindersTitle')}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              type="button"
-              onClick={handleResetReminders}
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '3px 8px',
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-              }}
-              title={t('schedule.config.resetReminders')}
-            >
-              🔄 {t('schedule.config.resetReminders')}
-            </button>
             <button
               type="button"
               onClick={() => setShowAddReminder(!showAddReminder)}
@@ -5992,61 +5956,72 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             background: 'rgba(59, 130, 246, 0.06)',
             border: '1px solid rgba(59, 130, 246, 0.25)',
             borderRadius: 8,
-            padding: 10,
+            padding: 12,
             marginBottom: 10,
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: 10,
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#93c5fd' }}>
               ➕ {t('schedule.config.addReminder')}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>קהל יעד / סוג תזכורת:</span>
-              <select
+            <div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                קהל יעד / סוג תזכורת:
+              </span>
+              <StyledSelect<string>
                 value={newKind}
-                onChange={(e) => setNewKind(e.target.value as PollReminderKind)}
-                style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
-              >
-                <option value="reminder_no_vote">{t('schedule.config.reminderKindNoVote')}</option>
-                <option value="reminder_maybe">{t('schedule.config.reminderKindMaybe')}</option>
-              </select>
+                onChange={(val) => setNewKind(val as PollReminderKind)}
+                options={kindOptions}
+                size="sm"
+                fullWidth
+              />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
               <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>מועד שליחה:</span>
-                <select
-                  value={newDays}
-                  onChange={(e) => setNewDays(Number(e.target.value))}
-                  style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
-                >
-                  <option value={0}>{t('schedule.config.daysBefore0')}</option>
-                  <option value={1}>{t('schedule.config.daysBefore1')}</option>
-                  <option value={2}>{t('schedule.config.daysBefore2')}</option>
-                  <option value={3}>{t('schedule.config.daysBefore3')}</option>
-                </select>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  מועד שליחה:
+                </span>
+                <StyledSelect<string>
+                  value={String(newDays)}
+                  onChange={(val) => setNewDays(Number(val))}
+                  options={daysOptions}
+                  size="sm"
+                  fullWidth
+                />
               </div>
 
               <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>שעה:</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  שעה:
+                </span>
                 <Time24Picker value={newTime} onChange={setNewTime} />
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>תווית / תיאור (אופציונלי):</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                תווית / תיאור (אופציונלי):
+              </span>
               <input
                 type="text"
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder="למשל: תזכורת בוקר נוספת"
-                style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
+                style={{
+                  ...inputBase,
+                  padding: '7px 10px',
+                  fontSize: 12,
+                  background: '#1f2937',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text)',
+                }}
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
               <button
                 type="button"
                 onClick={() => setShowAddReminder(false)}
@@ -6054,7 +6029,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                   background: 'transparent',
                   border: '1px solid var(--border)',
                   borderRadius: 6,
-                  padding: '4px 10px',
+                  padding: '5px 12px',
                   fontSize: 12,
                   color: 'var(--text-muted)',
                   cursor: 'pointer',
@@ -6069,7 +6044,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                   background: 'rgba(16, 185, 129, 0.2)',
                   border: '1px solid rgba(16, 185, 129, 0.4)',
                   borderRadius: 6,
-                  padding: '4px 14px',
+                  padding: '5px 16px',
                   fontSize: 12,
                   fontWeight: 600,
                   color: '#34d399',
@@ -6083,76 +6058,60 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         )}
 
         {/* Existing reminders list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {reminders.map((rule) => {
             const isNoVote = rule.kind === 'reminder_no_vote';
+            const selectedDayLabel = daysOptions.find(o => o.value === String(rule.daysBefore ?? 1))?.label || '';
             return (
               <div
                 key={rule.id}
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  flexDirection: 'column',
                   gap: 8,
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  background: 'rgba(255, 255, 255, 0.02)',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: 'rgba(255, 255, 255, 0.025)',
                   border: '1px solid var(--border)',
                   opacity: rule.enabled ? 1 : 0.55,
                   transition: 'opacity 0.2s',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                  <ToggleSwitch
-                    checked={rule.enabled}
-                    onChange={(checked) => handleToggleReminder(rule.id, checked)}
-                    ariaLabel={rule.label || (rule.kind === 'reminder_no_vote' ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
-                  />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: 10,
-                        padding: '1px 5px',
-                        borderRadius: 4,
-                        background: isNoVote ? 'rgba(59, 130, 246, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                        color: isNoVote ? '#93c5fd' : '#fcd34d',
-                        fontWeight: 600,
-                      }}>
-                        {isNoVote ? 'לא הצביעו' : 'אעדכן'}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      <select
-                        value={rule.daysBefore ?? 1}
-                        onChange={(e) => handleReminderDaysChange(rule.id, Number(e.target.value))}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-muted)',
-                          fontSize: 11,
-                          padding: 0,
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          textDecorationStyle: 'dotted',
-                        }}
-                      >
-                        <option value={0} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore0')}</option>
-                        <option value={1} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore1')}</option>
-                        <option value={2} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore2')}</option>
-                        <option value={3} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore3')}</option>
-                      </select>
-                    </div>
+                {/* Top header row: Toggle, Target Audience Badge, Title, Delete */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <ToggleSwitch
+                      checked={rule.enabled}
+                      onChange={(checked) => handleToggleReminder(rule.id, checked)}
+                      ariaLabel={rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
+                    />
+                    <span style={{
+                      fontSize: 10,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      background: isNoVote ? 'rgba(59, 130, 246, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: isNoVote ? '#93c5fd' : '#fcd34d',
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}>
+                      {isNoVote ? 'לא הצביעו' : 'אעדכן'}
+                    </span>
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--text)',
+                      lineHeight: 1.35,
+                      wordBreak: 'break-word',
+                    }}>
+                      {rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
+                    </span>
                   </div>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <Time24Picker
-                    value={rule.time}
-                    onChange={(nextTime) => handleReminderTimeChange(rule.id, nextTime)}
-                  />
                   <button
                     type="button"
                     onClick={() => handleDeleteReminder(rule.id)}
@@ -6161,15 +6120,46 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                       border: 'none',
                       color: 'var(--text-muted)',
                       cursor: 'pointer',
-                      fontSize: 14,
+                      fontSize: 15,
                       padding: '4px',
                       borderRadius: 4,
                       lineHeight: 1,
+                      flexShrink: 0,
                     }}
                     title="מחק תזכורת"
+                    aria-label="מחק תזכורת"
                   >
                     🗑️
                   </button>
+                </div>
+
+                {/* Bottom timing controls row: Days before (StyledSelect) and Time24Picker */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  paddingTop: 6,
+                  borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <StyledSelect<string>
+                      value={String(rule.daysBefore ?? 1)}
+                      onChange={(nextVal) => handleReminderDaysChange(rule.id, Number(nextVal))}
+                      options={daysOptions}
+                      size="sm"
+                      triggerLabel={`📅 ${selectedDayLabel}`}
+                      fullWidth
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>שעה:</span>
+                    <Time24Picker
+                      value={rule.time}
+                      onChange={(nextTime) => handleReminderTimeChange(rule.id, nextTime)}
+                    />
+                  </div>
                 </div>
               </div>
             );

@@ -3797,14 +3797,18 @@ const SettingsScreen = () => {
                                     {(() => {
                                       const isReminder = entry.kind.includes('reminder');
                                       const details = Array.isArray(entry.details) ? entry.details : [];
-                                      const deliveredPlayers = details
-                                        .filter((det: any) => det.ok === true || det.status === 'sent')
-                                        .map((det: any) => det.player || det.name)
-                                        .filter(Boolean);
-                                      const failedPlayers = details
-                                        .filter((det: any) => det.ok === false || (det.status && det.status !== 'sent'))
-                                        .map((det: any) => det.player || det.name)
-                                        .filter(Boolean);
+                                      const deliveredPlayers = Array.from(new Set(
+                                        details
+                                          .filter((det: any) => det.ok === true || det.status === 'sent' || (typeof det.status === 'number' && det.status >= 200 && det.status < 300))
+                                          .map((det: any) => det.player || det.name)
+                                          .filter(Boolean)
+                                      ));
+                                      const failedPlayers = Array.from(new Set(
+                                        details
+                                          .filter((det: any) => (det.ok === false || det.status === 'failed' || (typeof det.status === 'number' && det.status >= 400)))
+                                          .map((det: any) => det.player || det.name)
+                                          .filter((name: string) => Boolean(name) && !deliveredPlayers.includes(name))
+                                      ));
                                       const nonPushPlayers = isReminder && hasTargets
                                         ? displayTargets.filter(name => !deliveredPlayers.includes(name) && !failedPlayers.includes(name))
                                         : [];
@@ -3826,47 +3830,54 @@ const SettingsScreen = () => {
                                             </div>
                                           </div>
 
-                                          {deliveredPlayers.length > 0 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-                                              <span style={{ color: '#10B981', fontWeight: 600 }}>{t('settings.ai.pushDeliveredViaPush')}</span>
-                                              {deliveredPlayers.map((name, ni) => (
-                                                <span
-                                                  key={ni}
-                                                  style={{
-                                                    padding: '0.05rem 0.35rem',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.55rem',
-                                                    background: 'rgba(16, 185, 129, 0.12)',
-                                                    color: '#6ee7b7',
-                                                    fontWeight: 600,
-                                                  }}
-                                                >
-                                                  {name} ✓
-                                                </span>
-                                              ))}
-                                            </div>
-                                          )}
+                                          {(deliveredPlayers.length > 0 || failedPlayers.length > 0 || displayTargets.length > 0) && (() => {
+                                            const showDelivered = deliveredPlayers.length > 0 || (failedPlayers.length === 0 && entry.sent_count > 0);
+                                            const showFailed = failedPlayers.length > 0 || (!entry.success && entry.sent_count === 0);
+                                            const isMixed = showDelivered && showFailed;
+                                            const labelColor = isMixed ? '#f59e0b' : (showFailed ? '#EF4444' : '#10B981');
+                                            const labelText = isMixed
+                                              ? (language === 'he' ? 'סטטוס מסירה:' : 'Delivery status:')
+                                              : (showFailed ? t('settings.ai.pushDeliveryFailed') : t('settings.ai.pushDeliveredViaPush'));
 
-                                          {failedPlayers.length > 0 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-                                              <span style={{ color: '#EF4444', fontWeight: 600 }}>{t('settings.ai.pushDeliveryFailed')}</span>
-                                              {failedPlayers.map((name, fi) => (
-                                                <span
-                                                  key={fi}
-                                                  style={{
-                                                    padding: '0.05rem 0.35rem',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.55rem',
-                                                    background: 'rgba(239, 68, 68, 0.12)',
-                                                    color: '#fca5a5',
-                                                    fontWeight: 600,
-                                                  }}
-                                                >
-                                                  {name} ✗
-                                                </span>
-                                              ))}
-                                            </div>
-                                          )}
+                                            const delList = deliveredPlayers.length > 0 ? deliveredPlayers : (showDelivered ? displayTargets : []);
+                                            const failList = failedPlayers.length > 0 ? failedPlayers : (showFailed ? displayTargets : []);
+
+                                            return (
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                                <span style={{ color: labelColor, fontWeight: 600 }}>{labelText}</span>
+                                                {delList.map((name, ni) => (
+                                                  <span
+                                                    key={`del-${ni}`}
+                                                    style={{
+                                                      padding: '0.05rem 0.35rem',
+                                                      borderRadius: '4px',
+                                                      fontSize: '0.55rem',
+                                                      background: 'rgba(16, 185, 129, 0.12)',
+                                                      color: '#6ee7b7',
+                                                      fontWeight: 600,
+                                                    }}
+                                                  >
+                                                    {name} ✓
+                                                  </span>
+                                                ))}
+                                                {failList.map((name, fi) => (
+                                                  <span
+                                                    key={`fail-${fi}`}
+                                                    style={{
+                                                      padding: '0.05rem 0.35rem',
+                                                      borderRadius: '4px',
+                                                      fontSize: '0.55rem',
+                                                      background: 'rgba(239, 68, 68, 0.12)',
+                                                      color: '#fca5a5',
+                                                      fontWeight: 600,
+                                                    }}
+                                                  >
+                                                    {name} ✗
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            );
+                                          })()}
 
                                           {isReminder && nonPushPlayers.length > 0 && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>

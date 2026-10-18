@@ -1435,7 +1435,7 @@ const he = {
 
   // ── Push Notifications Usage card ──
   'settings.ai.pushNotificationsUsage': 'התראות פוש',
-  'settings.ai.pushActiveSubscribers': '{count} מנויים פעילים בקבוצה',
+  'settings.ai.pushActiveSubscribers': 'מנויים פעילים בקבוצה',
   'settings.ai.pushRecent': 'התראות שנשלחו לאחרונה',
   'settings.ai.pushNoLogsYet': 'עדיין לא נשלחו התראות פוש',
   'settings.ai.pushSentTo': 'נשלח אל:',
@@ -1445,7 +1445,7 @@ const he = {
   'settings.ai.pushNoPushFallback': 'ללא מנוי פוש (נשלח מייל תזכורת):',
   'settings.ai.pushAllSubscribers': 'כל מנויי הקבוצה',
   'settings.ai.pushVoteChangeSubscribers': 'מנויי עדכוני הצבעה',
-  'settings.ai.pushDevicesDelivered': '{delivered}/{total} מכשירים',
+  'settings.ai.pushDevicesDelivered': 'מכשירים שנמסרו',
   'settings.ai.pushLoading': 'טוען היסטוריית התראות...',
   'settings.ai.pushTotalSent': 'סה״כ נמסרו לאחרונה',
   'settings.ai.unlinkedDevice': 'מכשיר לא מקושר',
@@ -4204,7 +4204,7 @@ const en: Record<keyof typeof he, string> = {
 
   // ── Push Notifications Usage card ──
   'settings.ai.pushNotificationsUsage': 'Push Notifications',
-  'settings.ai.pushActiveSubscribers': '{count} active subscribers in group',
+  'settings.ai.pushActiveSubscribers': 'Active subscribers in group',
   'settings.ai.pushRecent': 'Recent notifications',
   'settings.ai.pushNoLogsYet': 'No push notifications sent yet',
   'settings.ai.pushSentTo': 'Sent to:',
@@ -4214,7 +4214,7 @@ const en: Record<keyof typeof he, string> = {
   'settings.ai.pushNoPushFallback': 'No push device (reminder email sent):',
   'settings.ai.pushAllSubscribers': 'All group subscribers',
   'settings.ai.pushVoteChangeSubscribers': 'Vote change subscribers',
-  'settings.ai.pushDevicesDelivered': '{delivered}/{total} devices',
+  'settings.ai.pushDevicesDelivered': 'Devices delivered',
   'settings.ai.pushLoading': 'Loading push history…',
   'settings.ai.pushTotalSent': 'Total delivered recently',
   'settings.ai.unlinkedDevice': 'Unlinked device',
