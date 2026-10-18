@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey, ScheduleEmailKind } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey, ScheduleEmailKind, PollReminderRule } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 import { isObserverMode } from '../auth/observerMode';
 
@@ -139,6 +139,9 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.schedule_default_allow_maybe != null) s.scheduleDefaultAllowMaybe = row.schedule_default_allow_maybe === true;
   if (row.schedule_reminder_evening_time != null) s.scheduleReminderEveningTime = String(row.schedule_reminder_evening_time);
   if (row.schedule_reminder_noon_time != null) s.scheduleReminderNoonTime = String(row.schedule_reminder_noon_time);
+  if (Array.isArray(row.schedule_reminders_config)) {
+    s.scheduleRemindersConfig = row.schedule_reminders_config as PollReminderRule[];
+  }
   // Auto-create-poll schedule (migration 050). All columns NOT NULL with
   // server-side defaults, but tolerate missing keys so the mapper works
   // during the migration window.
@@ -420,6 +423,7 @@ function settingsToRow(s: Settings, groupId: string) {
     schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
     schedule_reminder_evening_time: s.scheduleReminderEveningTime ?? '18:00',
     schedule_reminder_noon_time: s.scheduleReminderNoonTime ?? '12:00',
+    schedule_reminders_config: s.scheduleRemindersConfig ?? null,
     schedule_auto_create_enabled: s.scheduleAutoCreateEnabled ?? false,
     schedule_auto_create_day: s.scheduleAutoCreateDay ?? 0,
     schedule_auto_create_time: s.scheduleAutoCreateTime ?? '18:00',

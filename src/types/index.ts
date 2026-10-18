@@ -502,6 +502,58 @@ export type ScheduleEmailKind =
   | 'cancellation'    // ❌ ההצבעה בוטלה — admin cancelled
   | 'reminder';       // 📣 תזכורת להצבעה — admin sent manual reminder
 
+// Customizable poll reminders (migration 137).
+export type PollReminderKind = 'reminder_no_vote' | 'reminder_maybe';
+
+export interface PollReminderRule {
+  id: string;              // unique ID (e.g. 'no_vote_noon', 'rule_1715...')
+  slot: number;            // positive integer mapping to poll_reminder_log.slot
+  kind: PollReminderKind;  // 'reminder_no_vote' | 'reminder_maybe'
+  daysBefore: number;      // 0 = ביום המועד, 1 = יום לפני, 2 = יומיים לפני
+  time: string;            // 'HH:MM' 24h
+  enabled: boolean;        // true/false
+  label?: string;          // optional user-facing title/description
+}
+
+export const DEFAULT_POLL_REMINDERS: PollReminderRule[] = [
+  {
+    id: 'no_vote_noon',
+    slot: 1,
+    kind: 'reminder_no_vote',
+    daysBefore: 1,
+    time: '12:00',
+    enabled: true,
+    label: 'תזכורת צהריים למי שטרם הצביע',
+  },
+  {
+    id: 'no_vote_evening',
+    slot: 2,
+    kind: 'reminder_no_vote',
+    daysBefore: 1,
+    time: '18:00',
+    enabled: true,
+    label: 'תזכורת ערב לפני פתיחה לאורחים',
+  },
+  {
+    id: 'maybe_first',
+    slot: 1,
+    kind: 'reminder_maybe',
+    daysBefore: 2,
+    time: '18:00',
+    enabled: true,
+    label: 'תזכורת ראשונה למתלבטים ("אעדכן")',
+  },
+  {
+    id: 'maybe_final',
+    slot: 2,
+    kind: 'reminder_maybe',
+    daysBefore: 1,
+    time: '18:00',
+    enabled: true,
+    label: 'תזכורת אחרונה לפני שחרור מקום',
+  },
+];
+
 export interface Settings {
   rebuyValue: number;
   chipsPerRebuy: number;
@@ -541,6 +593,8 @@ export interface Settings {
   // Evening reminder hour (migration 136). Default '18:00'.
   scheduleReminderEveningTime?: string;    // 'HH:MM' 24h, default '18:00'
   scheduleReminderNoonTime?: string;       // 'HH:MM' 24h, default '12:00'
+  // Customizable poll reminders schedule (migration 137).
+  scheduleRemindersConfig?: PollReminderRule[];
   // Auto-create-poll schedule. When enabled, ScheduleTab auto-opens a new
   // poll the first time any admin loads the tab at-or-after the next
   // weekly trigger occurrence (day-of-week + time). Uses the group's

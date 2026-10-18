@@ -354,13 +354,19 @@ async function voteChangeRecipientNames(pollId: string, actorUserId: string | nu
     : { data: [] as Array<{ id: string; name: string }> };
   const nameById = new Map(((players || []) as Array<{ id: string; name: string }>).map(p => [p.id, p.name]));
 
+  // vote_change is strictly push-only: only players who have an active push subscription should be targeted.
+  const { data: subs } = await sb.from('push_subscriptions')
+    .select('player_name')
+    .eq('group_id', groupId);
+  const pushNames = new Set((subs || []).map(s => (s as { player_name?: string }).player_name).filter(Boolean));
+
   const out = new Set<string>();
   for (const m of memberRows) {
     if (m.user_id === actorUserId) continue;
     // Absent means on, matching the column default and the SQL rule.
     if (m.schedule_vote_change_notifs === false) continue;
     const name = nameById.get(m.player_id);
-    if (name) out.add(name);
+    if (name && pushNames.has(name)) out.add(name);
   }
   return Array.from(out);
 }

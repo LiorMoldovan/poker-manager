@@ -29,7 +29,8 @@ import {
   sendDateExcludedNotifications,
 } from '../utils/scheduleNotifications';
 import { supabase } from '../database/supabaseClient';
-import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game, ScheduleEmailKind } from '../types';
+import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings, Game, ScheduleEmailKind, PollReminderRule, PollReminderKind } from '../types';
+import { DEFAULT_POLL_REMINDERS } from '../types';
 import PollCard from './PollCard';
 
 // Render a modal as a direct child of <body>. This is critical for
@@ -5459,6 +5460,26 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
   const [defaultAllowMaybe, setDefaultAllowMaybe] = useState<boolean>(initial.scheduleDefaultAllowMaybe !== false);
   const [reminderEveningTime, setReminderEveningTime] = useState<string>(initial.scheduleReminderEveningTime ?? '18:00');
+  const [reminders, setReminders] = useState<PollReminderRule[]>(() => {
+    if (Array.isArray(initial.scheduleRemindersConfig) && initial.scheduleRemindersConfig.length > 0) {
+      return initial.scheduleRemindersConfig;
+    }
+    return DEFAULT_POLL_REMINDERS.map(r => {
+      if (r.id === 'no_vote_noon' && initial.scheduleReminderNoonTime) {
+        return { ...r, time: initial.scheduleReminderNoonTime };
+      }
+      if ((r.id === 'no_vote_evening' || r.kind === 'reminder_maybe') && initial.scheduleReminderEveningTime) {
+        return { ...r, time: initial.scheduleReminderEveningTime };
+      }
+      return r;
+    });
+  });
+  const [showAddReminder, setShowAddReminder] = useState(false);
+  const [newKind, setNewKind] = useState<PollReminderKind>('reminder_no_vote');
+  const [newDays, setNewDays] = useState<number>(1);
+  const [newTime, setNewTime] = useState<string>('18:00');
+  const [newLabel, setNewLabel] = useState<string>('');
+
   // Auto-create-poll schedule (migration 050). Default off; the day +
   // time fields stay editable even when disabled so admins can pre-fill
   // them before flipping the toggle on.
@@ -5480,6 +5501,9 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
       setDefaultAllowMaybe(fresh.scheduleDefaultAllowMaybe !== false);
       setReminderEveningTime(fresh.scheduleReminderEveningTime ?? '18:00');
+      if (Array.isArray(fresh.scheduleRemindersConfig) && fresh.scheduleRemindersConfig.length > 0) {
+        setReminders(fresh.scheduleRemindersConfig);
+      }
       setAutoCreateEnabled(fresh.scheduleAutoCreateEnabled === true);
       setAutoCreateDay(fresh.scheduleAutoCreateDay ?? 0);
       setAutoCreateTime(fresh.scheduleAutoCreateTime ?? '18:00');
@@ -5493,7 +5517,8 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     | 'scheduleDefaultTarget' | 'scheduleDefaultDelayHours'
     | 'scheduleDefaultMaybeHoldHours'
     | 'scheduleDefaultTime' | 'scheduleDefaultAllowMaybe'
-    | 'scheduleReminderEveningTime'
+    | 'scheduleReminderEveningTime' | 'scheduleReminderNoonTime'
+    | 'scheduleRemindersConfig'
     | 'scheduleAutoCreateEnabled' | 'scheduleAutoCreateDay'
     | 'scheduleAutoCreateTime' | 'scheduleAutoCreatedAt'
   >>;
@@ -5600,7 +5625,76 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
 
   const handleReminderEveningTime = (next: string) => {
     setReminderEveningTime(next);
-    void persist({ scheduleReminderEveningTime: next });
+    const updated = reminders.map(r => r.id === 'no_vote_evening' ? { ...r, time: next } : r);
+    setReminders(updated);
+    void persist({ scheduleReminderEveningTime: next, scheduleRemindersConfig: updated });
+  };
+
+  const handleToggleReminder = (ruleId: string, checked: boolean) => {
+    const updated = reminders.map(r => r.id === ruleId ? { ...r, enabled: checked } : r);
+    setReminders(updated);
+    void persist({ scheduleRemindersConfig: updated });
+  };
+
+  const handleReminderTimeChange = (ruleId: string, nextTime: string) => {
+    const updated = reminders.map(r => r.id === ruleId ? { ...r, time: nextTime } : r);
+    setReminders(updated);
+    if (ruleId === 'no_vote_evening') {
+      setReminderEveningTime(nextTime);
+    }
+    void persist({
+      scheduleRemindersConfig: updated,
+      ...(ruleId === 'no_vote_evening' ? { scheduleReminderEveningTime: nextTime } : {}),
+    });
+  };
+
+  const handleReminderDaysChange = (ruleId: string, nextDays: number) => {
+    const updated = reminders.map(r => r.id === ruleId ? { ...r, daysBefore: nextDays } : r);
+    setReminders(updated);
+    void persist({ scheduleRemindersConfig: updated });
+  };
+
+  const handleDeleteReminder = (ruleId: string) => {
+    if (!window.confirm(t('schedule.config.deleteReminderConfirm'))) return;
+    const updated = reminders.filter(r => r.id !== ruleId);
+    setReminders(updated);
+    void persist({ scheduleRemindersConfig: updated });
+  };
+
+  const handleResetReminders = () => {
+    setReminders(DEFAULT_POLL_REMINDERS);
+    setReminderEveningTime('18:00');
+    void persist({
+      scheduleRemindersConfig: DEFAULT_POLL_REMINDERS,
+      scheduleReminderEveningTime: '18:00',
+      scheduleReminderNoonTime: '12:00',
+    });
+  };
+
+  const handleCreateReminder = () => {
+    const highestSlot = reminders
+      .filter(r => r.kind === newKind)
+      .reduce((max, r) => Math.max(max, r.slot || 1), 0);
+
+    const defaultLabel = newKind === 'reminder_no_vote'
+      ? (newDays === 0 ? 'תזכורת ביום הפתיחה' : `תזכורת ${newDays} ימים לפני פתיחה`)
+      : (newDays === 0 ? 'תזכורת ביום השחרור' : `תזכורת ${newDays} ימים לפני שחרור`);
+
+    const created: PollReminderRule = {
+      id: `rule_${Date.now()}`,
+      slot: highestSlot + 1,
+      kind: newKind,
+      daysBefore: newDays,
+      time: newTime || '18:00',
+      enabled: true,
+      label: newLabel.trim() || defaultLabel,
+    };
+
+    const updated = [...reminders, created];
+    setReminders(updated);
+    setShowAddReminder(false);
+    setNewLabel('');
+    void persist({ scheduleRemindersConfig: updated });
   };
 
   const handleAutoCreateEnabled = (checked: boolean) => {
@@ -5844,6 +5938,245 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         />
       </div>
 
+      <div style={{ height: 1, background: 'var(--border)', margin: '14px 0 10px' }} />
+
+      {/* Automated Poll Reminders section (Migration 137) */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+            {t('schedule.config.remindersTitle')}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={handleResetReminders}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                padding: '3px 8px',
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+              }}
+              title={t('schedule.config.resetReminders')}
+            >
+              🔄 {t('schedule.config.resetReminders')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddReminder(!showAddReminder)}
+              style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                borderRadius: 4,
+                padding: '3px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#93c5fd',
+                cursor: 'pointer',
+              }}
+            >
+              {t('schedule.config.addReminder')}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.45 }}>
+          {t('schedule.config.remindersHelper')}
+        </div>
+
+        {/* Add reminder panel */}
+        {showAddReminder && (
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.06)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+            borderRadius: 8,
+            padding: 10,
+            marginBottom: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#93c5fd' }}>
+              ➕ {t('schedule.config.addReminder')}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>קהל יעד / סוג תזכורת:</span>
+              <select
+                value={newKind}
+                onChange={(e) => setNewKind(e.target.value as PollReminderKind)}
+                style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
+              >
+                <option value="reminder_no_vote">{t('schedule.config.reminderKindNoVote')}</option>
+                <option value="reminder_maybe">{t('schedule.config.reminderKindMaybe')}</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'end' }}>
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>מועד שליחה:</span>
+                <select
+                  value={newDays}
+                  onChange={(e) => setNewDays(Number(e.target.value))}
+                  style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
+                >
+                  <option value={0}>{t('schedule.config.daysBefore0')}</option>
+                  <option value={1}>{t('schedule.config.daysBefore1')}</option>
+                  <option value={2}>{t('schedule.config.daysBefore2')}</option>
+                  <option value={3}>{t('schedule.config.daysBefore3')}</option>
+                </select>
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>שעה:</span>
+                <Time24Picker value={newTime} onChange={setNewTime} />
+              </div>
+            </div>
+
+            <div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>תווית / תיאור (אופציונלי):</span>
+              <input
+                type="text"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="למשל: תזכורת בוקר נוספת"
+                style={{ ...inputBase, padding: '6px 8px', fontSize: 12 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setShowAddReminder(false)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateReminder}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: 6,
+                  padding: '4px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#34d399',
+                  cursor: 'pointer',
+                }}
+              >
+                ✓ שמור תזכורת
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Existing reminders list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {reminders.map((rule) => {
+            const isNoVote = rule.kind === 'reminder_no_vote';
+            return (
+              <div
+                key={rule.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--border)',
+                  opacity: rule.enabled ? 1 : 0.55,
+                  transition: 'opacity 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                  <ToggleSwitch
+                    checked={rule.enabled}
+                    onChange={(checked) => handleToggleReminder(rule.id, checked)}
+                    ariaLabel={rule.label || (rule.kind === 'reminder_no_vote' ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
+                  />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 10,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: isNoVote ? 'rgba(59, 130, 246, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                        color: isNoVote ? '#93c5fd' : '#fcd34d',
+                        fontWeight: 600,
+                      }}>
+                        {isNoVote ? 'לא הצביעו' : 'אעדכן'}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      <select
+                        value={rule.daysBefore ?? 1}
+                        onChange={(e) => handleReminderDaysChange(rule.id, Number(e.target.value))}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          fontSize: 11,
+                          padding: 0,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          textDecorationStyle: 'dotted',
+                        }}
+                      >
+                        <option value={0} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore0')}</option>
+                        <option value={1} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore1')}</option>
+                        <option value={2} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore2')}</option>
+                        <option value={3} style={{ background: '#1e293b', color: '#fff' }}>{t('schedule.config.daysBefore3')}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <Time24Picker
+                    value={rule.time}
+                    onChange={(nextTime) => handleReminderTimeChange(rule.id, nextTime)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReminder(rule.id)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: '4px',
+                      borderRadius: 4,
+                      lineHeight: 1,
+                    }}
+                    title="מחק תזכורת"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div style={{ height: 1, background: 'var(--border)', margin: '12px 0 8px' }} />
 
       {/* Auto-create-poll schedule (migration 050). Off by default. When
@@ -5987,8 +6320,8 @@ function Time24Picker({ value, onChange }: Time24PickerProps) {
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         onFocus={(e) => e.target.select()}
         style={numInputStyle}
-        aria-label="hour"
-        placeholder="HH"
+        aria-label="שעה"
+        placeholder="00"
       />
       <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>:</span>
       <input
@@ -6002,8 +6335,8 @@ function Time24Picker({ value, onChange }: Time24PickerProps) {
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         onFocus={(e) => e.target.select()}
         style={numInputStyle}
-        aria-label="minute"
-        placeholder="MM"
+        aria-label="דקה"
+        placeholder="00"
       />
     </div>
   );

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.15';
+export const APP_VERSION = '6.38.17';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,25 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.17',
+    date: '2026-10-18',
+    changes: [
+      '🎯 דיוק נמעני פוש בעדכון הצבעה',
+      '🌐 תרגום עברי מלא בהיסטוריית פוש',
+    ],
+  },
+  {
+    version: '6.38.16',
+    date: '2026-10-18',
+    changes: [
+      '⏰ ניהול מלא של תזכורות לסקר',
+      '➕ הוספה ומחיקה של תזכורות מותאמות',
+      '🔘 הפעלה וכיבוי של תזכורות סקר',
+      '🔄 תיקון כפילות אייקון רענון בפוש',
+      '📋 פירוט מסירה בפוש לעומת מייל',
+    ],
+  },
   {
     version: '6.38.15',
     date: '2026-10-18',

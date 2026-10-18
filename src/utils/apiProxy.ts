@@ -872,6 +872,7 @@ export interface PushUsageResponse {
   recent: PushUsageEntry[];
   totalSent: number;
   activeSubscribers: string[];
+  voteChangeSubscribers?: string[];
 }
 
 async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse | null> {
@@ -888,6 +889,26 @@ async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse 
         .filter((n): n is string => Boolean(n && n.trim()))
     ));
 
+    // Resolve which players have active push subscriptions AND have vote_change notifications enabled
+    let voteChangePushSubscribers: string[] = [];
+    try {
+      const { data: vMembers } = await supabase
+        .from('group_members')
+        .select('player_id, schedule_vote_change_notifs')
+        .eq('group_id', groupId);
+
+      const vMemberRows = (vMembers || []) as Array<{ player_id: string; schedule_vote_change_notifs: boolean | null }>;
+      const vOptedInIds = vMemberRows.filter(m => m.schedule_vote_change_notifs !== false).map(m => m.player_id).filter(Boolean);
+
+      if (vOptedInIds.length > 0) {
+        const { data: vPlayers } = await supabase.from('players').select('name').in('id', vOptedInIds);
+        const vNames = new Set((vPlayers || []).map(p => (p as { name: string }).name));
+        voteChangePushSubscribers = activeSubscribers.filter(name => vNames.has(name));
+      }
+    } catch {
+      voteChangePushSubscribers = [];
+    }
+
     // 2. Try push_notifications_log
     const { data: logRows, error: logError } = await supabase
       .from('push_notifications_log')
@@ -899,6 +920,21 @@ async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse 
     const entries: PushUsageEntry[] = [];
     if (!logError && logRows && logRows.length > 0) {
       for (const row of logRows) {
+        let targets = row.target_player_names || [];
+        if (row.kind === 'vote_change') {
+          const fromDetails = (Array.isArray(row.details) ? row.details : [])
+            .map((d: any) => d.player || d.name)
+            .filter(Boolean);
+          if (fromDetails.length > 0) {
+            targets = fromDetails;
+          } else if (targets.length > 0) {
+            targets = targets.filter((n: string) => activeSubscribers.includes(n));
+          }
+          if (targets.length === 0 && voteChangePushSubscribers.length > 0) {
+            targets = voteChangePushSubscribers;
+          }
+        }
+
         entries.push({
           id: row.id,
           sent_at: row.sent_at,
@@ -906,7 +942,7 @@ async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse 
           title: row.title,
           body: row.body,
           url: row.url,
-          target_player_names: row.target_player_names || [],
+          target_player_names: targets,
           sent_count: row.sent_count ?? 0,
           total_count: row.total_count ?? 0,
           details: Array.isArray(row.details) ? row.details : [],
@@ -938,26 +974,40 @@ async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse 
         let body = String(payload.push_body || payload.body || '');
 
         if (!title) {
-          if (kind === 'creation') title = '🃏 ערב פוקר חדש — הצביעו!';
+          if (kind === 'creation' || kind === 'poll_creation') title = '🃏 ערב פוקר חדש — הצביעו!';
           else if (kind === 'confirmed') title = '✅ נקבע תאריך למשחק';
           else if (kind === 'target_filled') title = '🎯 השולחן מלא!';
           else if (kind === 'vote_change') title = '🗳 עדכון בהצבעה';
-          else if (kind === 'reminder_no_vote') title = '🃏 טרם הצבעת בסקר';
-          else title = `התראה (${kind})`;
+          else if (kind.includes('maybe')) title = '🤔 תזכורת למתלבטים';
+          else if (kind.includes('reminder') || kind.includes('vote')) title = '🃏 טרם הצבעת בסקר';
+          else if (kind === 'cancellation') title = '❌ ההצבעה בוטלה';
+          else if (kind === 'expanded') title = '🔓 ההצבעה נפתחה לכולם';
+          else if (kind === 'broadcast') title = '📢 הודעת מנהל';
+          else title = 'התראת סקר';
         }
 
         if (!body) {
-          if (kind === 'creation') body = 'נפתחה הצבעה חדשה לערב פוקר 📅';
+          if (kind === 'creation' || kind === 'poll_creation') body = 'נפתחה הצבעה חדשה לערב פוקר 📅';
           else if (kind === 'confirmed') body = 'נבחר תאריך לערב הפוקר';
           else if (kind === 'target_filled') body = 'השולחן התמלא שחקנים';
-          else if (kind === 'reminder_no_vote') body = 'תזכורת להצביע ולשמור מקום';
+          else if (kind === 'vote_change') body = 'שחקן עדכן את סטטוס ההצבעה';
+          else if (kind.includes('maybe')) body = 'נא לעדכן אם מגיעים';
+          else if (kind.includes('reminder') || kind.includes('vote')) body = 'תזכורת להצביע ולשמור מקום';
+          else if (kind === 'cancellation') body = 'ההצבעה למשחק בוטלה';
+          else if (kind === 'expanded') body = 'ההרשמה למשחק פתוחה כעת לכולם';
+          else if (kind === 'broadcast') body = 'הודעה חדשה ממנהל הקבוצה';
+          else body = 'עדכון לגבי הצבעת משחק';
         }
 
-        const targetPlayers = Array.isArray(payload.recipient_player_names)
+        let targetPlayers = Array.isArray(payload.recipient_player_names)
           ? (payload.recipient_player_names as string[])
           : [];
 
-        const targetCount = targetPlayers.length > 0 ? targetPlayers.length : activeSubscribers.length;
+        if (kind === 'vote_change') {
+          targetPlayers = voteChangePushSubscribers;
+        }
+
+        const targetCount = targetPlayers.length > 0 ? targetPlayers.length : (kind === 'vote_change' ? 0 : activeSubscribers.length);
 
         entries.push({
           id: job.id,
@@ -983,6 +1033,7 @@ async function fetchPushUsageDirect(groupId: string): Promise<PushUsageResponse 
       recent: entries.slice(0, 30),
       totalSent,
       activeSubscribers,
+      voteChangeSubscribers: voteChangePushSubscribers,
     };
   } catch (err) {
     console.warn('[proxyPushUsage] direct fallback error:', err);

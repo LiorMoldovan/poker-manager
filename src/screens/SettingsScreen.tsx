@@ -3541,12 +3541,47 @@ const SettingsScreen = () => {
                 Shows active subscribers, total sends, and recent push notification log with
                 title, body, target players, and delivery count. */}
             {(isSuperAdmin || isOwner || role === 'admin') && (() => {
-              const activeSubscribers = pushUsage?.activeSubscribers || [];
+              const activeSubscribers = (pushUsage?.activeSubscribers || [])
+                .map(s => {
+                  if (s && s.trim()) return s;
+                  return language === 'he' ? t('settings.ai.unlinkedDevice') : 'Unnamed device';
+                })
+                .filter(Boolean);
+              const voteChangeSubscribers = (pushUsage?.voteChangeSubscribers || [])
+                .filter((s): s is string => Boolean(s && s.trim()));
               const totalSent = pushUsage?.totalSent || 0;
               const recent = pushUsage?.recent || [];
               const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
 
+              const KIND_HEBREW_MAP: Record<string, string> = {
+                creation: 'סקר חדש',
+                poll_creation: 'סקר חדש',
+                vote_change: 'עדכון הצבעה',
+                reminder: 'תזכורת הצבעה',
+                reminder_no_vote: 'תזכורת הצבעה',
+                reminder_no_vote_noon: 'תזכורת צהריים',
+                reminder_no_vote_evening: 'תזכורת ערב',
+                reminder_maybe: 'תזכורת אולי',
+                maybe_first: 'תזכורת אולי',
+                maybe_final: 'תזכורת אחרונה',
+                confirmed: 'תאריך נבחר',
+                target_filled: 'שולחן מלא',
+                expanded: 'נפתח לכולם',
+                cancellation: 'סקר בוטל',
+                broadcast: 'הודעה',
+              };
+
               const kindLabel = (kind: string): string => {
+                if (language === 'he') {
+                  if (KIND_HEBREW_MAP[kind]) return KIND_HEBREW_MAP[kind];
+                  if (kind.includes('maybe')) return 'תזכורת אולי';
+                  if (kind.includes('noon')) return 'תזכורת צהריים';
+                  if (kind.includes('evening')) return 'תזכורת ערב';
+                  if (kind.includes('reminder') || kind.includes('vote')) return 'תזכורת הצבעה';
+                  const key = `settings.ai.pushKind.${kind}` as 'settings.ai.pushKind.creation';
+                  const translated = t(key);
+                  return translated && translated !== key ? translated : 'התראת סקר';
+                }
                 const key = `settings.ai.pushKind.${kind}` as 'settings.ai.pushKind.creation';
                 const translated = t(key);
                 return translated === key ? kind : translated;
@@ -3583,7 +3618,7 @@ const SettingsScreen = () => {
                       }}
                     >
                       <span style={{ display: 'inline-block', transform: loadingPushUsage ? 'rotate(360deg)' : 'none', transition: 'transform 0.5s' }}>🔄</span>
-                      <span>{loadingPushUsage ? t('settings.ai.pushLoading') : t('common.refresh')}</span>
+                      <span>{loadingPushUsage ? t('settings.ai.pushLoading') : t('common.refresh').replace('🔄', '').trim()}</span>
                     </button>
                   </div>
 
@@ -3661,10 +3696,30 @@ const SettingsScreen = () => {
                             const d = new Date(entry.sent_at);
                             const dateStr = d.toLocaleDateString(usageLoc, { day: 'numeric', month: 'short' });
                             const timeStr = d.toLocaleTimeString(usageLoc, { hour: '2-digit', minute: '2-digit' });
-                            const hasTargets = Array.isArray(entry.target_player_names) && entry.target_player_names.length > 0;
+                            const isVoteChange = entry.kind === 'vote_change';
+                            const deliveredFromDetails = (entry.details || [])
+                              .filter((det: any) => det.ok === true || det.status === 'sent')
+                              .map((det: any) => det.player || det.name)
+                              .filter(Boolean);
+
+                            let displayTargets = Array.isArray(entry.target_player_names) ? entry.target_player_names : [];
+                            if (isVoteChange) {
+                              if (deliveredFromDetails.length > 0) {
+                                displayTargets = deliveredFromDetails;
+                              } else if (displayTargets.length > 0) {
+                                displayTargets = displayTargets.filter(n => activeSubscribers.includes(n));
+                              }
+                              if (displayTargets.length === 0 && voteChangeSubscribers.length > 0) {
+                                displayTargets = voteChangeSubscribers;
+                              }
+                            }
+
+                            const hasTargets = displayTargets.length > 0;
                             const targetText = hasTargets
-                              ? entry.target_player_names!.join(', ')
-                              : t('settings.ai.pushAllSubscribers');
+                              ? displayTargets.join(', ')
+                              : (isVoteChange
+                                  ? (voteChangeSubscribers.length > 0 ? voteChangeSubscribers.join(', ') : '—')
+                                  : t('settings.ai.pushAllSubscribers'));
                             const isExpanded = expandedPushIdx === i;
 
                             return (
@@ -3739,34 +3794,102 @@ const SettingsScreen = () => {
                                     <div style={{ color: 'var(--text)', lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                                       {entry.body}
                                     </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.2rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                                      <div>
-                                        <span style={{ color: 'var(--text-muted)' }}>{t('settings.ai.pushSentTo')}: </span>
-                                        <span style={{ color: 'var(--text)' }}>{targetText}</span>
-                                      </div>
-                                      <div>
-                                        <span>{t('settings.ai.pushDevicesDelivered')}: </span>
-                                        <span style={{ color: '#10B981', fontWeight: 600 }}>{entry.sent_count} / {entry.total_count}</span>
-                                      </div>
-                                    </div>
-                                    {entry.details && entry.details.length > 0 && (
-                                      <div style={{ marginTop: '0.2rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                                        {entry.details.map((det, di) => (
-                                          <span
-                                            key={di}
-                                            style={{
-                                              padding: '0.1rem 0.35rem',
-                                              borderRadius: '4px',
-                                              fontSize: '0.55rem',
-                                              background: det.ok ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                              color: det.ok ? '#6ee7b7' : '#fca5a5',
-                                            }}
-                                          >
-                                            {det.player}: {det.ok ? '✓' : det.status || '✗'}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {(() => {
+                                      const isReminder = entry.kind.includes('reminder');
+                                      const details = Array.isArray(entry.details) ? entry.details : [];
+                                      const deliveredPlayers = details
+                                        .filter((det: any) => det.ok === true || det.status === 'sent')
+                                        .map((det: any) => det.player || det.name)
+                                        .filter(Boolean);
+                                      const failedPlayers = details
+                                        .filter((det: any) => det.ok === false || (det.status && det.status !== 'sent'))
+                                        .map((det: any) => det.player || det.name)
+                                        .filter(Boolean);
+                                      const nonPushPlayers = isReminder && hasTargets
+                                        ? displayTargets.filter(name => !deliveredPlayers.includes(name) && !failedPlayers.includes(name))
+                                        : [];
+
+                                      return (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.2rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                                            <div>
+                                              <span style={{ color: 'var(--text-muted)' }}>
+                                                {isReminder ? t('settings.ai.pushTargetAudience') : t('settings.ai.pushSentTo')}{' '}
+                                              </span>
+                                              <span style={{ color: 'var(--text)', fontWeight: 600 }}>{targetText}</span>
+                                            </div>
+                                            <div>
+                                              <span>{t('settings.ai.pushDevicesDelivered')}: </span>
+                                              <span style={{ color: entry.sent_count > 0 ? '#10B981' : '#EF4444', fontWeight: 600 }}>
+                                                {entry.sent_count} / {entry.total_count}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {deliveredPlayers.length > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                              <span style={{ color: '#10B981', fontWeight: 600 }}>{t('settings.ai.pushDeliveredViaPush')}</span>
+                                              {deliveredPlayers.map((name, ni) => (
+                                                <span
+                                                  key={ni}
+                                                  style={{
+                                                    padding: '0.05rem 0.35rem',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.55rem',
+                                                    background: 'rgba(16, 185, 129, 0.12)',
+                                                    color: '#6ee7b7',
+                                                    fontWeight: 600,
+                                                  }}
+                                                >
+                                                  {name} ✓
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {failedPlayers.length > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                              <span style={{ color: '#EF4444', fontWeight: 600 }}>{t('settings.ai.pushDeliveryFailed')}</span>
+                                              {failedPlayers.map((name, fi) => (
+                                                <span
+                                                  key={fi}
+                                                  style={{
+                                                    padding: '0.05rem 0.35rem',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.55rem',
+                                                    background: 'rgba(239, 68, 68, 0.12)',
+                                                    color: '#fca5a5',
+                                                    fontWeight: 600,
+                                                  }}
+                                                >
+                                                  {name} ✗
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {isReminder && nonPushPlayers.length > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                              <span style={{ color: '#93c5fd' }}>{t('settings.ai.pushNoPushFallback')}</span>
+                                              {nonPushPlayers.map((name, npi) => (
+                                                <span
+                                                  key={npi}
+                                                  style={{
+                                                    padding: '0.05rem 0.35rem',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.55rem',
+                                                    background: 'rgba(59, 130, 246, 0.12)',
+                                                    color: '#bfdbfe',
+                                                  }}
+                                                >
+                                                  {name} ✉️
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 )}
                               </div>
