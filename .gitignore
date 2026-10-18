@@ -39,8 +39,9 @@ scripts/promptlab/out/
 !scripts/settlelab/
 scripts/settlelab/out/
 
-# Cursor MCP config (contains Supabase PAT)
+# Cursor & Antigravity MCP config (contains Supabase PAT)
 .cursor/mcp.json
+.agents/mcp_config.json
 
 # Scratch files & analysis
 scratch/

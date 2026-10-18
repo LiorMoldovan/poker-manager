@@ -137,6 +137,8 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.schedule_default_maybe_hold_hours != null) s.scheduleDefaultMaybeHoldHours = Number(row.schedule_default_maybe_hold_hours);
   if (row.schedule_default_time != null) s.scheduleDefaultTime = String(row.schedule_default_time);
   if (row.schedule_default_allow_maybe != null) s.scheduleDefaultAllowMaybe = row.schedule_default_allow_maybe === true;
+  if (row.schedule_reminder_evening_time != null) s.scheduleReminderEveningTime = String(row.schedule_reminder_evening_time);
+  if (row.schedule_reminder_noon_time != null) s.scheduleReminderNoonTime = String(row.schedule_reminder_noon_time);
   // Auto-create-poll schedule (migration 050). All columns NOT NULL with
   // server-side defaults, but tolerate missing keys so the mapper works
   // during the migration window.
@@ -253,6 +255,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     targetFilledNotificationsSentAt: (row.target_filled_notifications_sent_at as string | null) ?? null,
     createdSource: (row.created_source as 'admin' | 'auto') ?? 'admin',
     createdByName: (row.created_by_name as string | null) ?? null,
+    reminderEveningTime: (row.reminder_evening_time as string | null) ?? '18:00',
     dates: [],
     votes: [],
   };
@@ -415,6 +418,8 @@ function settingsToRow(s: Settings, groupId: string) {
     schedule_default_maybe_hold_hours: s.scheduleDefaultMaybeHoldHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',
     schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
+    schedule_reminder_evening_time: s.scheduleReminderEveningTime ?? '18:00',
+    schedule_reminder_noon_time: s.scheduleReminderNoonTime ?? '12:00',
     schedule_auto_create_enabled: s.scheduleAutoCreateEnabled ?? false,
     schedule_auto_create_day: s.scheduleAutoCreateDay ?? 0,
     schedule_auto_create_time: s.scheduleAutoCreateTime ?? '18:00',
@@ -1975,6 +1980,7 @@ export interface CreatePollRpcInput {
   allowMaybe?: boolean;
   note?: string | null;
   source?: 'admin' | 'auto';
+  reminderEveningTime?: string | null;
 }
 
 export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll> {
@@ -1994,6 +2000,7 @@ export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll
     p_note: input.note || null,
     p_source: input.source ?? 'admin',
     p_maybe_hold_hours: input.maybeHoldHours ?? 48,
+    p_reminder_evening_time: input.reminderEveningTime || null,
   });
   if (error) throw error;
   const newId = data as string;
@@ -2175,6 +2182,7 @@ export interface PollMetaPatch {
   note: string | null;
   defaultLocation: string | null;
   allowMaybe: boolean;
+  reminderEveningTime?: string | null;
 }
 
 export async function updatePollMetaRpc(pollId: string, patch: PollMetaPatch): Promise<void> {
@@ -2188,6 +2196,7 @@ export async function updatePollMetaRpc(pollId: string, patch: PollMetaPatch): P
     p_default_location: patch.defaultLocation ?? '',
     p_allow_maybe: patch.allowMaybe,
     p_maybe_hold_hours: patch.maybeHoldHours,
+    p_reminder_evening_time: patch.reminderEveningTime ?? null,
   });
   if (error) throw error;
   await refreshPollsNow();

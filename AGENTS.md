@@ -21,7 +21,7 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 
 ## Supabase MCP — Read AND Write Enabled
 
-**You have direct read AND write access to the live Supabase DB via an MCP server.** It is configured in `.cursor/mcp.json` (which is gitignored — contains a Supabase Personal Access Token). The server is registered under the name **`supabase`** (or `project-0-Poker Game-supabase` for legacy account-level installs). Use whichever name appears in your available MCP tools list — they expose the same tools and project (`ursjltxklmxmapfvkttj`).
+**You have direct read AND write access to the live Supabase DB via an MCP server.** It is configured in `.cursor/mcp.json` and `.agents/mcp_config.json` (both gitignored — populated with the Supabase Personal Access Token from the permanent Windows User environment variable `SUPABASE_ACCESS_TOKEN`). The server is registered under the name **`supabase`** (project `ursjltxklmxmapfvkttj`).
 
 The server is **NOT** in `--read-only` mode any more. The access token has full DB privileges. **With great power…** — see "Confirm Before Risky Actions" critical rule below. When in doubt, ASK the user.
 
@@ -55,7 +55,12 @@ The server is **NOT** in `--read-only` mode any more. The access token has full 
 - Saying "done" after `apply_migration` without running a verification SELECT.
 
 ### If the MCP is unavailable
-If neither `supabase` nor `project-0-Poker Game-supabase` appears in your tools, tell the user: "the Supabase MCP is not registered in this session — please check `.cursor/mcp.json` exists with a valid `SUPABASE_ACCESS_TOKEN` and reload Cursor (`Ctrl+Shift+P → Developer: Reload Window`)." Do not silently fall back to "ask the user to run queries."
+If `supabase` does not appear in your MCP tools, you **do NOT** need to bother the user:
+- Full service-role access is permanently configured in `.env.local` (`SUPABASE_SERVICE_ROLE_KEY`).
+- You can query and inspect the live database directly via `node -e` using the preconfigured helper:
+  `const { getSupabaseAdmin, executeSql } = require('./scripts/supabase-admin.cjs');`
+- Never ask the user to run SELECT queries or claim you have no DB access when investigating data state.
+
 
 ## Critical Rules
 

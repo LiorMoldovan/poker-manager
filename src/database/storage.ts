@@ -1660,6 +1660,7 @@ export const createPoll = (input: CreatePollInput): Promise<GamePoll> =>
     allowMaybe: input.allowMaybe,
     note: input.note ?? null,
     source: input.source ?? 'admin',
+    reminderEveningTime: input.reminderEveningTime ?? null,
   });
 
 export const castVote = (

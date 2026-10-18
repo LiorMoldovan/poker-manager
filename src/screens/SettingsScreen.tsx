@@ -43,7 +43,7 @@ import { getLocalGeminiKey, saveLocalGeminiKey } from '../utils/localApiKey';
 // The Recharts imports went with the dashboard — no other usage
 // in this file.
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyGeminiModels, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, type EmailUsageResponse } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyGeminiModels, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, proxyGetEmailQuotaConfig, proxySetEmailQuotaConfig, proxyPushUsage, type EmailUsageResponse, type PushUsageResponse } from '../utils/apiProxy';
 import { PINNED_MODELS, TTS_MODEL, scanModels, type ModelScan } from '../utils/geminiModels';
 import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
 import { verbForName } from '../utils/hebrewGender';
@@ -155,6 +155,12 @@ const SettingsScreen = () => {
     baselineCycleStart: string;
   }>({ resetDay: '', monthlyCap: '', baselineUsed: '', baselineCycleStart: '' });
   const [quotaEditorSaving, setQuotaEditorSaving] = useState(false);
+
+  // Push Notifications usage (admins / super-admin)
+  const [pushUsage, setPushUsage] = useState<PushUsageResponse | null>(null);
+  const [loadingPushUsage, setLoadingPushUsage] = useState(false);
+  const [showPushRecent, setShowPushRecent] = useState(true);
+  const [expandedPushIdx, setExpandedPushIdx] = useState<number | null>(null);
 
   // AI Status state
   const [, setAiStatus] = useState<AIStatusData | null>(null);
@@ -722,6 +728,34 @@ const SettingsScreen = () => {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [activeTab, isSuperAdmin]);
+
+  // Push notification history: fetch once on AI tab open. Refreshes on `push-sent` and `visibilitychange`.
+  useEffect(() => {
+    if (activeTab !== 'ai') return;
+    let cancelled = false;
+    const refresh = () => {
+      setLoadingPushUsage(true);
+      const gid = getGroupId();
+      proxyPushUsage(gid).then(u => {
+        if (!cancelled) {
+          setPushUsage(u);
+          setLoadingPushUsage(false);
+        }
+      }).catch(() => {
+        if (!cancelled) setLoadingPushUsage(false);
+      });
+    };
+    refresh();
+    const onSent = () => refresh();
+    const onVis = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('push-sent', onSent);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('push-sent', onSent);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [activeTab]);
 
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
   const sortPlayersByType = (playerList: Player[]): Player[] => {
@@ -3497,6 +3531,249 @@ const SettingsScreen = () => {
                           {t('settings.ai.emailUsageEmpty')}
                         </div>
                       )
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Push Notifications Usage Card — mirrors EmailJS usage card.
+                Shows active subscribers, total sends, and recent push notification log with
+                title, body, target players, and delivery count. */}
+            {(isSuperAdmin || isOwner || role === 'admin') && (() => {
+              const activeSubscribers = pushUsage?.activeSubscribers || [];
+              const totalSent = pushUsage?.totalSent || 0;
+              const recent = pushUsage?.recent || [];
+              const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
+
+              const kindLabel = (kind: string): string => {
+                const key = `settings.ai.pushKind.${kind}` as 'settings.ai.pushKind.creation';
+                const translated = t(key);
+                return translated === key ? kind : translated;
+              };
+
+              return (
+                <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
+                    <h2 className="card-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>🔔</span>
+                      <span>{t('settings.ai.pushNotificationsUsage')}</span>
+                    </h2>
+                    <button
+                      onClick={() => {
+                        setLoadingPushUsage(true);
+                        const gid = getGroupId();
+                        proxyPushUsage(gid).then(u => {
+                          setPushUsage(u);
+                          setLoadingPushUsage(false);
+                        }).catch(() => setLoadingPushUsage(false));
+                      }}
+                      disabled={loadingPushUsage}
+                      style={{
+                        fontSize: '0.65rem',
+                        padding: '0.25rem 0.55rem',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.4)',
+                        borderRadius: '6px',
+                        color: '#93c5fd',
+                        cursor: loadingPushUsage ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                      }}
+                    >
+                      <span style={{ display: 'inline-block', transform: loadingPushUsage ? 'rotate(360deg)' : 'none', transition: 'transform 0.5s' }}>🔄</span>
+                      <span>{loadingPushUsage ? t('settings.ai.pushLoading') : t('common.refresh')}</span>
+                    </button>
+                  </div>
+
+                  {/* Summary row */}
+                  <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                    <div style={{
+                      flex: 1,
+                      padding: '0.55rem 0.65rem',
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                    }}>
+                      <div style={{ fontSize: '0.65rem', color: '#93c5fd', marginBottom: '0.15rem' }}>
+                        {t('settings.ai.pushActiveSubscribers')}
+                      </div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
+                        {activeSubscribers.length}
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activeSubscribers.length > 0 ? activeSubscribers.join(', ') : '—'}
+                      </div>
+                    </div>
+
+                    <div style={{
+                      flex: 1,
+                      padding: '0.55rem 0.65rem',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                    }}>
+                      <div style={{ fontSize: '0.65rem', color: '#6ee7b7', marginBottom: '0.15rem' }}>
+                        {t('settings.ai.pushTotalSent')}
+                      </div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
+                        {totalSent}
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                        {recent.length} {t('settings.ai.pushRecent').toLowerCase()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent push notifications list */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                    <button
+                      onClick={() => setShowPushRecent(s => !s)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '0.2rem 0',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>
+                        {t('settings.ai.pushRecent')} · {recent.length}
+                      </span>
+                      <span style={{ fontSize: '0.6rem', transform: showPushRecent ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                        ▼
+                      </span>
+                    </button>
+
+                    {showPushRecent && (
+                      <div style={{ marginTop: '0.4rem', maxHeight: '280px', overflowY: 'auto' }}>
+                        {recent.length === 0 ? (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.75rem 0' }}>
+                            {t('settings.ai.pushNoLogsYet')}
+                          </div>
+                        ) : (
+                          recent.map((entry, i) => {
+                            const d = new Date(entry.sent_at);
+                            const dateStr = d.toLocaleDateString(usageLoc, { day: 'numeric', month: 'short' });
+                            const timeStr = d.toLocaleTimeString(usageLoc, { hour: '2-digit', minute: '2-digit' });
+                            const hasTargets = Array.isArray(entry.target_player_names) && entry.target_player_names.length > 0;
+                            const targetText = hasTargets
+                              ? entry.target_player_names!.join(', ')
+                              : t('settings.ai.pushAllSubscribers');
+                            const isExpanded = expandedPushIdx === i;
+
+                            return (
+                              <div key={`${entry.id || entry.sent_at}-${i}`} style={{
+                                borderBottom: i < recent.length - 1 ? '1px solid var(--border)' : 'none',
+                              }}>
+                                <div
+                                  onClick={() => setExpandedPushIdx(isExpanded ? null : i)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.35rem 0',
+                                    fontSize: '0.65rem',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <span style={{ minWidth: '70px', color: 'var(--text-muted)' }}>
+                                    {dateStr} {timeStr}
+                                  </span>
+                                  <span style={{
+                                    minWidth: '80px',
+                                    padding: '0.1rem 0.35rem',
+                                    background: 'rgba(99, 102, 241, 0.12)',
+                                    borderRadius: '4px',
+                                    color: '#a5b4fc',
+                                    fontSize: '0.6rem',
+                                    textAlign: 'center',
+                                  }}>
+                                    {kindLabel(entry.kind)}
+                                  </span>
+                                  <span style={{
+                                    flex: 1,
+                                    color: 'var(--text)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    textAlign: isRTL ? 'right' : 'left',
+                                  }}>
+                                    {targetText}
+                                  </span>
+                                  <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                                    ▼
+                                  </span>
+                                  <span style={{
+                                    color: entry.success && entry.sent_count > 0 ? '#10B981' : '#EF4444',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                  }}>
+                                    <span>{entry.success && entry.sent_count > 0 ? '✓' : '✗'}</span>
+                                    <span style={{ fontSize: '0.6rem', opacity: 0.85 }}>({entry.sent_count})</span>
+                                  </span>
+                                </div>
+
+                                {isExpanded && (
+                                  <div style={{
+                                    padding: '0.45rem 0.6rem 0.65rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    marginBottom: '0.3rem',
+                                    fontSize: '0.65rem',
+                                    color: 'var(--text-muted)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.3rem',
+                                  }}>
+                                    <div style={{ color: 'var(--text)', fontWeight: 600 }}>
+                                      {entry.title}
+                                    </div>
+                                    <div style={{ color: 'var(--text)', lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                      {entry.body}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.2rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                                      <div>
+                                        <span style={{ color: 'var(--text-muted)' }}>{t('settings.ai.pushSentTo')}: </span>
+                                        <span style={{ color: 'var(--text)' }}>{targetText}</span>
+                                      </div>
+                                      <div>
+                                        <span>{t('settings.ai.pushDevicesDelivered')}: </span>
+                                        <span style={{ color: '#10B981', fontWeight: 600 }}>{entry.sent_count} / {entry.total_count}</span>
+                                      </div>
+                                    </div>
+                                    {entry.details && entry.details.length > 0 && (
+                                      <div style={{ marginTop: '0.2rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                        {entry.details.map((det, di) => (
+                                          <span
+                                            key={di}
+                                            style={{
+                                              padding: '0.1rem 0.35rem',
+                                              borderRadius: '4px',
+                                              fontSize: '0.55rem',
+                                              background: det.ok ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                              color: det.ok ? '#6ee7b7' : '#fca5a5',
+                                            }}
+                                          >
+                                            {det.player}: {det.ok ? '✓' : det.status || '✗'}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

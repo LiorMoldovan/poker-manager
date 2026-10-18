@@ -251,6 +251,8 @@ export interface GamePoll {
   // auto-schedule opened it (client OR server cron), createdByName is null.
   createdSource: 'admin' | 'auto';
   createdByName?: string | null;
+  // Migration 136: customizable evening reminder time ('HH:MM', default '18:00')
+  reminderEveningTime?: string | null;
   // Embedded children (populated by cache layer)
   dates: GamePollDate[];
   votes: GamePollVote[];
@@ -273,6 +275,7 @@ export interface CreatePollInput {
   // 'admin' (default) when a person opens the poll; 'auto' when the
   // client-side weekly auto-schedule opens it. Threaded to create_game_poll.
   source?: 'admin' | 'auto';
+  reminderEveningTime?: string | null;
 }
 
 export interface AppNotification {
@@ -535,6 +538,9 @@ export interface Settings {
   scheduleDefaultMaybeHoldHours?: number;  // 0..240, default 48 — permanent-maybe seat hold (migration 101)
   scheduleDefaultTime?: string;            // 'HH:MM' 24h, default '21:00'
   scheduleDefaultAllowMaybe?: boolean;     // default true
+  // Evening reminder hour (migration 136). Default '18:00'.
+  scheduleReminderEveningTime?: string;    // 'HH:MM' 24h, default '18:00'
+  scheduleReminderNoonTime?: string;       // 'HH:MM' 24h, default '12:00'
   // Auto-create-poll schedule. When enabled, ScheduleTab auto-opens a new
   // poll the first time any admin loads the tab at-or-after the next
   // weekly trigger occurrence (day-of-week + time). Uses the group's

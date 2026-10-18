@@ -93,6 +93,7 @@ interface BuiltMessage {
 interface DispatchPlan {
   message: BuiltMessage;
   recipientPlayerNames: string[];
+  kind?: string;
   // Push to every subscriber in the group rather than to
   // recipientPlayerNames, which then only governs the email leg. Used by the
   // two group-wide announcements ('creation', 'target_filled'). Expressed to
@@ -722,6 +723,44 @@ function buildFromPayload(payload: Record<string, unknown>): BuiltMessage | null
   };
 }
 
+// Rich email reminder for unvoted regulars who do not have push subscriptions.
+// Displays the live voting status of all proposed dates and a direct CTA link.
+function buildNoVoteEmailReminderMessage(
+  ctx: PollCtx,
+  payload: Record<string, unknown>,
+): BuiltMessage {
+  const target = ctx.poll.target_player_count;
+  const openDates = ctx.dates.filter(d => !d.disabled_at);
+  const yesOn = (dateId: string) =>
+    ctx.votes.filter(v => v.date_id === dateId && v.response === 'yes').length;
+
+  const dateLines = openDates.map(d => {
+    const loc = d.location || ctx.poll.default_location;
+    const taken = yesOn(d.id);
+    return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו`;
+  }).join('\n');
+
+  const link = emailVoteLink(ctx.poll.share_slug || ctx.poll.id);
+  const subject = '🃏 תזכורת: טרם הצבעת בסקר השבועי';
+  const customBody = typeof payload.push_body === 'string' && payload.push_body
+    ? payload.push_body
+    : 'מחר הסקר ייפתח גם לאורחים — כדאי להצביע בהקדם ולשריין מקום!';
+
+  return {
+    pushTitle: '🃏 טרם הצבעת בסקר',
+    pushBody: customBody,
+    emailSubject: subject,
+    emailBody:
+      'היי,\n\n' +
+      'טרם הצבעת בסקר לקראת ערב הפוקר הקרוב.\n\n' +
+      `${I}📅 מצב ההצבעה בתאריכים המוצעים:\n${dateLines}\n\n` +
+      `${I}🎯 יעד: ${target} שחקנים\n\n` +
+      `${customBody}\n\n` +
+      `👉 להצבעה: ${link}`,
+    url: deepLinkUrl(ctx.poll.id),
+  };
+}
+
 // ─── Obsolescence guard ────────────────────────────────────────────────────
 //
 // Quiet hours (migration 117) can hold a job until 07:00, which opens a gap
@@ -911,6 +950,7 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
           recipientPlayerNames: othersPush,
           emailRecipientNames: [],
           groupId: group_id,
+          kind,
           pushOnly: true,
           emailOnly,
         });
@@ -966,6 +1006,7 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
       recipientPlayerNames,
       pushToWholeGroup,
       groupId: group_id,
+      kind,
       pushOnly: !emailAllowedForGroup || pushOnly,
       emailOnly,
       preemptTargetFilledPollId,
@@ -1002,6 +1043,51 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
   const recipientNames = Array.isArray(payload.recipient_player_names)
     ? (payload.recipient_player_names as string[])
     : [];
+
+  // Special handling for reminder_no_vote:
+  // Regulars who have push subscriptions receive push only (preserves EmailJS quota).
+  // Regulars who do NOT have push subscriptions receive an informative email with current poll status and voting link.
+  if (kind === 'reminder_no_vote') {
+    const { data: subs } = await sb.from('push_subscriptions')
+      .select('player_name')
+      .eq('group_id', group_id);
+    const pushSubscribedNames = new Set((subs || []).map(s => (s as { player_name?: string }).player_name).filter(Boolean));
+
+    const pushRecipients = recipientNames.filter(name => pushSubscribedNames.has(name));
+    const emailRecipients = recipientNames.filter(name => !pushSubscribedNames.has(name));
+
+    const plans: DispatchPlan[] = [];
+
+    // 1. Regulars with push: PUSH ONLY
+    if (pushRecipients.length > 0 && pushEnabled) {
+      plans.push({
+        message,
+        recipientPlayerNames: pushRecipients,
+        groupId: group_id,
+        kind,
+        pushOnly: true,
+        emailOnly: false,
+      });
+    }
+
+    // 2. Regulars without push: EMAIL REMINDER with current proposed dates and vote counts
+    if (emailRecipients.length > 0 && emailAllowedForGroup && poll_id) {
+      const ctx = await loadPollCtx(poll_id);
+      const emailMsg = ctx ? buildNoVoteEmailReminderMessage(ctx, payload) : message;
+      plans.push({
+        message: emailMsg,
+        recipientPlayerNames: [],
+        emailRecipientNames: emailRecipients,
+        groupId: group_id,
+        kind,
+        pushOnly: false,
+        emailOnly: true,
+      });
+    }
+
+    return plans;
+  }
+
   // Reminders go to email if the group has it on. Training kinds are
   // push-only by convention (we retired training emails in v5.43), and
   // so is date_excluded: dropping one date while the poll stays open is
@@ -1013,15 +1099,12 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
     || kind === 'training_report_resolved'
     || kind === 'training_milestone'
     || kind === 'date_excluded'
-    // Nudges are push-only on purpose. They repeat up to four times per
-    // poll, which is fine on a channel people can mute per-device and
-    // ruinous against a 200/month email quota.
-    || kind === 'reminder_no_vote'
     || kind === 'reminder_maybe';
   return [{
     message,
     recipientPlayerNames: recipientNames,
     groupId: group_id,
+    kind,
     pushOnly: pushOnlyKind || !emailAllowedForGroup,
     emailOnly,
   }];
@@ -1038,6 +1121,7 @@ async function postSendPush(plan: DispatchPlan): Promise<{ ok: boolean; status: 
       groupId: plan.groupId,
       title: plan.message.pushTitle,
       body: plan.message.pushBody,
+      kind: plan.kind || 'broadcast',
       // Omitted entirely for whole-group announcements: send-push reads a
       // missing target list as "every subscriber in this group".
       targetPlayerNames: plan.pushToWholeGroup ? undefined : plan.recipientPlayerNames,

@@ -244,7 +244,7 @@ export default async function handler(req: Request): Promise<Response> {
   const vapidSubject = 'mailto:pokermanager.app@gmail.com';
 
   try {
-    const { groupId, title, body, targetPlayerNames, url: notifUrl } = await req.json();
+    const { groupId, title, body, targetPlayerNames, url: notifUrl, kind } = await req.json();
 
     if (!groupId || !title || !body) {
       return new Response(JSON.stringify({ error: { message: 'Missing groupId, title, or body' } }), {
@@ -346,6 +346,24 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (gone.length > 0) {
       await db.from('push_subscriptions').delete().in('endpoint', gone);
+    }
+
+    // Log to push_notifications_log for audit and in-app display (Settings → Services).
+    try {
+      await db.from('push_notifications_log').insert({
+        group_id: groupId,
+        kind: (typeof kind === 'string' && kind) ? kind : 'broadcast',
+        title,
+        body,
+        url: notifUrl || '/',
+        target_player_names: targetPlayerNames || [],
+        sent_count: sent,
+        total_count: subs.length,
+        details,
+        success: sent > 0 || subs.length === 0,
+      });
+    } catch (logErr) {
+      console.warn('[send-push] push_notifications_log insert warning:', logErr);
     }
 
     return new Response(JSON.stringify({ sent, total: subs.length, details }), { headers: JSON_HEADERS });

@@ -3499,6 +3499,7 @@ function CreatePollModal(props: CreatePollModalProps) {
   const [delay, setDelay] = useState(settings.scheduleDefaultDelayHours ?? 48);
   const [maybeHold, setMaybeHold] = useState(settings.scheduleDefaultMaybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(settings.scheduleDefaultAllowMaybe !== false);
+  const [reminderEveningTime, setReminderEveningTime] = useState(settings.scheduleReminderEveningTime || '18:00');
   const [defaultLocation, setDefaultLocation] = useState('');
   const [note, setNote] = useState('');
   const [dates, setDates] = useState<DraftDate[]>([
@@ -3629,6 +3630,7 @@ function CreatePollModal(props: CreatePollModalProps) {
         defaultLocation: defaultLocation || null,
         allowMaybe,
         note: note || null,
+        reminderEveningTime: reminderEveningTime || '18:00',
       });
       // Notification dispatch: trg_enqueue_poll_notification fires on the
       // INSERT (status='open') and the worker drains the 'creation' job.
@@ -3746,6 +3748,14 @@ function CreatePollModal(props: CreatePollModalProps) {
               </div>
             </div>
           )}
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+              ⏰ {t('schedule.reminderEveningTime')}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <Time24Picker value={reminderEveningTime} onChange={setReminderEveningTime} />
+            </div>
+          </div>
         </div>
 
         <div style={{ marginBottom: 12 }}>
@@ -3906,6 +3916,7 @@ function EditPollModal(props: EditPollModalProps) {
   const [expansionDelay, setExpansionDelay] = useState(poll.expansionDelayHours);
   const [maybeHold, setMaybeHold] = useState(poll.maybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(poll.allowMaybe);
+  const [reminderEveningTime, setReminderEveningTime] = useState(poll.reminderEveningTime || getSettings().scheduleReminderEveningTime || '18:00');
   const [submitting, setSubmitting] = useState(false);
 
   // Group-level location presets (managed in Settings → Locations) — show
@@ -4044,6 +4055,7 @@ function EditPollModal(props: EditPollModalProps) {
         note: note.trim() || null,
         defaultLocation: defaultLocation.trim() || null,
         allowMaybe,
+        reminderEveningTime: reminderEveningTime || '18:00',
       });
       // Notification side-effects (status flip to 'confirmed' on lower
       // target, retroactive target_filled when yes_count already meets
@@ -4260,6 +4272,14 @@ function EditPollModal(props: EditPollModalProps) {
               />
             </div>
           )}
+          <div style={{ flex: '1 1 90px', minWidth: 80 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+              ⏰ {t('schedule.reminderEveningTime')}
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <Time24Picker value={reminderEveningTime} onChange={setReminderEveningTime} />
+            </div>
+          </div>
         </div>
 
         {/* Allow "I'll update" toggle */}
@@ -5438,6 +5458,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [defaultMaybeHold, setDefaultMaybeHold] = useState<number>(initial.scheduleDefaultMaybeHoldHours ?? 48);
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
   const [defaultAllowMaybe, setDefaultAllowMaybe] = useState<boolean>(initial.scheduleDefaultAllowMaybe !== false);
+  const [reminderEveningTime, setReminderEveningTime] = useState<string>(initial.scheduleReminderEveningTime ?? '18:00');
   // Auto-create-poll schedule (migration 050). Default off; the day +
   // time fields stay editable even when disabled so admins can pre-fill
   // them before flipping the toggle on.
@@ -5458,6 +5479,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       setDefaultMaybeHold(fresh.scheduleDefaultMaybeHoldHours ?? 48);
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
       setDefaultAllowMaybe(fresh.scheduleDefaultAllowMaybe !== false);
+      setReminderEveningTime(fresh.scheduleReminderEveningTime ?? '18:00');
       setAutoCreateEnabled(fresh.scheduleAutoCreateEnabled === true);
       setAutoCreateDay(fresh.scheduleAutoCreateDay ?? 0);
       setAutoCreateTime(fresh.scheduleAutoCreateTime ?? '18:00');
@@ -5471,6 +5493,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     | 'scheduleDefaultTarget' | 'scheduleDefaultDelayHours'
     | 'scheduleDefaultMaybeHoldHours'
     | 'scheduleDefaultTime' | 'scheduleDefaultAllowMaybe'
+    | 'scheduleReminderEveningTime'
     | 'scheduleAutoCreateEnabled' | 'scheduleAutoCreateDay'
     | 'scheduleAutoCreateTime' | 'scheduleAutoCreatedAt'
   >>;
@@ -5573,6 +5596,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const handleDefaultAllowMaybe = (checked: boolean) => {
     setDefaultAllowMaybe(checked);
     void persist({ scheduleDefaultAllowMaybe: checked });
+  };
+
+  const handleReminderEveningTime = (next: string) => {
+    setReminderEveningTime(next);
+    void persist({ scheduleReminderEveningTime: next });
   };
 
   const handleAutoCreateEnabled = (checked: boolean) => {
@@ -5794,6 +5822,17 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
             </div>
           </div>
         )}
+        <div>
+          <div
+            title={t('schedule.config.reminderEveningHelper')}
+            style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}
+          >
+            ⏰ {t('schedule.config.reminderEveningTime')}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Time24Picker value={reminderEveningTime} onChange={handleReminderEveningTime} />
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text)' }}>
