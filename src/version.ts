@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.19';
+export const APP_VERSION = '6.38.20';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.20',
+    date: '2026-10-18',
+    changes: [
+      '🔔 הצגת כל משימות התזכורת בהיסטוריית פוש',
+      '🏷️ כותרת "רשומים לקבלת התראה" בהגדרות',
+      '📱 באנר מנויים קומפקטי ומותאם למובייל',
+      '🧹 הסרת קוביית סה״כ נמסרו בהגדרות',
+    ],
+  },
   {
     version: '6.38.19',
     date: '2026-10-18',

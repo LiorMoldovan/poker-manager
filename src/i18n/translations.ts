@@ -1435,7 +1435,7 @@ const he = {
 
   // ── Push Notifications Usage card ──
   'settings.ai.pushNotificationsUsage': 'התראות פוש',
-  'settings.ai.pushActiveSubscribers': 'מנויים פעילים בקבוצה',
+  'settings.ai.pushActiveSubscribers': 'רשומים לקבלת התראה',
   'settings.ai.pushRecent': 'התראות שנשלחו לאחרונה',
   'settings.ai.pushNoLogsYet': 'עדיין לא נשלחו התראות פוש',
   'settings.ai.pushSentTo': 'נשלח אל:',
@@ -4205,7 +4205,7 @@ const en: Record<keyof typeof he, string> = {
 
   // ── Push Notifications Usage card ──
   'settings.ai.pushNotificationsUsage': 'Push Notifications',
-  'settings.ai.pushActiveSubscribers': 'Active subscribers in group',
+  'settings.ai.pushActiveSubscribers': 'Registered for notifications',
   'settings.ai.pushRecent': 'Recent notifications',
   'settings.ai.pushNoLogsYet': 'No push notifications sent yet',
   'settings.ai.pushSentTo': 'Sent to:',

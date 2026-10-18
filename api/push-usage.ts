@@ -153,20 +153,20 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
-    // 3. Fallback: if push_notifications_log is empty (e.g. freshly created or historical),
-    // complement with completed notification_jobs so the user sees past sends right away.
-    if (entries.length < 5) {
-      const { data: jobs } = await db
-        .from('notification_jobs')
-        .select('*')
-        .eq('group_id', groupId)
-        .eq('status', 'done')
-        .order('completed_at', { ascending: false })
-        .limit(20);
+    // 3. Complement from notification_jobs: always include recent completed reminder/poll jobs
+    // (especially reminders where non-push recipients received email fallback)
+    const { data: jobs } = await db
+      .from('notification_jobs')
+      .select('*')
+      .eq('group_id', groupId)
+      .eq('status', 'done')
+      .order('completed_at', { ascending: false })
+      .limit(20);
 
+    if (jobs && jobs.length > 0) {
       const existingJobTimes = new Set(entries.map(e => e.sent_at.slice(0, 16)));
 
-      for (const job of (jobs || [])) {
+      for (const job of jobs) {
         const time = job.completed_at || job.created_at;
         if (time && existingJobTimes.has(time.slice(0, 16))) continue;
 
@@ -210,7 +210,12 @@ export default async function handler(req: Request): Promise<Response> {
           targetPlayers = voteChangePushSubscribers;
         }
 
+        const isReminderKind = kind.includes('reminder') || kind.includes('vote_reminder');
+        const pushDelivered = isReminderKind
+          ? targetPlayers.filter(p => activeSubscribers.includes(p))
+          : targetPlayers;
         const targetCount = targetPlayers.length > 0 ? targetPlayers.length : (kind === 'vote_change' ? 0 : activeSubscribers.length);
+        const sentCount = isReminderKind ? pushDelivered.length : targetCount;
 
         entries.push({
           id: job.id,
@@ -220,9 +225,9 @@ export default async function handler(req: Request): Promise<Response> {
           body,
           url: String(payload.url || '/'),
           target_player_names: targetPlayers,
-          sent_count: targetCount,
+          sent_count: sentCount,
           total_count: targetCount,
-          details: targetPlayers.map(p => ({ player: p, ok: true })),
+          details: pushDelivered.map(p => ({ player: p, ok: true })),
           success: true,
         });
       }

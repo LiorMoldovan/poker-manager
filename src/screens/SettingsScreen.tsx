@@ -3549,7 +3549,6 @@ const SettingsScreen = () => {
                 .filter(Boolean);
               const voteChangeSubscribers = (pushUsage?.voteChangeSubscribers || [])
                 .filter((s): s is string => Boolean(s && s.trim()));
-              const totalSent = pushUsage?.totalSent || 0;
               const recent = pushUsage?.recent || [];
               const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
 
@@ -3622,42 +3621,41 @@ const SettingsScreen = () => {
                     </button>
                   </div>
 
-                  {/* Summary row */}
-                  <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.75rem' }}>
-                    <div style={{
-                      flex: 1,
-                      padding: '0.55rem 0.65rem',
-                      background: 'rgba(59, 130, 246, 0.08)',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(59, 130, 246, 0.2)',
-                    }}>
-                      <div style={{ fontSize: '0.65rem', color: '#93c5fd', marginBottom: '0.15rem' }}>
+                  {/* Registered subscribers banner */}
+                  <div style={{
+                    padding: '0.5rem 0.7rem',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    marginBottom: '0.75rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 600 }}>
                         {t('settings.ai.pushActiveSubscribers')}
-                      </div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
+                      </span>
+                      <span style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        color: '#60a5fa',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        padding: '0.1rem 0.45rem',
+                        borderRadius: '10px',
+                      }}>
                         {activeSubscribers.length}
-                      </div>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {activeSubscribers.length > 0 ? activeSubscribers.join(', ') : '—'}
-                      </div>
+                      </span>
                     </div>
-
                     <div style={{
-                      flex: 1,
-                      padding: '0.55rem 0.65rem',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      fontSize: '0.68rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.35,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}>
-                      <div style={{ fontSize: '0.65rem', color: '#6ee7b7', marginBottom: '0.15rem' }}>
-                        {t('settings.ai.pushTotalSent')}
-                      </div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
-                        {totalSent}
-                      </div>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                        {recent.length} {t('settings.ai.pushRecent').toLowerCase()}
-                      </div>
+                      {activeSubscribers.length > 0 ? activeSubscribers.join(', ') : '—'}
                     </div>
                   </div>
 
