@@ -1094,6 +1094,87 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
     return plans;
   }
 
+  // Special handling for reminder_maybe:
+  // Tailor push notification per recipient to mention the exact day(s) they voted 'maybe' on,
+  // especially when they also confirmed 'yes' on other dates.
+  if (kind === 'reminder_maybe' && poll_id && recipientNames.length > 0 && pushEnabled) {
+    const ctx = await loadPollCtx(poll_id);
+    if (ctx) {
+      const plans: DispatchPlan[] = [];
+
+      for (const name of recipientNames) {
+        const player = ctx.playersByName.get(name)
+          || Array.from(ctx.playersById.values()).find(p => p.name.trim() === name.trim());
+        if (!player) continue;
+
+        // In confirmed polls, only consider the pinned date
+        const relevantDates = (ctx.poll.status === 'confirmed' && ctx.poll.confirmed_date_id)
+          ? ctx.dates.filter(d => d.id === ctx.poll.confirmed_date_id)
+          : ctx.dates;
+
+        // Dates this player voted maybe on
+        const maybeDateIds = ctx.votes
+          .filter(v => v.player_id === player.id && v.response === 'maybe')
+          .map(v => v.date_id);
+        const maybeDates = relevantDates
+          .filter(d => maybeDateIds.includes(d.id))
+          .sort((a, b) => a.proposed_date.localeCompare(b.proposed_date));
+
+        if (maybeDates.length === 0) continue;
+
+        // Dates this player voted yes on
+        const yesDateIds = ctx.votes
+          .filter(v => v.player_id === player.id && v.response === 'yes')
+          .map(v => v.date_id);
+        const yesDates = relevantDates
+          .filter(d => yesDateIds.includes(d.id))
+          .sort((a, b) => a.proposed_date.localeCompare(b.proposed_date));
+
+        const formatDayCompact = (d: PollCtx['dates'][0]) => {
+          const weekday = hebrewWeekdayForDate(d.proposed_date);
+          const day = Number(d.proposed_date.slice(8, 10));
+          const month = Number(d.proposed_date.slice(5, 7));
+          return `${weekday} (${day}/${month})`;
+        };
+
+        const maybeDaysStr = maybeDates.map(formatDayCompact).join(', ');
+        const yesDaysStr = yesDates.map(formatDayCompact).join(', ');
+
+        let pushTitle = '⏳ תזכורת "אעדכן"';
+        let pushBody = '';
+
+        if (maybeDates.length === 1) {
+          pushTitle = `⏳ תזכורת "אעדכן" — ${formatDayCompact(maybeDates[0])}`;
+        } else {
+          pushTitle = `⏳ תזכורת "אעדכן" (${maybeDates.length} מועדים)`;
+        }
+
+        if (yesDates.length > 0) {
+          pushBody = `אישרת הגעה ל${yesDaysStr}. לגבי ${maybeDaysStr}: בלי אישור, המקום עומד להשתחרר`;
+        } else {
+          pushBody = `סימנת "אעדכן" ל${maybeDaysStr} — בלי אישור הגעה, המקום עומד להשתחרר`;
+        }
+
+        plans.push({
+          message: {
+            ...message,
+            pushTitle,
+            pushBody,
+          },
+          recipientPlayerNames: [name],
+          groupId: group_id,
+          kind,
+          pushOnly: true,
+          emailOnly: false,
+        });
+      }
+
+      if (plans.length > 0) {
+        return plans;
+      }
+    }
+  }
+
   // Reminders go to email if the group has it on. Training kinds are
   // push-only by convention (we retired training emails in v5.43), and
   // so is date_excluded: dropping one date while the poll stays open is

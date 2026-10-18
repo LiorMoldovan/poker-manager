@@ -5479,6 +5479,8 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const [newDays, setNewDays] = useState<number>(1);
   const [newTime, setNewTime] = useState<string>('18:00');
   const [newLabel, setNewLabel] = useState<string>('');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState<string>('');
 
   const daysOptions = useMemo<StyledSelectOption<string>[]>(() => [
     { value: '0', label: t('schedule.config.daysBefore0') },
@@ -5660,6 +5662,24 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
     const updated = reminders.filter(r => r.id !== ruleId);
     setReminders(updated);
     void persist({ scheduleRemindersConfig: updated });
+  };
+
+  const handleStartEdit = (rule: PollReminderRule) => {
+    setEditingRuleId(rule.id);
+    const fallback = rule.kind === 'reminder_no_vote' ? 'תזכורת לקבועים' : 'תזכורת למתלבטים';
+    setEditingLabel(rule.label || fallback);
+  };
+
+  const handleSaveEdit = (ruleId: string) => {
+    const nextText = editingLabel.trim();
+    const updated = reminders.map(r => r.id === ruleId ? { ...r, label: nextText } : r);
+    setReminders(updated);
+    void persist({ scheduleRemindersConfig: updated });
+    setEditingRuleId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRuleId(null);
   };
 
   const handleCreateReminder = () => {
@@ -6061,7 +6081,10 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {reminders.map((rule) => {
             const isNoVote = rule.kind === 'reminder_no_vote';
+            const isEditing = editingRuleId === rule.id;
             const selectedDayLabel = daysOptions.find(o => o.value === String(rule.daysBefore ?? 1))?.label || '';
+            const fallbackLabel = isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים';
+            const currentLabel = rule.label || fallbackLabel;
             return (
               <div
                 key={rule.id}
@@ -6072,23 +6095,23 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                   padding: '10px 12px',
                   borderRadius: 8,
                   background: 'rgba(255, 255, 255, 0.025)',
-                  border: '1px solid var(--border)',
+                  border: isEditing ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid var(--border)',
                   opacity: rule.enabled ? 1 : 0.55,
                   transition: 'opacity 0.2s',
                 }}
               >
-                {/* Top header row: Toggle, Target Audience Badge, Title, Delete */}
+                {/* Top header row: Toggle, Target Audience Badge, Title / Edit Input, Edit & Delete */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: 8,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: isEditing ? 0 : 1, minWidth: 0 }}>
                     <ToggleSwitch
                       checked={rule.enabled}
                       onChange={(checked) => handleToggleReminder(rule.id, checked)}
-                      ariaLabel={rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
+                      ariaLabel={currentLabel}
                     />
                     <span style={{
                       fontSize: 10,
@@ -6101,36 +6124,121 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                     }}>
                       {isNoVote ? 'לא הצביעו' : 'אעדכן'}
                     </span>
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--text)',
-                      lineHeight: 1.35,
-                      wordBreak: 'break-word',
-                    }}>
-                      {rule.label || (isNoVote ? 'תזכורת לקבועים' : 'תזכורת למתלבטים')}
-                    </span>
+                    {!isEditing && (
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--text)',
+                        lineHeight: 1.35,
+                        wordBreak: 'break-word',
+                      }}>
+                        {currentLabel}
+                      </span>
+                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteReminder(rule.id)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                      fontSize: 15,
-                      padding: '4px',
-                      borderRadius: 4,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                    }}
-                    title="מחק תזכורת"
-                    aria-label="מחק תזכורת"
-                  >
-                    🗑️
-                  </button>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                      <input
+                        type="text"
+                        value={editingLabel}
+                        onChange={(e) => setEditingLabel(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEdit(rule.id);
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                        autoFocus
+                        placeholder="שם תזכורת..."
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: '#111827',
+                          border: '1px solid #3b82f6',
+                          borderRadius: 6,
+                          padding: '3px 8px',
+                          fontSize: 12,
+                          color: '#fff',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(rule.id)}
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          border: '1px solid rgba(16, 185, 129, 0.5)',
+                          borderRadius: 6,
+                          padding: '3px 8px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: '#34d399',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                        title="שמור שם"
+                        aria-label="שמור שם"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          padding: '3px 8px',
+                          fontSize: 11,
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                        title="בטל עריכה"
+                        aria-label="בטל עריכה"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(rule)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          fontSize: 13,
+                          padding: '4px',
+                          borderRadius: 4,
+                          lineHeight: 1,
+                        }}
+                        title="ערוך שם"
+                        aria-label="ערוך שם"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReminder(rule.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          fontSize: 15,
+                          padding: '4px',
+                          borderRadius: 4,
+                          lineHeight: 1,
+                        }}
+                        title="מחק תזכורת"
+                        aria-label="מחק תזכורת"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom timing controls row: Days before (StyledSelect) and Time24Picker */}
