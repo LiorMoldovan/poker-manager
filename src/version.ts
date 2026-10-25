@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.21';
+export const APP_VERSION = '6.38.22';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.22',
+    date: '2026-10-25',
+    changes: [
+      '🔒 חסימת כרטיס מיילים לקבוצות משניות',
+      '🎯 דיוק בדיקת התאמה מול EmailJS',
+      '⚙️ זיהוי קבוצת ברירת מחדל מרכזית',
+    ],
+  },
   {
     version: '6.38.21',
     date: '2026-10-25',

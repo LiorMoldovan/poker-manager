@@ -11,14 +11,17 @@ import { getGroupId } from '../database/supabaseCache';
 //
 // If the env wasn't set (e.g. dev/localhost without a build override), we
 // return `true` to preserve the legacy "everyone can try" behavior. The
-// server-side check in `api/send-email.ts` is the actual enforcement
-// boundary; this helper is only the awareness layer.
+export const DEFAULT_OWNER_GROUP_ID = 'd1998bed-7bae-4221-8877-20c537acfc43';
+
+export function getOwnerGroupId(): string {
+  const envOwner = (import.meta.env.VITE_OWNER_GROUP_ID as string | undefined)?.trim();
+  return envOwner || DEFAULT_OWNER_GROUP_ID;
+}
+
 export function isEmailEnabledForCurrentGroup(): boolean {
-  const owner = (import.meta.env.VITE_OWNER_GROUP_ID as string | undefined)?.trim();
-  if (!owner) return true;
   const current = getGroupId();
-  if (!current) return true; // not yet loaded — don't pre-block
-  return current === owner;
+  if (!current) return false;
+  return current === getOwnerGroupId();
 }
 
 // Single-source dispatcher. Both the proxy (when it short-circuits client-side)

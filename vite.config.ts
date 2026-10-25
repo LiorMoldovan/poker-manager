@@ -96,6 +96,7 @@ export default defineConfig({
   ],
   define: {
     'import.meta.env.VITE_VAPID_PUBLIC_KEY': JSON.stringify(process.env.VITE_VAPID_PUBLIC_KEY || ''),
+    'import.meta.env.VITE_OWNER_GROUP_ID': JSON.stringify(process.env.VITE_OWNER_GROUP_ID || process.env.OWNER_GROUP_ID || 'd1998bed-7bae-4221-8877-20c537acfc43'),
   },
   server: {
     port: 3000,

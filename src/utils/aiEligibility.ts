@@ -22,19 +22,19 @@ import { hasLocalGeminiKey } from './localApiKey';
 // AI affordances when we KNOW they won't work, so non-owner groups
 // without their own key see clean "set your API key" messaging instead
 // of broken-call surprises.
+import { DEFAULT_OWNER_GROUP_ID } from './emailEligibility';
+
 //
 // Mirrors the shape of `emailEligibility.ts`; same env-var pattern.
 
-function getOwnerGroupId(): string | undefined {
-  return (import.meta.env.VITE_OWNER_GROUP_ID as string | undefined)?.trim() || undefined;
+function getOwnerGroupId(): string {
+  return (import.meta.env.VITE_OWNER_GROUP_ID as string | undefined)?.trim() || DEFAULT_OWNER_GROUP_ID;
 }
 
 function isCurrentGroupOwner(): boolean {
-  const owner = getOwnerGroupId();
-  if (!owner) return true; // env not configured — be permissive (server still enforces)
   const current = getGroupId();
-  if (!current) return false; // group not yet loaded — don't pre-affirm
-  return current === owner;
+  if (!current) return false;
+  return current === getOwnerGroupId();
 }
 
 // True iff this group can call the Gemini proxy successfully:

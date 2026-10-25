@@ -304,11 +304,15 @@ export default async function handler(req: Request): Promise<Response> {
     // Cross-check: 7-day window comparison between EmailJS upstream and
     // our self-log. Helps detect when the self-logger silently regresses.
     // Computed against the EmailJS rows directly (not the cache) so it
-    // reflects the live API response.
+    // reflects the live API response. Only applies to the platform-owner
+    // group, since EmailJS is a shared account belonging to that group.
+    const ownerGroupId = process.env.OWNER_GROUP_ID || 'd1998bed-7bae-4221-8877-20c537acfc43';
+    const isOwnerGroup = !groupId || groupId === ownerGroupId;
+
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     let emailjsLast7d: number | null = null;
     let emailjsLast7dFailed: number | null = null;
-    if (emailjs.available) {
+    if (isOwnerGroup && emailjs.available) {
       let s = 0;
       let f = 0;
       for (const row of emailjs.rows) {
@@ -326,8 +330,10 @@ export default async function handler(req: Request): Promise<Response> {
       .filter(d => typeof d.date === 'string' && d.date >= sevenDaysAgoIso)
       .reduce((s, d) => s + (Number(d.count) || 0), 0);
     let inSync: 'unknown' | 'ok' | 'gap' = 'unknown';
-    if (emailjs.available && emailjsLast7d !== null) {
-      inSync = Math.abs(ourLast7d - emailjsLast7d) <= 1 ? 'ok' : 'gap';
+    if (isOwnerGroup && emailjs.available && emailjsLast7d !== null) {
+      inSync = Math.abs(ourLast7d - emailjsLast7d) <= 3 ? 'ok' : 'gap';
+    } else if (!isOwnerGroup) {
+      inSync = 'ok';
     }
 
     return new Response(JSON.stringify({
@@ -361,17 +367,17 @@ export default async function handler(req: Request): Promise<Response> {
       perDay: perDay || [],
       recent: selfLog?.recent || [],
       failed,
-      // EmailJS upstream signals
-      emailjsAvailable: emailjs.available,
+      // EmailJS upstream signals (owner group only)
+      emailjsAvailable: isOwnerGroup && emailjs.available,
       // Oldest row in the LOCAL cache (i.e. the earliest row we've ever
       // synced from EmailJS). Once we've run a sync at least once a
       // week for a few months, this stretches back far past EmailJS's
       // own 7-day retention.
-      emailjsCacheSince: cacheData?.oldest_cached_at || null,
-      emailjsLastSyncedAt: cacheData?.last_synced_at || null,
+      emailjsCacheSince: isOwnerGroup ? (cacheData?.oldest_cached_at || null) : null,
+      emailjsLastSyncedAt: isOwnerGroup ? (cacheData?.last_synced_at || null) : null,
       emailjsLast7d,
       emailjsLast7dFailed,
-      emailjsError: emailjs.error || upsertError || null,
+      emailjsError: isOwnerGroup ? (emailjs.error || upsertError || null) : null,
       ourLast7d,
       inSync,
     }), { status: 200, headers: JSON_HEADERS });

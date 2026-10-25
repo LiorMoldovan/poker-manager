@@ -225,11 +225,13 @@ export async function getCurrentCycleUsage(
   const failed = Number(selfLogJson.failed || 0);
 
   const baseline = await parseBaselineConfig(authHeader);
+  const ownerGroupId = process.env.OWNER_GROUP_ID || 'd1998bed-7bae-4221-8877-20c537acfc43';
+  const isOwnerGroup = !groupId || groupId === ownerGroupId;
 
-  // Baseline only applies if (a) it's configured, (b) we're still in
-  // the baseline cycle. Outside that, the self-log is authoritative
-  // on its own.
-  if (!baseline || !isBaselineCycle(cycle, baseline)) {
+  // Baseline only applies if (a) this is the platform-owner group,
+  // (b) it's configured, (c) we're still in the baseline cycle.
+  // Outside that, the self-log is authoritative on its own.
+  if (!isOwnerGroup || !baseline || !isBaselineCycle(cycle, baseline)) {
     return {
       used: selfLogUsed,
       selfLogUsed,
