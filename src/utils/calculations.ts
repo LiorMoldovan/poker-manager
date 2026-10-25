@@ -66,8 +66,22 @@ type ScoreContext = {
    *  settled by one counterparty rather than collecting in pieces, mapped to
    *  how flat they are (1 = dead even, 0 = right at the edge). Splitting
    *  someone who finished +4₪ is worse than splitting someone at +55₪. */
-  flatness: ReadonlyMap<string, number>;
+  flatness: Map<string, number>;
+  /** Dynamic load balancing: when multiple settlement arrangements achieve the
+   *  minimal total transfers, prefers balancing transactions across participants
+   *  rather than burdening a single player with all payments (e.g. 3 & 3 vs 5 & 1).
+   *  Gated to future games (>= 2026-10-25) so historical games remain byte-for-byte locked. */
+  enableLoadBalance?: boolean;
 };
+
+// Effective date for dynamic load balancing among players.
+// Historical games prior to this date retain their exact settled pairings.
+export const SETTLEMENT_LOAD_BALANCE_EFFECTIVE_DATE = '2026-10-25';
+
+// Penalty weight for transaction variance per person.
+// Kept deliberately low (0.08) so it acts strictly as a tiebreaker between
+// arrangements with the same total transfer count, never adding extra transfers.
+const COST_LOAD_BALANCE = 0.08;
 
 // Prices, not a priority order.
 //
@@ -129,6 +143,9 @@ const scoreTransfers = (transfers: Settlement[], ctx: ScoreContext): number => {
     if (c <= 1) continue;
     const flat = ctx.flatness.get(name);
     if (flat !== undefined) cost += (c - 1) * COST_SPLIT * flat;
+    if (ctx.enableLoadBalance) {
+      cost += (c - 1) * (c - 1) * COST_LOAD_BALANCE;
+    }
   }
   const evenAt = ctx.comfortable * EVEN_SPREAD_SCALE;
   cost += COST_UNEVENNESS * (Math.max(0, evenAt - minAmt) / evenAt);
@@ -344,7 +361,7 @@ function bestSettleRecursive(
  * overfitting by rerunning all 30 games at 2-3x each weight — the output does
  * not move, so the result comes from the balances rather than the tuning.
  */
-function settleGroup(group: BalanceEntry[], minTransfer: number): Settlement[] {
+function settleGroup(group: BalanceEntry[], minTransfer: number, gameDate?: string): Settlement[] {
   const active = group.filter(b => Math.abs(b.balance) > 0.001);
   // 11 is where the narrowed search still lands around 125 ms; 12 measured
   // 1.2 s, which is back in freeze territory.
@@ -359,10 +376,13 @@ function settleGroup(group: BalanceEntry[], minTransfer: number): Settlement[] {
     const abs = Math.abs(b.balance);
     if (abs < nearFlatLimit) flatness.set(b.name, 1 - abs / nearFlatLimit);
   }
+  const datePrefix = gameDate ? gameDate.split('T')[0] : undefined;
+  const enableLoadBalance = !datePrefix || datePrefix >= SETTLEMENT_LOAD_BALANCE_EFFECTIVE_DATE;
   const ctx: ScoreContext = {
     minTransfer,
     comfortable: minTransfer * PETTY_TRANSFER_MULTIPLE,
     flatness,
+    enableLoadBalance,
   };
   // Up to 8 the exhaustive search finishes in well under a second, so take the
   // exact answer. Beyond that it blows up (a 9-player night measured ~2 s and
@@ -405,7 +425,7 @@ function optimizedSettle(
 
   const allTransfers: Settlement[] = [];
   for (const group of groups) {
-    allTransfers.push(...settleGroup(group, minTransfer));
+    allTransfers.push(...settleGroup(group, minTransfer, gameDate));
   }
 
   const rounded = allTransfers.filter(t => Math.round(t.amount) > 0);

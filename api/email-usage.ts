@@ -174,6 +174,16 @@ export default async function handler(req: Request): Promise<Response> {
   const authHeader = req.headers.get('Authorization') || '';
 
   try {
+    let groupId: string | null = null;
+    try {
+      const body = await req.json();
+      if (body && typeof body.groupId === 'string') {
+        groupId = body.groupId.trim() || null;
+      }
+    } catch {
+      // empty body is expected/allowed
+    }
+
     // ─── Step 0: Compute the EmailJS billing cycle window ─────────────
     // Helper resolves reset day from system_config first (UI-editable),
     // env var second, calendar-month default last. Same precedence is
@@ -206,7 +216,7 @@ export default async function handler(req: Request): Promise<Response> {
     //   - EmailJS cache RPC → cross-check signal (catches logger
     //     regressions; bounded by 7-day API retention)
     const [usageResult, emailjsCacheRes] = await Promise.all([
-      getCurrentCycleUsage(authHeader, cycle),
+      getCurrentCycleUsage(authHeader, cycle, groupId),
       fetch(`${SUPABASE_URL}/rest/v1/rpc/get_emailjs_monthly_summary`, {
         method: 'POST',
         headers: {

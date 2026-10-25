@@ -3918,7 +3918,6 @@ function EditPollModal(props: EditPollModalProps) {
   const [expansionDelay, setExpansionDelay] = useState(poll.expansionDelayHours);
   const [maybeHold, setMaybeHold] = useState(poll.maybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(poll.allowMaybe);
-  const [reminderEveningTime, setReminderEveningTime] = useState(poll.reminderEveningTime || getSettings().scheduleReminderEveningTime || '18:00');
   const [submitting, setSubmitting] = useState(false);
 
   // Group-level location presets (managed in Settings → Locations) — show
@@ -4057,7 +4056,6 @@ function EditPollModal(props: EditPollModalProps) {
         note: note.trim() || null,
         defaultLocation: defaultLocation.trim() || null,
         allowMaybe,
-        reminderEveningTime: reminderEveningTime || '18:00',
       });
       // Notification side-effects (status flip to 'confirmed' on lower
       // target, retroactive target_filled when yes_count already meets
@@ -4274,14 +4272,6 @@ function EditPollModal(props: EditPollModalProps) {
               />
             </div>
           )}
-          <div style={{ flex: '1 1 90px', minWidth: 80 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              ⏰ {t('schedule.reminderEveningTime')}
-            </label>
-            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <Time24Picker value={reminderEveningTime} onChange={setReminderEveningTime} />
-            </div>
-          </div>
         </div>
 
         {/* Allow "I'll update" toggle */}

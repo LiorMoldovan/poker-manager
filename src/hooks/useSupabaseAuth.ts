@@ -55,6 +55,21 @@ const SUPABASE_ROLE_MAP: Record<string, PermissionRole> = {
   member: 'member',
 };
 
+const LAST_ACTIVE_GROUP_KEY = 'poker_last_active_group_id';
+
+async function touchGroupActive(groupId: string, isMembership = true) {
+  try {
+    localStorage.setItem(LAST_ACTIVE_GROUP_KEY, groupId);
+  } catch {}
+  if (isMembership) {
+    try {
+      await supabase.rpc('touch_group_active', { p_group_id: groupId });
+    } catch {
+      // Fire-and-forget: ignore network errors
+    }
+  }
+}
+
 export function useSupabaseAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -127,7 +142,8 @@ export function useSupabaseAuth() {
         groups ( name, invite_code, created_by, training_enabled )
       `)
       .eq('user_id', userId)
-      .order('joined_at', { ascending: true });
+      .order('last_active_at', { ascending: false, nullsFirst: false })
+      .order('joined_at', { ascending: false });
 
     if (error) {
       console.warn('fetchMemberships network error, keeping current state:', error.message);
@@ -164,17 +180,46 @@ export function useSupabaseAuth() {
         });
       }
 
-      setState(prev => ({
-        ...prev,
-        memberships,
-        activeGroupId: switchToGroupId && memberships.some(m => m.groupId === switchToGroupId)
-          ? switchToGroupId
-          : prev.activeGroupId && memberships.some(m => m.groupId === prev.activeGroupId)
-            ? prev.activeGroupId
-            : memberships[0].groupId,
-        loading: false,
-      }));
+      const storedLastGroupId = (() => {
+        try {
+          return localStorage.getItem(LAST_ACTIVE_GROUP_KEY);
+        } catch {
+          return null;
+        }
+      })();
+
+      setState(prev => {
+        let resolvedGroupId: string | null = null;
+
+        if (switchToGroupId && memberships.some(m => m.groupId === switchToGroupId)) {
+          resolvedGroupId = switchToGroupId;
+        } else if (prev.activeGroupId && (
+          memberships.some(m => m.groupId === prev.activeGroupId) ||
+          (prev.isSuperAdmin && prev.allGroups.some(g => g.groupId === prev.activeGroupId))
+        )) {
+          resolvedGroupId = prev.activeGroupId;
+        } else if (prev.isSuperAdmin && storedLastGroupId && prev.allGroups.some(g => g.groupId === storedLastGroupId)) {
+          resolvedGroupId = storedLastGroupId;
+        } else {
+          resolvedGroupId = memberships[0]?.groupId ?? null;
+        }
+
+        if (resolvedGroupId) {
+          const isMembership = memberships.some(m => m.groupId === resolvedGroupId);
+          touchGroupActive(resolvedGroupId, isMembership);
+        }
+
+        return {
+          ...prev,
+          memberships,
+          activeGroupId: resolvedGroupId,
+          loading: false,
+        };
+      });
     } else {
+      try {
+        localStorage.removeItem(LAST_ACTIVE_GROUP_KEY);
+      } catch {}
       setState(prev => ({ ...prev, memberships: [], activeGroupId: null, loading: false }));
     }
   }, []);
@@ -190,6 +235,8 @@ export function useSupabaseAuth() {
       const isMembership = prev.memberships.some(m => m.groupId === groupId);
       const isObservable = prev.isSuperAdmin && prev.allGroups.some(g => g.groupId === groupId);
       if (!isMembership && !isObservable) return prev;
+
+      touchGroupActive(groupId, isMembership);
       return { ...prev, activeGroupId: groupId };
     });
   }, []);
@@ -249,6 +296,9 @@ export function useSupabaseAuth() {
         }
       } else {
         membershipFetchedFor = null;
+        try {
+          localStorage.removeItem(LAST_ACTIVE_GROUP_KEY);
+        } catch {}
         setState({ user: null, session: null, memberships: [], allGroups: [], activeGroupId: null, isSuperAdmin: false, loading: false });
       }
     });
@@ -281,6 +331,9 @@ export function useSupabaseAuth() {
     if (import.meta.env.DEV) {
       fetch('/__dev_auth_sync', { method: 'DELETE' }).catch(() => {});
     }
+    try {
+      localStorage.removeItem(LAST_ACTIVE_GROUP_KEY);
+    } catch {}
     setState({ user: null, session: null, memberships: [], allGroups: [], activeGroupId: null, isSuperAdmin: false, loading: false });
   }, []);
 

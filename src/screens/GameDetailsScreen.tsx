@@ -104,19 +104,26 @@ const GameDetailsScreen = () => {
       setSharedExpenses(gameExpenses);
     }
     
+    const gameDateStr = game.date ? game.date.split('T')[0] : undefined;
+    const blockedPairs = settings.blockedTransfers || [];
+
     // Calculate settlements - use COMBINED if there are expenses
     if (gameExpenses.length > 0) {
       const { settlements: settl, smallTransfers: small } = calculateCombinedSettlement(
         gamePlayers,
         gameExpenses,
-        settings.minTransfer
+        settings.minTransfer,
+        gameDateStr,
+        blockedPairs
       );
       setSettlements(settl);
       setSkippedTransfers(small);
     } else {
       const { settlements: settl, smallTransfers: small } = calculateSettlement(
         gamePlayers, 
-        settings.minTransfer
+        settings.minTransfer,
+        gameDateStr,
+        blockedPairs
       );
       setSettlements(settl);
       setSkippedTransfers(small);

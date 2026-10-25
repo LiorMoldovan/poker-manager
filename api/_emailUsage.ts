@@ -187,6 +187,7 @@ export interface CycleUsageResult {
 export async function getCurrentCycleUsage(
   authHeader: string,
   cycle: CycleWindow,
+  groupId?: string | null,
 ): Promise<CycleUsageResult | null> {
   // Pull the full cycle count from the self-log. This RPC also gives
   // us per_kind, per_day, and recent for the Usage card to render —
@@ -210,6 +211,7 @@ export async function getCurrentCycleUsage(
       body: JSON.stringify({
         month_start: cycle.start.toISOString(),
         month_end: cycle.end.toISOString(),
+        p_group_id: groupId || null,
       }),
     });
     if (!r.ok) return null;
@@ -257,6 +259,7 @@ export async function getCurrentCycleUsage(
       body: JSON.stringify({
         month_start: baseline.takenAt.toISOString(),
         month_end: cycle.end.toISOString(),
+        p_group_id: groupId || null,
       }),
     });
     if (r.ok) {

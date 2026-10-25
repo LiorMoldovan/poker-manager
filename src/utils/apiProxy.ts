@@ -627,8 +627,9 @@ async function fetchSystemConfig<T>(key: string): Promise<T | null> {
   }
 }
 
-async function fetchEmailUsageDirect(): Promise<EmailUsageResponse | null> {
+async function fetchEmailUsageDirect(groupId?: string | null): Promise<EmailUsageResponse | null> {
   try {
+    const targetGroupId = groupId || getGroupId() || null;
     // 1. Resolve cycle window from system_config (fall back to day 1).
     const resetDayConfig = await fetchSystemConfig<number>('emailjs_quota_reset_day');
     const resetDay = (typeof resetDayConfig === 'number' && resetDayConfig >= 1 && resetDayConfig <= 31)
@@ -660,6 +661,7 @@ async function fetchEmailUsageDirect(): Promise<EmailUsageResponse | null> {
     const { data, error } = await supabase.rpc('get_email_usage_summary', {
       month_start: cycle.start,
       month_end: cycle.end,
+      p_group_id: targetGroupId,
     });
     if (error || !data) return null;
     const row = data as {
@@ -683,6 +685,7 @@ async function fetchEmailUsageDirect(): Promise<EmailUsageResponse | null> {
       const { data: postData, error: postErr } = await supabase.rpc('get_email_usage_summary', {
         month_start: baselineTakenAt,
         month_end: cycle.end,
+        p_group_id: targetGroupId,
       });
       const postCount = !postErr && postData ? Number((postData as { used?: number }).used || 0) : 0;
       used = baselineUsed + postCount;
@@ -800,7 +803,8 @@ export async function proxySetEmailQuotaConfig(updates: {
   }
 }
 
-export async function proxyEmailUsage(): Promise<EmailUsageResponse | null> {
+export async function proxyEmailUsage(groupId?: string | null): Promise<EmailUsageResponse | null> {
+  const targetGroupId = groupId || getGroupId() || null;
   // Production path: hit the Edge Function. It does cycle math from
   // EMAILJS_QUOTA_RESET_DAY, fetches /history for the cross-check,
   // and merges everything into one response.
@@ -809,7 +813,7 @@ export async function proxyEmailUsage(): Promise<EmailUsageResponse | null> {
     const res = await fetch('/api/email-usage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
-      body: '{}',
+      body: JSON.stringify({ groupId: targetGroupId }),
     });
     if (res.ok) return (await res.json()) as EmailUsageResponse;
     // 404/405 on dev means Vite isn't serving Edge Functions — fall
@@ -819,7 +823,7 @@ export async function proxyEmailUsage(): Promise<EmailUsageResponse | null> {
   } catch {
     // network error — same fallback story
   }
-  return fetchEmailUsageDirect();
+  return fetchEmailUsageDirect(targetGroupId);
 }
 
 export async function proxySendPush(payload: {

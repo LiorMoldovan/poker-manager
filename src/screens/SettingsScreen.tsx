@@ -713,9 +713,14 @@ const SettingsScreen = () => {
   // polling: the data only changes when an email is actually sent.
   useEffect(() => {
     if (activeTab !== 'ai' || !isSuperAdmin) return;
+    if (!isEmailEnabledForCurrentGroup()) {
+      setEmailUsage(null);
+      return;
+    }
     let cancelled = false;
     const refresh = () => {
-      proxyEmailUsage().then(u => { if (!cancelled) setEmailUsage(u); });
+      const gid = getGroupId();
+      proxyEmailUsage(gid).then(u => { if (!cancelled) setEmailUsage(u); });
     };
     refresh();
     const onSent = () => refresh();
@@ -727,7 +732,7 @@ const SettingsScreen = () => {
       window.removeEventListener('email-sent', onSent);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [activeTab, isSuperAdmin]);
+  }, [activeTab, isSuperAdmin, multiGroup?.activeGroupId]);
 
   // Push notification history: fetch once on AI tab open. Refreshes on `push-sent` and `visibilitychange`.
   useEffect(() => {
@@ -3153,14 +3158,31 @@ const SettingsScreen = () => {
               );
             })()}
 
-            {/* EmailJS Usage Card — super admin only.
-                Mirrors the ElevenLabs Usage card directly above it: same
-                quota bar, same stats row, same recent-list pattern. Data
-                comes from `email_usage_log` (we maintain it ourselves —
-                EmailJS Free has no usage API). The card refreshes on
-                `email-sent` events so the bar updates immediately when an
-                admin sends a poll notification or settlement email. */}
-            {isSuperAdmin && (() => {
+            {/* EmailJS Usage Card — super admin only, in groups where email is enabled.
+                In other groups (e.g. observing another player's group), email sending is
+                disabled, so we show an informational locked notice instead of bleeding
+                the main group's emails or suggesting this group has an EmailJS quota. */}
+            {isSuperAdmin && !isEmailEnabledForCurrentGroup() && (
+              <div className="card" style={{
+                marginBottom: '0.75rem',
+                background: 'rgba(107, 114, 128, 0.08)',
+                borderStyle: 'dashed',
+                borderColor: 'rgba(107, 114, 128, 0.4)',
+                borderWidth: 1,
+                padding: '0.85rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+                  <span>🔒</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>
+                    {t('settings.ai.emailJsUsage')}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  {t('settings.notifications.emailLockedPreview')}
+                </p>
+              </div>
+            )}
+            {isSuperAdmin && isEmailEnabledForCurrentGroup() && (() => {
               const used = emailUsage?.used ?? 0;
               const limit = emailUsage?.limit ?? 200;
               const remaining = emailUsage?.remaining ?? Math.max(limit - used, 0);
@@ -3290,7 +3312,7 @@ const SettingsScreen = () => {
                               if (res.ok) {
                                 setShowQuotaEditor(false);
                                 // Refresh the Usage card.
-                                const fresh = await proxyEmailUsage();
+                                const fresh = await proxyEmailUsage(getGroupId());
                                 setEmailUsage(fresh);
                               }
                             } finally {

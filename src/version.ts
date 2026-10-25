@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.20';
+export const APP_VERSION = '6.38.21';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.38.21',
+    date: '2026-10-25',
+    changes: [
+      '🧹 הסרת שעת תזכורת ערב מעריכת סקר',
+      '⚖️ איזון עומס העברות בהתחשבנות סופית',
+      '🔒 הגבלת צפייה במכסת מיילים לסופר אדמין',
+      '🏢 שמירת קבוצה אחרונה פעילה במעבר',
+      '📅 דיוק בדיקת תאריכים בסקר אוטומטי',
+    ],
+  },
   {
     version: '6.38.20',
     date: '2026-10-18',
