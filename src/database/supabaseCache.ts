@@ -2106,6 +2106,18 @@ export async function adminSetPollPreferredDateRpc(
   return getPollById(poll.id) ?? poll;
 }
 
+export async function adminReorderPollWaitlistRpc(
+  dateId: string,
+  playerIds: string[],
+): Promise<void> {
+  const { error } = await supabase.rpc('admin_reorder_poll_waitlist', {
+    p_date_id: dateId,
+    p_player_ids: playerIds,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
 export async function cancelPollRpc(pollId: string, reason?: string | null): Promise<void> {
   const { error } = await supabase.rpc('cancel_game_poll', {
     p_poll_id: pollId,

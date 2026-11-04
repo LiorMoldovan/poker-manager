@@ -2860,6 +2860,10 @@ const he = {
   'schedule.leadingDate': 'מוביל',
   // aria-label for the row of admin action chips at the bottom of the card.
   'schedule.adminBarLabel': 'פעולות מנהל הקבוצה',
+  'schedule.waitlist.reorderTitle': '⏳ סדר רשימת המתנה',
+  'schedule.waitlist.reorderHint': 'הראשון בתור (#1) יקודם אוטומטית ל-✓ אגיע כשיתפנה מקום',
+  'schedule.waitlist.moveUp': 'קדם בתור',
+  'schedule.waitlist.moveDown': 'הורד בתור',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -5554,6 +5558,10 @@ const en: Record<keyof typeof he, string> = {
   'schedule.lockedDate': 'Locked',
   'schedule.leadingDate': 'Leading',
   'schedule.adminBarLabel': 'Admin actions',
+  'schedule.waitlist.reorderTitle': '⏳ Waitlist Order',
+  'schedule.waitlist.reorderHint': 'First in line (#1) is automatically promoted to ✓ Coming when a seat opens',
+  'schedule.waitlist.moveUp': 'Move up',
+  'schedule.waitlist.moveDown': 'Move down',
 };
 
 const translations = { he, en } as const;

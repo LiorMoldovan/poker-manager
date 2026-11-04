@@ -9,7 +9,7 @@ import {
   updatePollMeta,
   deletePoll,
   adminCastVote, adminDeleteVote,
-  adminSetPollPreferredDate,
+  adminSetPollPreferredDate, adminReorderPollWaitlist,
   getMyVoteChangeNotifs, setMyVoteChangeNotifs,
   getGroupId,
   getPlayerStats, getAllGames,
@@ -4105,6 +4105,39 @@ function EditPollModal(props: EditPollModalProps) {
   const [expansionDelay, setExpansionDelay] = useState(poll.expansionDelayHours);
   const [maybeHold, setMaybeHold] = useState(poll.maybeHoldHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(poll.allowMaybe);
+  const playerNameById = useMemo(
+    () => new Map(getAllPlayers().map(p => [p.id, p.name])),
+    [],
+  );
+  const initialWaitlistByDate = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const d of poll.dates) {
+      if (d.disabledAt) continue;
+      const wl = poll.votes
+        .filter(v => v.dateId === d.id && v.response === 'waitlist')
+        .slice()
+        .sort((a, b) => new Date(a.votedAt || a.createdAt || 0).getTime() - new Date(b.votedAt || b.createdAt || 0).getTime())
+        .map(v => v.playerId);
+      if (wl.length >= 2) {
+        map[d.id] = wl;
+      }
+    }
+    return map;
+  }, [poll.dates, poll.votes]);
+  const [waitlistOrderByDate, setWaitlistOrderByDate] = useState<Record<string, string[]>>(() => initialWaitlistByDate);
+
+  const moveWaitlistPlayer = (dId: string, idx: number, dir: -1 | 1) => {
+    setWaitlistOrderByDate(prev => {
+      const list = prev[dId];
+      if (!list) return prev;
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= list.length) return prev;
+      const next = list.slice();
+      const [item] = next.splice(idx, 1);
+      next.splice(targetIdx, 0, item);
+      return { ...prev, [dId]: next };
+    });
+  };
   const [submitting, setSubmitting] = useState(false);
 
   // Group-level location presets (managed in Settings → Locations) — show
@@ -4236,6 +4269,14 @@ function EditPollModal(props: EditPollModalProps) {
     }
     setSubmitting(true);
     try {
+      for (const [dId, orderedIds] of Object.entries(waitlistOrderByDate)) {
+        const initialIds = initialWaitlistByDate[dId] || [];
+        const changed = orderedIds.length === initialIds.length
+          && orderedIds.some((id, i) => id !== initialIds[i]);
+        if (changed) {
+          await adminReorderPollWaitlist(dId, orderedIds);
+        }
+      }
       await updatePollMeta(poll.id, {
         target: Math.floor(target),
         expansionDelay: Math.floor(expansionDelay),
@@ -4461,6 +4502,125 @@ function EditPollModal(props: EditPollModalProps) {
           )}
         </div>
 
+        {Object.keys(waitlistOrderByDate).length > 0 && (
+          <div style={{
+            marginBottom: 14,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(168, 85, 247, 0.08)',
+            border: '1px solid rgba(168, 85, 247, 0.32)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#c084fc', marginBottom: 2 }}>
+              {t('schedule.waitlist.reorderTitle')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              {t('schedule.waitlist.reorderHint')}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {poll.dates
+                .filter(d => waitlistOrderByDate[d.id]?.length >= 2)
+                .map(d => {
+                  const orderedIds = waitlistOrderByDate[d.id] || [];
+                  return (
+                    <div key={d.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {poll.dates.filter(x => !x.disabledAt).length > 1 && (
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
+                          📅 {fmtHebrewDate(d)}
+                        </div>
+                      )}
+                      {orderedIds.map((pid, idx) => (
+                        <div
+                          key={pid}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                            padding: '5px 8px',
+                            borderRadius: 6,
+                            background: 'rgba(15, 23, 42, 0.45)',
+                            border: '1px solid rgba(168, 85, 247, 0.24)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              padding: '1px 7px',
+                              borderRadius: 999,
+                              background: 'rgba(168, 85, 247, 0.22)',
+                              color: '#c084fc',
+                              border: '1px solid rgba(168, 85, 247, 0.45)',
+                              flexShrink: 0,
+                            }}>
+                              #{idx + 1}
+                            </span>
+                            <span style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: 'var(--text)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {playerNameById.get(pid) || pid}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => moveWaitlistPlayer(d.id, idx, -1)}
+                              disabled={submitting || idx === 0}
+                              title={t('schedule.waitlist.moveUp')}
+                              aria-label={t('schedule.waitlist.moveUp')}
+                              style={{
+                                width: 26,
+                                height: 24,
+                                borderRadius: 5,
+                                border: '1px solid rgba(168, 85, 247, 0.38)',
+                                background: idx === 0 ? 'transparent' : 'rgba(168, 85, 247, 0.16)',
+                                color: '#c084fc',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: submitting || idx === 0 ? 'not-allowed' : 'pointer',
+                                opacity: submitting || idx === 0 ? 0.35 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >▲</button>
+                            <button
+                              type="button"
+                              onClick={() => moveWaitlistPlayer(d.id, idx, 1)}
+                              disabled={submitting || idx === orderedIds.length - 1}
+                              title={t('schedule.waitlist.moveDown')}
+                              aria-label={t('schedule.waitlist.moveDown')}
+                              style={{
+                                width: 26,
+                                height: 24,
+                                borderRadius: 5,
+                                border: '1px solid rgba(168, 85, 247, 0.38)',
+                                background: idx === orderedIds.length - 1 ? 'transparent' : 'rgba(168, 85, 247, 0.16)',
+                                color: '#c084fc',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: submitting || idx === orderedIds.length - 1 ? 'not-allowed' : 'pointer',
+                                opacity: submitting || idx === orderedIds.length - 1 ? 0.35 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >▼</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
         {/* Allow "I'll update" toggle */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -4534,6 +4694,42 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   // the old native confirm() so the UX matches the rest of the app.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPreferredDate, setIsPreferredDate] = useState(false);
+
+  const orderedWaitlistFromPoll = useMemo(
+    () =>
+      poll.votes
+        .filter(v => v.dateId === dateId && v.response === 'waitlist')
+        .slice()
+        .sort((a, b) => new Date(a.votedAt || a.createdAt || 0).getTime() - new Date(b.votedAt || b.createdAt || 0).getTime())
+        .map(v => v.playerId),
+    [poll.votes, dateId],
+  );
+  const [proxyWaitlistOrder, setProxyWaitlistOrder] = useState<string[]>(() => orderedWaitlistFromPoll);
+  const [reorderingWaitlist, setReorderingWaitlist] = useState(false);
+
+  useEffect(() => {
+    setProxyWaitlistOrder(orderedWaitlistFromPoll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedWaitlistFromPoll.join(',')]);
+
+  const handleMoveProxyWaitlist = async (idx: number, dir: -1 | 1) => {
+    if (reorderingWaitlist || submitting) return;
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= proxyWaitlistOrder.length) return;
+    const next = proxyWaitlistOrder.slice();
+    const [item] = next.splice(idx, 1);
+    next.splice(targetIdx, 0, item);
+    setProxyWaitlistOrder(next);
+    setReorderingWaitlist(true);
+    try {
+      await adminReorderPollWaitlist(dateId, next);
+    } catch (e) {
+      setProxyWaitlistOrder(orderedWaitlistFromPoll);
+      onError(handleRpcError(e));
+    } finally {
+      setReorderingWaitlist(false);
+    }
+  };
 
   // Group filtered players by type. Order: permanent → permanent_guest → guest,
   // matching the convention used in SettingsScreen and other admin lists.
@@ -4855,6 +5051,114 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
             </div>
           )}
 
+          {proxyWaitlistOrder.length >= 2 && (
+            <div style={{
+              marginBottom: 12,
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: 'rgba(168, 85, 247, 0.08)',
+              border: '1px solid rgba(168, 85, 247, 0.32)',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#c084fc', marginBottom: 2 }}>
+                {t('schedule.waitlist.reorderTitle')}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                {t('schedule.waitlist.reorderHint')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {proxyWaitlistOrder.map((pid, idx) => {
+                  const pName = players.find(x => x.id === pid)?.name || pid;
+                  return (
+                    <div
+                      key={pid}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        padding: '4px 8px',
+                        borderRadius: 6,
+                        background: 'rgba(15, 23, 42, 0.45)',
+                        border: '1px solid rgba(168, 85, 247, 0.24)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '1px 7px',
+                          borderRadius: 999,
+                          background: 'rgba(168, 85, 247, 0.22)',
+                          color: '#c084fc',
+                          border: '1px solid rgba(168, 85, 247, 0.45)',
+                          flexShrink: 0,
+                        }}>
+                          #{idx + 1}
+                        </span>
+                        <span style={{
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          color: 'var(--text)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {pName}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveProxyWaitlist(idx, -1)}
+                          disabled={reorderingWaitlist || submitting || idx === 0}
+                          title={t('schedule.waitlist.moveUp')}
+                          aria-label={t('schedule.waitlist.moveUp')}
+                          style={{
+                            width: 24,
+                            height: 22,
+                            borderRadius: 5,
+                            border: '1px solid rgba(168, 85, 247, 0.38)',
+                            background: idx === 0 ? 'transparent' : 'rgba(168, 85, 247, 0.16)',
+                            color: '#c084fc',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            cursor: reorderingWaitlist || submitting || idx === 0 ? 'not-allowed' : 'pointer',
+                            opacity: reorderingWaitlist || submitting || idx === 0 ? 0.35 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >▲</button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveProxyWaitlist(idx, 1)}
+                          disabled={reorderingWaitlist || submitting || idx === proxyWaitlistOrder.length - 1}
+                          title={t('schedule.waitlist.moveDown')}
+                          aria-label={t('schedule.waitlist.moveDown')}
+                          style={{
+                            width: 24,
+                            height: 22,
+                            borderRadius: 5,
+                            border: '1px solid rgba(168, 85, 247, 0.38)',
+                            background: idx === proxyWaitlistOrder.length - 1 ? 'transparent' : 'rgba(168, 85, 247, 0.16)',
+                            color: '#c084fc',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            cursor: reorderingWaitlist || submitting || idx === proxyWaitlistOrder.length - 1 ? 'not-allowed' : 'pointer',
+                            opacity: reorderingWaitlist || submitting || idx === proxyWaitlistOrder.length - 1 ? 0.35 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >▼</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Player picker */}
           <div style={{ marginBottom: 10 }}>
             <div style={{
@@ -5001,6 +5305,7 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                             flexShrink: 0,
                           }}>
                             {responseLabels[has.response].label}
+                            {has.response === 'waitlist' && proxyWaitlistOrder.indexOf(p.id) >= 0 ? ` #${proxyWaitlistOrder.indexOf(p.id) + 1}` : ''}
                           </span>
                         )}
                       </button>

@@ -23,7 +23,7 @@ import {
   updatePollMetaRpc, type PollMetaPatch,
   claimPollNotificationsRpc, linkPollToGameRpc,
   adminCastPollVoteRpc, adminDeletePollVoteRpc,
-  setPollPreferredDateRpc, adminSetPollPreferredDateRpc,
+  setPollPreferredDateRpc, adminSetPollPreferredDateRpc, adminReorderPollWaitlistRpc,
   deletePollRpc,
   subscribeToPollChangesRpc, unsubscribeFromPollChangesRpc,
   getMyPollChangeSubscriptionsRpc, getPollChangeRecipientsRpc,
@@ -1693,6 +1693,11 @@ export const adminSetPollPreferredDate = (
   voterPlayerId: string,
   dateId: string | null,
 ): Promise<GamePoll> => adminSetPollPreferredDateRpc(pollId, voterPlayerId, dateId);
+
+export const adminReorderPollWaitlist = (
+  dateId: string,
+  playerIds: string[],
+): Promise<void> => adminReorderPollWaitlistRpc(dateId, playerIds);
 
 export const cancelPoll = (pollId: string, reason?: string): Promise<void> =>
   cancelPollRpc(pollId, reason ?? null);
