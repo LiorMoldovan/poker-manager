@@ -1850,7 +1850,7 @@ const fmtVoteDateTime = (iso: string): string => {
 export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, highlightPlayerId, youLabel, t }: VoterGroupsProps) {
   const groups: { response: RsvpResponse; label: string; color: string; tint: string }[] = [
     { response: 'yes',      label: t('schedule.voters.yes'),      color: '#10b981', tint: 'rgba(16, 185, 129, 0.12)' },
-    { response: 'waitlist', label: `⏳ ${t('schedule.voters.waitlist')}`, color: '#f59e0b', tint: 'rgba(245, 158, 11, 0.12)' },
+    { response: 'waitlist', label: `⏳ ${t('schedule.voters.waitlist')}`, color: '#c084fc', tint: 'rgba(168, 85, 247, 0.12)' },
     { response: 'maybe', label: t('schedule.voters.maybe'), color: '#eab308', tint: 'rgba(234, 179, 8, 0.12)' },
     { response: 'no',    label: t('schedule.voters.no'),    color: '#ef4444', tint: 'rgba(239, 68, 68, 0.10)' },
   ];
@@ -1951,10 +1951,10 @@ export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe
                         }}>
                           {g.response === 'waitlist' && (
                             <span style={{
-                              color: '#f59e0b', fontSize: 11, fontWeight: 700,
+                              color: '#c084fc', fontSize: 11, fontWeight: 700,
                               padding: '0 6px', borderRadius: 6,
-                              background: 'rgba(245, 158, 11, 0.18)',
-                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              background: 'rgba(168, 85, 247, 0.18)',
+                              border: '1px solid rgba(168, 85, 247, 0.45)',
                               marginInlineEnd: 6,
                             }}>
                               #{v.waitlistPos ?? idx + 1}
@@ -2631,8 +2631,8 @@ function ShareDateCompetitionStrip({
                       {s.waitlist > 0 && (
                         <span style={{
                           padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
-                          background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b',
-                          border: '1px solid rgba(245, 158, 11, 0.45)',
+                          background: 'rgba(168, 85, 247, 0.18)', color: '#c084fc',
+                          border: '1px solid rgba(168, 85, 247, 0.45)',
                         }}>⏳ {s.waitlist}</span>
                       )}
                       {s.preferred > 0 && (
@@ -2722,10 +2722,10 @@ function ShareDateCompetitionStrip({
                   marginTop: 4, paddingTop: 2,
                 }}>
                   <span style={{
-                    fontSize: 18, fontWeight: 700, color: '#f59e0b',
+                    fontSize: 18, fontWeight: 700, color: '#c084fc',
                     padding: '4px 12px', borderRadius: 999,
-                    background: 'rgba(245, 158, 11, 0.18)',
-                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    background: 'rgba(168, 85, 247, 0.18)',
+                    border: '1px solid rgba(168, 85, 247, 0.45)',
                     letterSpacing: 0.3,
                   }}>
                     ⏳ {t('schedule.voters.waitlist')} · {waitlistVoters.length}
@@ -2736,15 +2736,15 @@ function ShareDateCompetitionStrip({
                       <span
                         key={`waitlist-${d.id}-${v.playerId}`}
                         style={{
-                          fontSize: 21, color: '#fcd34d',
+                          fontSize: 21, color: '#d8b4fe',
                           padding: '5px 14px', borderRadius: 12,
-                          background: 'rgba(245, 158, 11, 0.12)',
-                          border: '1px solid rgba(245, 158, 11, 0.40)',
+                          background: 'rgba(168, 85, 247, 0.12)',
+                          border: '1px solid rgba(168, 85, 247, 0.40)',
                           display: 'inline-flex', alignItems: 'center', gap: 6,
                           fontWeight: 600,
                         }}
                       >
-                        <span style={{ color: '#f59e0b', fontSize: 16, fontWeight: 700 }}>#{v.waitlistPos ?? idx + 1}</span>
+                        <span style={{ color: '#c084fc', fontSize: 16, fontWeight: 700 }}>#{v.waitlistPos ?? idx + 1}</span>
                         {name}
                         {v.isPreferred && <span style={{ color: '#fbbf24', fontSize: 15 }}>⭐</span>}
                         {v.isProxy && <span style={{ color: '#eab308', fontSize: 15 }}>★</span>}
@@ -2890,7 +2890,7 @@ function PollShareInvitationBody({
           // Empty groups are filtered at render time.
           const voterGroups: { resp: RsvpResponse; color: string; tint: string; symbol: string; label: string; rows: VoterRow[] }[] = [
             { resp: 'yes',      color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.share.confirmedVoters'), rows: s.voters.filter(v => v.response === 'yes') },
-            { resp: 'waitlist', color: '#f59e0b',    tint: 'rgba(245, 158, 11, 0.10)',  symbol: '⏳', label: t('schedule.voters.waitlist'),        rows: [...s.voters.filter(v => v.response === 'waitlist')].sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime()) },
+            { resp: 'waitlist', color: '#c084fc',    tint: 'rgba(168, 85, 247, 0.10)',  symbol: '⏳', label: t('schedule.voters.waitlist'),        rows: [...s.voters.filter(v => v.response === 'waitlist')].sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime()) },
             { resp: 'maybe', color: '#eab308',    tint: 'rgba(234, 179, 8, 0.10)',  symbol: '?', label: t('schedule.voters.maybe'),           rows: s.voters.filter(v => v.response === 'maybe') },
             { resp: 'no',    color: '#f87171',    tint: 'rgba(239, 68, 68, 0.08)',  symbol: '✕', label: t('schedule.voters.no'),              rows: s.voters.filter(v => v.response === 'no') },
           ];
@@ -2942,8 +2942,8 @@ function PollShareInvitationBody({
                     {s.waitlist > 0 && (
                       <span style={{
                         padding: '9px 18px', borderRadius: 999, fontSize: 24, fontWeight: 700,
-                        background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b',
-                        border: '1px solid rgba(245, 158, 11, 0.45)',
+                        background: 'rgba(168, 85, 247, 0.18)', color: '#c084fc',
+                        border: '1px solid rgba(168, 85, 247, 0.45)',
                         letterSpacing: 0.2,
                       }}>⏳ {s.waitlist}</span>
                     )}
@@ -3003,10 +3003,10 @@ function PollShareInvitationBody({
                               }}>
                               {g.resp === 'waitlist' && (
                             <span style={{
-                              color: '#f59e0b', fontSize: 11, fontWeight: 700,
-                              padding: '0 6px', borderRadius: 6,
-                              background: 'rgba(245, 158, 11, 0.18)',
-                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              color: '#c084fc', fontSize: 18, fontWeight: 700,
+                              padding: '2px 10px', borderRadius: 8,
+                              background: 'rgba(168, 85, 247, 0.18)',
+                              border: '1px solid rgba(168, 85, 247, 0.45)',
                               marginInlineEnd: 6,
                             }}>
                               #{v.waitlistPos ?? idx + 1}
@@ -3015,8 +3015,8 @@ function PollShareInvitationBody({
                           {name}
                           {v.isPreferred && (
                             <span style={{
-                              color: '#fbbf24', fontSize: 10, fontWeight: 700,
-                              padding: '0 6px', borderRadius: 6,
+                              color: '#fbbf24', fontSize: 17, fontWeight: 700,
+                              padding: '2px 10px', borderRadius: 8,
                               background: 'rgba(251, 191, 36, 0.16)',
                               border: '1px solid rgba(251, 191, 36, 0.4)',
                               marginInlineStart: 6,
@@ -3297,15 +3297,15 @@ function PollShareConfirmationBody({
           style={{
             marginTop: 20,
             padding: '18px 24px',
-            background: 'rgba(245, 158, 11, 0.08)',
-            border: '1px dashed rgba(245, 158, 11, 0.40)',
+            background: 'rgba(168, 85, 247, 0.08)',
+            border: '1px dashed rgba(168, 85, 247, 0.45)',
             borderRadius: 16,
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, fontWeight: 700, color: '#c084fc' }}>
             <span>⏳</span>
             <span>{t('schedule.voters.waitlist')} · {waitlistVotes.length}</span>
           </div>
@@ -3317,19 +3317,22 @@ function PollShareConfirmationBody({
                   key={`conf-wl-${v.playerId}`}
                   style={{
                     fontSize: 22,
-                    color: '#fcd34d',
+                    color: '#d8b4fe',
                     padding: '6px 16px',
                     borderRadius: 12,
-                    background: 'rgba(245, 158, 11, 0.14)',
-                    border: '1px solid rgba(245, 158, 11, 0.40)',
+                    background: 'rgba(168, 85, 247, 0.14)',
+                    border: '1px solid rgba(168, 85, 247, 0.45)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 8,
                     fontWeight: 600,
                   }}
                 >
-                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>#{idx + 1}</span>
+                  <span style={{ color: '#c084fc', fontWeight: 800 }}>#{idx + 1}</span>
                   {name}
+                  {Boolean(v.castByUserId && (!v.userId || v.castByUserId !== v.userId)) && (
+                    <span style={{ color: '#eab308', fontSize: 17 }}>★</span>
+                  )}
                 </span>
               );
             })}
@@ -4811,7 +4814,7 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
 
   const responseLabels: Record<RsvpResponse, { label: string; color: string }> = {
     yes:      { label: t('schedule.rsvpYes'),                color: '#10b981' },
-    waitlist: { label: `⏳ ${t('schedule.rsvpWaitlist')}`,    color: '#f59e0b' },
+    waitlist: { label: `⏳ ${t('schedule.rsvpWaitlist')}`,    color: '#a855f7' },
     maybe: { label: t('schedule.rsvpMaybe'), color: '#eab308' },
     no:    { label: t('schedule.rsvpNo'),    color: '#ef4444' },
   };

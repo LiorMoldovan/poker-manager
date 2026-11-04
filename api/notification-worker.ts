@@ -219,6 +219,8 @@ interface PollCtx {
     date_id: string;
     response: string;
     user_id: string | null;
+    voted_at?: string;
+    is_preferred?: boolean;
     created_at: string;
   }>;
   playersById: Map<string, { id: string; name: string; type: string }>;
@@ -230,7 +232,7 @@ async function loadPollCtx(pollId: string): Promise<PollCtx | null> {
   const [pollRes, datesRes, votesRes, playersRes] = await Promise.all([
     sb.from('game_polls').select('id, group_id, status, target_player_count, confirmed_date_id, expanded_at, default_location, cancellation_reason, share_slug').eq('id', pollId).maybeSingle(),
     sb.from('game_poll_dates').select('id, proposed_date, proposed_time, location, disabled_at').eq('poll_id', pollId).order('proposed_date'),
-    sb.from('game_poll_votes').select('player_id, date_id, response, user_id, created_at').eq('poll_id', pollId),
+    sb.from('game_poll_votes').select('player_id, date_id, response, user_id, created_at, voted_at, is_preferred').eq('poll_id', pollId),
     // Deferred: load all players in the group (cheap, one query) so the
     // recipient resolver and confirmed-line builder have name + type.
     sb.from('players').select('id, name, type, group_id'),
@@ -261,6 +263,19 @@ function yesVoterNamesOnPinnedDate(ctx: PollCtx): string[] {
     .filter(v => v.date_id === dateId && v.response === 'yes')
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map(v => ctx.playersById.get(v.player_id)?.name)
+    .filter((n): n is string => Boolean(n));
+}
+
+function waitlistVoterNamesOnPinnedDate(ctx: PollCtx): string[] {
+  const dateId = ctx.poll.confirmed_date_id;
+  if (!dateId) return [];
+  return ctx.votes
+    .filter(v => v.date_id === dateId && v.response === 'waitlist')
+    .sort((a, b) => (a.voted_at || a.created_at).localeCompare(b.voted_at || b.created_at))
+    .map((v, idx) => {
+      const name = ctx.playersById.get(v.player_id)?.name;
+      return name ? `#${idx + 1} ${name}` : null;
+    })
     .filter((n): n is string => Boolean(n));
 }
 
@@ -458,7 +473,14 @@ function buildExpandedMessage(ctx: PollCtx): BuiltMessage {
     const loc = d.location || ctx.poll.default_location;
     const taken = yesOn(d.id);
     return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}`
-      + `${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו`;
+      + `${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו`
+      + (() => {
+          const wl = ctx.votes.filter(v => v.date_id === d.id && v.response === 'waitlist').length;
+          const pref = open.length >= 2
+            ? ctx.votes.filter(v => v.date_id === d.id && v.is_preferred && (v.response === 'yes' || v.response === 'waitlist')).length
+            : 0;
+          return `${wl > 0 ? ` (⏳ ${wl} בהמתנה)` : ''}${pref > 0 ? ` · ⭐ ${pref} מעדיפים` : ''}`;
+        })();
   }).join('\n');
   const leading = open.reduce((max, d) => Math.max(max, yesOn(d.id)), 0);
   const missing = Math.max(0, target - leading);
@@ -535,6 +557,10 @@ function buildConfirmedMessage(ctx: PollCtx): BuiltMessage | null {
       `${I}📅 ${dateVerbose}\n` +
       locLine +
       `${I}👥 ${confirmedLine}` +
+      (() => {
+        const wl = waitlistVoterNamesOnPinnedDate(ctx);
+        return wl.length > 0 ? `\n${I}⏳ רשימת המתנה (${wl.length}): ${wl.join(', ')}.` : '';
+      })() +
       cta +
       '\n\nנתראה על השולחן! 🃏',
     url: deepLinkUrl(ctx.poll.id),
@@ -567,14 +593,18 @@ function buildConfirmedOthersMessage(ctx: PollCtx): BuiltMessage | null {
   if (missing === 0) {
     return {
       pushTitle: '📅 נקבע תאריך לערב הפוקר',
-      pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''} · המשחק כבר מלא`,
+      pushBody: `${dateCompact}${loc ? ` — ${loc}` : ''} · המשחק מלא — ניתן להירשם לרשימת ההמתנה ⏳`,
       emailSubject: '📅 נקבע תאריך לערב הפוקר',
       emailBody:
         'נקבע תאריך לערב הפוקר 🎯\n\n' +
         `${I}📅 ${dateVerbose}\n` +
         locLine +
         `${I}👥 ${confirmedLine}\n` +
-        '🪑 כל המקומות תפוסים. אם מישהו יבטל — נעדכן' +
+        (() => {
+          const wl = waitlistVoterNamesOnPinnedDate(ctx);
+          const wlBlock = wl.length > 0 ? `${I}⏳ רשימת המתנה (${wl.length}): ${wl.join(', ')}.\n` : '';
+          return `${wlBlock}🪑 כל המקומות תפוסים — ניתן להירשם לרשימת ההמתנה באפליקציה ולקבל עדכון אוטומטי אם יתפנה מקום ⏳`;
+        })() +
         cta,
       url: deepLinkUrl(ctx.poll.id),
     };
@@ -622,6 +652,10 @@ function buildTargetFilledMessage(ctx: PollCtx): BuiltMessage | null {
       `${I}📅 ${dateVerbose}\n` +
       locLine +
       `${I}👥 ${confirmedLine}` +
+      (() => {
+        const wl = waitlistVoterNamesOnPinnedDate(ctx);
+        return wl.length > 0 ? `\n${I}⏳ רשימת המתנה (${wl.length}): ${wl.join(', ')}.` : '';
+      })() +
       cta +
       '\n\nנתראה על השולחן! 🃏',
     url: deepLinkUrl(ctx.poll.id),
@@ -662,15 +696,35 @@ function buildVoteChangeMessage(
     waitlist: 'רשימת המתנה',
   };
   const verb = isNew ? 'הצביע' : 'עדכן הצבעה';
+  const fromWaitlist = payload.from_waitlist === true;
   const dateLabel = formatHebrewDateTime(dateRow.proposed_date, dateRow.proposed_time);
-  const text = `${player.name} ${verb}: ${responseLabel[response] || response} — ${dateLabel}`;
+  const wlSorted = ctx.votes
+    .filter(v => v.date_id === dateId && v.response === 'waitlist')
+    .sort((a, b) => (a.voted_at || a.created_at).localeCompare(b.voted_at || b.created_at));
+  const wlIdx = wlSorted.findIndex(v => v.player_id === playerId);
+  const wlPosSuffix = response === 'waitlist' && wlIdx >= 0 ? ` (#${wlIdx + 1})` : '';
+  const voteRow = ctx.votes.find(v => v.date_id === dateId && v.player_id === playerId);
+  const enabledDatesCount = ctx.dates.filter(d => !d.disabled_at).length;
+  const prefSuffix = voteRow?.is_preferred && enabledDatesCount >= 2 && (response === 'yes' || response === 'waitlist')
+    ? ' ⭐'
+    : '';
+  const yesCountOnDate = ctx.votes.filter(v => v.date_id === dateId && v.response === 'yes').length;
+  const wlCountOnDate = wlSorted.length;
+  const seatSummary = `\n\n📊 אישרו ${yesCountOnDate} מתוך ${ctx.poll.target_player_count}${wlCountOnDate > 0 ? ` · ⏳ ${wlCountOnDate} בהמתנה` : ''}`;
+  const text = fromWaitlist
+    ? `${player.name} נכנס למשחק מרשימת ההמתנה ✓${prefSuffix} — ${dateLabel}`
+    : `${player.name} ${verb}: ${responseLabel[response] || response}${wlPosSuffix}${prefSuffix} — ${dateLabel}`;
+  const titleText = fromWaitlist
+    ? '🎉 קודם מרשימת ההמתנה'
+    : (isNew ? '🗳 הצבעה חדשה' : '🗳 שינוי בהצבעה');
+
   return {
-    pushTitle: isNew ? '🗳 הצבעה חדשה' : '🗳 שינוי בהצבעה',
+    pushTitle: titleText,
     pushBody: text,
-    emailSubject: `🗳 ${player.name} ${verb}`,
+    emailSubject: fromWaitlist ? ('🎉 ' + player.name + ' קודם מרשימת ההמתנה') : ('🗳 ' + player.name + ' ' + verb),
     emailBody:
-      `${text}\n\n` +
-      `👉 לצפייה בהצבעה: ${emailVoteLink(ctx.poll.share_slug || ctx.poll.id)}`,
+      text + seatSummary + '\n\n' +
+      '👉 לצפייה בהצבעה: ' + emailVoteLink(ctx.poll.share_slug || ctx.poll.id),
     url: deepLinkUrl(ctx.poll.id),
   };
 }
@@ -745,7 +799,11 @@ function buildNoVoteEmailReminderMessage(
   const dateLines = openDates.map(d => {
     const loc = d.location || ctx.poll.default_location;
     const taken = yesOn(d.id);
-    return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו`;
+    const wl = ctx.votes.filter(v => v.date_id === d.id && v.response === 'waitlist').length;
+    const pref = openDates.length >= 2
+      ? ctx.votes.filter(v => v.date_id === d.id && v.is_preferred && (v.response === 'yes' || v.response === 'waitlist')).length
+      : 0;
+    return `• ${formatHebrewDateTime(d.proposed_date, d.proposed_time)}${loc ? ` — ${loc}` : ''} · ${taken}/${target} אישרו${wl > 0 ? ` (⏳ ${wl} בהמתנה)` : ''}${pref > 0 ? ` · ⭐ ${pref} מעדיפים` : ''}`;
   }).join('\n');
 
   const link = emailVoteLink(ctx.poll.share_slug || ctx.poll.id);
@@ -797,20 +855,40 @@ const SENTINEL_COLUMN: Partial<Record<Kind, string>> = {
 
 async function obsolescenceCheck(job: Job): Promise<Obsolete | null> {
   const { kind, poll_id } = job;
-  if (!poll_id) return null;
+  const effectivePollId = poll_id || (typeof job.payload?.poll_id === 'string' ? job.payload.poll_id : null);
+  if (!effectivePollId) return null;
   if (kind !== 'creation' && kind !== 'expanded' && kind !== 'confirmed'
       && kind !== 'target_filled' && kind !== 'vote_change'
-      && kind !== 'reminder_no_vote' && kind !== 'reminder_maybe') {
+      && kind !== 'reminder_no_vote' && kind !== 'reminder_maybe'
+      && kind !== 'waitlist_promoted') {
     return null;
   }
 
   const sb = db();
   const { data } = await sb.from('game_polls')
     .select('status, confirmed_date_id, target_player_count, expanded_at')
-    .eq('id', poll_id)
+    .eq('id', effectivePollId)
     .maybeSingle();
-  // Poll vanished — planForJob returns null for that anyway.
   if (!data) return null;
+  const pollCheck = data as { status: string };
+  if (kind === 'waitlist_promoted') {
+    if (pollCheck.status === 'cancelled') {
+      return { reason: 'poll was cancelled before waitlist_promoted notice went out', reopen: false };
+    }
+    const promoDateId = typeof job.payload?.date_id === 'string' ? job.payload.date_id : null;
+    const promoPlayerId = typeof job.payload?.player_id === 'string' ? job.payload.player_id : null;
+    if (promoDateId && promoPlayerId) {
+      const { data: vRow } = await sb.from('game_poll_votes')
+        .select('response')
+        .eq('date_id', promoDateId)
+        .eq('player_id', promoPlayerId)
+        .maybeSingle();
+      if (!vRow || (vRow as { response?: string }).response !== 'yes') {
+        return { reason: 'promoted voter is no longer yes on date before notice went out', reopen: false };
+      }
+    }
+    return null;
+  }
   const poll = data as {
     status: string;
     confirmed_date_id: string | null;
@@ -905,6 +983,7 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
     || kind === 'training_report_filed'
     || kind === 'training_report_resolved'
     || kind === 'training_milestone'
+    || kind === 'waitlist_promoted'
       ? true
       : (emailKinds as Record<string, boolean | undefined>)[kind] !== false;
   // Email is also gated to the owner group at the network layer; mirror

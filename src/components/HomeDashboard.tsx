@@ -1439,7 +1439,7 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
           </span>{' '}
           {comingNames.join(' · ')}
           {waitlistNames.length > 0 && (
-            <div style={{ marginTop: '0.2rem', color: '#f59e0b' }}>
+            <div style={{ marginTop: '0.2rem', color: '#c084fc' }}>
               <span style={{ fontWeight: 600 }}>⏳ {t('schedule.voters.waitlist')}:</span>{' '}
               {waitlistNames.join(' · ')}
             </div>
@@ -1752,7 +1752,7 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
                 const tone = myResponse === 'yes'
                   ? { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', key: 'home.schedule.openGlanceMineYes' as const }
                   : myResponse === 'waitlist'
-                  ? { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.16)', key: 'schedule.rsvpWaitlist' as const }
+                  ? { fg: '#c084fc', bg: 'rgba(168, 85, 247, 0.18)', key: 'schedule.rsvpWaitlist' as const }
                   : myResponse === 'no'
                   ? { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', key: 'home.schedule.openGlanceMineNo' as const }
                   : myResponse === 'maybe'
@@ -1768,7 +1768,7 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
                     padding: '1px 6px',
                     borderRadius: 6,
                   }}>
-                    {t(tone.key)}
+                    {myResponse === 'waitlist' ? ('⏳ ' + t(tone.key)) : t(tone.key)}
                   </span>
                 );
               })()}

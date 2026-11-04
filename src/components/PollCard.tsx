@@ -939,10 +939,10 @@ export default function PollCard(props: PollCardProps) {
                   </span>
                   {s.waitlist > 0 && (
                     <span style={{
-                      fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                      fontSize: 10, fontWeight: 700, color: '#c084fc',
                       padding: '1px 6px', borderRadius: 999,
-                      background: 'rgba(245, 158, 11, 0.16)',
-                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      background: 'rgba(168, 85, 247, 0.16)',
+                      border: '1px solid rgba(168, 85, 247, 0.45)',
                       fontVariantNumeric: 'tabular-nums',
                     }}>
                       ⏳ {s.waitlist}
@@ -983,7 +983,7 @@ export default function PollCard(props: PollCardProps) {
                     const active = myVote === effectiveResp;
                     const myWaitlistPos = showAsWaitlist ? s.voters.find(v => v.playerId === currentPlayer?.id)?.waitlistPos : undefined;
                     const colorMap: Record<RsvpResponse, string> = {
-                      yes: '#10b981', waitlist: '#f59e0b', maybe: '#eab308', no: '#ef4444',
+                      yes: '#10b981', waitlist: '#a855f7', maybe: '#eab308', no: '#ef4444',
                     };
                     const labelMap: Record<RsvpResponse, string> = {
                       yes: t('schedule.rsvpYes'),
@@ -1026,9 +1026,11 @@ export default function PollCard(props: PollCardProps) {
                         className={`poll-rsvp-btn${active ? ' poll-rsvp-btn--active' : ''}`}
                         style={{
                           padding: '6px 12px', borderRadius: 8,
-                          border: active ? `1.5px solid ${colorMap[effectiveResp]}` : '1px solid var(--border)',
-                          background: active ? `${colorMap[effectiveResp]}1f` : 'transparent',
-                          color: active ? colorMap[effectiveResp] : 'var(--text)',
+                          border: active ? `1.5px solid ${colorMap[effectiveResp]}` : showAsWaitlist ? '1px dashed rgba(168, 85, 247, 0.45)' : '1px solid var(--border)',
+                          background: active ? `${colorMap[effectiveResp]}24` : showAsWaitlist ? 'rgba(168, 85, 247, 0.08)' : 'transparent',
+                          color: active ? (effectiveResp === 'waitlist' ? '#c084fc' : colorMap[effectiveResp]) : showAsWaitlist ? '#d8b4fe' : 'var(--text)',
+
+
                           fontWeight: active ? 700 : 500, fontSize: 13,
                           cursor: disabled ? 'not-allowed' : 'pointer',
                           opacity: disabled ? 0.4 : 1,
@@ -1122,7 +1124,7 @@ export default function PollCard(props: PollCardProps) {
                         {expanded ? t('schedule.voters.hideList') : (() => {
                           const chips: { key: string; color: string; text: string }[] = [];
                           if (s.yes > 0) chips.push({ key: 'y', color: '#10b981', text: `✓${s.yes}` });
-                          if (s.waitlist > 0) chips.push({ key: 'w', color: '#f59e0b', text: `⏳${s.waitlist}` });
+                          if (s.waitlist > 0) chips.push({ key: 'w', color: '#c084fc', text: `⏳${s.waitlist}` });
                           if (s.maybe > 0) chips.push({ key: 'm', color: '#eab308', text: `?${s.maybe}` });
                           if (s.no > 0) chips.push({ key: 'n', color: '#ef4444', text: `✕${s.no}` });
                           return (

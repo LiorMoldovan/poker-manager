@@ -275,16 +275,31 @@ function buildPollClosesAtLine(poll: GamePoll): string | null {
 // bidi resolver anchors the line as RTL on the very first strong
 // character, avoiding the digit-Hebrew-digit-Hebrew-digit shuffling
 // that some clients render awkwardly.
-function buildPerDateYesTally(yesCount: number, target: number): string | null {
+function buildPerDateYesTally(yesCount: number, target: number, waitlistCount = 0, preferredCount = 0): string | null {
   if (yesCount === 0) return null;
   // Three-NBSP indent so the tally visually nests under the bullet
   // even though `white-space: normal` collapses regular leading spaces
   // in the email's HTML body.
   const indent = '\u00a0\u00a0\u00a0';
+  const extra = `${waitlistCount > 0 ? ` · ⏳ ${waitlistCount} בהמתנה` : ''}${preferredCount > 0 ? ` · ⭐ ${preferredCount} מעדיפים` : ''}`;
   if (yesCount === 1) {
-    return `${indent}✅ אישר שחקן אחד מתוך ${target}`;
+    return `${indent}✅ אישר שחקן אחד מתוך ${target}${extra}`;
   }
-  return `${indent}✅ אישרו ${yesCount} מתוך ${target}`;
+  return `${indent}✅ אישרו ${yesCount} מתוך ${target}${extra}`;
+}
+
+function formatWaitlistLineForDate(poll: GamePoll, dateId: string): string {
+  const playersById = new Map(getAllPlayers().map(p => [p.id, p.name]));
+  const wl = poll.votes
+    .filter(v => v.dateId === dateId && v.response === 'waitlist')
+    .sort((a, b) => (a.votedAt || a.createdAt).localeCompare(b.votedAt || b.createdAt))
+    .map((v, idx) => {
+      const name = playersById.get(v.playerId);
+      return name ? `#${idx + 1} ${name}` : null;
+    })
+    .filter((n): n is string => Boolean(n));
+  if (wl.length === 0) return '';
+  return `\n\u00a0\u00a0⏳ רשימת המתנה (${wl.length}): ${wl.join(', ')}.`;
 }
 
 // Decide between a single shared "מיקום - {loc}" line below the
@@ -319,9 +334,15 @@ function buildDatesAndLocationBlock(poll: GamePoll): { dateLines: string; locati
     const head = withInlineLocation
       ? formatDateBullet(d, poll.defaultLocation)
       : `• ${formatHebrewDateTime(d)}`;
+    const wlCount = poll.votes.reduce((n, v) => n + (v.dateId === d.id && v.response === 'waitlist' ? 1 : 0), 0);
+    const prefCount = visibleDates.length >= 2
+      ? poll.votes.reduce((n, v) => n + (v.dateId === d.id && v.isPreferred && (v.response === 'yes' || v.response === 'waitlist') ? 1 : 0), 0)
+      : 0;
     const tally = buildPerDateYesTally(
       yesByDateId.get(d.id) ?? 0,
       poll.targetPlayerCount,
+      wlCount,
+      prefCount,
     );
     return tally ? `${head}\n${tally}` : head;
   };
@@ -495,6 +516,7 @@ export function buildConfirmedMessage(
       `${I}📅 ${dateLineVerbose}\n` +
       locLine +
       `${I}👥 ${confirmedLine}` +
+      formatWaitlistLineForDate(poll, confirmedDate.id) +
       ctaBlock +
       '\n\nנתראה על השולחן! 🃏',
   };
@@ -530,7 +552,7 @@ export function buildConfirmedFullOthersMessage(
 
   return {
     pushTitle: '📅 נקבע תאריך לערב הפוקר',
-    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''} · המשחק כבר מלא`,
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''} · המשחק מלא — ניתן להירשם לרשימת ההמתנה ⏳`,
     emailSubject: '📅 נקבע תאריך לערב הפוקר',
     emailBody: (name) =>
       emailGreeting(name) +
@@ -538,7 +560,8 @@ export function buildConfirmedFullOthersMessage(
       `${I}📅 ${dateLineVerbose}\n` +
       locLine +
       `${I}👥 ${confirmedLine}\n` +
-      '🪑 כל המקומות תפוסים. אם מישהו יבטל — נעדכן' +
+      `${I}👥 ${confirmedLine}${formatWaitlistLineForDate(poll, confirmedDate.id)}\n` +
+      '🪑 כל המקומות תפוסים — ניתן להירשם לרשימת ההמתנה באפליקציה ולקבל עדכון אוטומטי אם יתפנה מקום ⏳' +
       ctaBlock,
   };
 }
@@ -599,6 +622,7 @@ export function buildTargetFilledMessage(
       `${I}📅 ${dateLineVerbose}\n` +
       locLine +
       `${I}👥 ${confirmedLine}` +
+      formatWaitlistLineForDate(poll, confirmedDate.id) +
       seatsLine +
       ctaBlock +
       '\n\nנתראה על השולחן! 🃏',
@@ -1199,7 +1223,16 @@ export function buildVoteEventMessage(
   // already credits the editor separately, the verb describes what
   // *the voter* is on record as.
   const verbKey = RESPONSE_VERB_KEY[vote.response];
-  const responseLabel = verbKey ? verbForName(verbKey, voterName) : vote.response;
+  const wlSorted = poll.votes
+    .filter(v => v.dateId === vote.dateId && v.response === 'waitlist')
+    .sort((a, b) => (a.votedAt || a.createdAt).localeCompare(b.votedAt || b.createdAt));
+  const wlIdx = wlSorted.findIndex(v => v.playerId === vote.playerId);
+  const wlPosSuffix = vote.response === 'waitlist' && wlIdx >= 0 ? ` (#${wlIdx + 1})` : '';
+  const enabledDatesCount = poll.dates.filter(d => !d.disabledAt).length;
+  const prefSuffix = vote.isPreferred && enabledDatesCount >= 2 && (vote.response === 'yes' || vote.response === 'waitlist')
+    ? ' ⭐'
+    : '';
+  const responseLabel = `${verbKey ? verbForName(verbKey, voterName) : vote.response}${wlPosSuffix}${prefSuffix}`;
   const proxyTag = changedByName && changedByName !== voterName
     ? ` (ע״י ${changedByName})`
     : '';
@@ -1223,7 +1256,7 @@ export function buildVoteEventMessage(
   const yesCount = poll.votes.filter(
     v => v.dateId === vote.dateId && v.response === 'yes',
   ).length;
-  const stateLine = `📊 ${buildSeatStateLine(yesCount, poll.targetPlayerCount)}`;
+  const stateLine = `📊 ${buildSeatStateLine(yesCount, poll.targetPlayerCount)}${wlSorted.length > 0 ? ` · ⏳ ${wlSorted.length} בהמתנה` : ''}`;
   return {
     pushTitle: title,
     pushBody: summary,
@@ -1297,7 +1330,7 @@ function buildReminderPush(poll: GamePoll, dates: GamePollDate[]): { title: stri
     );
     const missing = poll.targetPlayerCount - yesCount;
     const seatLine = missing <= 0
-      ? 'ההרכב כמעט סגור.'
+      ? 'ההרכב מלא — ניתן להירשם לרשימת ההמתנה ⏳'
       : missing === 1
         ? 'חסר שחקן אחד להשלמת ההרכב.'
         : `חסרים ${missing} שחקנים להשלמת ההרכב.`;
@@ -1420,6 +1453,10 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
         0,
       ),
       target,
+      poll.votes.reduce((n, v) => n + (v.dateId === d.id && v.response === 'waitlist' ? 1 : 0), 0),
+      stateSource.length >= 2
+        ? poll.votes.reduce((n, v) => n + (v.dateId === d.id && v.isPreferred && (v.response === 'yes' || v.response === 'waitlist') ? 1 : 0), 0)
+        : 0,
     );
     return tally ? `${head}\n${tally}` : head;
   }).join('\n');
