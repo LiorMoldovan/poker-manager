@@ -45,7 +45,7 @@ export interface PeriodRecapData {
     sniper?: { playerName: string; winRate: number; wins: number; games: number; profit: number };
     bigHit?: { playerName: string; profit: number; date: string };
     hotStreak?: { playerName: string; streak: number; profit: number };
-    atm?: { playerName: string; totalRebuys: number; totalInvested: number; games: number };
+    atm?: { playerName: string; totalRebuys: number; totalInvested: number; games: number; profit: number };
   };
   deterministicHighlights: string[];
 }
@@ -360,7 +360,11 @@ export function computePeriodRecap(
     highlights.push(`הקופה האישית הגדולה של התקופה: ${globalBigHit.playerName} התפוצץ עם +₪${globalBigHit.profit.toLocaleString('he-IL')} בערב אחד (${globalBigHit.date}).`);
   }
   if (atmCandidate) {
-    highlights.push(`המממן הרשמי של השולחן: ${atmCandidate.playerName} תרם לקופה ${atmCandidate.totalRebuys} כניסות (₪${atmCandidate.totalInvested.toLocaleString('he-IL')}).`);
+    if (atmCandidate.profit > 0) {
+      highlights.push(`מלך הריבאי שלא מוותר: ${atmCandidate.playerName} רשם ${atmCandidate.totalRebuys} קניות חוזרות (₪${atmCandidate.totalInvested.toLocaleString('he-IL')}) והצליח לסיים ברווח נקי של +₪${atmCandidate.profit.toLocaleString('he-IL')}!`);
+    } else {
+      highlights.push(`מלך הריבאי והאקשן: ${atmCandidate.playerName} הזרים לקופה ${atmCandidate.totalRebuys} כניסות (₪${atmCandidate.totalInvested.toLocaleString('he-IL')}) שהקפיצו את האקשן בשולחן.`);
+    }
   }
 
   return {
@@ -404,6 +408,7 @@ export function computePeriodRecap(
             totalRebuys: atmCandidate.totalRebuys,
             totalInvested: atmCandidate.totalInvested,
             games: atmCandidate.gamesPlayed,
+            profit: atmCandidate.profit,
           }
         : undefined,
     },

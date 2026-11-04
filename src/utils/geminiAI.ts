@@ -6047,7 +6047,7 @@ export const generatePeriodRecapAI = async (recap: {
     sniper?: { playerName: string; winRate: number; wins: number; games: number };
     bigHit?: { playerName: string; profit: number; date: string };
     hotStreak?: { playerName: string; streak: number };
-    atm?: { playerName: string; totalRebuys: number; totalInvested: number };
+    atm?: { playerName: string; totalRebuys: number; totalInvested: number; profit?: number };
   };
 }): Promise<{ text: string; model: string }> => {
   const apiKey = getGeminiApiKey();
@@ -6068,7 +6068,11 @@ export const generatePeriodRecapAI = async (recap: {
     awardsLines.push(`- הרצף החם: ${recap.awards.hotStreak.playerName} (${recap.awards.hotStreak.streak} ניצחונות רצופים)`);
   }
   if (recap.awards.atm) {
-    awardsLines.push(`- המממן של השולחן: ${recap.awards.atm.playerName} (${recap.awards.atm.totalRebuys} כניסות, ₪${recap.awards.atm.totalInvested})`);
+    const atmProfit = (recap.awards.atm as { profit?: number }).profit;
+    const profitStr = atmProfit !== undefined
+      ? `, שורה תחתונה: ${atmProfit >= 0 ? '+' : ''}₪${atmProfit.toLocaleString('he-IL')}`
+      : '';
+    awardsLines.push(`- מלך הריבאי והאקשן: ${recap.awards.atm.playerName} (${recap.awards.atm.totalRebuys} קניות חוזרות, ₪${recap.awards.atm.totalInvested.toLocaleString('he-IL')} הושקעו${profitStr})`);
   }
 
   const prompt = `אתה כתב הספורט והפרשן של קבוצת פוקר חברים ישראלית. כתוב סיכום תקופה חגיגי, חד, שנון ומבוסס נתונים עבור "${recap.title}" (בסגנון Spotify Wrapped).
@@ -6087,7 +6091,7 @@ ${buildTraitBlock(recap.allRanked.map(p => p.playerName))}
 - כתוב 3 פסקאות קצרות וקולעות (סה"כ 90-130 מילים) בעברית טבעית וזורמת.
 - פסקה 1: הכתרת האלוף (${recap.podium[0]?.playerName || ''}) ומאבק הפודיום מול מקומות 2-3.
 - פסקה 2: זרקור על כוכבי התארים (הצלף, המכה הגדולה או הרצף החם) ומי הפתיע.
-- פסקה 3: עקיצה חברית לתחתית הטבלה / המממן של השולחן וסיכום האווירה לקראת התקופה הבאה.
+- פסקה 3: התייחסות למלך הריבאי (שים לב אם עשה קאמבק מרשים לרווח חרף הקניות החוזרות, או שהזין את האקשן בקופה) ועקיצה חברית לתחתית הטבלה.
 - דיוק מוחלט במספרים — אל תמציא שום נתון שלא מופיע למעלה. ללא כותרות או כוכביות מיותרות.`;
 
   const result = await callWithFallback({

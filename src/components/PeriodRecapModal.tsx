@@ -658,24 +658,27 @@ export const PeriodRecapModal = ({
                     </div>
                   )}
 
-                  {/* ATM / Table Sponsor */}
+                  {/* Rebuy King / Most Entries */}
                   {recap.awards.atm && (
                     <div
                       style={{
-                        background: 'rgba(244, 63, 94, 0.08)',
-                        border: '1px solid rgba(251, 113, 133, 0.28)',
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(251, 191, 36, 0.3)',
                         borderRadius: '10px',
                         padding: '0.55rem 0.45rem',
                         textAlign: 'center',
                       }}
                     >
-                      <div style={{ fontSize: '1.25rem' }}>🏧</div>
-                      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fb7185' }}>המממן של השולחן</div>
+                      <div style={{ fontSize: '1.25rem' }}>🔄</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fbbf24' }}>מלך הריבאי</div>
                       <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
                         {recap.awards.atm.playerName}
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: '#fecdd3', marginTop: '0.1rem' }}>
-                        {recap.awards.atm.totalRebuys} קניות חוזרות
+                      <div style={{ fontSize: '0.74rem', color: '#fde68a', marginTop: '0.1rem' }}>
+                        {recap.awards.atm.totalRebuys} קניות{' '}
+                        <span style={{ color: recap.awards.atm.profit >= 0 ? '#4ade80' : '#94a3b8', direction: 'ltr', display: 'inline-block' }}>
+                          ({recap.awards.atm.profit >= 0 ? '+' : ''}₪{recap.awards.atm.profit.toLocaleString('he-IL')})
+                        </span>
                       </div>
                     </div>
                   )}
