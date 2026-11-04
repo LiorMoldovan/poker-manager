@@ -115,42 +115,9 @@ export const PeriodRecapModal = ({
     }
   };
 
-  const buildWhatsAppText = () => {
-    const LTR = '\u200E';
-    let text = `👑 *סיכום ${recap.title}* 🃏\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-    if (recap.podium.length > 0) {
-      text += `🏆 *אלופי התקופה:*\n`;
-      const medals = ['🥇', '🥈', '🥉'];
-      recap.podium.slice(0, 3).forEach((p, idx) => {
-        text += `${medals[idx]} *${p.playerName}*: ${LTR}${p.profit >= 0 ? '+' : ''}₪${p.profit.toLocaleString('he-IL')} (${p.gamesPlayed} משחקים, ${p.winRate}%)\n`;
-      });
-      text += `\n`;
-    }
-
-    text += `🎖️ *תארי הצטיינות:*\n`;
-    if (recap.awards.sniper) {
-      text += `🎯 צלף: *${recap.awards.sniper.playerName}* (${recap.awards.sniper.winRate}% ניצחונות)\n`;
-    }
-    if (recap.awards.bigHit) {
-      text += `💥 שיא ערב: *${recap.awards.bigHit.playerName}* (${LTR}+₪${recap.awards.bigHit.profit.toLocaleString('he-IL')})\n`;
-    }
-    if (recap.awards.hotStreak) {
-      text += `🔥 רצף ניצחונות: *${recap.awards.hotStreak.playerName}* (${recap.awards.hotStreak.streak} ברצף)\n`;
-    }
-    if (recap.awards.atm) {
-      text += `🏧 מממן השולחן: *${recap.awards.atm.playerName}* (${recap.awards.atm.totalRebuys} כניסות)\n`;
-    }
-
-    text += `\n🎮 סה״כ שוחקו ${recap.gamesCount} משחקים`;
-    return text;
-  };
-
   const handleShareInfographic = async () => {
     if (isSharing) return;
     setIsSharing(true);
-    const shareText = buildWhatsAppText();
     try {
       if (shareCardRef.current) {
         const canvas = await html2canvas(shareCardRef.current, {
@@ -162,24 +129,14 @@ export const PeriodRecapModal = ({
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (blob) {
           const file = new File([blob], `poker-recap-${recap.periodKey}.png`, { type: 'image/png' });
-          await shareFiles([file], recap.title, shareText);
-          return;
+          await shareFiles([file], recap.title);
         }
       }
-      // Fallback if no card or canvas failed
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
     } catch (err) {
       console.error('Share recap failed:', err);
-      // Fallback directly to text on WhatsApp
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
     } finally {
       setIsSharing(false);
     }
-  };
-
-  const handleShareWhatsAppTextOnly = () => {
-    const text = buildWhatsAppText();
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const nextSlide = () => setSlideIdx(prev => Math.min(SLIDE_COUNT - 1, prev + 1));
@@ -336,23 +293,23 @@ export const PeriodRecapModal = ({
               type="button"
               onClick={handleShareInfographic}
               disabled={isSharing}
-              title="שתף לוואטסאפ"
+              title="שתף תמונה לוואטסאפ"
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.3rem',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                color: '#34d399',
-                borderRadius: '8px',
-                padding: '0.25rem 0.55rem',
-                fontSize: '0.74rem',
-                fontWeight: 700,
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                color: '#f8fafc',
+                borderRadius: '6px',
+                padding: '0.3rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
                 cursor: isSharing ? 'wait' : 'pointer',
                 fontFamily: 'inherit',
               }}
             >
-              <span>📲</span>
+              <span>📤</span>
               <span>{isSharing ? 'משתף...' : 'שתף'}</span>
             </button>
 
@@ -1015,50 +972,25 @@ export const PeriodRecapModal = ({
                 )}
               </div>
 
-              {/* WhatsApp Share Actions */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {/* WhatsApp Share Action */}
+              <div style={{ marginTop: '0.2rem' }}>
                 <button
                   type="button"
+                  className="btn btn-primary"
                   onClick={handleShareInfographic}
                   disabled={isSharing}
                   style={{
                     width: '100%',
-                    padding: '0.7rem',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    color: '#ffffff',
-                    fontWeight: 800,
-                    fontSize: '0.92rem',
-                    cursor: isSharing ? 'wait' : 'pointer',
-                    fontFamily: 'inherit',
-                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    padding: '0.65rem 1rem',
+                    fontSize: '0.88rem',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.45rem',
                   }}
                 >
-                  <span>📲</span>
-                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה וסיכום לוואטסאפ'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleShareWhatsAppTextOnly}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#94a3b8',
-                    padding: '0.45rem',
-                    borderRadius: '10px',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  💬 שתף כהודעת טקסט בלבד לוואטסאפ
+                  <span>📤</span>
+                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה לוואטסאפ'}</span>
                 </button>
               </div>
             </div>

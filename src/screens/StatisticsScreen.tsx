@@ -3021,9 +3021,9 @@ const StatisticsScreen = () => {
                     }
                   }}
                   style={{
-                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.12))',
-                    border: '1px solid rgba(251, 191, 36, 0.45)',
-                    color: '#fbbf24',
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    border: '1px solid rgba(59, 130, 246, 0.35)',
+                    color: '#60a5fa',
                     borderRadius: '999px',
                     padding: '0.22rem 0.65rem',
                     fontSize: '0.7rem',
