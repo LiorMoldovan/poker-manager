@@ -41,12 +41,13 @@ import {
   ReminderModal,
   ModalPortal,
   fmtHebrewDate,
+  fmtHebrewDateCompact,
   hasGuestTierPlayers,
   ghostBtn,
   shareBtn,
 } from './ScheduleTab';
 import type { PollCardProps, DateStat } from './ScheduleTab';
-import { getAllPolls, setPollVotingLock, getSettings } from '../database/storage';
+import { getAllPolls, setPollVotingLock, setPollPreferredDate, getSettings } from '../database/storage';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { buildWazeUrl, openWaze } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
@@ -82,12 +83,15 @@ export default function PollCard(props: PollCardProps) {
   const dateStats = useMemo(() => {
     const stats = new Map<string, DateStat>();
     for (const d of poll.dates) {
-      stats.set(d.id, { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 });
+      stats.set(d.id, { yes: 0, waitlist: 0, maybe: 0, no: 0, preferred: 0, voters: [], proxyCount: 0 });
     }
     for (const v of poll.votes) {
       const s = stats.get(v.dateId);
       if (!s) continue;
       s[v.response]++;
+      if (v.isPreferred && (v.response === 'yes' || v.response === 'waitlist')) {
+        s.preferred++;
+      }
       const isProxy = !!v.castByUserId && (v.userId == null || v.castByUserId !== v.userId);
       s.voters.push({
         playerId: v.playerId,
@@ -96,8 +100,15 @@ export default function PollCard(props: PollCardProps) {
         votedAt: v.votedAt,
         createdAt: v.createdAt,
         castByUserId: v.castByUserId ?? null,
+        isPreferred: v.isPreferred === true,
       });
       if (isProxy) s.proxyCount++;
+    }
+    for (const s of stats.values()) {
+      const wl = s.voters
+        .filter(v => v.response === 'waitlist')
+        .sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime());
+      wl.forEach((v, idx) => { v.waitlistPos = idx + 1; });
     }
     return stats;
   }, [poll]);
@@ -338,14 +349,16 @@ export default function PollCard(props: PollCardProps) {
     if (poll.dates.length < 2) return null;
     if (poll.confirmedDateId) return null;
     let bestId: string | null = null;
+    let bestPref = -1;
     let bestYes = 0;
     let tied = false;
     for (const d of poll.dates) {
       if (d.disabledAt) continue;
       const y = dateStats.get(d.id)?.yes ?? 0;
       if (y === 0) continue;
-      if (y > bestYes) { bestId = d.id; bestYes = y; tied = false; }
-      else if (y === bestYes) { tied = true; }
+      const pr = dateStats.get(d.id)?.preferred ?? 0;
+      if (y > bestYes || (y === bestYes && pr > bestPref)) { bestId = d.id; bestYes = y; bestPref = pr; tied = false; }
+      else if (y === bestYes && pr === bestPref) { tied = true; }
     }
     return tied ? null : bestId;
   }, [poll.dates, poll.confirmedDateId, dateStats]);
@@ -536,7 +549,7 @@ export default function PollCard(props: PollCardProps) {
       {poll.status !== 'expired' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {poll.dates.map(d => {
-            const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
+            const s = dateStats.get(d.id) || { yes: 0, waitlist: 0, maybe: 0, no: 0, preferred: 0, voters: [], proxyCount: 0 };
             const myVote = currentUserVoteByDate.get(d.id);
             const loc = d.location || poll.defaultLocation;
             const isPinnedHere = poll.confirmedDateId === d.id;
@@ -924,6 +937,30 @@ export default function PollCard(props: PollCardProps) {
                   }}>
                     {s.yes}/{poll.targetPlayerCount}
                   </span>
+                  {s.waitlist > 0 && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                      padding: '1px 6px', borderRadius: 999,
+                      background: 'rgba(245, 158, 11, 0.16)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      ⏳ {s.waitlist}
+                    </span>
+                  )}
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    {poll.dates.length >= 2 && !poll.confirmedDateId && s.preferred > 0 && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: '#fbbf24',
+                        padding: '1px 6px', borderRadius: 999,
+                        background: 'rgba(251, 191, 36, 0.14)',
+                        border: '1px solid rgba(251, 191, 36, 0.4)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {t('schedule.preference.badgeCount', { count: s.preferred })}
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 {/* RSVP buttons + admin proxy.
@@ -940,12 +977,17 @@ export default function PollCard(props: PollCardProps) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {(['yes', 'maybe', 'no'] as RsvpResponse[]).map(resp => {
                     if (resp === 'maybe' && !poll.allowMaybe) return null;
-                    const active = myVote === resp;
+                    const isYesFullOrHeld = myVote !== 'yes' && (s.yes >= poll.targetPlayerCount || s.yes + heldHere >= poll.targetPlayerCount);
+                    const showAsWaitlist = resp === 'yes' && (isYesFullOrHeld || myVote === 'waitlist');
+                    const effectiveResp: RsvpResponse = showAsWaitlist ? 'waitlist' : resp;
+                    const active = myVote === effectiveResp;
+                    const myWaitlistPos = showAsWaitlist ? s.voters.find(v => v.playerId === currentPlayer?.id)?.waitlistPos : undefined;
                     const colorMap: Record<RsvpResponse, string> = {
-                      yes: '#10b981', maybe: '#eab308', no: '#ef4444',
+                      yes: '#10b981', waitlist: '#f59e0b', maybe: '#eab308', no: '#ef4444',
                     };
                     const labelMap: Record<RsvpResponse, string> = {
                       yes: t('schedule.rsvpYes'),
+                      waitlist: active && myWaitlistPos ? `⏳ ${t('schedule.rsvpWaitlistPos', { pos: myWaitlistPos })}` : `⏳ ${t('schedule.rsvpWaitlist')}`,
                       maybe: t('schedule.rsvpMaybe'),
                       no: t('schedule.rsvpNo'),
                     };
@@ -960,12 +1002,12 @@ export default function PollCard(props: PollCardProps) {
                     const wouldHitHold =
                       resp === 'yes' && !active && !wouldOverfill
                       && s.yes + heldHere >= poll.targetPlayerCount;
-                    const disabled = !canVote.allowed || wouldOverfill || wouldHitHold || isFillPinnedLocked || isDisabled;
+                    const disabled = !canVote.allowed || isFillPinnedLocked || isDisabled;
                     return (
                       <button
                         key={resp}
                         disabled={disabled}
-                        onClick={() => onVote(poll, d.id, resp)}
+                        onClick={() => onVote(poll, d.id, effectiveResp)}
                         title={
                           isDisabled ? t('schedule.errorDateDisabled') :
                           wouldOverfill ? t('schedule.errorSeatFull') :
@@ -984,13 +1026,13 @@ export default function PollCard(props: PollCardProps) {
                         className={`poll-rsvp-btn${active ? ' poll-rsvp-btn--active' : ''}`}
                         style={{
                           padding: '6px 12px', borderRadius: 8,
-                          border: active ? `1.5px solid ${colorMap[resp]}` : '1px solid var(--border)',
-                          background: active ? `${colorMap[resp]}1f` : 'transparent',
-                          color: active ? colorMap[resp] : 'var(--text)',
+                          border: active ? `1.5px solid ${colorMap[effectiveResp]}` : '1px solid var(--border)',
+                          background: active ? `${colorMap[effectiveResp]}1f` : 'transparent',
+                          color: active ? colorMap[effectiveResp] : 'var(--text)',
                           fontWeight: active ? 700 : 500, fontSize: 13,
                           cursor: disabled ? 'not-allowed' : 'pointer',
                           opacity: disabled ? 0.4 : 1,
-                        }}>{labelMap[resp]}</button>
+                        }}>{labelMap[effectiveResp]}</button>
                     );
                   })}
                   {isAdmin && (
@@ -1080,6 +1122,7 @@ export default function PollCard(props: PollCardProps) {
                         {expanded ? t('schedule.voters.hideList') : (() => {
                           const chips: { key: string; color: string; text: string }[] = [];
                           if (s.yes > 0) chips.push({ key: 'y', color: '#10b981', text: `✓${s.yes}` });
+                          if (s.waitlist > 0) chips.push({ key: 'w', color: '#f59e0b', text: `⏳${s.waitlist}` });
                           if (s.maybe > 0) chips.push({ key: 'm', color: '#eab308', text: `?${s.maybe}` });
                           if (s.no > 0) chips.push({ key: 'n', color: '#ef4444', text: `✕${s.no}` });
                           return (
@@ -1135,6 +1178,81 @@ export default function PollCard(props: PollCardProps) {
               `[Start] [Share] [Edit] [Lock] [⋯]` — and the
               auto-margin on the kebab made the wrap look broken).
           Wraps naturally on narrow viewports if it ever needs to. */}
+      {canVote.allowed && !poll.confirmedDateId && currentPlayer && (() => {
+        const myPosDates = poll.dates.filter(d => {
+          if (d.disabledAt) return false;
+          const r = currentUserVoteByDate.get(d.id);
+          return r === 'yes' || r === 'waitlist';
+        });
+        if (myPosDates.length < 2) return null;
+        const myPrefId = poll.votes.find(
+          v => v.playerId === currentPlayer.id && v.isPreferred && (v.response === 'yes' || v.response === 'waitlist'),
+        )?.dateId ?? null;
+        const handleSelectPref = async (dateId: string | null) => {
+          if (dateId === myPrefId) return;
+          try {
+            await setPollPreferredDate(poll.id, dateId);
+          } catch (e) {
+            onError(handleRpcError(e));
+          }
+        };
+        return (
+          <div style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: 'rgba(251, 191, 36, 0.08)',
+            border: '1px solid rgba(251, 191, 36, 0.30)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 6,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginInlineEnd: 4 }}>
+              {t('schedule.preference.prompt')}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleSelectPref(null)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: myPrefId === null ? 700 : 500,
+                border: myPrefId === null ? '1.5px solid #fbbf24' : '1px solid var(--border)',
+                background: myPrefId === null ? 'rgba(251, 191, 36, 0.20)' : 'transparent',
+                color: myPrefId === null ? '#fbbf24' : 'var(--text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              {t('schedule.preference.equal')}
+            </button>
+            {myPosDates.map(d => {
+              const active = myPrefId === d.id;
+              return (
+                <button
+                  key={`pref-${d.id}`}
+                  type="button"
+                  onClick={() => handleSelectPref(d.id)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: active ? 700 : 500,
+                    border: active ? '1.5px solid #fbbf24' : '1px solid var(--border)',
+                    background: active ? 'rgba(251, 191, 36, 0.22)' : 'transparent',
+                    color: active ? '#fbbf24' : 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ⭐ {fmtHebrewDateCompact(d)}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       <div role="group" aria-label={t('schedule.adminBarLabel')} style={{
         display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12,
       }}>

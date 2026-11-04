@@ -54,6 +54,7 @@ const VERB_KEYS = [
   'confirmed',   // אישר / אישרה — RSVP yes
   'willUpdate',  // יעדכן / תעדכן — RSVP maybe
   'declined',    // סירב / סירבה — RSVP no
+  'waitlisted',  // נרשם לרשימת ההמתנה / נרשמה לרשימת ההמתנה — RSVP waitlist
   'invited',     // מוזמן / מוזמנת — passive participle (invited to ...)
   'updateImp',   // עדכן / עדכני — imperative ("let us know")
   'completeImp', // השלם / השלימי — imperative ("complete the vote")
@@ -71,6 +72,7 @@ const VERBS: Record<Language, LangVerbs> = {
     confirmed:   { male: 'אישר',    female: 'אישרה' },
     willUpdate:  { male: 'יעדכן',   female: 'תעדכן' },
     declined:    { male: 'סירב',    female: 'סירבה' },
+    waitlisted:  { male: 'נרשם לרשימת ההמתנה', female: 'נרשמה לרשימת ההמתנה' },
     invited:     { male: 'מוזמן',   female: 'מוזמנת' },
     updateImp:   { male: 'עדכן',    female: 'עדכני' },
     completeImp: { male: 'השלם',    female: 'השלימי' },
@@ -84,6 +86,7 @@ const VERBS: Record<Language, LangVerbs> = {
     confirmed:   { male: 'confirmed',   female: 'confirmed' },
     willUpdate:  { male: 'will update', female: 'will update' },
     declined:    { male: 'declined',    female: 'declined' },
+    waitlisted:  { male: 'joined waitlist', female: 'joined waitlist' },
     invited:     { male: 'invited',     female: 'invited' },
     updateImp:   { male: 'let us know', female: 'let us know' },
     completeImp: { male: 'complete',    female: 'complete' },

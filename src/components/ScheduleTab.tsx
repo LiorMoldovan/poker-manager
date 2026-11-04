@@ -9,6 +9,7 @@ import {
   updatePollMeta,
   deletePoll,
   adminCastVote, adminDeleteVote,
+  adminSetPollPreferredDate,
   getMyVoteChangeNotifs, setMyVoteChangeNotifs,
   getGroupId,
   getPlayerStats, getAllGames,
@@ -634,7 +635,7 @@ export default function ScheduleTab() {
       );
       if (myVote && currentPlayer) {
         const isNewVote = previousResponse === null;
-        const isResponseChange = previousResponse !== null && previousResponse !== response;
+        const isResponseChange = previousResponse !== null && previousResponse !== myVote.response;
         if (isNewVote) {
           sendVoteChangeNotifications(updated, myVote, currentPlayer.name, null, { isNewVote: true })
             .catch(err => console.warn('sendVoteChangeNotifications failed:', err));
@@ -1848,7 +1849,8 @@ const fmtVoteDateTime = (iso: string): string => {
 
 export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, highlightPlayerId, youLabel, t }: VoterGroupsProps) {
   const groups: { response: RsvpResponse; label: string; color: string; tint: string }[] = [
-    { response: 'yes',   label: t('schedule.voters.yes'),   color: '#10b981', tint: 'rgba(16, 185, 129, 0.12)' },
+    { response: 'yes',      label: t('schedule.voters.yes'),      color: '#10b981', tint: 'rgba(16, 185, 129, 0.12)' },
+    { response: 'waitlist', label: `⏳ ${t('schedule.voters.waitlist')}`, color: '#f59e0b', tint: 'rgba(245, 158, 11, 0.12)' },
     { response: 'maybe', label: t('schedule.voters.maybe'), color: '#eab308', tint: 'rgba(234, 179, 8, 0.12)' },
     { response: 'no',    label: t('schedule.voters.no'),    color: '#ef4444', tint: 'rgba(239, 68, 68, 0.10)' },
   ];
@@ -1860,8 +1862,14 @@ export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe
     if (arr) arr.push(v);
   }
   // Most-recent first inside each group so the latest activity is at the top.
-  for (const arr of byResponse.values()) {
-    arr.sort((a, b) => new Date(b.votedAt).getTime() - new Date(a.votedAt).getTime());
+  {
+  for (const [respKey, arr] of byResponse.entries()) {
+    if (respKey === 'waitlist') {
+      arr.sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime());
+    } else {
+      arr.sort((a, b) => new Date(b.votedAt).getTime() - new Date(a.votedAt).getTime());
+    }
+  }
   }
 
   if (voters.length === 0) return null;
@@ -1941,7 +1949,29 @@ export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe
                         <span style={{
                           fontSize: 13, color: 'var(--text)', fontWeight: 600,
                         }}>
+                          {g.response === 'waitlist' && (
+                            <span style={{
+                              color: '#f59e0b', fontSize: 11, fontWeight: 700,
+                              padding: '0 6px', borderRadius: 6,
+                              background: 'rgba(245, 158, 11, 0.18)',
+                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              marginInlineEnd: 6,
+                            }}>
+                              #{v.waitlistPos ?? idx + 1}
+                            </span>
+                          )}
                           {name}
+                          {v.isPreferred && (
+                            <span style={{
+                              color: '#fbbf24', fontSize: 10, fontWeight: 700,
+                              padding: '0 6px', borderRadius: 6,
+                              background: 'rgba(251, 191, 36, 0.16)',
+                              border: '1px solid rgba(251, 191, 36, 0.4)',
+                              marginInlineStart: 6,
+                            }}>
+                              {t('schedule.preference.voterTag')}
+                            </span>
+                          )}
                         </span>
                         {v.isProxy && (
                           <span style={{ color: '#facc15', fontSize: 11 }} aria-hidden>★</span>
@@ -2227,8 +2257,10 @@ export type VoterRow = {
   // byline ("נוסף ע״י <name>") instead of a generic "admin" label.
   // null for legacy rows or self-cast votes where attribution is moot.
   castByUserId: string | null;
+  isPreferred?: boolean;
+  waitlistPos?: number;
 };
-export type DateStat = { yes: number; maybe: number; no: number; voters: VoterRow[]; proxyCount: number };
+export type DateStat = { yes: number; waitlist: number; maybe: number; no: number; preferred: number; voters: VoterRow[]; proxyCount: number };
 
 interface PollShareCardProps {
   mode: 'invitation' | 'confirmation' | 'cancellation';
@@ -2394,6 +2426,7 @@ export function PollShareCard({ mode, poll, dateStats, playerById, players, conf
             poll={poll}
             confirmedDate={confirmedDate}
             confirmedPlayers={confirmedPlayers}
+            playerById={playerById}
             t={t}
             tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN }}
           />
@@ -2490,7 +2523,19 @@ function ShareDateCompetitionStrip({
       const y = dateStats.get(d.id)?.yes ?? 0;
       if (y === topYes) { count++; leaderId = d.id; }
     }
-    if (count !== 1) leaderId = null;
+    if (count !== 1) {
+      let bestPref = -1;
+      let prefWinner: string | null = null;
+      let prefCount = 0;
+      for (const d of enabledDates) {
+        const y = dateStats.get(d.id)?.yes ?? 0;
+        if (y !== topYes) continue;
+        const pr = dateStats.get(d.id)?.preferred ?? 0;
+        if (pr > bestPref) { bestPref = pr; prefWinner = d.id; prefCount = 1; }
+        else if (pr === bestPref) { prefCount++; }
+      }
+      leaderId = (prefCount === 1 && bestPref > 0) ? prefWinner : null;
+    }
   }
   if (poll.status === 'confirmed'
       && poll.confirmedDateId
@@ -2514,7 +2559,7 @@ function ShareDateCompetitionStrip({
         borderRadius: 14,
       }}>
         {poll.dates.map(d => {
-          const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
+          const s = dateStats.get(d.id) || { yes: 0, waitlist: 0, maybe: 0, no: 0, preferred: 0, voters: [], proxyCount: 0 };
           const isLeader = d.id === leaderId;
           const pct = Math.min(100, Math.round((s.yes / Math.max(1, poll.targetPlayerCount)) * 100));
           // Excluded dates (migration 086 — set_game_poll_date_disabled)
@@ -2532,6 +2577,11 @@ function ShareDateCompetitionStrip({
           const isDisabled = !!d.disabledAt;
           const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
           const yesVoters = isDisabled ? [] : s.voters.filter(v => v.response === 'yes');
+          const waitlistVoters = isDisabled
+            ? []
+            : [...s.voters.filter(v => v.response === 'waitlist')].sort(
+                (a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime(),
+              );
           return (
             // data-share-split lets the rasterised image splitter cut
             // between strip rows when a long-date list pushes the
@@ -2578,6 +2628,20 @@ function ShareDateCompetitionStrip({
                         background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
                         border: `1px solid ${ACCENT_GREEN}55`,
                       }}>✓ {s.yes}</span>
+                      {s.waitlist > 0 && (
+                        <span style={{
+                          padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
+                          background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b',
+                          border: '1px solid rgba(245, 158, 11, 0.45)',
+                        }}>⏳ {s.waitlist}</span>
+                      )}
+                      {s.preferred > 0 && (
+                        <span style={{
+                          padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
+                          background: 'rgba(251, 191, 36, 0.16)', color: '#fbbf24',
+                          border: '1px solid rgba(251, 191, 36, 0.45)',
+                        }}>⭐ {s.preferred}</span>
+                      )}
                       {poll.allowMaybe && (
                         <span style={{
                           padding: '7px 16px', borderRadius: 999, fontSize: 22, fontWeight: 700,
@@ -2645,7 +2709,45 @@ function ShareDateCompetitionStrip({
                         }}
                       >
                         {name}
+                        {v.isPreferred && <span style={{ color: '#fbbf24', fontSize: 16 }}>⭐</span>}
                         {v.isProxy && <span style={{ color: '#eab308', fontSize: 16 }}>★</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {waitlistVoters.length > 0 && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+                  marginTop: 4, paddingTop: 2,
+                }}>
+                  <span style={{
+                    fontSize: 18, fontWeight: 700, color: '#f59e0b',
+                    padding: '4px 12px', borderRadius: 999,
+                    background: 'rgba(245, 158, 11, 0.18)',
+                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    letterSpacing: 0.3,
+                  }}>
+                    ⏳ {t('schedule.voters.waitlist')} · {waitlistVoters.length}
+                  </span>
+                  {waitlistVoters.map((v, idx) => {
+                    const name = playerById.get(v.playerId)?.name || '—';
+                    return (
+                      <span
+                        key={`waitlist-${d.id}-${v.playerId}`}
+                        style={{
+                          fontSize: 21, color: '#fcd34d',
+                          padding: '5px 14px', borderRadius: 12,
+                          background: 'rgba(245, 158, 11, 0.12)',
+                          border: '1px solid rgba(245, 158, 11, 0.40)',
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span style={{ color: '#f59e0b', fontSize: 16, fontWeight: 700 }}>#{v.waitlistPos ?? idx + 1}</span>
+                        {name}
+                        {v.isPreferred && <span style={{ color: '#fbbf24', fontSize: 15 }}>⭐</span>}
+                        {v.isProxy && <span style={{ color: '#eab308', fontSize: 15 }}>★</span>}
                       </span>
                     );
                   })}
@@ -2782,12 +2884,13 @@ function PollShareInvitationBody({
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {poll.dates.map(d => {
-          const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
+          const s = dateStats.get(d.id) || { yes: 0, waitlist: 0, maybe: 0, no: 0, preferred: 0, voters: [], proxyCount: 0 };
           const loc = d.location || poll.defaultLocation;
           // Group voters by response in display order yes → maybe → no.
           // Empty groups are filtered at render time.
           const voterGroups: { resp: RsvpResponse; color: string; tint: string; symbol: string; label: string; rows: VoterRow[] }[] = [
-            { resp: 'yes',   color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.share.confirmedVoters'), rows: s.voters.filter(v => v.response === 'yes') },
+            { resp: 'yes',      color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.share.confirmedVoters'), rows: s.voters.filter(v => v.response === 'yes') },
+            { resp: 'waitlist', color: '#f59e0b',    tint: 'rgba(245, 158, 11, 0.10)',  symbol: '⏳', label: t('schedule.voters.waitlist'),        rows: [...s.voters.filter(v => v.response === 'waitlist')].sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime()) },
             { resp: 'maybe', color: '#eab308',    tint: 'rgba(234, 179, 8, 0.10)',  symbol: '?', label: t('schedule.voters.maybe'),           rows: s.voters.filter(v => v.response === 'maybe') },
             { resp: 'no',    color: '#f87171',    tint: 'rgba(239, 68, 68, 0.08)',  symbol: '✕', label: t('schedule.voters.no'),              rows: s.voters.filter(v => v.response === 'no') },
           ];
@@ -2836,6 +2939,14 @@ function PollShareInvitationBody({
                       border: `1px solid ${ACCENT_GREEN}55`,
                       letterSpacing: 0.2,
                     }}>✓ {s.yes}</span>
+                    {s.waitlist > 0 && (
+                      <span style={{
+                        padding: '9px 18px', borderRadius: 999, fontSize: 24, fontWeight: 700,
+                        background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b',
+                        border: '1px solid rgba(245, 158, 11, 0.45)',
+                        letterSpacing: 0.2,
+                      }}>⏳ {s.waitlist}</span>
+                    )}
                     {poll.allowMaybe && (
                       <span style={{
                         padding: '9px 18px', borderRadius: 999, fontSize: 24, fontWeight: 700,
@@ -2875,7 +2986,7 @@ function PollShareInvitationBody({
                         }}>
                           {g.symbol} {g.label} · {g.rows.length}
                         </span>
-                        {g.rows.map(v => {
+                        {g.rows.map((v, idx) => {
                           const name = playerById.get(v.playerId)?.name || '—';
                           const isYes = g.resp === 'yes';
                           return (
@@ -2890,7 +3001,29 @@ function PollShareInvitationBody({
                                 display: 'inline-flex', alignItems: 'center', gap: 7,
                                 fontWeight: isYes ? 600 : 500,
                               }}>
-                              {name}
+                              {g.resp === 'waitlist' && (
+                            <span style={{
+                              color: '#f59e0b', fontSize: 11, fontWeight: 700,
+                              padding: '0 6px', borderRadius: 6,
+                              background: 'rgba(245, 158, 11, 0.18)',
+                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              marginInlineEnd: 6,
+                            }}>
+                              #{v.waitlistPos ?? idx + 1}
+                            </span>
+                          )}
+                          {name}
+                          {v.isPreferred && (
+                            <span style={{
+                              color: '#fbbf24', fontSize: 10, fontWeight: 700,
+                              padding: '0 6px', borderRadius: 6,
+                              background: 'rgba(251, 191, 36, 0.16)',
+                              border: '1px solid rgba(251, 191, 36, 0.4)',
+                              marginInlineStart: 6,
+                            }}>
+                              {t('schedule.preference.voterTag')}
+                            </span>
+                          )}
                               {v.isProxy && <span style={{ color: '#eab308', fontSize: 18 }}>★</span>}
                             </span>
                           );
@@ -3104,16 +3237,20 @@ function SharePendingPermanents({
 }
 
 function PollShareConfirmationBody({
-  poll, confirmedDate, confirmedPlayers, t, tokens,
+  poll, confirmedDate, confirmedPlayers, playerById, t, tokens,
 }: {
   poll: GamePoll;
   confirmedDate: GamePollDate;
+  playerById: Map<string, Player>;
   confirmedPlayers: Player[];
   t: PollShareCardProps['t'];
   tokens: ShareTokens;
 }) {
   const { TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN = '#10b981' } = tokens;
   const loc = confirmedDate.location || poll.defaultLocation;
+  const waitlistVotes = poll.votes
+    .filter(v => v.dateId === confirmedDate.id && v.response === 'waitlist')
+    .sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime());
   return (
     <>
       {/* Boarding-pass hero — four columns (day · date · time · location)
@@ -3153,6 +3290,53 @@ function PollShareConfirmationBody({
         confirmedPlayers={confirmedPlayers}
         t={t}
         tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN }}
+      />
+      {waitlistVotes.length > 0 && (
+        <div
+          data-share-split="true"
+          style={{
+            marginTop: 20,
+            padding: '18px 24px',
+            background: 'rgba(245, 158, 11, 0.08)',
+            border: '1px dashed rgba(245, 158, 11, 0.40)',
+            borderRadius: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>
+            <span>⏳</span>
+            <span>{t('schedule.voters.waitlist')} · {waitlistVotes.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {waitlistVotes.map((v, idx) => {
+              const name = playerById.get(v.playerId)?.name || '—';
+              return (
+                <span
+                  key={`conf-wl-${v.playerId}`}
+                  style={{
+                    fontSize: 22,
+                    color: '#fcd34d',
+                    padding: '6px 16px',
+                    borderRadius: 12,
+                    background: 'rgba(245, 158, 11, 0.14)',
+                    border: '1px solid rgba(245, 158, 11, 0.40)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontWeight: 600,
+                  }}
+                >
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>#{idx + 1}</span>
+                  {name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <span style={{ display: 'none' }}
       />
     </>
   );
@@ -4336,12 +4520,17 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   // sweep "everyone confirmed in WhatsApp" in one shot instead of one click
   // per player.
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(() => new Set());
-  const [response, setResponse] = useState<RsvpResponse>('yes');
+  const [response, setResponse] = useState<RsvpResponse>(() =>
+    poll.votes.filter(v => v.dateId === dateId && v.response === 'yes').length >= poll.targetPlayerCount
+      ? 'waitlist'
+      : 'yes'
+  );
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   // Inline-modal flag for the "Delete this vote?" confirmation. Replaces
   // the old native confirm() so the UX matches the rest of the app.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isPreferredDate, setIsPreferredDate] = useState(false);
 
   // Group filtered players by type. Order: permanent → permanent_guest → guest,
   // matching the convention used in SettingsScreen and other admin lists.
@@ -4443,6 +4632,18 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   // prefill. We use a ref so transitions like "select A (had 'yes' + comment)
   // → switch to B (no existing vote)" can clear the carry-over without
   // wiping mid-typing edits during pure multi-select expansion.
+  const canSetPreferredInProxy = useMemo(() => {
+    if (!onlySelectedId || poll.confirmedDateId) return false;
+    if (response !== 'yes' && response !== 'waitlist') return false;
+    const enabledDateIds = new Set(poll.dates.filter(d => !d.disabledAt).map(d => d.id));
+    if (enabledDateIds.size < 2 || !enabledDateIds.has(dateId)) return false;
+    return poll.votes.some(
+      v => v.playerId === onlySelectedId
+        && v.dateId !== dateId
+        && enabledDateIds.has(v.dateId)
+        && (v.response === 'yes' || v.response === 'waitlist'),
+    );
+  }, [onlySelectedId, poll.confirmedDateId, poll.dates, poll.votes, dateId, response]);
   const lastPrefillFromPlayerIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -4450,6 +4651,8 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
     if (singleExistingVote) {
       setResponse(singleExistingVote.response);
       setComment(singleExistingVote.comment || '');
+      setComment(singleExistingVote.comment || '');
+      setIsPreferredDate(!!singleExistingVote.isPreferred);
       lastPrefillFromPlayerIdRef.current = singleExistingVote.playerId;
       return;
     }
@@ -4461,12 +4664,18 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
         && lastPrefillFromPlayerIdRef.current !== onlySelectedId) {
       setResponse('yes');
       setComment('');
+      setResponse(slotsRemaining === 0 ? 'waitlist' : 'yes');
+      setComment('');
+      setIsPreferredDate(false);
       lastPrefillFromPlayerIdRef.current = null;
       return;
     }
     // Case 3: nothing selected → forget the carry-over so the next
     // selection makes its own decision via the rules above.
     if (selectedCount === 0) {
+      setResponse(slotsRemaining === 0 ? 'waitlist' : 'yes');
+      setComment('');
+      setIsPreferredDate(false);
       lastPrefillFromPlayerIdRef.current = null;
     }
     // Case 4: multi-select active (≥2). Preserve whatever the admin typed.
@@ -4523,6 +4732,12 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
       // For typical N=1..15 selections this is well under a second total.
       for (const id of ids) {
         await adminCastVote(dateId, id, response, comment || undefined);
+      if (onlySelectedId && canSetPreferredInProxy) {
+        const wasPreferred = !!singleExistingVote?.isPreferred;
+        if (isPreferredDate !== wasPreferred) {
+          await adminSetPollPreferredDate(poll.id, onlySelectedId, isPreferredDate ? dateId : null);
+        }
+      }
       }
       // Fire vote-event notifications for:
       //   - Fresh proxy votes (no `prev` in the snapshot) — INSERTs, sent
@@ -4595,7 +4810,8 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   };
 
   const responseLabels: Record<RsvpResponse, { label: string; color: string }> = {
-    yes:   { label: t('schedule.rsvpYes'),   color: '#10b981' },
+    yes:      { label: t('schedule.rsvpYes'),                color: '#10b981' },
+    waitlist: { label: `⏳ ${t('schedule.rsvpWaitlist')}`,    color: '#f59e0b' },
     maybe: { label: t('schedule.rsvpMaybe'), color: '#eab308' },
     no:    { label: t('schedule.rsvpNo'),    color: '#ef4444' },
   };
@@ -4823,7 +5039,7 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
               )}
 
               <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                {(['yes', 'maybe', 'no'] as RsvpResponse[]).map(resp => {
+                {(['yes', 'waitlist', 'maybe', 'no'] as RsvpResponse[]).map(resp => {
                   if (resp === 'maybe' && !poll.allowMaybe) return null;
                   const active = response === resp;
                   const c = responseLabels[resp].color;
@@ -4842,6 +5058,24 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                 })}
               </div>
 
+              {canSetPreferredInProxy && (
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 6, marginBottom: 10,
+                  background: isPreferredDate ? 'rgba(251, 191, 36, 0.14)' : 'rgba(148, 163, 184, 0.08)',
+                  border: isPreferredDate ? '1px solid rgba(251, 191, 36, 0.45)' : '1px solid var(--border)',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  color: isPreferredDate ? '#fbbf24' : 'var(--text)',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={isPreferredDate}
+                    onChange={(e) => setIsPreferredDate(e.target.checked)}
+                    style={{ accentColor: '#fbbf24' }}
+                  />
+                  <span>{t('schedule.preference.proxyToggle')}</span>
+                </label>
+              )}
               <div style={{ marginBottom: 12 }}>
                 <input
                   type="text"
@@ -5119,7 +5353,7 @@ export function ReminderModal(props: ReminderModalProps) {
       if (responses) {
         for (const id of dateIds) {
           const r = responses.get(id);
-          if (r === 'yes' || r === 'no') decisiveCount++;
+          if (r === 'yes' || r === 'no' || r === 'waitlist') decisiveCount++;
           else if (r === 'maybe') maybeCount++;
         }
       }

@@ -348,9 +348,9 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         const mine = myPlayerId
           ? p.votes.find(v => v.dateId === d.id && v.playerId === myPlayerId)
           : null;
-        if (mine?.response === 'yes') return false;
+        if (mine?.response === 'yes' || mine?.response === 'waitlist') return false;
         const yes = p.votes.filter(v => v.dateId === d.id && v.response === 'yes').length;
-        return yes < p.targetPlayerCount;
+        return yes < p.targetPlayerCount || !mine;
       });
     };
 
@@ -1260,6 +1260,7 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
     let location: string | null = null;
     let missingSeats = 0;
     let comingNames: string[] = [];
+    let waitlistNames: string[] = [];
 
     if (opts.dateId) {
       const d = poll.dates.find(x => x.id === opts.dateId);
@@ -1278,6 +1279,15 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
       comingNames = yesVotes
         .map(v => playersById.get(v.playerId))
         .filter((name): name is string => Boolean(name));
+      const wlVotes = poll.votes
+        .filter(v => v.dateId === opts.dateId && v.response === 'waitlist')
+        .sort((a, b) => new Date(a.votedAt).getTime() - new Date(b.votedAt).getTime());
+      waitlistNames = wlVotes
+        .map((v, idx) => {
+          const nm = playersById.get(v.playerId);
+          return nm ? `#${idx + 1} ${nm}` : null;
+        })
+        .filter((x): x is string => Boolean(x));
     }
 
     // A single-date open poll that hits its target seat count is
@@ -1428,6 +1438,12 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
             {t('home.schedule.confirmedComing')}:
           </span>{' '}
           {comingNames.join(' · ')}
+          {waitlistNames.length > 0 && (
+            <div style={{ marginTop: '0.2rem', color: '#f59e0b' }}>
+              <span style={{ fontWeight: 600 }}>⏳ {t('schedule.voters.waitlist')}:</span>{' '}
+              {waitlistNames.join(' · ')}
+            </div>
+          )}
         </div>
       );
     } else if (opts.emptyFallback) {
@@ -1627,7 +1643,7 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
           // excluded dates — the ❌ הוצא badge is the dominant signal
           // there, and stacking the viewer's stale stance on top adds
           // noise without information.
-          const myResponse: 'yes' | 'no' | 'maybe' | null = (() => {
+          const myResponse: 'yes' | 'waitlist' | 'no' | 'maybe' | null = (() => {
             if (myPlayerId === null) return null;
             const mine = poll.votes.find(
               v => v.dateId === d.id && v.playerId === myPlayerId
@@ -1735,6 +1751,8 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
                 if (!myResponse && !hasMyVote) return null;
                 const tone = myResponse === 'yes'
                   ? { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', key: 'home.schedule.openGlanceMineYes' as const }
+                  : myResponse === 'waitlist'
+                  ? { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.16)', key: 'schedule.rsvpWaitlist' as const }
                   : myResponse === 'no'
                   ? { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', key: 'home.schedule.openGlanceMineNo' as const }
                   : myResponse === 'maybe'

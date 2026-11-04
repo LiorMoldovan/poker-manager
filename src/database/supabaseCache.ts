@@ -226,6 +226,7 @@ function toGamePollVote(row: Record<string, unknown>): GamePollVote {
     votedAt: row.voted_at as string,
     createdAt,
     castByUserId: (row.cast_by_user_id as string | null) ?? null,
+    isPreferred: row.is_preferred === true,
   };
 }
 
@@ -2062,6 +2063,40 @@ export async function adminDeletePollVoteRpc(
   const { data, error } = await supabase.rpc('admin_delete_poll_vote', {
     p_date_id: dateId,
     p_voter_player_id: voterPlayerId,
+  });
+  if (error) throw error;
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) throw new Error('poll_not_returned');
+  const poll = toGamePoll(rows[0]);
+  await refreshPollsNow();
+  return getPollById(poll.id) ?? poll;
+}
+
+export async function setPollPreferredDateRpc(
+  pollId: string,
+  dateId: string | null,
+): Promise<GamePoll> {
+  const { data, error } = await supabase.rpc('set_poll_preferred_date', {
+    p_poll_id: pollId,
+    p_date_id: dateId ?? null,
+  });
+  if (error) throw error;
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) throw new Error('poll_not_returned');
+  const poll = toGamePoll(rows[0]);
+  await refreshPollsNow();
+  return getPollById(poll.id) ?? poll;
+}
+
+export async function adminSetPollPreferredDateRpc(
+  pollId: string,
+  voterPlayerId: string,
+  dateId: string | null,
+): Promise<GamePoll> {
+  const { data, error } = await supabase.rpc('admin_set_poll_preferred_date', {
+    p_poll_id: pollId,
+    p_voter_player_id: voterPlayerId,
+    p_date_id: dateId ?? null,
   });
   if (error) throw error;
   const rows = data as Record<string, unknown>[] | null;

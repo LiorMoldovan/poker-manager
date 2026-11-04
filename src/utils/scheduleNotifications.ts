@@ -1182,6 +1182,7 @@ const RESPONSE_VERB_KEY: Record<RsvpResponse, VerbKey> = {
   yes: 'confirmed',
   maybe: 'willUpdate',
   no: 'declined',
+  waitlist: 'waitlisted',
 };
 
 export function buildVoteEventMessage(

@@ -68,7 +68,8 @@ type Kind =
   // branch of planForJob (line ~631) — no kind-specific handler
   // needed; the recipient list is built client-side (poll voters ∪
   // permanent members) and passed via `recipient_player_names`.
-  | 'date_excluded';
+  | 'date_excluded'
+  | 'waitlist_promoted';
 
 interface Job {
   id: string;
@@ -658,6 +659,7 @@ function buildVoteChangeMessage(
     yes: 'מגיע',
     no: 'לא מגיע',
     maybe: 'אעדכן',
+    waitlist: 'רשימת המתנה',
   };
   const verb = isNew ? 'הצביע' : 'עדכן הצבעה';
   const dateLabel = formatHebrewDateTime(dateRow.proposed_date, dateRow.proposed_time);

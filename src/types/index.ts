@@ -175,7 +175,7 @@ export interface PaidSettlement {
 
 export type GamePollStatus = 'open' | 'expanded' | 'confirmed' | 'cancelled' | 'expired';
 
-export type RsvpResponse = 'yes' | 'no' | 'maybe';
+export type RsvpResponse = 'yes' | 'no' | 'maybe' | 'waitlist';
 
 export interface GamePollDate {
   id: string;
@@ -202,6 +202,7 @@ export interface GamePollVote {
   votedAt: string;
   createdAt: string;                // first time this row was inserted; stays fixed across edits
   castByUserId?: string | null;     // auth.uid() of the user who last cast/edited this vote
+  isPreferred?: boolean;            // Migration 144: preferred date when voter has 2+ positive dates
 }
 
 export interface GamePoll {
