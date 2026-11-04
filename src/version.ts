@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.39.3';
+export const APP_VERSION = '6.39.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.39.4',
+    date: '2026-11-05',
+    changes: [
+      '🎨 דרופדאון חודשים בעיצוב כהה ואחיד',
+      '📤 כפתור שיתוף וואטסאפ אלגנטי ויחיד',
+      '❌ מניעת התנגשויות בכותרת הסיכום',
+    ],
+  },
   {
     version: '6.39.3',
     date: '2026-11-05',

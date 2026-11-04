@@ -12,6 +12,7 @@ import { generatePeriodRecapAI, getGeminiApiKey } from '../utils/geminiAI';
 import { canUserGenerateAI } from '../utils/aiEligibility';
 import { shareFiles } from '../utils/sharing';
 import { usePermissions } from '../App';
+import { StyledSelect, type StyledSelectOption } from './StyledSelect';
 
 interface PeriodRecapModalProps {
   isOpen: boolean;
@@ -64,6 +65,13 @@ export const PeriodRecapModal = ({
     if (!isOpen) return [];
     return getAvailableRecapPeriods();
   }, [isOpen]);
+
+  const periodOptions = useMemo<StyledSelectOption<string>[]>(() => {
+    return availablePeriods.map(p => ({
+      value: p.key,
+      label: `${p.label} (${p.gamesCount} מש׳)`,
+    }));
+  }, [availablePeriods]);
 
   const recap: PeriodRecapData | null = useMemo(() => {
     if (!isOpen) return null;
@@ -230,13 +238,13 @@ export const PeriodRecapModal = ({
           ))}
         </div>
 
-        {/* Clean Header Bar: Right side has dropdown, Left side has WhatsApp + Close button */}
+        {/* Clean Header Bar: Right side has dropdown, Left side has Close button */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0.35rem 0.85rem 0.55rem',
+            padding: '0.4rem 0.85rem',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
             gap: '0.6rem',
           }}
@@ -245,31 +253,13 @@ export const PeriodRecapModal = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🎬</span>
             {availablePeriods.length > 1 ? (
-              <select
+              <StyledSelect<string>
                 value={currentKey}
-                onChange={e => handlePeriodSelect(e.target.value)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  color: '#f8fafc',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  padding: '0.25rem 0.5rem',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                  maxWidth: '190px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {availablePeriods.map(p => (
-                  <option key={p.key} value={p.key} style={{ background: '#0f172a', color: '#f8fafc' }}>
-                    {p.label} ({p.gamesCount} מש׳)
-                  </option>
-                ))}
-              </select>
+                onChange={handlePeriodSelect}
+                options={periodOptions}
+                size="sm"
+                variant="default"
+              />
             ) : (
               <span
                 style={{
@@ -286,55 +276,29 @@ export const PeriodRecapModal = ({
             )}
           </div>
 
-          {/* Quick Actions: Direct WhatsApp share + Close button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={handleShareInfographic}
-              disabled={isSharing}
-              title="שתף תמונה לוואטסאפ"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                color: '#f8fafc',
-                borderRadius: '6px',
-                padding: '0.3rem 0.65rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: isSharing ? 'wait' : 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span>📤</span>
-              <span>{isSharing ? 'משתף...' : 'שתף'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="סגור"
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: 'none',
-                color: '#e2e8f0',
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                fontSize: '1.15rem',
-                lineHeight: 1,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              ×
-            </button>
-          </div>
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="סגור"
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: 'none',
+              color: '#e2e8f0',
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              fontSize: '1.15rem',
+              lineHeight: 1,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
         </div>
 
         {/* Slide Counter / Title Banner */}
@@ -785,26 +749,33 @@ export const PeriodRecapModal = ({
                 </div>
               )}
 
-              {/* Direct WhatsApp Share CTA */}
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleShareInfographic}
-                disabled={isSharing}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 1rem',
-                  fontSize: '0.88rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.45rem',
-                  marginTop: '0.2rem',
-                }}
-              >
-                <span>📤</span>
-                <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה לוואטסאפ'}</span>
-              </button>
+              {/* Small and elegant WhatsApp Share CTA */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  onClick={handleShareInfographic}
+                  disabled={isSharing}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.1))',
+                    border: '1px solid rgba(16, 185, 129, 0.45)',
+                    color: '#34d399',
+                    borderRadius: '999px',
+                    padding: '0.45rem 1.15rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: isSharing ? 'wait' : 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                    transition: 'all 0.2s ease',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ fontSize: '0.95rem' }}>📤</span>
+                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה לוואטסאפ'}</span>
+                </button>
+              </div>
             </div>
           )}
 
