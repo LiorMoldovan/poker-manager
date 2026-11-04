@@ -2672,7 +2672,7 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSpa
         }}
       >
         <span>🎬</span>
-        <span>סיכום חודש {latestCompletedMonth.label} (Wrapped)</span>
+        <span>סיכום חודש {latestCompletedMonth.label}</span>
       </button>
     </div>
   ) : null;

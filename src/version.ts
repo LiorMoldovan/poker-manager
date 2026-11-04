@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.39.5';
+export const APP_VERSION = '6.39.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.39.6',
+    date: '2026-11-05',
+    changes: [
+      '📤 כפתור שיתוף וואטסאפ לכרטיסיית הפודיום',
+      '🏷️ הסרת המילה Wrapped מעמוד הבית',
+    ],
+  },
   {
     version: '6.39.5',
     date: '2026-11-05',

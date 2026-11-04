@@ -2536,7 +2536,7 @@ const GameSummaryScreen = () => {
               }}
             >
               <span>🎬</span>
-              <span>צפה בסיכום חודש {monthLabel} (Wrapped) וחלוקת התארים</span>
+              <span>צפה בסיכום חודש {monthLabel} וחלוקת התארים</span>
             </button>
             {!collapsedSections.monthly && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{

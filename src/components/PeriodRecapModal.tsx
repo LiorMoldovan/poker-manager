@@ -49,7 +49,8 @@ export const PeriodRecapModal = ({
   const [aiError, setAiError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
 
-  const shareCardRef = useRef<HTMLDivElement>(null);
+  const slide0CardRef = useRef<HTMLDivElement>(null);
+  const slide1CardRef = useRef<HTMLDivElement>(null);
   const touchStartXRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -122,12 +123,13 @@ export const PeriodRecapModal = ({
     }
   };
 
-  const handleShareInfographic = async () => {
+  const handleShareInfographic = async (targetIdx: number = slideIdx) => {
     if (isSharing) return;
     setIsSharing(true);
     try {
-      if (shareCardRef.current) {
-        const canvas = await html2canvas(shareCardRef.current, {
+      const targetEl = targetIdx === 0 ? slide0CardRef.current : slide1CardRef.current;
+      if (targetEl) {
+        const canvas = await html2canvas(targetEl, {
           backgroundColor: '#0f172a',
           scale: 2,
           useCORS: true,
@@ -135,8 +137,9 @@ export const PeriodRecapModal = ({
         });
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (blob) {
-          const file = new File([blob], `poker-recap-${recap.periodKey}.png`, { type: 'image/png' });
-          await shareFiles([file], recap.title);
+          const suffix = targetIdx === 0 ? 'podium' : 'awards';
+          const file = new File([blob], `poker-recap-${recap.periodKey}-${suffix}.png`, { type: 'image/png' });
+          await shareFiles([file], `${recap.title} - ${targetIdx === 0 ? 'פודיום ואלופים' : 'נבחרת התארים'}`);
         }
       }
     } catch (err) {
@@ -334,203 +337,266 @@ export const PeriodRecapModal = ({
         >
           {/* SLIDE 0: Podium & Overview */}
           {slideIdx === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {/* Quick stats chips */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {/* Shareable Podium Card */}
               <div
+                ref={slide0CardRef}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '0.45rem',
+                  background: 'linear-gradient(165deg, #0f172a 0%, #1e293b 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '14px',
+                  padding: '0.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.65rem',
                 }}
               >
+                {/* Header for shared image */}
                 <div
                   style={{
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1px solid rgba(59, 130, 246, 0.22)',
-                    borderRadius: '10px',
-                    padding: '0.45rem 0.3rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#60a5fa' }}>
-                    {recap.gamesCount}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ערבי משחק</div>
-                </div>
-
-                <div
-                  style={{
-                    background: 'rgba(16, 185, 129, 0.08)',
-                    border: '1px solid rgba(16, 185, 129, 0.22)',
-                    borderRadius: '10px',
-                    padding: '0.45rem 0.3rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#34d399' }}>
-                    {recap.allRanked.length}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שחקנים פעילים</div>
-                </div>
-
-                <div
-                  style={{
-                    background: 'rgba(168, 85, 247, 0.08)',
-                    border: '1px solid rgba(168, 85, 247, 0.22)',
-                    borderRadius: '10px',
-                    padding: '0.45rem 0.3rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#c084fc', direction: 'ltr' }}>
-                    {recap.awards.bigHit ? `+₪${recap.awards.bigHit.profit}` : '—'}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שיא ערב</div>
-                </div>
-              </div>
-
-              {/* Champion Hero Card */}
-              {champ && (
-                <div
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.8))',
-                    border: '1.5px solid rgba(245, 158, 11, 0.45)',
-                    borderRadius: '14px',
-                    padding: '0.85rem',
-                    textAlign: 'center',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ fontSize: '1.8rem', lineHeight: 1 }}>🥇 👑</div>
-                  <div style={{ fontSize: '0.74rem', color: '#fbbf24', fontWeight: 800, marginTop: '0.2rem' }}>
-                    {periodType === 'year'
-                      ? `אלוף עונת ${year}`
-                      : periodType === 'h1' || periodType === 'h2'
-                      ? `אלוף ${recap.shortLabel}`
-                      : `אלוף חודש ${recap.shortLabel}`}
-                  </div>
-                  <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#ffffff', marginTop: '0.1rem' }}>
-                    {champ.playerName}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '1.35rem',
-                      fontWeight: 900,
-                      color: '#4ade80',
-                      marginTop: '0.1rem',
-                      direction: 'ltr',
-                    }}
-                  >
-                    +₪{champ.profit.toLocaleString('he-IL')}
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      gap: '0.65rem',
-                      marginTop: '0.45rem',
-                      fontSize: '0.74rem',
-                      color: '#cbd5e1',
-                    }}
-                  >
-                    <span>🎮 {champ.gamesPlayed} משחקים</span>
-                    <span>🎯 {champ.winRate}% ניצחונות</span>
-                    <span>📈 ₪{champ.avgProfit} לערב</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Runners up 2nd & 3rd */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.55rem' }}>
-                {second && (
-                  <div
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(203, 213, 225, 0.28)',
-                      borderRadius: '12px',
-                      padding: '0.65rem 0.5rem',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.3rem' }}>🥈</div>
-                    <div style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 700 }}>סגן האלוף</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
-                      {second.playerName}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.95rem',
-                        fontWeight: 800,
-                        color: second.profit >= 0 ? '#4ade80' : '#f87171',
-                        direction: 'ltr',
-                        marginTop: '0.1rem',
-                      }}
-                    >
-                      {second.profit >= 0 ? '+' : ''}₪{second.profit.toLocaleString('he-IL')}
-                    </div>
-                    <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      {second.gamesPlayed} מש׳ · {second.winRate}% ניצחון
-                    </div>
-                  </div>
-                )}
-
-                {third && (
-                  <div
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(217, 119, 6, 0.3)',
-                      borderRadius: '12px',
-                      padding: '0.65rem 0.5rem',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.3rem' }}>🥉</div>
-                    <div style={{ fontSize: '0.7rem', color: '#fdba74', fontWeight: 700 }}>מקום שלישי</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
-                      {third.playerName}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.95rem',
-                        fontWeight: 800,
-                        color: third.profit >= 0 ? '#4ade80' : '#f87171',
-                        direction: 'ltr',
-                        marginTop: '0.1rem',
-                      }}
-                    >
-                      {third.profit >= 0 ? '+' : ''}₪{third.profit.toLocaleString('he-IL')}
-                    </div>
-                    <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      {third.gamesPlayed} מש׳ · {third.winRate}% ניצחון
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Honorable mentions (ranks 4-6) */}
-              {recap.allRanked.length > 3 && (
-                <div
-                  style={{
-                    paddingTop: '0.4rem',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.07)',
                     display: 'flex',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    gap: '0.35rem 0.65rem',
-                    fontSize: '0.68rem',
-                    color: '#94a3b8',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    paddingBottom: '0.4rem',
                   }}
                 >
-                  {recap.allRanked.slice(3, 6).map(p => (
-                    <span key={p.playerId}>
-                      {p.rank}. {p.playerName}{' '}
-                      <span style={{ color: p.profit >= 0 ? '#4ade80' : '#f87171', direction: 'ltr', display: 'inline-block' }}>
-                        ({p.profit >= 0 ? '+' : ''}₪{p.profit})
-                      </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{ fontSize: '1rem' }}>🏆</span>
+                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#ffffff' }}>
+                      אלופי התקופה — {recap.shortLabel}
                     </span>
-                  ))}
+                  </div>
+                  <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                    {recap.gamesCount} משחקים
+                  </span>
                 </div>
-              )}
+
+                {/* Quick stats chips */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '0.45rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      border: '1px solid rgba(59, 130, 246, 0.22)',
+                      borderRadius: '10px',
+                      padding: '0.45rem 0.3rem',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#60a5fa' }}>
+                      {recap.gamesCount}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ערבי משחק</div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.22)',
+                      borderRadius: '10px',
+                      padding: '0.45rem 0.3rem',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#34d399' }}>
+                      {recap.allRanked.length}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שחקנים פעילים</div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'rgba(168, 85, 247, 0.08)',
+                      border: '1px solid rgba(168, 85, 247, 0.22)',
+                      borderRadius: '10px',
+                      padding: '0.45rem 0.3rem',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#c084fc', direction: 'ltr' }}>
+                      {recap.awards.bigHit ? `+₪${recap.awards.bigHit.profit}` : '—'}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שיא ערב</div>
+                  </div>
+                </div>
+
+                {/* Champion Hero Card */}
+                {champ && (
+                  <div
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.8))',
+                      border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                      borderRadius: '14px',
+                      padding: '0.85rem',
+                      textAlign: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.8rem', lineHeight: 1 }}>🥇 👑</div>
+                    <div style={{ fontSize: '0.74rem', color: '#fbbf24', fontWeight: 800, marginTop: '0.2rem' }}>
+                      {periodType === 'year'
+                        ? `אלוף עונת ${year}`
+                        : periodType === 'h1' || periodType === 'h2'
+                        ? `אלוף ${recap.shortLabel}`
+                        : `אלוף חודש ${recap.shortLabel}`}
+                    </div>
+                    <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#ffffff', marginTop: '0.1rem' }}>
+                      {champ.playerName}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '1.35rem',
+                        fontWeight: 900,
+                        color: '#4ade80',
+                        marginTop: '0.1rem',
+                        direction: 'ltr',
+                      }}
+                    >
+                      +₪{champ.profit.toLocaleString('he-IL')}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: '0.65rem',
+                        marginTop: '0.45rem',
+                        fontSize: '0.74rem',
+                        color: '#cbd5e1',
+                      }}
+                    >
+                      <span>🎮 {champ.gamesPlayed} משחקים</span>
+                      <span>🎯 {champ.winRate}% ניצחונות</span>
+                      <span>📈 ₪{champ.avgProfit} לערב</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Runners up 2nd & 3rd */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.55rem' }}>
+                  {second && (
+                    <div
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(203, 213, 225, 0.28)',
+                        borderRadius: '12px',
+                        padding: '0.65rem 0.5rem',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ fontSize: '1.3rem' }}>🥈</div>
+                      <div style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 700 }}>סגן האלוף</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
+                        {second.playerName}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.95rem',
+                          fontWeight: 800,
+                          color: second.profit >= 0 ? '#4ade80' : '#f87171',
+                          direction: 'ltr',
+                          marginTop: '0.1rem',
+                        }}
+                      >
+                        {second.profit >= 0 ? '+' : ''}₪{second.profit.toLocaleString('he-IL')}
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
+                        {second.gamesPlayed} מש׳ · {second.winRate}% ניצחון
+                      </div>
+                    </div>
+                  )}
+
+                  {third && (
+                    <div
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(217, 119, 6, 0.3)',
+                        borderRadius: '12px',
+                        padding: '0.65rem 0.5rem',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ fontSize: '1.3rem' }}>🥉</div>
+                      <div style={{ fontSize: '0.7rem', color: '#fdba74', fontWeight: 700 }}>מקום שלישי</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
+                        {third.playerName}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.95rem',
+                          fontWeight: 800,
+                          color: third.profit >= 0 ? '#4ade80' : '#f87171',
+                          direction: 'ltr',
+                          marginTop: '0.1rem',
+                        }}
+                      >
+                        {third.profit >= 0 ? '+' : ''}₪{third.profit.toLocaleString('he-IL')}
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
+                        {third.gamesPlayed} מש׳ · {third.winRate}% ניצחון
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Honorable mentions (ranks 4-6) */}
+                {recap.allRanked.length > 3 && (
+                  <div
+                    style={{
+                      paddingTop: '0.4rem',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.07)',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      justifyContent: 'center',
+                      gap: '0.35rem 0.65rem',
+                      fontSize: '0.68rem',
+                      color: '#94a3b8',
+                    }}
+                  >
+                    {recap.allRanked.slice(3, 6).map(p => (
+                      <span key={p.playerId}>
+                        {p.rank}. {p.playerName}{' '}
+                        <span style={{ color: p.profit >= 0 ? '#4ade80' : '#f87171', direction: 'ltr', display: 'inline-block' }}>
+                          ({p.profit >= 0 ? '+' : ''}₪{p.profit})
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Small and elegant WhatsApp Share CTA for Slide 1 */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  onClick={() => handleShareInfographic(0)}
+                  disabled={isSharing}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.1))',
+                    border: '1px solid rgba(16, 185, 129, 0.45)',
+                    color: '#34d399',
+                    borderRadius: '999px',
+                    padding: '0.45rem 1.15rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: isSharing ? 'wait' : 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                    transition: 'all 0.2s ease',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ fontSize: '0.95rem' }}>📤</span>
+                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף פודיום לוואטסאפ'}</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -539,7 +605,7 @@ export const PeriodRecapModal = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {/* Shareable Card Area */}
               <div
-                ref={shareCardRef}
+                ref={slide1CardRef}
                 style={{
                   background: 'linear-gradient(165deg, #0f172a 0%, #1e293b 100%)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -756,7 +822,7 @@ export const PeriodRecapModal = ({
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem' }}>
                 <button
                   type="button"
-                  onClick={handleShareInfographic}
+                  onClick={() => handleShareInfographic(1)}
                   disabled={isSharing}
                   style={{
                     display: 'inline-flex',
@@ -776,7 +842,7 @@ export const PeriodRecapModal = ({
                   }}
                 >
                   <span style={{ fontSize: '0.95rem' }}>📤</span>
-                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה לוואטסאפ'}</span>
+                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תארים לוואטסאפ'}</span>
                 </button>
               </div>
             </div>
