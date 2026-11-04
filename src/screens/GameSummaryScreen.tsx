@@ -2521,10 +2521,10 @@ const GameSummaryScreen = () => {
                 marginBottom: collapsedSections.monthly ? 0 : '0.6rem',
                 padding: '0.55rem 0.75rem',
                 borderRadius: '10px',
-                border: '1px solid rgba(251, 191, 36, 0.45)',
-                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(217, 119, 6, 0.12))',
-                color: '#fbbf24',
-                fontWeight: 800,
+                border: '1px solid rgba(59, 130, 246, 0.35)',
+                background: 'rgba(59, 130, 246, 0.12)',
+                color: '#60a5fa',
+                fontWeight: 700,
                 fontSize: '0.8rem',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -2532,6 +2532,7 @@ const GameSummaryScreen = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.4rem',
+                transition: 'all 0.2s ease',
               }}
             >
               <span>🎬</span>

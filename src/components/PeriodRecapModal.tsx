@@ -21,13 +21,11 @@ interface PeriodRecapModalProps {
   initialMonth?: number;
 }
 
-const SLIDE_COUNT = 5;
+const SLIDE_COUNT = 3;
 const SLIDE_TITLES = [
-  'התמונה הגדולה',
-  'פודיום האלופים',
-  'נבחרת התארים',
-  'סיפור התקופה',
-  'כרטיס שיתוף',
+  'פודיום והישגים',
+  'נבחרת התארים והסיפור',
+  'כרטיס שיתוף לוואטסאפ',
 ];
 
 export const PeriodRecapModal = ({
@@ -117,26 +115,71 @@ export const PeriodRecapModal = ({
     }
   };
 
-  const handleShareInfographic = async () => {
-    if (!shareCardRef.current || isSharing) return;
-    setIsSharing(true);
-    try {
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#0f172a',
-        scale: 2,
-        useCORS: true,
-        logging: false,
+  const buildWhatsAppText = () => {
+    const LTR = '\u200E';
+    let text = `👑 *סיכום ${recap.title}* 🃏\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    if (recap.podium.length > 0) {
+      text += `🏆 *אלופי התקופה:*\n`;
+      const medals = ['🥇', '🥈', '🥉'];
+      recap.podium.slice(0, 3).forEach((p, idx) => {
+        text += `${medals[idx]} *${p.playerName}*: ${LTR}${p.profit >= 0 ? '+' : ''}₪${p.profit.toLocaleString('he-IL')} (${p.gamesPlayed} משחקים, ${p.winRate}%)\n`;
       });
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (blob) {
-        const file = new File([blob], `poker-recap-${recap.periodKey}.png`, { type: 'image/png' });
-        await shareFiles([file], recap.title);
+      text += `\n`;
+    }
+
+    text += `🎖️ *תארי הצטיינות:*\n`;
+    if (recap.awards.sniper) {
+      text += `🎯 צלף: *${recap.awards.sniper.playerName}* (${recap.awards.sniper.winRate}% ניצחונות)\n`;
+    }
+    if (recap.awards.bigHit) {
+      text += `💥 שיא ערב: *${recap.awards.bigHit.playerName}* (${LTR}+₪${recap.awards.bigHit.profit.toLocaleString('he-IL')})\n`;
+    }
+    if (recap.awards.hotStreak) {
+      text += `🔥 רצף ניצחונות: *${recap.awards.hotStreak.playerName}* (${recap.awards.hotStreak.streak} ברצף)\n`;
+    }
+    if (recap.awards.atm) {
+      text += `🏧 מממן השולחן: *${recap.awards.atm.playerName}* (${recap.awards.atm.totalRebuys} כניסות)\n`;
+    }
+
+    text += `\n🎮 סה״כ שוחקו ${recap.gamesCount} משחקים`;
+    return text;
+  };
+
+  const handleShareInfographic = async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    const shareText = buildWhatsAppText();
+    try {
+      if (shareCardRef.current) {
+        const canvas = await html2canvas(shareCardRef.current, {
+          backgroundColor: '#0f172a',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (blob) {
+          const file = new File([blob], `poker-recap-${recap.periodKey}.png`, { type: 'image/png' });
+          await shareFiles([file], recap.title, shareText);
+          return;
+        }
       }
+      // Fallback if no card or canvas failed
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
     } catch (err) {
       console.error('Share recap failed:', err);
+      // Fallback directly to text on WhatsApp
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const handleShareWhatsAppTextOnly = () => {
+    const text = buildWhatsAppText();
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const nextSlide = () => setSlideIdx(prev => Math.min(SLIDE_COUNT - 1, prev + 1));
@@ -150,7 +193,7 @@ export const PeriodRecapModal = ({
     if (touchStartXRef.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartXRef.current;
     touchStartXRef.current = null;
-    // In RTL, swiping right-to-left (dx < -45) or left-to-right (dx > 45)
+    // In RTL, swipe forward or backward
     if (dx > 45) {
       nextSlide();
     } else if (dx < -45) {
@@ -185,11 +228,11 @@ export const PeriodRecapModal = ({
         onTouchEnd={handleTouchEnd}
         style={{
           width: '100%',
-          maxWidth: '410px',
+          maxWidth: '420px',
           maxHeight: '92vh',
-          background: 'linear-gradient(165deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%)',
-          borderRadius: '20px',
-          border: '1px solid rgba(251, 191, 36, 0.28)',
+          background: '#0f172a',
+          borderRadius: '18px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.75)',
           display: 'flex',
           flexDirection: 'column',
@@ -202,8 +245,8 @@ export const PeriodRecapModal = ({
           style={{
             display: 'grid',
             gridTemplateColumns: `repeat(${SLIDE_COUNT}, 1fr)`,
-            gap: '4px',
-            padding: '0.65rem 0.75rem 0.35rem',
+            gap: '5px',
+            padding: '0.65rem 0.85rem 0.35rem',
             direction: 'rtl',
           }}
         >
@@ -220,9 +263,9 @@ export const PeriodRecapModal = ({
                 cursor: 'pointer',
                 background:
                   i === slideIdx
-                    ? 'linear-gradient(90deg, #fbbf24, #f59e0b)'
+                    ? '#10b981'
                     : i < slideIdx
-                    ? 'rgba(251, 191, 36, 0.45)'
+                    ? 'rgba(16, 185, 129, 0.45)'
                     : 'rgba(255, 255, 255, 0.16)',
                 transition: 'all 0.25s ease',
               }}
@@ -231,34 +274,38 @@ export const PeriodRecapModal = ({
           ))}
         </div>
 
-        {/* Header Bar with Period Switcher & Close */}
+        {/* Clean Header Bar: Right side has dropdown, Left side has WhatsApp + Close button */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0.35rem 0.85rem 0.6rem',
+            padding: '0.35rem 0.85rem 0.55rem',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            gap: '0.5rem',
+            gap: '0.6rem',
           }}
         >
+          {/* Period selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: '1.15rem' }}>🎬</span>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🎬</span>
             {availablePeriods.length > 1 ? (
               <select
                 value={currentKey}
                 onChange={e => handlePeriodSelect(e.target.value)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: '#fbbf24',
-                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: '#f8fafc',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
                   borderRadius: '8px',
                   padding: '0.25rem 0.5rem',
-                  fontSize: '0.85rem',
+                  fontSize: '0.82rem',
                   fontWeight: 700,
                   fontFamily: 'inherit',
                   cursor: 'pointer',
-                  maxWidth: '210px',
+                  maxWidth: '190px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {availablePeriods.map(p => (
@@ -268,36 +315,89 @@ export const PeriodRecapModal = ({
                 ))}
               </select>
             ) : (
-              <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fbbf24' }}>
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  color: '#f8fafc',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {recap.title}
               </span>
             )}
           </div>
 
-          <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
-            {slideIdx + 1}/{SLIDE_COUNT} · {SLIDE_TITLES[slideIdx]}
-          </span>
+          {/* Quick Actions: Direct WhatsApp share + Close button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={handleShareInfographic}
+              disabled={isSharing}
+              title="שתף לוואטסאפ"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                color: '#34d399',
+                borderRadius: '8px',
+                padding: '0.25rem 0.55rem',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: isSharing ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <span>📲</span>
+              <span>{isSharing ? 'משתף...' : 'שתף'}</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: 'none',
-              color: '#e2e8f0',
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="סגור"
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                color: '#e2e8f0',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                fontSize: '1.15rem',
+                lineHeight: 1,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Slide Counter / Title Banner */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.3rem 0.85rem',
+            background: 'rgba(255, 255, 255, 0.02)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+            fontSize: '0.72rem',
+            color: '#94a3b8',
+          }}
+        >
+          <span style={{ fontWeight: 700, color: '#38bdf8' }}>
+            {slideIdx + 1} מתוך {SLIDE_COUNT} · {SLIDE_TITLES[slideIdx]}
+          </span>
+          <span style={{ color: '#64748b' }}>החלק ימינה / שמאלה לדפדוף</span>
         </div>
 
         {/* Slide Body */}
@@ -305,203 +405,84 @@ export const PeriodRecapModal = ({
           style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '1rem 0.9rem',
+            padding: '0.85rem',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             minHeight: '390px',
           }}
         >
-          {/* SLIDE 0: Big Picture & Pot */}
+          {/* SLIDE 0: Podium & Overview (No redundant total pot) */}
           {slideIdx === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div
-                  style={{
-                    display: 'inline-block',
-                    padding: '0.2rem 0.7rem',
-                    borderRadius: '999px',
-                    background: 'rgba(251, 191, 36, 0.15)',
-                    border: '1px solid rgba(251, 191, 36, 0.35)',
-                    color: '#fbbf24',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    marginBottom: '0.35rem',
-                  }}
-                >
-                  ✨ POKER WRAPPED · {recap.shortLabel}
-                </div>
-                <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 800, color: '#ffffff' }}>
-                  {recap.title}
-                </h2>
-                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
-                  כל המספרים, האלופים והרגעים הגדולים של התקופה
-                </p>
-              </div>
-
-              {/* Hero Pot Box */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(16, 185, 129, 0.12))',
-                  border: '1px solid rgba(251, 191, 36, 0.35)',
-                  borderRadius: '16px',
-                  padding: '1rem',
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 600 }}>
-                  💰 סך הכסף שהתגלגל על השולחן
-                </div>
-                <div
-                  style={{
-                    fontSize: '2.2rem',
-                    fontWeight: 900,
-                    color: '#fbbf24',
-                    letterSpacing: '0.5px',
-                    marginTop: '0.15rem',
-                  }}
-                >
-                  ₪{recap.totalPot.toLocaleString('he-IL')}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                  מתוך {recap.totalRebuys} כניסות וקניות חוזרות
-                </div>
-              </div>
-
-              {/* 2x2 Stats Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {/* Quick stats chips */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '0.6rem',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '0.45rem',
                 }}
               >
                 <div
                   style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '12px',
-                    padding: '0.7rem',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.22)',
+                    borderRadius: '10px',
+                    padding: '0.45rem 0.3rem',
                     textAlign: 'center',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
                   }}
                 >
-                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8' }}>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#60a5fa' }}>
                     {recap.gamesCount}
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>ערבי פוקר</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ערבי משחק</div>
                 </div>
 
                 <div
                   style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '12px',
-                    padding: '0.7rem',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.22)',
+                    borderRadius: '10px',
+                    padding: '0.45rem 0.3rem',
                     textAlign: 'center',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
                   }}
                 >
-                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#34d399' }}>
-                    ₪{recap.avgPotPerGame.toLocaleString('he-IL')}
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#34d399' }}>
+                    {recap.allRanked.length}
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>קופה ממוצעת לערב</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שחקנים פעילים</div>
                 </div>
 
-                {recap.biggestGamePot && (
-                  <div
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '12px',
-                      padding: '0.7rem',
-                      textAlign: 'center',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f472b6' }}>
-                      ₪{recap.biggestGamePot.pot.toLocaleString('he-IL')}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      שיא קופה ({recap.biggestGamePot.date})
-                    </div>
+                <div
+                  style={{
+                    background: 'rgba(168, 85, 247, 0.08)',
+                    border: '1px solid rgba(168, 85, 247, 0.22)',
+                    borderRadius: '10px',
+                    padding: '0.45rem 0.3rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#c084fc', direction: 'ltr' }}>
+                    {recap.awards.bigHit ? `+₪${recap.awards.bigHit.profit}` : '—'}
                   </div>
-                )}
-
-                {recap.topLocation ? (
-                  <div
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '12px',
-                      padding: '0.7rem',
-                      textAlign: 'center',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '1.05rem',
-                        fontWeight: 800,
-                        color: '#c084fc',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      🏠 {recap.topLocation.name}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      מארח מוביל ({recap.topLocation.count} מש׳)
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '12px',
-                      padding: '0.7rem',
-                      textAlign: 'center',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#c084fc' }}>
-                      {recap.allRanked.length}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      שחקנים פעילים (מינ׳ {recap.activeThreshold} מש׳)
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* SLIDE 1: Podium (1st, 2nd, 3rd) */}
-          {slideIdx === 1 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.76rem', color: '#fbbf24', fontWeight: 700 }}>
-                  🏆 פודיום האלופים · {recap.shortLabel}
-                </div>
-                <h3 style={{ margin: '0.15rem 0 0', fontSize: '1.25rem', fontWeight: 800 }}>
-                  שלישיית הצמרת של התקופה
-                </h3>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.1rem' }}>
-                  דירוג שחקנים פעילים (מינימום {recap.activeThreshold} משחקים מתוך {recap.gamesCount})
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>שיא ערב</div>
                 </div>
               </div>
 
-              {/* Champion Spotlight */}
+              {/* Champion Hero Card */}
               {champ && (
                 <div
                   style={{
-                    background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(217, 119, 6, 0.1))',
-                    border: '1.5px solid rgba(251, 191, 36, 0.55)',
-                    borderRadius: '16px',
-                    padding: '0.9rem',
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.8))',
+                    border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                    borderRadius: '14px',
+                    padding: '0.85rem',
                     textAlign: 'center',
                     position: 'relative',
                   }}
                 >
-                  <div style={{ fontSize: '2rem', lineHeight: 1 }}>🥇👑</div>
-                  <div style={{ fontSize: '0.74rem', color: '#fde68a', fontWeight: 700, marginTop: '0.2rem' }}>
+                  <div style={{ fontSize: '1.8rem', lineHeight: 1 }}>🥇 👑</div>
+                  <div style={{ fontSize: '0.74rem', color: '#fbbf24', fontWeight: 800, marginTop: '0.2rem' }}>
                     {periodType === 'year'
                       ? `אלוף עונת ${year}`
                       : periodType === 'h1' || periodType === 'h2'
@@ -514,9 +495,9 @@ export const PeriodRecapModal = ({
                   <div
                     style={{
                       fontSize: '1.35rem',
-                      fontWeight: 800,
+                      fontWeight: 900,
                       color: '#4ade80',
-                      marginTop: '0.15rem',
+                      marginTop: '0.1rem',
                       direction: 'ltr',
                     }}
                   >
@@ -526,39 +507,39 @@ export const PeriodRecapModal = ({
                     style={{
                       display: 'flex',
                       justifyContent: 'center',
-                      gap: '0.75rem',
+                      gap: '0.65rem',
                       marginTop: '0.45rem',
-                      fontSize: '0.75rem',
-                      color: '#e2e8f0',
+                      fontSize: '0.74rem',
+                      color: '#cbd5e1',
                     }}
                   >
                     <span>🎮 {champ.gamesPlayed} משחקים</span>
-                    <span>🎯 {champ.winRate}% ניצחון</span>
+                    <span>🎯 {champ.winRate}% ניצחונות</span>
                     <span>📈 ₪{champ.avgProfit} לערב</span>
                   </div>
                 </div>
               )}
 
-              {/* 2nd & 3rd Place Side-by-Side */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
+              {/* Runners up 2nd & 3rd */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.55rem' }}>
                 {second && (
                   <div
                     style={{
-                      background: 'rgba(148, 163, 184, 0.12)',
-                      border: '1px solid rgba(203, 213, 225, 0.35)',
-                      borderRadius: '14px',
-                      padding: '0.75rem 0.6rem',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(203, 213, 225, 0.28)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.4rem' }}>🥈</div>
+                    <div style={{ fontSize: '1.3rem' }}>🥈</div>
                     <div style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 700 }}>סגן האלוף</div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
                       {second.playerName}
                     </div>
                     <div
                       style={{
-                        fontSize: '1rem',
+                        fontSize: '0.95rem',
                         fontWeight: 800,
                         color: second.profit >= 0 ? '#4ade80' : '#f87171',
                         direction: 'ltr',
@@ -567,7 +548,7 @@ export const PeriodRecapModal = ({
                     >
                       {second.profit >= 0 ? '+' : ''}₪{second.profit.toLocaleString('he-IL')}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                    <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
                       {second.gamesPlayed} מש׳ · {second.winRate}% ניצחון
                     </div>
                   </div>
@@ -576,21 +557,21 @@ export const PeriodRecapModal = ({
                 {third && (
                   <div
                     style={{
-                      background: 'rgba(180, 83, 9, 0.15)',
-                      border: '1px solid rgba(217, 119, 6, 0.38)',
-                      borderRadius: '14px',
-                      padding: '0.75rem 0.6rem',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(217, 119, 6, 0.3)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.4rem' }}>🥉</div>
+                    <div style={{ fontSize: '1.3rem' }}>🥉</div>
                     <div style={{ fontSize: '0.7rem', color: '#fdba74', fontWeight: 700 }}>מקום שלישי</div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', marginTop: '0.1rem' }}>
                       {third.playerName}
                     </div>
                     <div
                       style={{
-                        fontSize: '1rem',
+                        fontSize: '0.95rem',
                         fontWeight: 800,
                         color: third.profit >= 0 ? '#4ade80' : '#f87171',
                         direction: 'ltr',
@@ -599,7 +580,7 @@ export const PeriodRecapModal = ({
                     >
                       {third.profit >= 0 ? '+' : ''}₪{third.profit.toLocaleString('he-IL')}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                    <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginTop: '0.15rem' }}>
                       {third.gamesPlayed} מש׳ · {third.winRate}% ניצחון
                     </div>
                   </div>
@@ -608,42 +589,41 @@ export const PeriodRecapModal = ({
             </div>
           )}
 
-          {/* SLIDE 2: 4 Special Awards Grid */}
-          {slideIdx === 2 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+          {/* SLIDE 1: Special Awards & AI Story */}
+          {slideIdx === 1 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.76rem', color: '#fbbf24', fontWeight: 700 }}>
-                  🎖️ נבחרת התארים · {recap.shortLabel}
-                </div>
-                <h3 style={{ margin: '0.15rem 0 0', fontSize: '1.2rem', fontWeight: 800 }}>
-                  מצטייני התקופה בקטגוריות המיוחדות
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
+                  נבחרת התארים ודבר הפרשן
                 </h3>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.1rem' }}>
+                  המצטיינים בקטגוריות המיוחדות של התקופה
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
+              {/* 2x2 Awards Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                 {/* Sniper */}
                 {recap.awards.sniper && (
                   <div
                     style={{
-                      background: 'rgba(16, 185, 129, 0.12)',
-                      border: '1px solid rgba(52, 211, 153, 0.35)',
-                      borderRadius: '14px',
-                      padding: '0.8rem 0.65rem',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(52, 211, 153, 0.28)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>🎯</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#34d399', marginTop: '0.15rem' }}>
-                      צלף התקופה
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '1.35rem' }}>🎯</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#34d399' }}>צלף התקופה</div>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
                       {recap.awards.sniper.playerName}
                     </div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#6ee7b7', marginTop: '0.1rem' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#6ee7b7' }}>
                       {recap.awards.sniper.winRate}% הצלחה
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      {recap.awards.sniper.wins} ניצחונות מ-{recap.awards.sniper.games} משחקים
+                    <div style={{ fontSize: '0.64rem', color: '#94a3b8' }}>
+                      {recap.awards.sniper.wins} מתוך {recap.awards.sniper.games} משחקים
                     </div>
                   </div>
                 )}
@@ -652,33 +632,23 @@ export const PeriodRecapModal = ({
                 {recap.awards.bigHit && (
                   <div
                     style={{
-                      background: 'rgba(168, 85, 247, 0.14)',
-                      border: '1px solid rgba(192, 132, 252, 0.38)',
-                      borderRadius: '14px',
-                      padding: '0.8rem 0.65rem',
+                      background: 'rgba(168, 85, 247, 0.08)',
+                      border: '1px solid rgba(192, 132, 252, 0.28)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>💥</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#c084fc', marginTop: '0.15rem' }}>
-                      המכה הגדולה
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '1.35rem' }}>💥</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#c084fc' }}>המכה הגדולה</div>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
                       {recap.awards.bigHit.playerName}
                     </div>
-                    <div
-                      style={{
-                        fontSize: '0.95rem',
-                        fontWeight: 800,
-                        color: '#e9d5ff',
-                        marginTop: '0.1rem',
-                        direction: 'ltr',
-                      }}
-                    >
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#e9d5ff', direction: 'ltr' }}>
                       +₪{recap.awards.bigHit.profit.toLocaleString('he-IL')}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      שיא בערב אחד ({recap.awards.bigHit.date})
+                    <div style={{ fontSize: '0.64rem', color: '#94a3b8' }}>
+                      שיא ערב ({recap.awards.bigHit.date})
                     </div>
                   </div>
                 )}
@@ -687,58 +657,42 @@ export const PeriodRecapModal = ({
                 {recap.awards.hotStreak ? (
                   <div
                     style={{
-                      background: 'rgba(249, 115, 22, 0.14)',
-                      border: '1px solid rgba(251, 146, 60, 0.38)',
-                      borderRadius: '14px',
-                      padding: '0.8rem 0.65rem',
+                      background: 'rgba(249, 115, 22, 0.08)',
+                      border: '1px solid rgba(251, 146, 60, 0.28)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>🔥</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#fb923c', marginTop: '0.15rem' }}>
-                      הרצף החם
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '1.35rem' }}>🔥</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#fb923c' }}>הרצף החם</div>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
                       {recap.awards.hotStreak.playerName}
                     </div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fed7aa', marginTop: '0.1rem' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fed7aa' }}>
                       {recap.awards.hotStreak.streak} ניצחונות ברצף
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      המומנטום הארוך בתקופה
-                    </div>
+                    <div style={{ fontSize: '0.64rem', color: '#94a3b8' }}>מומנטום בתקופה</div>
                   </div>
                 ) : (
                   <div
                     style={{
-                      background: 'rgba(56, 189, 248, 0.12)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      borderRadius: '14px',
-                      padding: '0.8rem 0.65rem',
+                      background: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>⚡</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#38bdf8', marginTop: '0.15rem' }}>
-                      ממוצע לערב
+                    <div style={{ fontSize: '1.35rem' }}>⚡</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#38bdf8' }}>ממוצע לערב</div>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
+                      {champ?.playerName || '—'}
                     </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.15rem' }}>
-                      {champ?.playerName || '-'}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.95rem',
-                        fontWeight: 800,
-                        color: '#bae6fd',
-                        marginTop: '0.1rem',
-                        direction: 'ltr',
-                      }}
-                    >
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#bae6fd', direction: 'ltr' }}>
                       +₪{champ?.avgProfit || 0}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      רווח ממוצע למשחק
-                    </div>
+                    <div style={{ fontSize: '0.64rem', color: '#94a3b8' }}>רווח ממוצע למשחק</div>
                   </div>
                 )}
 
@@ -746,89 +700,50 @@ export const PeriodRecapModal = ({
                 {recap.awards.atm && (
                   <div
                     style={{
-                      background: 'rgba(244, 63, 94, 0.13)',
-                      border: '1px solid rgba(251, 113, 133, 0.35)',
-                      borderRadius: '14px',
-                      padding: '0.8rem 0.65rem',
+                      background: 'rgba(244, 63, 94, 0.08)',
+                      border: '1px solid rgba(251, 113, 133, 0.28)',
+                      borderRadius: '12px',
+                      padding: '0.65rem 0.5rem',
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>🏧</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#fb7185', marginTop: '0.15rem' }}>
-                      המממן של השולחן
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '1.35rem' }}>🏧</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#fb7185' }}>המממן של השולחן</div>
+                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
                       {recap.awards.atm.playerName}
                     </div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fecdd3', marginTop: '0.1rem' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fecdd3' }}>
                       {recap.awards.atm.totalRebuys} כניסות
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-                      השקעה של ₪{recap.awards.atm.totalInvested.toLocaleString('he-IL')} בקופה
+                    <div style={{ fontSize: '0.64rem', color: '#94a3b8' }}>
+                      ₪{recap.awards.atm.totalInvested.toLocaleString('he-IL')} בקופה
                     </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
 
-          {/* SLIDE 3: AI Story & Highlights */}
-          {slideIdx === 3 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.76rem', color: '#fbbf24', fontWeight: 700 }}>
-                  🎙️ דבר הפרשן · {recap.shortLabel}
-                </div>
-                <h3 style={{ margin: '0.15rem 0 0', fontSize: '1.2rem', fontWeight: 800 }}>
-                  הסיפור של התקופה
-                </h3>
-              </div>
-
-              {/* Deterministic Highlights */}
+              {/* AI Narrative & Highlights Box */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '12px',
-                  padding: '0.7rem 0.8rem',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  padding: '0.75rem',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '0.45rem',
                 }}
               >
-                {recap.deterministicHighlights.map((line, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      fontSize: '0.8rem',
-                      lineHeight: 1.45,
-                      color: '#e2e8f0',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '0.4rem',
-                    }}
-                  >
-                    <span style={{ color: '#fbbf24', flexShrink: 0 }}>✦</span>
-                    <span>{line}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI Narrative Box */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(168, 85, 247, 0.12))',
-                  border: '1px solid rgba(129, 140, 248, 0.35)',
-                  borderRadius: '14px',
-                  padding: '0.85rem',
-                }}
-              >
                 {aiText ? (
                   <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#38bdf8', fontSize: '0.74rem', fontWeight: 700 }}>
+                      <span>🎙️</span>
+                      <span>דבר הפרשן</span>
+                    </div>
                     <div
                       style={{
-                        fontSize: '0.82rem',
-                        lineHeight: 1.6,
+                        fontSize: '0.78rem',
+                        lineHeight: 1.55,
                         color: '#f1f5f9',
                         whiteSpace: 'pre-line',
                       }}
@@ -836,77 +751,80 @@ export const PeriodRecapModal = ({
                       {aiText}
                     </div>
                     {canGenerateAI && (
-                      <div style={{ marginTop: '0.6rem', textAlign: 'left' }}>
+                      <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
                         <button
                           type="button"
                           onClick={handleGenerateAI}
                           disabled={aiLoading}
                           style={{
-                            background: 'rgba(255,255,255,0.08)',
+                            background: 'transparent',
                             border: '1px solid rgba(255,255,255,0.18)',
                             color: '#cbd5e1',
                             borderRadius: '6px',
-                            padding: '0.25rem 0.6rem',
-                            fontSize: '0.7rem',
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.66rem',
                             cursor: 'pointer',
                             fontFamily: 'inherit',
                           }}
                         >
-                          {aiLoading ? 'מייצר...' : '🔄 צור סיכום AI מחדש'}
+                          {aiLoading ? 'מעדכן...' : '🔄 צור מחדש עם AI'}
                         </button>
                       </div>
                     )}
                   </>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '0.4rem 0' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '0.55rem' }}>
-                      רוצה ניתוח פרשנות שנון ומלא על כל דרמות התקופה?
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#38bdf8', fontSize: '0.74rem', fontWeight: 700 }}>
+                      <span>✦</span>
+                      <span>נקודות ציון בתקופה</span>
                     </div>
-                    {canGenerateAI ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      {recap.deterministicHighlights.slice(0, 3).map((line, i) => (
+                        <div key={i} style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                          • {line}
+                        </div>
+                      ))}
+                    </div>
+                    {canGenerateAI && (
                       <button
                         type="button"
                         onClick={handleGenerateAI}
                         disabled={aiLoading}
                         style={{
-                          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                          border: 'none',
-                          color: '#ffffff',
+                          marginTop: '0.3rem',
+                          background: 'rgba(59, 130, 246, 0.15)',
+                          border: '1px solid rgba(59, 130, 246, 0.35)',
+                          color: '#60a5fa',
+                          borderRadius: '8px',
+                          padding: '0.45rem',
+                          fontSize: '0.75rem',
                           fontWeight: 700,
-                          fontSize: '0.82rem',
-                          padding: '0.5rem 1rem',
-                          borderRadius: '10px',
                           cursor: aiLoading ? 'wait' : 'pointer',
                           fontFamily: 'inherit',
                         }}
                       >
-                        {aiLoading ? '✨ כותב את סיפור התקופה...' : '✨ צור כתבת סיכום AI לתקופה'}
+                        {aiLoading ? '✨ מייצר פרשנות...' : '✨ צור ניתוח פרשנות AI לתקופה'}
                       </button>
-                    ) : (
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        מנהל הקבוצה יכול לייצר כתבת AI לתקופה זו
-                      </div>
                     )}
                     {aiError && (
-                      <div style={{ fontSize: '0.72rem', color: '#fca5a5', marginTop: '0.4rem' }}>
-                        {aiError}
-                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#fca5a5' }}>{aiError}</div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
             </div>
           )}
 
-          {/* SLIDE 4: Unified Shareable Infographic Card */}
-          {slideIdx === 4 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* SLIDE 2: Shareable Card (Design ready for WhatsApp) */}
+          {slideIdx === 2 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               <div
                 ref={shareCardRef}
                 style={{
-                  background: 'linear-gradient(160deg, #0f172a 0%, #1e1b4b 60%, #090d16 100%)',
-                  border: '1.5px solid rgba(251, 191, 36, 0.45)',
-                  borderRadius: '16px',
-                  padding: '0.9rem',
+                  background: 'linear-gradient(165deg, #0f172a 0%, #1e293b 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '14px',
+                  padding: '0.85rem',
                   direction: 'rtl',
                 }}
               >
@@ -917,21 +835,21 @@ export const PeriodRecapModal = ({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                    paddingBottom: '0.5rem',
-                    marginBottom: '0.65rem',
+                    paddingBottom: '0.45rem',
+                    marginBottom: '0.6rem',
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '0.68rem', color: '#fbbf24', fontWeight: 700 }}>
+                    <div style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 800 }}>
                       ♠️ POKER MANAGER WRAPPED
                     </div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
                       {recap.title}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'left', fontSize: '0.72rem', color: '#cbd5e1' }}>
+                  <div style={{ textAlign: 'left', fontSize: '0.72rem', color: '#94a3b8' }}>
                     <div>🎮 {recap.gamesCount} משחקים</div>
-                    <div>💰 קופה: ₪{recap.totalPot.toLocaleString('he-IL')}</div>
+                    <div>👥 {recap.allRanked.length} שחקנים</div>
                   </div>
                 </div>
 
@@ -941,31 +859,31 @@ export const PeriodRecapModal = ({
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3, 1fr)',
                     gap: '0.4rem',
-                    marginBottom: '0.65rem',
+                    marginBottom: '0.6rem',
                   }}
                 >
                   {recap.podium.slice(0, 3).map((p, idx) => {
                     const medals = ['🥇', '🥈', '🥉'];
                     const borders = [
-                      'rgba(251, 191, 36, 0.5)',
-                      'rgba(203, 213, 225, 0.35)',
-                      'rgba(217, 119, 6, 0.35)',
+                      'rgba(245, 158, 11, 0.45)',
+                      'rgba(203, 213, 225, 0.3)',
+                      'rgba(217, 119, 6, 0.3)',
                     ];
                     return (
                       <div
                         key={p.playerId}
                         style={{
-                          background: idx === 0 ? 'rgba(251, 191, 36, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                          background: idx === 0 ? 'rgba(245, 158, 11, 0.12)' : 'rgba(255, 255, 255, 0.04)',
                           border: `1px solid ${borders[idx]}`,
                           borderRadius: '10px',
-                          padding: '0.45rem 0.3rem',
+                          padding: '0.45rem 0.25rem',
                           textAlign: 'center',
                         }}
                       >
                         <div style={{ fontSize: '1.1rem' }}>{medals[idx]}</div>
                         <div
                           style={{
-                            fontSize: '0.82rem',
+                            fontSize: '0.8rem',
                             fontWeight: 800,
                             color: '#ffffff',
                             whiteSpace: 'nowrap',
@@ -977,13 +895,13 @@ export const PeriodRecapModal = ({
                         </div>
                         <div
                           style={{
-                            fontSize: '0.8rem',
+                            fontSize: '0.82rem',
                             fontWeight: 800,
                             color: p.profit >= 0 ? '#4ade80' : '#f87171',
                             direction: 'ltr',
                           }}
                         >
-                          {p.profit >= 0 ? '+' : ''}₪{p.profit}
+                          {p.profit >= 0 ? '+' : ''}₪{p.profit.toLocaleString('he-IL')}
                         </div>
                         <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
                           {p.gamesPlayed} מש׳ · {p.winRate}%
@@ -993,24 +911,23 @@ export const PeriodRecapModal = ({
                   })}
                 </div>
 
-                {/* Mini Awards 2x2 */}
+                {/* Awards 2x2 Mini Pills */}
                 <div
                   style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '0.4rem',
+                    gap: '0.35rem',
                   }}
                 >
                   {recap.awards.sniper && (
                     <div
                       style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '8px',
-                        padding: '0.35rem 0.5rem',
-                        fontSize: '0.72rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.45rem',
+                        fontSize: '0.68rem',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <span style={{ color: '#34d399', fontWeight: 700 }}>🎯 צלף:</span>
@@ -1022,13 +939,12 @@ export const PeriodRecapModal = ({
                   {recap.awards.bigHit && (
                     <div
                       style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '8px',
-                        padding: '0.35rem 0.5rem',
-                        fontSize: '0.72rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.45rem',
+                        fontSize: '0.68rem',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <span style={{ color: '#c084fc', fontWeight: 700 }}>💥 שיא ערב:</span>
@@ -1040,31 +956,29 @@ export const PeriodRecapModal = ({
                   {recap.awards.hotStreak && (
                     <div
                       style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '8px',
-                        padding: '0.35rem 0.5rem',
-                        fontSize: '0.72rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.45rem',
+                        fontSize: '0.68rem',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <span style={{ color: '#fb923c', fontWeight: 700 }}>🔥 רצף:</span>
                       <span style={{ fontWeight: 700 }}>
-                        {recap.awards.hotStreak.playerName} ({recap.awards.hotStreak.streak} ברצף)
+                        {recap.awards.hotStreak.playerName} ({recap.awards.hotStreak.streak})
                       </span>
                     </div>
                   )}
                   {recap.awards.atm && (
                     <div
                       style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '8px',
-                        padding: '0.35rem 0.5rem',
-                        fontSize: '0.72rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.45rem',
+                        fontSize: '0.68rem',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <span style={{ color: '#fb7185', fontWeight: 700 }}>🏧 מממן:</span>
@@ -1075,21 +989,21 @@ export const PeriodRecapModal = ({
                   )}
                 </div>
 
-                {/* Full Ranked Table Preview (4th place onwards) */}
+                {/* Standings 4th-8th */}
                 {recap.allRanked.length > 3 && (
                   <div
                     style={{
-                      marginTop: '0.55rem',
-                      paddingTop: '0.45rem',
+                      marginTop: '0.5rem',
+                      paddingTop: '0.4rem',
                       borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                       display: 'flex',
                       flexWrap: 'wrap',
-                      gap: '0.35rem 0.65rem',
-                      fontSize: '0.68rem',
+                      gap: '0.25rem 0.6rem',
+                      fontSize: '0.66rem',
                       color: '#cbd5e1',
                     }}
                   >
-                    {recap.allRanked.slice(3, 9).map(p => (
+                    {recap.allRanked.slice(3, 8).map(p => (
                       <span key={p.playerId}>
                         {p.rank}. {p.playerName}{' '}
                         <span style={{ color: p.profit >= 0 ? '#4ade80' : '#f87171', direction: 'ltr', display: 'inline-block' }}>
@@ -1101,36 +1015,62 @@ export const PeriodRecapModal = ({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={handleShareInfographic}
-                disabled={isSharing}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '0.95rem',
-                  cursor: isSharing ? 'wait' : 'pointer',
-                  fontFamily: 'inherit',
-                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                }}
-              >
-                {isSharing ? '📸 מכין תמונה לשיתוף...' : '📤 שתף כרטיס סיכום לוואטסאפ'}
-              </button>
+              {/* WhatsApp Share Actions */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <button
+                  type="button"
+                  onClick={handleShareInfographic}
+                  disabled={isSharing}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.92rem',
+                    cursor: isSharing ? 'wait' : 'pointer',
+                    fontFamily: 'inherit',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                  }}
+                >
+                  <span>📲</span>
+                  <span>{isSharing ? 'מכין תמונה לשיתוף...' : 'שתף תמונה וסיכום לוואטסאפ'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShareWhatsAppTextOnly}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#94a3b8',
+                    padding: '0.45rem',
+                    borderRadius: '10px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  💬 שתף כהודעת טקסט בלבד לוואטסאפ
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Bottom Navigation Bar */}
+          {/* Bottom Navigation */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginTop: '0.9rem',
+              marginTop: '0.85rem',
               paddingTop: '0.65rem',
               borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             }}
@@ -1140,12 +1080,12 @@ export const PeriodRecapModal = ({
               onClick={prevSlide}
               disabled={slideIdx === 0}
               style={{
-                background: slideIdx === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.1)',
+                background: slideIdx === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.08)',
                 border: 'none',
                 color: slideIdx === 0 ? '#475569' : '#f8fafc',
-                padding: '0.45rem 0.85rem',
-                borderRadius: '10px',
-                fontSize: '0.8rem',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: slideIdx === 0 ? 'default' : 'pointer',
                 fontFamily: 'inherit',
@@ -1160,10 +1100,10 @@ export const PeriodRecapModal = ({
                   key={i}
                   onClick={() => setSlideIdx(i)}
                   style={{
-                    width: i === slideIdx ? '18px' : '7px',
-                    height: '7px',
+                    width: i === slideIdx ? '16px' : '6px',
+                    height: '6px',
                     borderRadius: '999px',
-                    background: i === slideIdx ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+                    background: i === slideIdx ? '#10b981' : 'rgba(255,255,255,0.2)',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                   }}
@@ -1176,13 +1116,13 @@ export const PeriodRecapModal = ({
                 type="button"
                 onClick={nextSlide}
                 style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  border: 'none',
-                  color: '#0f172a',
-                  padding: '0.45rem 0.95rem',
-                  borderRadius: '10px',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  color: '#60a5fa',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
@@ -1194,12 +1134,12 @@ export const PeriodRecapModal = ({
                 type="button"
                 onClick={onClose}
                 style={{
-                  background: 'rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.1)',
                   border: 'none',
                   color: '#f8fafc',
-                  padding: '0.45rem 0.95rem',
-                  borderRadius: '10px',
-                  fontSize: '0.8rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -1216,4 +1156,3 @@ export const PeriodRecapModal = ({
 };
 
 export default PeriodRecapModal;
-
