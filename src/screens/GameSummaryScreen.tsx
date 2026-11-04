@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, shareComicImage } from '../utils/sharing';
@@ -20,7 +20,7 @@ import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { hapticTap } from '../utils/haptics';
-import PeriodRecapModal from '../components/PeriodRecapModal';
+const PeriodRecapModal = lazy(() => import('../components/PeriodRecapModal'));
 
 // ────────────────────────────────────────────────────────────────────
 // Game-Night Comic feature: PARKED.
@@ -2925,14 +2925,16 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
-      {gameDate && (
-        <PeriodRecapModal
-          isOpen={showMonthRecapModal}
-          onClose={() => setShowMonthRecapModal(false)}
-          initialPeriodType="month"
-          initialYear={new Date(gameDate).getFullYear()}
-          initialMonth={new Date(gameDate).getMonth() + 1}
-        />
+      {gameDate && showMonthRecapModal && (
+        <Suspense fallback={null}>
+          <PeriodRecapModal
+            isOpen={true}
+            onClose={() => setShowMonthRecapModal(false)}
+            initialPeriodType="month"
+            initialYear={new Date(gameDate).getFullYear()}
+            initialMonth={new Date(gameDate).getMonth() + 1}
+          />
+        </Suspense>
       )}
     </div>
   );

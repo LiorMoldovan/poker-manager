@@ -18,7 +18,7 @@
 // reads as one cohesive surface — no per-card patching of icon
 // sizes / title weights / subtitle treatments.
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GamePlayer, PlayerStats, TrainingPlayerData } from '../types';
 import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, getSettings, linkPollToGame } from '../database/storage';
@@ -35,7 +35,7 @@ import { verbForName } from '../utils/hebrewGender';
 import { usePermissions } from '../App';
 import { canViewerVoteNow } from '../utils/pollAccess';
 import { getLatestCompletedMonthPeriod } from '../utils/periodRecap';
-import PeriodRecapModal from './PeriodRecapModal';
+const PeriodRecapModal = lazy(() => import('./PeriodRecapModal'));
 
 // ─── Design tokens ──────────────────────────────────────────────────────
 // Every dashboard card MUST consume these instead of hard-coding sizes,
@@ -558,7 +558,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   };
 
   const [recapModal, setRecapModal] = useState<{ year: number; month: number } | null>(null);
-  const latestCompletedMonth = useMemo(() => getLatestCompletedMonthPeriod(), [allGames]);
+  const latestCompletedMonth = useMemo(() => getLatestCompletedMonthPeriod(allGames), [allGames]);
 
   // Stagger delay (ms) between successive cards. Short enough that the
   // user perceives the page as instant, long enough that the cards
@@ -705,13 +705,15 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         groupCompletedGames={groupCompletedGames}
       />
       {recapModal && (
-        <PeriodRecapModal
-          isOpen={true}
-          onClose={() => setRecapModal(null)}
-          initialPeriodType="month"
-          initialYear={recapModal.year}
-          initialMonth={recapModal.month}
-        />
+        <Suspense fallback={null}>
+          <PeriodRecapModal
+            isOpen={true}
+            onClose={() => setRecapModal(null)}
+            initialPeriodType="month"
+            initialYear={recapModal.year}
+            initialMonth={recapModal.month}
+          />
+        </Suspense>
       )}
     </div>
   );

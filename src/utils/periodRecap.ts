@@ -163,10 +163,11 @@ export function computePeriodRecap(
   month?: number,
   preloaded?: { games: Game[]; gamePlayers: GamePlayer[]; players: Player[]; rebuyValue: number }
 ): PeriodRecapData | null {
-  const allGames = (preloaded?.games || getAllGames()).filter(g => g.status === 'completed');
-  const allGP = preloaded?.gamePlayers || getAllGamePlayers();
-  const allPlayers = preloaded?.players || getAllPlayers();
-  const rebuyValue = preloaded?.rebuyValue || getSettings().rebuyValue || 30;
+  try {
+    const allGames = (preloaded?.games || getAllGames()).filter(g => g && g.status === 'completed');
+    const allGP = preloaded?.gamePlayers || getAllGamePlayers() || [];
+    const allPlayers = preloaded?.players || getAllPlayers() || [];
+    const rebuyValue = preloaded?.rebuyValue || getSettings().rebuyValue || 30;
 
   const playerMap = new Map<string, Player>();
   allPlayers.forEach(p => playerMap.set(p.id, p));
@@ -408,40 +409,56 @@ export function computePeriodRecap(
     },
     deterministicHighlights: highlights,
   };
+  } catch (err) {
+    console.warn('computePeriodRecap failed:', err);
+    return null;
+  }
 }
 
 /**
  * Returns the most recently completed month that has at least 1 completed game.
  */
-export function getLatestCompletedMonthPeriod(): { year: number; month: number; label: string } | null {
-  const allGames = getAllGames().filter(g => g.status === 'completed');
-  if (allGames.length === 0) return null;
+export function getLatestCompletedMonthPeriod(providedGames?: Game[]): { year: number; month: number; label: string } | null {
+  try {
+    const rawGames = providedGames || getAllGames();
+    if (!Array.isArray(rawGames) || rawGames.length === 0) return null;
+    const completedGames = rawGames.filter(g => g && g.status === 'completed');
+    if (completedGames.length === 0) return null;
 
-  const now = new Date();
-  const curY = now.getFullYear();
-  const curM = now.getMonth() + 1;
+    const now = new Date();
+    const curY = now.getFullYear();
+    const curM = now.getMonth() + 1;
 
-  const ymSet = new Set<string>();
-  for (const g of allGames) {
-    const d = getGameDate(g);
-    const y = d.getFullYear();
-    const m = d.getMonth() + 1;
-    // Completed months only (strictly before current calendar month)
-    if (y < curY || (y === curY && m < curM)) {
-      ymSet.add(`${y}-${String(m).padStart(2, '0')}`);
+    const ymSet = new Set<string>();
+    for (const g of completedGames) {
+      const d = getGameDate(g);
+      if (isNaN(d.getTime())) continue;
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      if (isNaN(y) || isNaN(m)) continue;
+      // Completed months only (strictly before current calendar month)
+      if (y < curY || (y === curY && m < curM)) {
+        ymSet.add(`${y}-${String(m).padStart(2, '0')}`);
+      }
     }
-  }
 
-  if (ymSet.size === 0) return null;
-  const sorted = Array.from(ymSet).sort().reverse();
-  const [yStr, mStr] = sorted[0].split('-');
-  const year = parseInt(yStr, 10);
-  const month = parseInt(mStr, 10);
-  return {
-    year,
-    month,
-    label: `${HEBREW_MONTHS[month - 1]} ${year}`,
-  };
+    if (ymSet.size === 0) return null;
+    const sorted = Array.from(ymSet).sort().reverse();
+    if (!sorted[0]) return null;
+    const parts = sorted[0].split('-');
+    if (parts.length !== 2) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return null;
+    return {
+      year,
+      month,
+      label: `${HEBREW_MONTHS[month - 1]} ${year}`,
+    };
+  } catch (err) {
+    console.warn('getLatestCompletedMonthPeriod error:', err);
+    return null;
+  }
 }
 
 /**

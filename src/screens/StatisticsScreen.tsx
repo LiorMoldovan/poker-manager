@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, hideForCapture, shareFiles } from '../utils/sharing';
@@ -22,8 +22,8 @@ import {
   RecapPeriodType,
   PlayerTrophyCabinet,
 } from '../utils/periodRecap';
-import PeriodRecapModal from '../components/PeriodRecapModal';
-import PlayerTrophyModal from '../components/PlayerTrophyModal';
+const PeriodRecapModal = lazy(() => import('../components/PeriodRecapModal'));
+const PlayerTrophyModal = lazy(() => import('../components/PlayerTrophyModal'));
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 type ViewMode = 'table' | 'records' | 'players';
@@ -7428,24 +7428,30 @@ const StatisticsScreen = () => {
 
       {/* Player Trophy Cabinet Modal */}
       {trophyModalPlayerId && (
-        <PlayerTrophyModal
-          cabinet={playerTrophyCabinets.get(trophyModalPlayerId) || null}
-          onClose={() => setTrophyModalPlayerId(null)}
-          onOpenPeriodRecap={(pType, yr, mo) => {
-            setTrophyModalPlayerId(null);
-            openPeriodRecap(pType, yr, mo);
-          }}
-        />
+        <Suspense fallback={null}>
+          <PlayerTrophyModal
+            cabinet={playerTrophyCabinets.get(trophyModalPlayerId) || null}
+            onClose={() => setTrophyModalPlayerId(null)}
+            onOpenPeriodRecap={(pType, yr, mo) => {
+              setTrophyModalPlayerId(null);
+              openPeriodRecap(pType, yr, mo);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Period Recap (Wrapped) Modal */}
-      <PeriodRecapModal
-        isOpen={recapModalState.isOpen}
-        onClose={() => setRecapModalState(prev => ({ ...prev, isOpen: false }))}
-        initialPeriodType={recapModalState.periodType}
-        initialYear={recapModalState.year}
-        initialMonth={recapModalState.month}
-      />
+      {recapModalState.isOpen && (
+        <Suspense fallback={null}>
+          <PeriodRecapModal
+            isOpen={true}
+            onClose={() => setRecapModalState(prev => ({ ...prev, isOpen: false }))}
+            initialPeriodType={recapModalState.periodType}
+            initialYear={recapModalState.year}
+            initialMonth={recapModalState.month}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };
