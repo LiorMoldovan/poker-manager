@@ -20,6 +20,7 @@ import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { hapticTap } from '../utils/haptics';
+import PeriodRecapModal from '../components/PeriodRecapModal';
 
 // ────────────────────────────────────────────────────────────────────
 // Game-Night Comic feature: PARKED.
@@ -151,6 +152,7 @@ const GameSummaryScreen = () => {
   const [previousRankMap, setPreviousRankMap] = useState<Record<string, number>>({});
   const [monthlyStats, setMonthlyStats] = useState<PlayerStats[]>([]);
   const [monthLabel, setMonthLabel] = useState('');
+  const [showMonthRecapModal, setShowMonthRecapModal] = useState(false);
   const monthlyRef = useRef<HTMLDivElement>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const [paidSettlements, setPaidSettlements] = useState<PaidSettlement[]>([]);
@@ -962,14 +964,13 @@ const GameSummaryScreen = () => {
     const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
     const enMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const gameMonthIdx = actualGameDate.getMonth();
-    const isLastGameOfMonth = gameYear >= 2026 && (
+    const isLastGameOfMonth =
       game.periodMarkers?.isLastGameOfMonth ??
       !cachedAllGames.some(g => {
         if (g.status !== 'completed' || g.id === game.id) return false;
         const gd = new Date(g.date || g.createdAt);
         return gd.getFullYear() === gameYear && gd.getMonth() === gameMonthIdx && gd > actualGameDate;
-      })
-    );
+      });
     if (isLastGameOfMonth) {
       const monthStart = new Date(gameYear, gameMonthIdx, 1);
       const monthEnd = new Date(gameYear, gameMonthIdx + 1, 0, 23, 59, 59);
@@ -2508,9 +2509,33 @@ const GameSummaryScreen = () => {
       {monthlyStats.length > 0 && (
         <div ref={monthlyRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
-            <button onClick={() => toggleSection('monthly')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.monthly ? 0 : '0.5rem' }}>
+            <button onClick={() => toggleSection('monthly')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.monthSummary', { month: monthLabel })}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMonthRecapModal(true)}
+              style={{
+                width: '100%',
+                marginBottom: collapsedSections.monthly ? 0 : '0.6rem',
+                padding: '0.55rem 0.75rem',
+                borderRadius: '10px',
+                border: '1px solid rgba(251, 191, 36, 0.45)',
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(217, 119, 6, 0.12))',
+                color: '#fbbf24',
+                fontWeight: 800,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <span>🎬</span>
+              <span>צפה בסיכום חודש {monthLabel} (Wrapped) וחלוקת התארים</span>
             </button>
             {!collapsedSections.monthly && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{
@@ -2897,6 +2922,16 @@ const GameSummaryScreen = () => {
         >
           {shareError}
         </div>
+      )}
+
+      {gameDate && (
+        <PeriodRecapModal
+          isOpen={showMonthRecapModal}
+          onClose={() => setShowMonthRecapModal(false)}
+          initialPeriodType="month"
+          initialYear={new Date(gameDate).getFullYear()}
+          initialMonth={new Date(gameDate).getMonth() + 1}
+        />
       )}
     </div>
   );

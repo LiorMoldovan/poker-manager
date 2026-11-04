@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory, Player } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, addPlayerToGame, getAllPlayers, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, updateGamePlayerEntryMode, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, addPlayerToGame, getAllPlayers, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
-import { cleanNumber } from '../utils/calculations';
+import { cleanNumber, formatCurrency } from '../utils/calculations';
 import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { generateTraitMessages } from '../utils/playerTraits';
@@ -11,6 +11,7 @@ import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/stora
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
 import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
+import { TotalNumpadModal } from '../components/TotalNumpadModal';
 import { useTranslation } from '../i18n';
 
 // Runtime safety net: same logic as `hasLiteralLiveCount` in geminiAI.ts.
@@ -72,6 +73,8 @@ const LiveGameScreen = () => {
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [actions, setActions] = useState<GameAction[]>([]);
   const [rebuyValue, setRebuyValue] = useState(50);
+  const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
+  const [earlyExitPlayerId, setEarlyExitPlayerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
@@ -393,6 +396,7 @@ const LiveGameScreen = () => {
     setPlayers(gamePlayers);
     const settings = getSettings();
     setRebuyValue(settings.rebuyValue);
+    setChipsPerRebuy(settings.chipsPerRebuy || 10000);
 
     if (game?.sharedExpenses) {
       setSharedExpenses(game.sharedExpenses);
@@ -1945,6 +1949,31 @@ const LiveGameScreen = () => {
     navigateToChipEntry();
   };
 
+  const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
+  const earlyExitPlayer = players.find(p => p.id === earlyExitPlayerId) || null;
+
+  const handleEarlyExitConfirm = (totalChips: number) => {
+    if (!earlyExitPlayer) return;
+    updateGamePlayerEntryMode(earlyExitPlayer.id, 'total', totalChips);
+    setPlayers(prev => prev.map(p =>
+      p.id === earlyExitPlayer.id
+        ? { ...p, entryMode: 'total', totalChipCount: totalChips, chipCounts: {} }
+        : p
+    ));
+    setEarlyExitPlayerId(null);
+  };
+
+  const handleCancelEarlyExit = () => {
+    if (!earlyExitPlayer) return;
+    updateGamePlayerEntryMode(earlyExitPlayer.id, 'color', null);
+    setPlayers(prev => prev.map(p =>
+      p.id === earlyExitPlayer.id
+        ? { ...p, entryMode: 'color', totalChipCount: null }
+        : p
+    ));
+    setEarlyExitPlayerId(null);
+  };
+
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
   const totalRebuys = players.reduce((sum, p) => sum + p.rebuys, 0);
 
@@ -2058,11 +2087,15 @@ const LiveGameScreen = () => {
           )}
         </div>
 
-        {players.map(player => (
-          <div key={player.id} className="player-card" style={{ position: 'relative', padding: '0.25rem 0.5rem' }}>
+        {players.map(player => {
+          const isEarlyExited = player.entryMode === 'total' && player.totalChipCount !== null && player.totalChipCount !== undefined;
+          const earlyChips = player.totalChipCount ?? 0;
+          const earlyProfit = earlyChips * valuePerChip - player.rebuys * rebuyValue;
+          return (
+          <div key={player.id} className="player-card" style={{ position: 'relative', padding: '0.25rem 0.5rem', ...(isEarlyExited ? { background: 'rgba(16, 185, 129, 0.06)', borderColor: 'rgba(16, 185, 129, 0.25)' } : {}) }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: '1 1 auto', minWidth: 0 }}>
-              <span className="player-name" style={{ flex: '1 1 auto', minWidth: 0, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.playerName}</span>
-              {isAdmin && player.rebuys <= 1 && (
+              <span className="player-name" style={{ flex: '1 1 auto', minWidth: 0, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isEarlyExited ? 'var(--text-muted)' : 'var(--text)' }}>{player.playerName}</span>
+              {isAdmin && player.rebuys <= 1 && !isEarlyExited && (
                 <button
                   onClick={() => handleRemovePlayer(player)}
                   style={{
@@ -2082,7 +2115,7 @@ const LiveGameScreen = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  minWidth: '3.25rem',
+                  minWidth: '3rem',
                   gap: '0.05rem',
                 }}
               >
@@ -2094,26 +2127,78 @@ const LiveGameScreen = () => {
                 </span>
               </div>
             </div>
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+            {isEarlyExited ? (
+              <button
+                type="button"
+                onClick={() => isAdmin && setEarlyExitPlayerId(player.id)}
+                disabled={!isAdmin}
+                title={isAdmin ? 'לחץ לעריכת צ׳יפים או החזרה למשחק' : undefined}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  padding: '0.28rem 0.55rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  background: 'rgba(16, 185, 129, 0.14)',
+                  color: 'var(--text)',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  fontFamily: 'Outfit, sans-serif',
+                  cursor: isAdmin ? 'pointer' : 'default',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span>🚪 {earlyChips.toLocaleString('he-IL')}</span>
+                <span dir="ltr" style={{ color: earlyProfit > 0 ? 'var(--success)' : earlyProfit < 0 ? '#ef4444' : 'var(--text-muted)', fontWeight: 700 }}>
+                  ({earlyProfit > 0 ? `+${cleanNumber(earlyProfit)}` : earlyProfit < 0 ? `-${cleanNumber(Math.abs(earlyProfit))}` : '0'})
+                </span>
+                {isAdmin && <span style={{ fontSize: '0.62rem', opacity: 0.7 }}>✏️</span>}
+              </button>
+            ) : isAdmin ? (
+              <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0, alignItems: 'center' }}>
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => handleRebuy(player, 1)}
-                  style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem', fontWeight: 600 }}
+                  style={{ fontSize: '0.78rem', padding: '0.3rem 0.55rem', fontWeight: 600 }}
                 >
                   {t('live.buyin')}
                 </button>
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => handleRebuy(player, 0.5)}
-                  style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem' }}
+                  style={{ fontSize: '0.65rem', padding: '0.2rem 0.38rem' }}
                 >
                   {t('live.halfBuyin')}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setEarlyExitPlayerId(player.id)}
+                  title="סיום ערב מוקדם והזנת סה״כ צ׳יפים"
+                  style={{
+                    background: 'rgba(148, 163, 184, 0.12)',
+                    border: '1px solid rgba(148, 163, 184, 0.28)',
+                    color: 'var(--text-muted)',
+                    borderRadius: '6px',
+                    padding: '0.22rem 0.4rem',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    fontFamily: 'Outfit, sans-serif',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.15rem',
+                  }}
+                >
+                  🚪 סיים
+                </button>
               </div>
-            )}
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {actions.length > 0 && (
@@ -2442,6 +2527,25 @@ const LiveGameScreen = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {earlyExitPlayer && (
+        <TotalNumpadModal
+          isOpen={true}
+          playerName={earlyExitPlayer.playerName}
+          currentValue={earlyExitPlayer.totalChipCount ?? 0}
+          valuePerChip={valuePerChip}
+          playerBuyinTotal={earlyExitPlayer.rebuys * rebuyValue}
+          formatMoney={(n: number) => formatCurrency(n)}
+          subtitle="🚪 סיום מוקדם — הסכום יועבר אוטומטית למסך ספירת הצ'יפים"
+          onConfirm={handleEarlyExitConfirm}
+          onCancelEarlyExit={
+            earlyExitPlayer.entryMode === 'total' && earlyExitPlayer.totalChipCount != null
+              ? handleCancelEarlyExit
+              : undefined
+          }
+          onClose={() => setEarlyExitPlayerId(null)}
+        />
       )}
 
     </div>

@@ -690,13 +690,24 @@ const ChipEntryScreen = () => {
     setPhotoAvailable(isGeminiEnabledForCurrentGroup());
     // Initialize chip counts
     const initialCounts: Record<string, Record<string, number>> = {};
+    const preCompletedIds: string[] = [];
     gamePlayers.forEach(player => {
       initialCounts[player.id] = {};
       chips.forEach(chip => {
         initialCounts[player.id][chip.id] = player.chipCounts[chip.id] || 0;
       });
+      if (player.entryMode === 'total' && player.totalChipCount !== null && player.totalChipCount !== undefined) {
+        preCompletedIds.push(player.id);
+      }
     });
     setChipCounts(initialCounts);
+    if (preCompletedIds.length > 0) {
+      setCompletedPlayers(prev => {
+        const next = new Set(prev);
+        preCompletedIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
     
     // Don't auto-select any player - let user choose
     setSelectedPlayerId(null);
@@ -1419,6 +1430,16 @@ const ChipEntryScreen = () => {
                 }}>
                   {profit > 0 ? '\u200E+' : ''}{cleanNumber(profit)}
                 </span>
+                {player.entryMode === 'total' && player.totalChipCount != null && (
+                  <span style={{
+                    fontSize: '0.65rem',
+                    color: 'var(--text-muted)',
+                    marginTop: '0.1rem',
+                    direction: 'ltr',
+                  }}>
+                    🚪 {player.totalChipCount.toLocaleString('he-IL')}
+                  </span>
+                )}
               </>
             );
 
@@ -1594,7 +1615,7 @@ const ChipEntryScreen = () => {
                   here. Gated on mixedMode: when the admin chose
                   the clean single-mode view, this in-card switch
                   contradicts that intent and disappears. */}
-              {isAdmin && mixedMode && chipValues.length > 0 && (
+              {isAdmin && chipValues.length > 0 && (
                 <div style={{ marginTop: '0.15rem', marginBottom: '0.5rem', textAlign: 'end' }}>
                   <button
                     type="button"

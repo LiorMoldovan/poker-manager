@@ -6032,3 +6032,71 @@ function emptyChipCountResult(
     errorCode,
   };
 }
+
+// ─── Period Recap (Wrapped) AI Narrative ─────────────────────────────────────
+
+export const generatePeriodRecapAI = async (recap: {
+  title: string;
+  shortLabel: string;
+  gamesCount: number;
+  totalPot: number;
+  avgPotPerGame: number;
+  podium: Array<{ playerName: string; profit: number; gamesPlayed: number; winRate: number }>;
+  allRanked: Array<{ playerName: string; profit: number; gamesPlayed: number; winRate: number; totalRebuys: number }>;
+  awards: {
+    sniper?: { playerName: string; winRate: number; wins: number; games: number };
+    bigHit?: { playerName: string; profit: number; date: string };
+    hotStreak?: { playerName: string; streak: number };
+    atm?: { playerName: string; totalRebuys: number; totalInvested: number };
+  };
+}): Promise<{ text: string; model: string }> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const standingsLines = recap.allRanked
+    .map((p, idx) => `${idx + 1}. ${p.playerName}: ${p.profit >= 0 ? '+' : ''}₪${p.profit} (${p.gamesPlayed} מש׳, ${p.winRate}% ניצחון, ${p.totalRebuys} כניסות)`)
+    .join('\n');
+
+  const awardsLines: string[] = [];
+  if (recap.awards.sniper) {
+    awardsLines.push(`- צלף התקופה: ${recap.awards.sniper.playerName} (${recap.awards.sniper.winRate}% ניצחון — ${recap.awards.sniper.wins}/${recap.awards.sniper.games})`);
+  }
+  if (recap.awards.bigHit) {
+    awardsLines.push(`- המכה הגדולה: ${recap.awards.bigHit.playerName} (+₪${recap.awards.bigHit.profit} בערב אחד, ${recap.awards.bigHit.date})`);
+  }
+  if (recap.awards.hotStreak) {
+    awardsLines.push(`- הרצף החם: ${recap.awards.hotStreak.playerName} (${recap.awards.hotStreak.streak} ניצחונות רצופים)`);
+  }
+  if (recap.awards.atm) {
+    awardsLines.push(`- המממן של השולחן: ${recap.awards.atm.playerName} (${recap.awards.atm.totalRebuys} כניסות, ₪${recap.awards.atm.totalInvested})`);
+  }
+
+  const prompt = `אתה כתב הספורט והפרשן של קבוצת פוקר חברים ישראלית. כתוב סיכום תקופה חגיגי, חד, שנון ומבוסס נתונים עבור "${recap.title}" (בסגנון Spotify Wrapped).
+
+נתוני התקופה (${recap.shortLabel}):
+- מספר משחקים: ${recap.gamesCount}
+- סך הכסף שעבר על השולחן: ₪${recap.totalPot.toLocaleString('he-IL')} (ממוצע ₪${recap.avgPotPerGame.toLocaleString('he-IL')} לערב)
+
+דירוג השחקנים הפעילים:
+${standingsLines}
+
+תארים מיוחדים בתקופה:
+${awardsLines.join('\n')}
+${buildTraitBlock(recap.allRanked.map(p => p.playerName))}
+הנחיות כתיבה:
+- כתוב 3 פסקאות קצרות וקולעות (סה"כ 90-130 מילים) בעברית טבעית וזורמת.
+- פסקה 1: הכתרת האלוף (${recap.podium[0]?.playerName || ''}) ומאבק הפודיום מול מקומות 2-3.
+- פסקה 2: זרקור על כוכבי התארים (הצלף, המכה הגדולה או הרצף החם) ומי הפתיע.
+- פסקה 3: עקיצה חברית לתחתית הטבלה / המממן של השולחן וסיכום האווירה לקראת התקופה הבאה.
+- דיוק מוחלט במספרים — אל תמציא שום נתון שלא מופיע למעלה. ללא כותרות או כוכביות מיותרות.`;
+
+  const result = await callWithFallback({
+    prompt,
+    apiKey,
+    maxOutputTokens: 4096,
+    label: `Period Recap (${recap.shortLabel})`,
+  });
+
+  return { text: result.text.trim(), model: result.model };
+};
+

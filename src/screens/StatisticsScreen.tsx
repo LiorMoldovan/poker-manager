@@ -15,6 +15,15 @@ import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { StyledSelect } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { hapticTap } from '../utils/haptics';
+import {
+  computeAllPlayerTrophies,
+  computeMonthlyHallOfFame,
+  getLatestCompletedMonthPeriod,
+  RecapPeriodType,
+  PlayerTrophyCabinet,
+} from '../utils/periodRecap';
+import PeriodRecapModal from '../components/PeriodRecapModal';
+import PlayerTrophyModal from '../components/PlayerTrophyModal';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 type ViewMode = 'table' | 'records' | 'players';
@@ -108,6 +117,34 @@ const StatisticsScreen = () => {
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
   const [showLocationFilter, setShowLocationFilter] = useState(false); // Collapsed by default
+  const [hofMode, setHofMode] = useState<'seasons' | 'months'>('seasons');
+  const [trophyModalPlayerId, setTrophyModalPlayerId] = useState<string | null>(null);
+  const [recapModalState, setRecapModalState] = useState<{
+    isOpen: boolean;
+    periodType: RecapPeriodType;
+    year: number;
+    month?: number;
+  }>({
+    isOpen: false,
+    periodType: 'month',
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+  });
+
+  const playerTrophyCabinets = useMemo<Map<string, PlayerTrophyCabinet>>(
+    () => (viewMode === 'players' ? computeAllPlayerTrophies() : new Map<string, PlayerTrophyCabinet>()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stats, viewMode === 'players']
+  );
+  const monthlyHallOfFame = useMemo(
+    () => (hofMode === 'months' ? computeMonthlyHallOfFame() : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stats, hofMode]
+  );
+
+  const openPeriodRecap = useCallback((periodType: RecapPeriodType, year: number, month?: number) => {
+    setRecapModalState({ isOpen: true, periodType, year, month });
+  }, []);
   // Hosting places currently included. Keys come from getGameLocationKey, so
   // games with no recorded place live under NO_LOCATION_KEY. Seeded to "all"
   // by an effect once the available places are known.
@@ -2955,20 +2992,54 @@ const StatisticsScreen = () => {
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
-                  marginBottom: showTimePeriod ? '0.5rem' : 0
-                }}
-              >
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  {t('stats.timePeriod')} {timePeriodChip}
-                </span>
-                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginBottom: showTimePeriod ? '0.5rem' : 0 }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
+                  style={{ 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    flex: 1, padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+                  }}
+                >
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                    {t('stats.timePeriod')} {timePeriodChip}
+                  </span>
+                  <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (timePeriod === 'month') {
+                      openPeriodRecap('month', selectedYear, selectedMonth);
+                    } else if (timePeriod === 'h1' || timePeriod === 'h2' || timePeriod === 'year') {
+                      openPeriodRecap(timePeriod, selectedYear);
+                    } else {
+                      const latest = getLatestCompletedMonthPeriod();
+                      if (latest) openPeriodRecap('month', latest.year, latest.month);
+                      else openPeriodRecap('year', selectedYear);
+                    }
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.12))',
+                    border: '1px solid rgba(251, 191, 36, 0.45)',
+                    color: '#fbbf24',
+                    borderRadius: '999px',
+                    padding: '0.22rem 0.65rem',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}
+                >
+                  <span>🎬</span>
+                  <span>סיכום תקופה</span>
+                </button>
+              </div>
               {showTimePeriod && (
               <>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
@@ -3559,13 +3630,13 @@ const StatisticsScreen = () => {
                 </button>
               </div>
 
-              {/* Hall of Fame - All Years Champions */}
+              {/* Hall of Fame - All Years Champions & Monthly Champions */}
               {podiumData.history.length > 0 && (
                 <div ref={hallOfFameRef} className="card" style={{ padding: '0.75rem', marginBottom: '1rem' }}>
                   <div style={{ 
                     textAlign: 'center', 
                     padding: '0.5rem', 
-                    marginBottom: '0.75rem',
+                    marginBottom: '0.55rem',
                     background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1))',
                     borderRadius: '6px',
                     fontSize: '0.85rem',
@@ -3574,69 +3645,182 @@ const StatisticsScreen = () => {
                   }}>
                     {t('stats.hallOfFame')}
                   </div>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '45px 1fr 1fr 1fr',
-                    gap: '0.25rem',
-                    marginBottom: '0.35rem',
-                    padding: '0.25rem 0.4rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '4px',
-                    fontSize: '0.55rem',
-                    fontWeight: '600',
-                    color: 'var(--text-muted)',
-                    textAlign: 'center'
+
+                  {/* Mode Toggle: Seasons & Halves vs Monthly Champions */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '0.3rem',
+                    padding: '0.25rem',
+                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    marginBottom: '0.65rem',
                   }}>
-                    <div>{t('stats.yearColShort')}</div>
-                    <div style={{ color: '#3b82f6' }}>{t('stats.h1Label')}</div>
-                    <div style={{ color: '#8b5cf6' }}>{t('stats.h2Label')}</div>
-                    <div style={{ color: 'var(--primary)' }}>{t('stats.yearColShort')}</div>
+                    <button
+                      type="button"
+                      onClick={() => setHofMode('seasons')}
+                      style={{
+                        flex: 1,
+                        padding: '0.35rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        background: hofMode === 'seasons' ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                        color: hofMode === 'seasons' ? '#e9d5ff' : 'var(--text-muted)',
+                      }}
+                    >
+                      🏆 עונות וחציונים
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHofMode('months')}
+                      style={{
+                        flex: 1,
+                        padding: '0.35rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        background: hofMode === 'months' ? 'rgba(251, 191, 36, 0.22)' : 'transparent',
+                        color: hofMode === 'months' ? '#fbbf24' : 'var(--text-muted)',
+                      }}
+                    >
+                      🥇 אלופי החודשים
+                    </button>
                   </div>
-                  {podiumData.history.map((yearData) => (
-                    <div 
-                      key={yearData.year}
-                      style={{ 
+
+                  {hofMode === 'seasons' ? (
+                    <>
+                      <div style={{ 
                         display: 'grid', 
                         gridTemplateColumns: '45px 1fr 1fr 1fr',
                         gap: '0.25rem',
-                        padding: '0.4rem',
                         marginBottom: '0.35rem',
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
-                        fontSize: '0.55rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.7rem', color: 'var(--text)' }}>{yearData.year}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h1Top3.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent', borderRadius: '4px' }}>
-                        {yearData.h1Top3.length > 0 ? yearData.h1Top3.map((player, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
-                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
-                          </div>
-                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
+                        padding: '0.25rem 0.4rem',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        borderRadius: '4px',
+                        fontSize: '0.55rem',
+                        fontWeight: '600',
+                        color: 'var(--text-muted)',
+                        textAlign: 'center'
+                      }}>
+                        <div>{t('stats.yearColShort')}</div>
+                        <div style={{ color: '#3b82f6' }}>{t('stats.h1Label')}</div>
+                        <div style={{ color: '#8b5cf6' }}>{t('stats.h2Label')}</div>
+                        <div style={{ color: 'var(--primary)' }}>{t('stats.yearColShort')}</div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h2Top3.length > 0 ? 'rgba(139, 92, 246, 0.08)' : 'transparent', borderRadius: '4px' }}>
-                        {yearData.h2Top3.length > 0 ? yearData.h2Top3.map((player, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
-                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                      {podiumData.history.map((yearData) => (
+                        <div 
+                          key={yearData.year}
+                          style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: '45px 1fr 1fr 1fr',
+                            gap: '0.25rem',
+                            padding: '0.4rem',
+                            marginBottom: '0.35rem',
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(255, 255, 255, 0.05)',
+                            fontSize: '0.55rem'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.7rem', color: 'var(--text)' }}>{yearData.year}</div>
+                          <div
+                            onClick={() => yearData.h1Top3.length > 0 && openPeriodRecap('h1', yearData.year)}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h1Top3.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent', borderRadius: '4px', cursor: yearData.h1Top3.length > 0 ? 'pointer' : 'default' }}
+                          >
+                            {yearData.h1Top3.length > 0 ? yearData.h1Top3.map((player, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                                <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                                <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                              </div>
+                            )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
                           </div>
-                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.yearlyTop3.length > 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))' : 'transparent', borderRadius: '4px', border: yearData.yearlyTop3.length > 0 ? '1px solid rgba(251, 191, 36, 0.15)' : 'none' }}>
-                        {yearData.yearlyTop3.length > 0 ? yearData.yearlyTop3.map((player, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '700' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : (idx === 0 ? '#fbbf24' : 'var(--text)'), fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
-                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                          <div
+                            onClick={() => yearData.h2Top3.length > 0 && openPeriodRecap('h2', yearData.year)}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h2Top3.length > 0 ? 'rgba(139, 92, 246, 0.08)' : 'transparent', borderRadius: '4px', cursor: yearData.h2Top3.length > 0 ? 'pointer' : 'default' }}
+                          >
+                            {yearData.h2Top3.length > 0 ? yearData.h2Top3.map((player, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                                <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                                <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                              </div>
+                            )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
                           </div>
-                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
-                      </div>
+                          <div
+                            onClick={() => yearData.yearlyTop3.length > 0 && openPeriodRecap('year', yearData.year)}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.yearlyTop3.length > 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))' : 'transparent', borderRadius: '4px', border: yearData.yearlyTop3.length > 0 ? '1px solid rgba(251, 191, 36, 0.15)' : 'none', cursor: yearData.yearlyTop3.length > 0 ? 'pointer' : 'default' }}
+                          >
+                            {yearData.yearlyTop3.length > 0 ? yearData.yearlyTop3.map((player, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                                <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}</span>
+                                <span style={{ fontWeight: idx === 0 ? '700' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : (idx === 0 ? '#fbbf24' : 'var(--text)'), fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                                <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                              </div>
+                            )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {monthlyHallOfFame.map(yearGroup => (
+                        <div key={yearGroup.year}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fbbf24', marginBottom: '0.3rem', padding: '0 0.2rem' }}>
+                            📅 שנת {yearGroup.year}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            {yearGroup.months.map(mRow => (
+                              <div
+                                key={`${mRow.year}-${mRow.month}`}
+                                onClick={() => openPeriodRecap('month', mRow.year, mRow.month)}
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '64px 1fr auto',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  padding: '0.4rem 0.5rem',
+                                  background: 'rgba(255, 255, 255, 0.03)',
+                                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.65rem',
+                                }}
+                              >
+                                <div>
+                                  <div style={{ fontWeight: 700, color: 'var(--text)' }}>{mRow.monthName}</div>
+                                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>{mRow.gamesCount} מש׳</div>
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem 0.6rem', alignItems: 'center' }}>
+                                  {mRow.top3.map((p, idx) => (
+                                    <span key={p.playerId} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}>
+                                      <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                                      <span style={{
+                                        fontWeight: idx === 0 ? 700 : 500,
+                                        color: identityName && p.playerName === identityName ? ME_NAME_COLOR : idx === 0 ? '#fbbf24' : 'var(--text)',
+                                      }}>
+                                        {p.playerName}
+                                      </span>
+                                      <span style={{ fontSize: '0.58rem', color: p.profit >= 0 ? 'var(--success)' : 'var(--danger)', direction: 'ltr' }}>
+                                        ({p.profit >= 0 ? '+' : ''}{cleanNumber(p.profit)})
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                                <span style={{ fontSize: '0.75rem', opacity: 0.8 }} title="צפה בסיכום חודש">🎬</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
               {podiumData.history.length > 0 && (
@@ -5420,18 +5604,97 @@ const StatisticsScreen = () => {
                     const isMe = identityName && player.playerName === identityName;
                     const attLongest = attendanceStreakRecords.get(player.playerId)?.longest ?? 0;
                     const attCurrent = attendanceStreakRecords.get(player.playerId)?.current ?? 0;
+                    const cabinet = playerTrophyCabinets.get(player.playerId);
                     return (
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}), animation: index < 10 ? 'contentFadeIn 0.25s ease-out backwards' : undefined, animationDelay: index < 10 ? `${index * 0.05}s` : undefined }}>
               <div className="card-header">
-                <h3 className="card-title" style={isMe ? meNameStyle : undefined}>
-                  {player.playerName}
-                  {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
-                    sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <h3 className="card-title" style={{ margin: 0, ...(isMe ? meNameStyle : {}) }}>
+                    {player.playerName}
+                    {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
+                      sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
+                  </h3>
+                  {cabinet?.reigningBadge && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openPeriodRecap(
+                          cabinet.reigningBadge!.periodType,
+                          cabinet.reigningBadge!.year,
+                          cabinet.reigningBadge!.month
+                        );
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(217, 119, 6, 0.14))',
+                        border: '1px solid rgba(251, 191, 36, 0.5)',
+                        color: '#fbbf24',
+                        borderRadius: '999px',
+                        padding: '0.15rem 0.5rem',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {cabinet.reigningBadge.label}
+                    </button>
+                  )}
+                </div>
                 <span className={getProfitColor(player.totalProfit)} style={{ fontSize: '1.25rem', fontWeight: '700' }}>
                   {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{formatCurrency(Math.abs(player.totalProfit))}
                 </span>
               </div>
+
+              {/* Single-Row Mobile Trophy Bar (up to 4 compact pills, taps open PlayerTrophyModal) */}
+              {cabinet && cabinet.compactPills.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTrophyModalPlayerId(player.playerId)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.3rem',
+                    padding: '0.35rem 0.45rem',
+                    marginBottom: '0.65rem',
+                    background: 'rgba(255, 255, 255, 0.025)',
+                    border: '1px solid rgba(251, 191, 36, 0.2)',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'nowrap', overflow: 'hidden', flex: 1 }}>
+                    {cabinet.compactPills.map(pill => (
+                      <span
+                        key={pill.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.18rem',
+                          padding: '0.18rem 0.4rem',
+                          borderRadius: '6px',
+                          background: pill.bg,
+                          border: `1px solid ${pill.border}`,
+                          color: pill.color,
+                          fontSize: '0.66rem',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span>{pill.icon}</span>
+                        <span>{pill.label.replace('אלוף ', '')}</span>
+                        <span style={{ fontWeight: 900 }}>×{pill.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0, paddingRight: '0.15rem' }}>
+                    🏆 ❯
+                  </span>
+                </button>
+              )}
 
               {/* Current Streak Badge */}
               {player.currentStreak !== 0 && (
@@ -7162,6 +7425,27 @@ const StatisticsScreen = () => {
       )}
       </>
       )}
+
+      {/* Player Trophy Cabinet Modal */}
+      {trophyModalPlayerId && (
+        <PlayerTrophyModal
+          cabinet={playerTrophyCabinets.get(trophyModalPlayerId) || null}
+          onClose={() => setTrophyModalPlayerId(null)}
+          onOpenPeriodRecap={(pType, yr, mo) => {
+            setTrophyModalPlayerId(null);
+            openPeriodRecap(pType, yr, mo);
+          }}
+        />
+      )}
+
+      {/* Period Recap (Wrapped) Modal */}
+      <PeriodRecapModal
+        isOpen={recapModalState.isOpen}
+        onClose={() => setRecapModalState(prev => ({ ...prev, isOpen: false }))}
+        initialPeriodType={recapModalState.periodType}
+        initialYear={recapModalState.year}
+        initialMonth={recapModalState.month}
+      />
     </div>
   );
 };

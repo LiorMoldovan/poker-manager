@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.38.25';
+export const APP_VERSION = '6.39.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,10 +14,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '6.38.25',
-    date: '2026-11-04',
+    version: '6.39.0',
+    date: '2026-11-05',
     changes: [
-      '⏳ שינוי סדר רשימת ההמתנה לאדמין',
+      '🚪 סיום ערב מוקדם בלייב עם סכום מוצהר',
+      '✓ השלמה אוטומטית של שחקנים שסיימו בספירת צ\'יפים',
+      '🎬 סיכום תקופה חודשי וחצי שנתי בסטוריז',
+      '🏆 ארון גביעים אישי ומטריצת חודשים שנתית',
+      '🥇 היכל תהילה היסטורי לאלופי החודשים',
+      '📤 שיתוף אינפוגרפיקת סיכום חודשי לוואטסאפ',
     ],
   },
   {

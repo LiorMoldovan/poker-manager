@@ -34,6 +34,8 @@ import { getSharedProgress, getTrainingSessionCounts } from '../utils/pokerTrain
 import { verbForName } from '../utils/hebrewGender';
 import { usePermissions } from '../App';
 import { canViewerVoteNow } from '../utils/pollAccess';
+import { getLatestCompletedMonthPeriod } from '../utils/periodRecap';
+import PeriodRecapModal from './PeriodRecapModal';
 
 // ─── Design tokens ──────────────────────────────────────────────────────
 // Every dashboard card MUST consume these instead of hard-coding sizes,
@@ -555,6 +557,9 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
     });
   };
 
+  const [recapModal, setRecapModal] = useState<{ year: number; month: number } | null>(null);
+  const latestCompletedMonth = useMemo(() => getLatestCompletedMonthPeriod(), [allGames]);
+
   // Stagger delay (ms) between successive cards. Short enough that the
   // user perceives the page as instant, long enough that the cards
   // visibly arrive in sequence.
@@ -671,6 +676,12 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         playerName={playerName}
         isSparseGroup={isSparseGroup}
         onClick={goLeaderboard}
+        latestCompletedMonth={latestCompletedMonth}
+        onOpenPrevMonthRecap={
+          latestCompletedMonth
+            ? () => setRecapModal({ year: latestCompletedMonth.year, month: latestCompletedMonth.month })
+            : undefined
+        }
       />
       {trainingEnabled && (
         <TrainingCard
@@ -693,6 +704,15 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
         isSparseGroup={isSparseGroup}
         groupCompletedGames={groupCompletedGames}
       />
+      {recapModal && (
+        <PeriodRecapModal
+          isOpen={true}
+          onClose={() => setRecapModal(null)}
+          initialPeriodType="month"
+          initialYear={recapModal.year}
+          initialMonth={recapModal.month}
+        />
+      )}
     </div>
   );
 }
@@ -2504,9 +2524,11 @@ interface LeaderboardProps extends SectionProps {
   // the same code paths they did before this change.
   isSparseGroup: boolean;
   onClick: () => void;
+  latestCompletedMonth?: { year: number; month: number; label: string } | null;
+  onOpenPrevMonthRecap?: () => void;
 }
 
-function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSparseGroup, onClick }: LeaderboardProps) {
+function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSparseGroup, onClick, latestCompletedMonth, onOpenPrevMonthRecap }: LeaderboardProps) {
   const { top3, monthLabel, hasAnyCompletedGames, monthGameCount, monthDistinctPlayers } = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -2622,6 +2644,37 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSpa
     );
   }
 
+  const prevMonthRecapBtn = latestCompletedMonth && onOpenPrevMonthRecap ? (
+    <div style={{ marginTop: '0.5rem' }}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenPrevMonthRecap();
+        }}
+        style={{
+          width: '100%',
+          padding: '0.45rem 0.65rem',
+          borderRadius: '8px',
+          border: '1px solid rgba(251, 191, 36, 0.4)',
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.08))',
+          color: '#fbbf24',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.35rem',
+        }}
+      >
+        <span>🎬</span>
+        <span>סיכום חודש {latestCompletedMonth.label} (Wrapped)</span>
+      </button>
+    </div>
+  ) : null;
+
   if (top3.length === 0) {
     return (
       <HomeCard
@@ -2630,6 +2683,7 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSpa
         icon="🏅"
         title={titleWithMonth}
         subtitle={t('home.leaderboard.empty')}
+        body={prevMonthRecapBtn}
         onClick={onClick}
       />
     );
@@ -2791,7 +2845,12 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, isSpa
       step={step}
       icon="🏅"
       title={titleWithMonth}
-      body={body}
+      body={
+        <>
+          {body}
+          {prevMonthRecapBtn}
+        </>
+      }
       onClick={onClick}
     />
   );
