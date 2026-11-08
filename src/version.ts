@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.40.2';
+export const APP_VERSION = '6.40.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,27 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.40.4',
+    date: '2026-11-08',
+    changes: [
+      '⚡ איחוד רצפי ניצחונות לכרטיס שיא בודד',
+      '👑 חישוב מהפכים בצמרת ותיקון פערים',
+      '👥 חלון פירוט שחקנים פעילים ואורחים',
+      '🎙️ שדרוג ניתוח עומק טקטי לפאנל הפרשן',
+      '🎯 גיוון סיפורים לכלל השחקנים הקבועים',
+    ],
+  },
+  {
+    version: '6.40.3',
+    date: '2026-11-08',
+    changes: [
+      '📤 חלוקה ל-4 כרטיסים נפרדים לוואטסאפ',
+      '⚡ כרטיס שיאים ותגליות עצמאי',
+      '📖 כרטיס סיפורי תנודות ועונה מובחן',
+      '🎙️ כרטיס ניתוח פרשן ייעודי',
+    ],
+  },
   {
     version: '6.40.2',
     date: '2026-11-08',
