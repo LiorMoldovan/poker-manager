@@ -6039,15 +6039,19 @@ export const generatePeriodRecapAI = async (recap: {
   title: string;
   shortLabel: string;
   gamesCount: number;
-  totalPot: number;
-  avgPotPerGame: number;
+  totalPot?: number;
+  avgPotPerGame?: number;
+  avgPlayersPerGame?: number;
   podium: Array<{ playerName: string; profit: number; gamesPlayed: number; winRate: number }>;
   allRanked: Array<{ playerName: string; profit: number; gamesPlayed: number; winRate: number; totalRebuys: number }>;
+  records?: Array<{ icon: string; title: string; badge?: string; description: string }>;
+  stories?: Array<{ icon: string; title: string; badge?: string; description: string }>;
   awards: {
     sniper?: { playerName: string; winRate: number; wins: number; games: number };
     bigHit?: { playerName: string; profit: number; date: string };
     hotStreak?: { playerName: string; streak: number };
-    atm?: { playerName: string; totalRebuys: number; totalInvested: number; profit?: number };
+    fourthAward?: { title: string; playerName: string; subtitle: string };
+    atm?: { playerName: string; totalRebuys: number; avgRebuys?: number; totalInvested: number; profit?: number };
   };
 }): Promise<{ text: string; model: string }> => {
   const apiKey = getGeminiApiKey();
@@ -6064,7 +6068,9 @@ export const generatePeriodRecapAI = async (recap: {
   if (recap.awards.bigHit) {
     awardsLines.push(`- המכה הגדולה: ${recap.awards.bigHit.playerName} (+₪${recap.awards.bigHit.profit} בערב אחד, ${recap.awards.bigHit.date})`);
   }
-  if (recap.awards.hotStreak) {
+  if (recap.awards.fourthAward) {
+    awardsLines.push(`- ${recap.awards.fourthAward.title}: ${recap.awards.fourthAward.playerName} (${recap.awards.fourthAward.subtitle})`);
+  } else if (recap.awards.hotStreak) {
     awardsLines.push(`- הרצף החם: ${recap.awards.hotStreak.playerName} (${recap.awards.hotStreak.streak} ניצחונות רצופים)`);
   }
   if (recap.awards.atm) {
@@ -6072,26 +6078,41 @@ export const generatePeriodRecapAI = async (recap: {
     const profitStr = atmProfit !== undefined
       ? `, שורה תחתונה: ${atmProfit >= 0 ? '+' : ''}₪${atmProfit.toLocaleString('he-IL')}`
       : '';
-    awardsLines.push(`- מלך הריבאי והאקשן: ${recap.awards.atm.playerName} (${recap.awards.atm.totalRebuys} קניות חוזרות, ₪${recap.awards.atm.totalInvested.toLocaleString('he-IL')} הושקעו${profitStr})`);
+    const avgRebuys = (recap.awards.atm as { avgRebuys?: number }).avgRebuys;
+    const avgStr = avgRebuys !== undefined
+      ? `ממוצע ${avgRebuys} קניות למשחק (סה״כ ${recap.awards.atm.totalRebuys} כניסות)`
+      : `${recap.awards.atm.totalRebuys} קניות`;
+    awardsLines.push(`- מלך הריבאי והאקשן: ${recap.awards.atm.playerName} (${avgStr}, ₪${recap.awards.atm.totalInvested.toLocaleString('he-IL')} הושקעו${profitStr})`);
   }
 
-  const prompt = `אתה כתב הספורט והפרשן של קבוצת פוקר חברים ישראלית. כתוב סיכום תקופה חגיגי, חד, שנון ומבוסס נתונים עבור "${recap.title}" (בסגנון Spotify Wrapped).
+  const recordsLines: string[] = (recap.records || []).map(
+    r => `- ${r.icon} ${r.title}${r.badge ? ` [${r.badge}]` : ''}: ${r.description}`
+  );
+
+  const storiesLines: string[] = (recap.stories || []).map(
+    s => `- ${s.icon} ${s.title}${s.badge ? ` [${s.badge}]` : ''}: ${s.description}`
+  );
+
+  const prompt = `אתה כתב הספורט והפרשן של קבוצת פוקר חברים ישראלית. כתוב סיכום תקופה חגיגי, חד, שנון ומבוסס נתונים עבור "${recap.title}".
 
 נתוני התקופה (${recap.shortLabel}):
 - מספר משחקים: ${recap.gamesCount}
-- סך הכסף שעבר על השולחן: ₪${recap.totalPot.toLocaleString('he-IL')} (ממוצע ₪${recap.avgPotPerGame.toLocaleString('he-IL')} לערב)
+${recap.avgPlayersPerGame ? `- ממוצע שחקנים לערב: ${recap.avgPlayersPerGame}` : ''}
 
 דירוג השחקנים הפעילים:
 ${standingsLines}
 
-תארים מיוחדים בתקופה:
-${awardsLines.join('\n')}
+${recordsLines.length > 0 ? `שיאים וציוני דרך היסטוריים שנרשמו בתקופה (כולל שיאי כל הזמנים):\n${recordsLines.join('\n')}\n` : ''}
+${storiesLines.length > 0 ? `סיפורי מפתח ותנודות בדירוג (שנתי, חצי-שנתי, כל הזמנים):\n${storiesLines.join('\n')}\n` : ''}
+${awardsLines.length > 0 ? `תארים נוספים:\n${awardsLines.join('\n')}\n` : ''}
 ${buildTraitBlock(recap.allRanked.map(p => p.playerName))}
 הנחיות כתיבה:
-- כתוב 3 פסקאות קצרות וקולעות (סה"כ 90-130 מילים) בעברית טבעית וזורמת.
-- פסקה 1: הכתרת האלוף (${recap.podium[0]?.playerName || ''}) ומאבק הפודיום מול מקומות 2-3.
-- פסקה 2: זרקור על כוכבי התארים (הצלף, המכה הגדולה או הרצף החם) ומי הפתיע.
-- פסקה 3: התייחסות למלך הריבאי (שים לב אם עשה קאמבק מרשים לרווח חרף הקניות החוזרות, או שהזין את האקשן בקופה) ועקיצה חברית לתחתית הטבלה.
+- כתוב 3 פסקאות קצרות וקולעות (סה"כ 90-130 מילים) בעברית טבעית, חיה ושנונה של פרשן ספורט שמכיר את החבר'ה.
+- דגש קריטי: חשוב מאוד להתייחס לשינויים המשמעותיים שהיו בתקופה הזו — לאו דווקא במיקום בטבלה ולא רק לשיאים!
+- פסקה 1: הכתרת האלוף (${recap.podium[0]?.playerName || ''}) ומאבקי הצמרת (סגירת פערים של רודפים מול מובילים שנבלמו, או פערים שנפתחו).
+- פסקה 2: ניתוח תפניות המומנטום והשינויים הבולטים: שחקנים שהיו בבור עמוק ושברו בצורת עם חודש ירוק, שחקנים יציבים שספגו נפילה פתאומית וחודש קשוח, או שינויים חדים באחוזי ההצלחה ובכושר המשחק.
+- פסקה 3: סיכום התקופה עם מבט קדימה — מי מגיע לחודש הבא בשיא התנופה, מי חייב בדק בית והתאוששות, ועקיצה חברית קלה.
+- אין להזכיר כלל גודל קופה או סכומי קופות (זה לא מעניין את השחקנים).
 - דיוק מוחלט במספרים — אל תמציא שום נתון שלא מופיע למעלה. ללא כותרות או כוכביות מיותרות.`;
 
   const result = await callWithFallback({

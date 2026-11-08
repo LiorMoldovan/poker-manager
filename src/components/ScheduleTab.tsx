@@ -4798,13 +4798,9 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   // Spots left to add — only meaningful when bulk-casting 'yes' AND
   // the poll is still in its active phase.
   const isYesResponse = response === 'yes';
-  const slotsLeftForSelection = enforceCap && isYesResponse
-    ? slotsRemaining - selectedNewYesCount
-    : Infinity;
-  // Submit guard: if user toggled response from 'no'/'maybe' → 'yes' after
-  // selecting more players than the cap allows, block submit and surface
-  // the cause rather than silently pruning the selection.
-  const capExceeded = enforceCap && isYesResponse && slotsLeftForSelection < 0;
+  const projectedYesCount = currentYesCount + selectedNewYesCount;
+  const targetWillExpand = enforceCap && isYesResponse && projectedYesCount > poll.targetPlayerCount;
+  const newTarget = targetWillExpand ? projectedYesCount : poll.targetPlayerCount;
 
   // When exactly ONE player is selected and they already have a vote, the
   // form prefills with that vote so the admin can quickly edit it. With
@@ -4888,17 +4884,6 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
         next.delete(id);
         return next;
       }
-      // Block ADD if response is 'yes' and the target headcount would be
-      // exceeded. Players who already have a 'yes' vote can always be
-      // selected — toggling them is a no-op for the cap (server treats
-      // it as an UPDATE with the same response and doesn't double-count).
-      if (isYesResponse) {
-        const existing = poll.votes.find(v => v.dateId === dateId && v.playerId === id);
-        const wouldBeNewYes = existing?.response !== 'yes';
-        if (wouldBeNewYes && slotsLeftForSelection <= 0) {
-          return prev;
-        }
-      }
       next.add(id);
       return next;
     });
@@ -4908,10 +4893,6 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
 
   const handleSubmit = async () => {
     if (selectedCount === 0) return;
-    // Defensive guard: the cap is enforced at toggle-time, but a user
-    // could over-select while response='no' then switch to 'yes'. Block
-    // submit in that case so we never push the date past its target.
-    if (capExceeded) return;
     setSubmitting(true);
     // Snapshot per-player previous (response, comment) BEFORE the bulk cast.
     // We need this so vote_change notifications fire only for rows whose
@@ -4931,12 +4912,12 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
       // For typical N=1..15 selections this is well under a second total.
       for (const id of ids) {
         await adminCastVote(dateId, id, response, comment || undefined);
-      if (onlySelectedId && canSetPreferredInProxy) {
-        const wasPreferred = !!singleExistingVote?.isPreferred;
-        if (isPreferredDate !== wasPreferred) {
-          await adminSetPollPreferredDate(poll.id, onlySelectedId, isPreferredDate ? dateId : null);
+        if (onlySelectedId && canSetPreferredInProxy) {
+          const wasPreferred = !!singleExistingVote?.isPreferred;
+          if (isPreferredDate !== wasPreferred) {
+            await adminSetPollPreferredDate(poll.id, onlySelectedId, isPreferredDate ? dateId : null);
+          }
         }
-      }
       }
       // Fire vote-event notifications for:
       //   - Fresh proxy votes (no `prev` in the snapshot) — INSERTs, sent
@@ -5201,13 +5182,13 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
               <div style={{
                 fontSize: 11, fontWeight: 600,
                 marginBottom: 6,
-                color: slotsRemaining === 0
-                  ? '#ef4444'
-                  : (slotsLeftForSelection <= 0 ? '#eab308' : 'var(--text-muted)'),
+                color: targetWillExpand ? '#38bdf8' : (slotsRemaining === 0 ? '#eab308' : 'var(--text-muted)'),
               }}>
-                {slotsRemaining === 0
-                  ? t('schedule.proxy.slotsFull')
-                  : t('schedule.proxy.slotsRemaining', { count: slotsLeftForSelection })}
+                {targetWillExpand
+                  ? t('schedule.proxy.autoTargetExpand', { from: poll.targetPlayerCount, to: newTarget })
+                  : (slotsRemaining === 0
+                    ? t('schedule.proxy.slotsFullAutoExpand')
+                    : t('schedule.proxy.slotsRemaining', { count: slotsRemaining - selectedNewYesCount }))}
               </div>
             )}
             <input
@@ -5245,17 +5226,10 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                     // added — visually disable them. Selected rows and rows
                     // for players already at 'yes' (toggling them is a
                     // no-op for the cap) remain interactive.
-                    const wouldBeNewYes = has?.response !== 'yes';
-                    const blocked = !selected
-                      && isYesResponse
-                      && wouldBeNewYes
-                      && slotsLeftForSelection <= 0;
                     return (
                       <button
                         key={p.id}
                         onClick={() => togglePlayer(p.id)}
-                        disabled={blocked}
-                        title={blocked ? t('schedule.proxy.slotsFull') : undefined}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                           width: '100%', padding: '8px 10px', gap: 8,
@@ -5263,8 +5237,8 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                           background: selected ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
                           color: selected ? '#34d399' : 'var(--text)',
                           fontSize: 13,
-                          cursor: blocked ? 'not-allowed' : 'pointer',
-                          opacity: blocked ? 0.4 : 1,
+                          cursor: 'pointer',
+                          opacity: 1,
                           textAlign: 'right',
                           // minWidth: 0 lets the name text shrink/ellipsis
                           // instead of pushing the response label off-screen
@@ -5334,15 +5308,15 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                   response to 'yes' such that the projected count would
                   break the target. We don't auto-prune the selection —
                   the admin chooses whom to deselect. */}
-              {capExceeded && (
+              {targetWillExpand && (
                 <div style={{
                   fontSize: 12, fontWeight: 600, marginBottom: 6,
                   padding: '6px 10px', borderRadius: 6,
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  color: '#38bdf8',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
                 }}>
-                  ⚠️ {t('schedule.proxy.capExceeded')}
+                  {t('schedule.proxy.autoTargetExpand', { from: poll.targetPlayerCount, to: newTarget })}
                 </div>
               )}
 
@@ -5431,12 +5405,12 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
           )}
           <button
             onClick={handleSubmit}
-            disabled={submitting || selectedCount === 0 || capExceeded}
+            disabled={submitting || selectedCount === 0}
             style={{
               ...lightGreenBtn,
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
               cursor: submitting ? 'wait' : 'pointer',
-              opacity: (submitting || selectedCount === 0 || capExceeded) ? 0.5 : 1,
+              opacity: (submitting || selectedCount === 0) ? 0.5 : 1,
             }}>
             {submitting ? '...' : t('common.save')}
           </button>

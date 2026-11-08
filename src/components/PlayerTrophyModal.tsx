@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { PlayerTrophyCabinet, RecapPeriodType } from '../utils/periodRecap';
 
 interface PlayerTrophyModalProps {
@@ -7,81 +6,49 @@ interface PlayerTrophyModalProps {
   onOpenPeriodRecap: (periodType: RecapPeriodType, year: number, month?: number) => void;
 }
 
-const SHORT_MONTH_NAMES = [
-  'ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני',
-  'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳',
-];
-
 export const PlayerTrophyModal = ({
   cabinet,
   onClose,
   onOpenPeriodRecap,
 }: PlayerTrophyModalProps) => {
-  const [expandedYearBreakdowns, setExpandedYearBreakdowns] = useState<Record<number, boolean>>({});
-
   if (!cabinet) return null;
 
-  const toggleYearBreakdown = (year: number) => {
-    setExpandedYearBreakdowns(prev => ({
-      ...prev,
-      [year]: !prev[year],
-    }));
-  };
-
-  const summaryItems = [
+  const coreHonors = [
     {
       icon: '👑',
-      label: 'אלוף שנה',
+      label: 'אליפויות עונה',
       count: cabinet.yearlyChamps.length,
-      sub: cabinet.yearlyChamps.length > 0 ? cabinet.yearlyChamps.join(', ') : 'טרם זכה',
+      detail: cabinet.yearlyChamps.length > 0 ? cabinet.yearlyChamps.join(', ') : '—',
       color: '#fbbf24',
       bg: 'rgba(245, 158, 11, 0.12)',
       border: 'rgba(245, 158, 11, 0.35)',
     },
     {
       icon: '🏆',
-      label: 'אלוף חציון',
+      label: 'אליפויות חציון',
       count: cabinet.halfChamps.length,
-      sub: cabinet.halfChamps.length > 0 ? `${cabinet.halfPodiums} פודיומים` : 'טרם זכה',
+      detail: cabinet.halfChamps.length > 0 ? cabinet.halfChamps.join(', ') : '—',
       color: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.08)',
       border: 'rgba(245, 158, 11, 0.25)',
     },
     {
       icon: '🥇',
-      label: 'אלוף חודש',
+      label: 'אליפויות חודש',
       count: cabinet.monthlyChamps,
-      sub: 'מקום 1 בחודש',
+      detail: cabinet.monthlyChamps > 0 ? `${cabinet.monthlyChamps} חודשים` : '—',
       color: '#eab308',
       bg: 'rgba(234, 179, 8, 0.1)',
       border: 'rgba(234, 179, 8, 0.28)',
     },
     {
       icon: '🏅',
-      label: 'פודיום חודש',
+      label: 'סה״כ פודיומים',
       count: cabinet.monthlyPodiums,
-      sub: `🥇${cabinet.monthlyChamps} · 🥈${cabinet.monthlySilvers} · 🥉${cabinet.monthlyBronzes}`,
+      detail: `🥇${cabinet.monthlyChamps} · 🥈${cabinet.monthlySilvers} · 🥉${cabinet.monthlyBronzes}`,
       color: '#38bdf8',
       bg: 'rgba(56, 189, 248, 0.1)',
       border: 'rgba(56, 189, 248, 0.25)',
-    },
-    {
-      icon: '🎯',
-      label: 'צלף החודש',
-      count: cabinet.monthlySnipers,
-      sub: 'שיאן % ניצחון',
-      color: '#34d399',
-      bg: 'rgba(52, 211, 153, 0.1)',
-      border: 'rgba(52, 211, 153, 0.25)',
-    },
-    {
-      icon: '💥',
-      label: 'המכה הגדולה',
-      count: cabinet.monthlyBigHits,
-      sub: 'שיא קופה בערב',
-      color: '#c084fc',
-      bg: 'rgba(192, 132, 252, 0.1)',
-      border: 'rgba(192, 132, 252, 0.25)',
     },
   ];
 
@@ -98,7 +65,7 @@ export const PlayerTrophyModal = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0.5rem',
+        padding: '0.6rem',
         direction: 'rtl',
       }}
     >
@@ -107,7 +74,7 @@ export const PlayerTrophyModal = ({
         style={{
           width: '100%',
           maxWidth: '430px',
-          maxHeight: '92vh',
+          maxHeight: '90vh',
           background: '#0f172a',
           borderRadius: '18px',
           border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -124,7 +91,7 @@ export const PlayerTrophyModal = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0.75rem 0.9rem',
+            padding: '0.75rem 0.95rem',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
             background: 'rgba(30, 41, 59, 0.5)',
           }}
@@ -136,7 +103,7 @@ export const PlayerTrophyModal = ({
                 ארון הגביעים — {cabinet.playerName}
               </h3>
               <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                הישגים אישיים, תארים עונתיים וחודשיים
+                הישגים מרכזיים ותארי אליפות
               </div>
             </div>
           </div>
@@ -172,30 +139,30 @@ export const PlayerTrophyModal = ({
             padding: '0.85rem',
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.85rem',
+            gap: '0.75rem',
           }}
         >
-          {/* 3x2 Lifetime Trophy Counters */}
+          {/* Top 4 Core Honors Strip */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '0.45rem',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '0.4rem',
             }}
           >
-            {summaryItems.map(item => (
+            {coreHonors.map(item => (
               <div
                 key={item.label}
                 style={{
                   background: item.count > 0 ? item.bg : 'rgba(255, 255, 255, 0.02)',
                   border: `1px solid ${item.count > 0 ? item.border : 'rgba(255, 255, 255, 0.06)'}`,
                   borderRadius: '12px',
-                  padding: '0.5rem 0.3rem',
+                  padding: '0.5rem 0.25rem',
                   textAlign: 'center',
                   opacity: item.count > 0 ? 1 : 0.45,
                 }}
               >
-                <div style={{ fontSize: '1.2rem', lineHeight: 1.1 }}>{item.icon}</div>
+                <div style={{ fontSize: '1.15rem', lineHeight: 1.1 }}>{item.icon}</div>
                 <div
                   style={{
                     fontSize: '1.1rem',
@@ -204,42 +171,43 @@ export const PlayerTrophyModal = ({
                     marginTop: '0.1rem',
                   }}
                 >
-                  ×{item.count}
+                  {item.count}
                 </div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#e2e8f0' }}>
+                <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#e2e8f0', marginTop: '0.05rem' }}>
                   {item.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.58rem',
-                    color: '#94a3b8',
-                    marginTop: '0.1rem',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {item.sub}
                 </div>
               </div>
             ))}
           </div>
 
           {/* Section title */}
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginTop: '0.15rem' }}>
-            📜 הישגים לפי עונות (לחץ על תואר לפתיחת סיכום תקופה)
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '0.2rem',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 800 }}>
+              📜 זכיות מרכזיות לפי עונות
+            </span>
+            <span style={{ fontSize: '0.66rem', color: '#64748b' }}>
+              לחץ לצפייה בסיכום התקופה
+            </span>
           </div>
 
-          {/* Clean Chronological Year Cards */}
+          {/* Season Cards */}
           {cabinet.yearsMatrix.map(ym => {
-            const playedMonths = ym.months.filter(m => m.playerGames > 0);
             const totalGamesInYear = ym.months.reduce((acc, m) => acc + m.playerGames, 0);
 
-            // Collect all notable achievements in this year
-            interface AchievementPill {
+            // Collect major 1st place wins and championships
+            interface MajorWin {
               id: string;
               icon: string;
               title: string;
+              subtitle: string;
               periodType: RecapPeriodType;
               year: number;
               month?: number;
@@ -248,127 +216,74 @@ export const PlayerTrophyModal = ({
               border: string;
             }
 
-            const pills: AchievementPill[] = [];
+            const majorWins: MajorWin[] = [];
 
-            // Half titles
+            // 1. Year Championship
+            if (ym.isYearChamp) {
+              majorWins.push({
+                id: `year-${ym.year}`,
+                icon: '👑',
+                title: `אלוף עונת ${ym.year}`,
+                subtitle: `מקום ראשון שנתי · ${ym.yearProfit >= 0 ? '+' : ''}₪${ym.yearProfit.toLocaleString('he-IL')}`,
+                periodType: 'year',
+                year: ym.year,
+                color: '#fbbf24',
+                bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.08))',
+                border: 'rgba(245, 158, 11, 0.45)',
+              });
+            }
+
+            // 2. Half Championships
             if (ym.isH1Champ) {
-              pills.push({
+              majorWins.push({
                 id: `h1-${ym.year}`,
                 icon: '🏆',
                 title: 'אלוף חציון א׳',
+                subtitle: `מקום ראשון בחציון הראשון ${ym.year}`,
                 periodType: 'h1',
                 year: ym.year,
                 color: '#fbbf24',
-                bg: 'rgba(245, 158, 11, 0.15)',
-                border: 'rgba(245, 158, 11, 0.4)',
-              });
-            } else if (ym.h1Rank && ym.h1Rank <= 3) {
-              pills.push({
-                id: `h1-podium-${ym.year}`,
-                icon: ym.h1Rank === 2 ? '🥈' : '🥉',
-                title: ym.h1Rank === 2 ? 'סגן חציון א׳' : 'מקום 3 חציון א׳',
-                periodType: 'h1',
-                year: ym.year,
-                color: ym.h1Rank === 2 ? '#cbd5e1' : '#fdba74',
-                bg: 'rgba(255, 255, 255, 0.05)',
-                border: 'rgba(255, 255, 255, 0.15)',
+                bg: 'rgba(245, 158, 11, 0.12)',
+                border: 'rgba(245, 158, 11, 0.35)',
               });
             }
-
             if (ym.isH2Champ) {
-              pills.push({
+              majorWins.push({
                 id: `h2-${ym.year}`,
                 icon: '🏆',
                 title: 'אלוף חציון ב׳',
+                subtitle: `מקום ראשון בחציון השני ${ym.year}`,
                 periodType: 'h2',
                 year: ym.year,
                 color: '#fbbf24',
-                bg: 'rgba(245, 158, 11, 0.15)',
-                border: 'rgba(245, 158, 11, 0.4)',
-              });
-            } else if (ym.h2Rank && ym.h2Rank <= 3) {
-              pills.push({
-                id: `h2-podium-${ym.year}`,
-                icon: ym.h2Rank === 2 ? '🥈' : '🥉',
-                title: ym.h2Rank === 2 ? 'סגן חציון ב׳' : 'מקום 3 חציון ב׳',
-                periodType: 'h2',
-                year: ym.year,
-                color: ym.h2Rank === 2 ? '#cbd5e1' : '#fdba74',
-                bg: 'rgba(255, 255, 255, 0.05)',
-                border: 'rgba(255, 255, 255, 0.15)',
+                bg: 'rgba(245, 158, 11, 0.12)',
+                border: 'rgba(245, 158, 11, 0.35)',
               });
             }
 
-            // Month podiums & special awards
+            // 3. Month Championships
             ym.months.forEach(m => {
               if (m.isChamp) {
-                pills.push({
+                majorWins.push({
                   id: `m-champ-${m.month}`,
                   icon: '🥇',
-                  title: `${m.monthName} (+₪${m.profit})`,
+                  title: `אלוף חודש ${m.monthName}`,
+                  subtitle: `רווח נקי: +₪${m.profit.toLocaleString('he-IL')} (${m.playerGames} מש׳)`,
                   periodType: 'month',
                   year: ym.year,
                   month: m.month,
                   color: '#fbbf24',
-                  bg: 'rgba(245, 158, 11, 0.15)',
-                  border: 'rgba(245, 158, 11, 0.35)',
-                });
-              } else if (m.isSilver) {
-                pills.push({
-                  id: `m-silver-${m.month}`,
-                  icon: '🥈',
-                  title: `${m.monthName} (+₪${m.profit})`,
-                  periodType: 'month',
-                  year: ym.year,
-                  month: m.month,
-                  color: '#cbd5e1',
-                  bg: 'rgba(203, 213, 225, 0.12)',
-                  border: 'rgba(203, 213, 225, 0.3)',
-                });
-              } else if (m.isBronze) {
-                pills.push({
-                  id: `m-bronze-${m.month}`,
-                  icon: '🥉',
-                  title: `${m.monthName} (+₪${m.profit})`,
-                  periodType: 'month',
-                  year: ym.year,
-                  month: m.month,
-                  color: '#fdba74',
-                  bg: 'rgba(217, 119, 6, 0.12)',
-                  border: 'rgba(217, 119, 6, 0.3)',
-                });
-              }
-
-              if (m.isSniper && !m.isChamp) {
-                pills.push({
-                  id: `m-sniper-${m.month}`,
-                  icon: '🎯',
-                  title: `צלף ${m.monthName}`,
-                  periodType: 'month',
-                  year: ym.year,
-                  month: m.month,
-                  color: '#34d399',
-                  bg: 'rgba(52, 211, 153, 0.12)',
-                  border: 'rgba(52, 211, 153, 0.3)',
-                });
-              }
-
-              if (m.isBigHit && !m.isChamp) {
-                pills.push({
-                  id: `m-bighit-${m.month}`,
-                  icon: '💥',
-                  title: `שיא ${m.monthName} (+₪${m.profit})`,
-                  periodType: 'month',
-                  year: ym.year,
-                  month: m.month,
-                  color: '#c084fc',
-                  bg: 'rgba(192, 132, 252, 0.12)',
-                  border: 'rgba(192, 132, 252, 0.3)',
+                  bg: 'rgba(245, 158, 11, 0.1)',
+                  border: 'rgba(245, 158, 11, 0.3)',
                 });
               }
             });
 
-            const isExpanded = !!expandedYearBreakdowns[ym.year];
+            // Collect secondary podiums & awards for clean summary
+            const silverMonths = ym.months.filter(m => m.isSilver).map(m => m.monthName);
+            const bronzeMonths = ym.months.filter(m => m.isBronze).map(m => m.monthName);
+            const sniperMonths = ym.months.filter(m => m.isSniper && !m.isChamp).map(m => m.monthName);
+            const bigHitMonths = ym.months.filter(m => m.isBigHit && !m.isChamp).map(m => m.monthName);
 
             return (
               <div
@@ -385,231 +300,144 @@ export const PlayerTrophyModal = ({
                   gap: '0.55rem',
                 }}
               >
-                {/* Year Header */}
+                {/* Year Header Bar */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                    paddingBottom: '0.45rem',
+                    paddingBottom: '0.4rem',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <span style={{ fontSize: '1rem', fontWeight: 900, color: '#ffffff' }}>
+                    <span style={{ fontSize: '0.98rem', fontWeight: 900, color: '#ffffff' }}>
                       עונת {ym.year}
                     </span>
                     {ym.isYearChamp && (
                       <span
                         style={{
-                          fontSize: '0.7rem',
+                          fontSize: '0.68rem',
                           fontWeight: 800,
-                          padding: '0.12rem 0.5rem',
+                          padding: '0.12rem 0.45rem',
                           borderRadius: '999px',
                           background: 'rgba(245, 158, 11, 0.2)',
                           border: '1px solid rgba(245, 158, 11, 0.45)',
                           color: '#fbbf24',
                         }}
                       >
-                        👑 אלוף השנה
-                      </span>
-                    )}
-                    {!ym.isYearChamp && ym.yearRank && ym.yearRank <= 3 && (
-                      <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>
-                        {ym.yearRank === 2 ? '🥈 סגן אלוף' : '🥉 מקום 3 בעונה'}
+                        👑 אלוף העונה
                       </span>
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onOpenPeriodRecap('year', ym.year)}
-                    style={{
-                      background: 'rgba(59, 130, 246, 0.12)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                      color: '#60a5fa',
-                      borderRadius: '8px',
-                      padding: '0.2rem 0.55rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                    }}
-                  >
-                    <span>🎬 סיכום שנתי</span>
-                  </button>
-                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        color: ym.yearProfit >= 0 ? '#4ade80' : '#f87171',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {ym.yearProfit >= 0 ? '+' : ''}₪{ym.yearProfit.toLocaleString('he-IL')}
+                    </span>
 
-                {/* Year stats bar */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '0.72rem',
-                    color: '#94a3b8',
-                  }}
-                >
-                  <div>
-                    <span>🎮 {totalGamesInYear} משחקים</span>
-                    <span style={{ margin: '0 0.4rem' }}>•</span>
-                    <span>📅 {playedMonths.length} חודשים פעילים</span>
-                  </div>
-                  <div
-                    style={{
-                      fontWeight: 800,
-                      color: ym.yearProfit >= 0 ? '#4ade80' : '#f87171',
-                      direction: 'ltr',
-                    }}
-                  >
-                    {ym.yearProfit >= 0 ? '+' : ''}₪{ym.yearProfit.toLocaleString('he-IL')}
+                    <button
+                      type="button"
+                      onClick={() => onOpenPeriodRecap('year', ym.year)}
+                      style={{
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        border: '1px solid rgba(59, 130, 246, 0.25)',
+                        color: '#60a5fa',
+                        borderRadius: '6px',
+                        padding: '0.18rem 0.45rem',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      🎬 סיכום
+                    </button>
                   </div>
                 </div>
 
-                {/* Achievements flow pills */}
-                {pills.length > 0 ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    {pills.map(p => (
+                {/* Major Wins List */}
+                {majorWins.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {majorWins.map(win => (
                       <button
-                        key={p.id}
+                        key={win.id}
                         type="button"
-                        onClick={() => onOpenPeriodRecap(p.periodType, p.year, p.month)}
+                        onClick={() => onOpenPeriodRecap(win.periodType, win.year, win.month)}
                         style={{
-                          background: p.bg,
-                          border: `1px solid ${p.border}`,
-                          color: p.color,
-                          borderRadius: '8px',
-                          padding: '0.25rem 0.5rem',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.3rem',
+                          justifyContent: 'space-between',
+                          background: win.bg,
+                          border: `1px solid ${win.border}`,
+                          borderRadius: '10px',
+                          padding: '0.45rem 0.65rem',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          textAlign: 'right',
+                          transition: 'all 0.2s ease',
                         }}
                       >
-                        <span>{p.icon}</span>
-                        <span>{p.title}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>{win.icon}</span>
+                          <div>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: win.color }}>
+                              {win.title}
+                            </div>
+                            <div style={{ fontSize: '0.66rem', color: '#cbd5e1' }}>
+                              {win.subtitle}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                          ←
+                        </span>
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                    אין תארי פודיום בעונה זו
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', padding: '0.2rem 0' }}>
+                    אין זכיות באליפות בעונה זו ({totalGamesInYear} משחקים שוחקו)
                   </div>
                 )}
 
-                {/* Collapsible 12-month table toggle */}
-                <div style={{ marginTop: '0.15rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => toggleYearBreakdown(ym.year)}
+                {/* Secondary Honors Clean Strip */}
+                {(silverMonths.length > 0 || bronzeMonths.length > 0 || sniperMonths.length > 0 || bigHitMonths.length > 0) && (
+                  <div
                     style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#94a3b8',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      borderRadius: '8px',
+                      padding: '0.35rem 0.55rem',
                       fontSize: '0.68rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      padding: 0,
-                      fontFamily: 'inherit',
+                      color: '#94a3b8',
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
+                      flexWrap: 'wrap',
+                      gap: '0.3rem 0.6rem',
                     }}
                   >
-                    <span>{isExpanded ? '▲ הסתר לוח חודשים' : '▼ הצג לוח חודשים מלא'}</span>
-                  </button>
-
-                  {isExpanded && (
-                    <div
-                      style={{
-                        marginTop: '0.5rem',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(6, 1fr)',
-                        gap: '0.25rem',
-                      }}
-                    >
-                      {ym.months.map(cell => {
-                        const played = cell.playerGames > 0;
-                        let badge = '';
-                        if (cell.isChamp) badge = '🥇';
-                        else if (cell.isSilver) badge = '🥈';
-                        else if (cell.isBronze) badge = '🥉';
-
-                        return (
-                          <button
-                            key={cell.month}
-                            type="button"
-                            disabled={cell.gamesInMonth === 0}
-                            onClick={() => {
-                              if (cell.gamesInMonth > 0) {
-                                onOpenPeriodRecap('month', cell.year, cell.month);
-                              }
-                            }}
-                            style={{
-                              background: cell.isChamp
-                                ? 'rgba(245, 158, 11, 0.15)'
-                                : cell.isSilver
-                                ? 'rgba(203, 213, 225, 0.12)'
-                                : cell.isBronze
-                                ? 'rgba(217, 119, 6, 0.12)'
-                                : played
-                                ? 'rgba(255, 255, 255, 0.04)'
-                                : 'rgba(255, 255, 255, 0.015)',
-                              border: cell.isChamp
-                                ? '1px solid rgba(245, 158, 11, 0.45)'
-                                : played
-                                ? '1px solid rgba(255, 255, 255, 0.08)'
-                                : '1px solid rgba(255, 255, 255, 0.03)',
-                              borderRadius: '6px',
-                              padding: '0.25rem 0.15rem',
-                              textAlign: 'center',
-                              cursor: cell.gamesInMonth > 0 ? 'pointer' : 'default',
-                              opacity: played ? 1 : 0.35,
-                              fontFamily: 'inherit',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              minHeight: '44px',
-                            }}
-                          >
-                            <span style={{ fontSize: '0.6rem', color: '#cbd5e1' }}>
-                              {SHORT_MONTH_NAMES[cell.month - 1]}
-                            </span>
-                            <span style={{ fontSize: '0.72rem', lineHeight: 1 }}>
-                              {badge || (played ? '•' : '—')}
-                            </span>
-                            {played ? (
-                              <span
-                                style={{
-                                  fontSize: '0.58rem',
-                                  fontWeight: 700,
-                                  color:
-                                    cell.profit > 0
-                                      ? '#4ade80'
-                                      : cell.profit < 0
-                                      ? '#f87171'
-                                      : '#94a3b8',
-                                  direction: 'ltr',
-                                }}
-                              >
-                                {cell.profit > 0 ? `+${cell.profit}` : cell.profit}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: '0.52rem', color: '#64748b' }}>—</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                    {silverMonths.length > 0 && (
+                      <span>🥈 {silverMonths.length} סגנויות ({silverMonths.join(', ')})</span>
+                    )}
+                    {bronzeMonths.length > 0 && (
+                      <span>🥉 {bronzeMonths.length} מקום 3 ({bronzeMonths.join(', ')})</span>
+                    )}
+                    {sniperMonths.length > 0 && (
+                      <span>🎯 צלף ({sniperMonths.join(', ')})</span>
+                    )}
+                    {bigHitMonths.length > 0 && (
+                      <span>💥 שיא ערב ({bigHitMonths.join(', ')})</span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

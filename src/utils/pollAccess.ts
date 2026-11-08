@@ -39,16 +39,15 @@ export const guestGateLiftsAt = (poll: PollGateFields): number =>
 export const evaluatePollVoteGate = (
   poll: PollGateFields,
   playerType: PlayerType | null,
-  now: number,
+  _now: number,
 ): PollVoteGate => {
   if (!playerType) return { allowed: false, reason: 'no_player_link' };
   if (poll.status === 'cancelled' || poll.status === 'expired') {
     return { allowed: false, reason: 'poll_locked' };
   }
   if (poll.votingLockedAt) return { allowed: false, reason: 'voting_locked' };
-  if (playerType !== 'permanent' && !poll.expandedAt && now < guestGateLiftsAt(poll)) {
-    return { allowed: false, reason: 'tier_not_allowed' };
-  }
+  // Non-permanent players can participate immediately — if seats are held for permanent players
+  // or full, they are routed to the waitlist (per migration 147).
   return { allowed: true };
 };
 

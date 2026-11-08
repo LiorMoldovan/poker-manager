@@ -156,25 +156,37 @@ export default function PollCard(props: PollCardProps) {
   // expansion) because a fully-held poll deliberately doesn't expand yet, so
   // an expansion-based clock would never release. Permanents-only groups
   // never reach this (no guest tier → the cap never gates anyone).
-  const holdsActive = now < new Date(poll.createdAt).getTime()
+  const holdsActive = !poll.expandedAt && now < new Date(poll.createdAt).getTime()
     + (poll.expansionDelayHours + (poll.maybeHoldHours ?? 48)) * 3600_000;
   const viewerIsGuest = !!currentPlayer && currentPlayer.type !== 'permanent';
-  // Per-date count of permanent players currently holding a seat via 'maybe'.
+  // Migration 147: Per-date count of permanent players holding a seat:
+  // (1) Permanent players who voted 'maybe'
+  // (2) Permanent players who have NOT voted yet on this date
   // Disabled dates never hold seats (their votes don't count toward target).
   const heldByDate = useMemo(() => {
     const m = new Map<string, number>();
     if (!holdsActive) return m;
+    const permPlayers = players.filter(p => p.type === 'permanent');
     for (const d of poll.dates) {
       if (d.disabledAt) { m.set(d.id, 0); continue; }
       let held = 0;
+      const votedPermIds = new Set<string>();
       for (const v of poll.votes) {
-        if (v.dateId !== d.id || v.response !== 'maybe') continue;
-        if (playerById.get(v.playerId)?.type === 'permanent') held++;
+        if (v.dateId !== d.id) continue;
+        if (playerById.get(v.playerId)?.type === 'permanent') {
+          votedPermIds.add(v.playerId);
+          if (v.response === 'maybe') held++;
+        }
+      }
+      for (const p of permPlayers) {
+        if (!votedPermIds.has(p.id)) {
+          held++;
+        }
       }
       m.set(d.id, held);
     }
     return m;
-  }, [holdsActive, poll.dates, poll.votes, playerById]);
+  }, [holdsActive, poll.dates, poll.votes, players, playerById]);
 
   // Permission gate — shared with HomeDashboard via evaluatePollVoteGate so the
   // disabled-button reasoning here and the vote nudge there can never disagree
@@ -330,11 +342,11 @@ export default function PollCard(props: PollCardProps) {
     : poll.status;
 
   const statusColor: Record<string, string> = {
-    open:      '#3b82f6',
-    expanded:  '#f97316',
+    open: '#3b82f6',
+    expanded: '#f97316',
     confirmed: '#10b981',
     cancelled: '#ef4444',
-    expired:   '#94a3b8',
+    expired: '#94a3b8',
   };
 
   // ─── Leader detection (multi-date polls only) ───
@@ -399,9 +411,9 @@ export default function PollCard(props: PollCardProps) {
   // rows).
   const buildShareCaption = (mode: 'invitation' | 'confirmation' | 'cancellation'): string => {
     const captionKey = (
-      mode === 'invitation'   ? 'schedule.share.captionInvitation' :
-      mode === 'confirmation' ? 'schedule.share.captionConfirmation' :
-                                'schedule.share.captionCancellation'
+      mode === 'invitation' ? 'schedule.share.captionInvitation' :
+        mode === 'confirmation' ? 'schedule.share.captionConfirmation' :
+          'schedule.share.captionCancellation'
     ) as TranslationKey;
     const line = t(captionKey);
     if (typeof window === 'undefined') return line;
@@ -715,18 +727,18 @@ export default function PollCard(props: PollCardProps) {
                       && !poll.confirmedGameId
                       && !isDisabled
                       && (
-                      <button
-                        onClick={() => onManualClose(d.id)}
-                        title={poll.status === 'confirmed'
-                          ? t('schedule.manualRepin')
-                          : t('schedule.manualClose')}
-                        style={{
-                          padding: '2px 8px', borderRadius: 999,
-                          border: '1px dashed var(--border)', background: 'transparent',
-                          color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
-                          cursor: 'pointer',
-                        }}>📌 {t('schedule.manualPickShort')}</button>
-                    )}
+                        <button
+                          onClick={() => onManualClose(d.id)}
+                          title={poll.status === 'confirmed'
+                            ? t('schedule.manualRepin')
+                            : t('schedule.manualClose')}
+                          style={{
+                            padding: '2px 8px', borderRadius: 999,
+                            border: '1px dashed var(--border)', background: 'transparent',
+                            color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer',
+                          }}>📌 {t('schedule.manualPickShort')}</button>
+                      )}
                     {/* Admin release-pin — only on the currently-pinned
                         tile (the manual-pick chip above is hidden here
                         so this affordance owns the same slot). Hidden
@@ -740,17 +752,17 @@ export default function PollCard(props: PollCardProps) {
                       && isPinnedHere
                       && !poll.confirmedGameId
                       && (
-                      <button
-                        onClick={() => onReleasePin()}
-                        title={t('schedule.releasePinTooltip')}
-                        style={{
-                          padding: '2px 8px', borderRadius: 999,
-                          border: '1px dashed rgba(249, 115, 22, 0.50)',
-                          background: 'rgba(249, 115, 22, 0.08)',
-                          color: '#fb923c', fontSize: 11, fontWeight: 600,
-                          cursor: 'pointer',
-                        }}>🔓 {t('schedule.releasePinShort')}</button>
-                    )}
+                        <button
+                          onClick={() => onReleasePin()}
+                          title={t('schedule.releasePinTooltip')}
+                          style={{
+                            padding: '2px 8px', borderRadius: 999,
+                            border: '1px dashed rgba(249, 115, 22, 0.50)',
+                            background: 'rgba(249, 115, 22, 0.08)',
+                            color: '#fb923c', fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer',
+                          }}>🔓 {t('schedule.releasePinShort')}</button>
+                      )}
                     {/* Admin exclude/include toggle (migration 086).
                         Multi-date polls only — a single-date poll has
                         nothing meaningful to narrow. Hidden on the
@@ -769,28 +781,28 @@ export default function PollCard(props: PollCardProps) {
                       && !isPinnedHere
                       && !poll.confirmedGameId
                       && (
-                      <button
-                        onClick={() => onToggleDateDisabled(d.id, isDisabled)}
-                        title={t(isDisabled
-                          ? 'schedule.includeDateTooltip'
-                          : 'schedule.excludeDateTooltip')}
-                        style={{
-                          padding: '2px 8px', borderRadius: 999,
-                          border: isDisabled
-                            ? '1px dashed rgba(52, 211, 153, 0.50)'
-                            : '1px dashed rgba(148, 163, 184, 0.50)',
-                          background: isDisabled
-                            ? 'rgba(52, 211, 153, 0.08)'
-                            : 'transparent',
-                          color: isDisabled ? '#34d399' : 'var(--text-muted)',
-                          fontSize: 11, fontWeight: 600,
-                          cursor: 'pointer',
-                        }}>
-                        {isDisabled
-                          ? `♻️ ${t('schedule.includeDateShort')}`
-                          : `❌ ${t('schedule.excludeDateShort')}`}
-                      </button>
-                    )}
+                        <button
+                          onClick={() => onToggleDateDisabled(d.id, isDisabled)}
+                          title={t(isDisabled
+                            ? 'schedule.includeDateTooltip'
+                            : 'schedule.excludeDateTooltip')}
+                          style={{
+                            padding: '2px 8px', borderRadius: 999,
+                            border: isDisabled
+                              ? '1px dashed rgba(52, 211, 153, 0.50)'
+                              : '1px dashed rgba(148, 163, 184, 0.50)',
+                            background: isDisabled
+                              ? 'rgba(52, 211, 153, 0.08)'
+                              : 'transparent',
+                            color: isDisabled ? '#34d399' : 'var(--text-muted)',
+                            fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer',
+                          }}>
+                          {isDisabled
+                            ? `♻️ ${t('schedule.includeDateShort')}`
+                            : `❌ ${t('schedule.excludeDateShort')}`}
+                        </button>
+                      )}
                   </div>
                 </div>
 
@@ -1010,18 +1022,18 @@ export default function PollCard(props: PollCardProps) {
                         onClick={() => onVote(poll, d.id, effectiveResp)}
                         title={
                           isDisabled ? t('schedule.errorDateDisabled') :
-                          wouldOverfill ? t('schedule.errorSeatFull') :
-                          wouldHitHold ? (gateLiftsLabel
-                            ? t('schedule.errorSeatHeldAt', { when: gateLiftsLabel })
-                            : t('schedule.errorSeatHeld')) :
-                          isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
-                          canVote.allowed ? '' :
-                          canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
-                          canVote.reason === 'tier_not_allowed' ? (gateLiftsLabel
-                            ? t('schedule.errorTierNotAllowedAt', { when: gateLiftsLabel })
-                            : t('schedule.errorTierNotAllowed')) :
-                          canVote.reason === 'voting_locked' ? t('schedule.errorVotingLocked') :
-                          t('schedule.errorPollLocked')
+                            wouldOverfill ? t('schedule.errorSeatFull') :
+                              wouldHitHold ? (gateLiftsLabel
+                                ? t('schedule.errorSeatHeldAt', { when: gateLiftsLabel })
+                                : t('schedule.errorSeatHeld')) :
+                                isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
+                                  canVote.allowed ? '' :
+                                    canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
+                                      canVote.reason === 'tier_not_allowed' ? (gateLiftsLabel
+                                        ? t('schedule.errorTierNotAllowedAt', { when: gateLiftsLabel })
+                                        : t('schedule.errorTierNotAllowed')) :
+                                        canVote.reason === 'voting_locked' ? t('schedule.errorVotingLocked') :
+                                          t('schedule.errorPollLocked')
                         }
                         className={`poll-rsvp-btn${active ? ' poll-rsvp-btn--active' : ''}`}
                         style={{
@@ -1043,9 +1055,9 @@ export default function PollCard(props: PollCardProps) {
                       disabled={isVotingLocked || isFillPinnedLocked || isDisabled}
                       title={
                         isDisabled ? t('schedule.errorDateDisabled') :
-                        isVotingLocked ? t('schedule.errorVotingLocked') :
-                        isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
-                        t('schedule.proxy.modalTitle')}
+                          isVotingLocked ? t('schedule.errorVotingLocked') :
+                            isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
+                              t('schedule.proxy.modalTitle')}
                       className="poll-rsvp-btn"
                       style={{
                         // Icon-only button: keep the vertical box matched
@@ -1350,14 +1362,14 @@ export default function PollCard(props: PollCardProps) {
           || poll.status === 'expanded'
           || (isConfirmedBelowTarget && !poll.confirmedGameId && !isVotingLocked)
         ) && (
-          <button
-            onClick={() => setReminderOpen(true)}
-            title={t('schedule.reminder.button')}
-            style={ghostBtn}
-          >
-            📣 {t('schedule.reminder.button')}
-          </button>
-        )}
+            <button
+              onClick={() => setReminderOpen(true)}
+              title={t('schedule.reminder.button')}
+              style={ghostBtn}
+            >
+              📣 {t('schedule.reminder.button')}
+            </button>
+          )}
         {/* Edit (admin, active polls). */}
         {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
           <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
