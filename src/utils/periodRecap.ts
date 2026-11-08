@@ -30,6 +30,7 @@ export interface PeriodRecordHighlight {
   type: 'career_best_win' | 'career_best_month' | 'streak' | 'iron_man' | 'big_comeback' | 'turbulent_game' | 'group_record' | 'all_time_record';
   title: string;
   playerName?: string;
+  playerId?: string;
   badge?: string;
   description: string;
 }
@@ -86,6 +87,15 @@ export interface PeriodRecapData {
     atm?: { playerName: string; totalRebuys: number; avgRebuys: number; totalInvested: number; games: number; profit: number };
   };
   deterministicHighlights: string[];
+  regularPlayersSummary?: Array<{
+    playerId: string;
+    playerName: string;
+    gamesPlayed: number;
+    profit: number;
+    winRate: number;
+    totalRebuys: number;
+    status: string;
+  }>;
 }
 
 export interface PlayerMonthCell {
@@ -193,6 +203,79 @@ function isPeriodCompleted(periodType: RecapPeriodType, year: number, month?: nu
 }
 
 /**
+ * Unifies two significant records of the same player into a single prestigious card,
+ * preventing duplicate cards for the same person without losing either milestone.
+ */
+function combinePlayerRecords(
+  r1: PeriodRecordHighlight,
+  r2: PeriodRecordHighlight
+): PeriodRecordHighlight {
+  function recordScore(r: PeriodRecordHighlight): number {
+    if (r.type === 'all_time_record' || r.type === 'group_record') return 100;
+    if (r.type === 'career_best_month') return 90;
+    if (r.type === 'career_best_win') return 80;
+    if (r.title.includes('מושלם') || r.title.includes('רצף')) return 70;
+    if (r.title.includes('מלך הריבאי')) return 60;
+    if (r.type === 'big_comeback') return 50;
+    return 40;
+  }
+
+  const [primary, secondary] = recordScore(r1) >= recordScore(r2) ? [r1, r2] : [r2, r1];
+  const pName = primary.playerName || secondary.playerName || 'שחקן';
+  const pId = primary.playerId || secondary.playerId;
+
+  const icon = (primary.icon === '👑' || secondary.icon === '👑')
+    ? '👑'
+    : (primary.icon === '🔥' || secondary.icon === '🔥')
+      ? '🔥'
+      : (primary.icon === '🌟' || secondary.icon === '🌟')
+        ? '🌟'
+        : primary.icon;
+
+  let title = `דאבל הישגים היסטורי: ${pName}`;
+  const t1 = primary.title || '';
+  const t2 = secondary.title || '';
+
+  if (t1.includes('חודש שיא') && (t2.includes('מושלם') || t2.includes('רצף'))) {
+    title = `חודש שיא ומאזן מושלם: ${pName}`;
+  } else if ((t1.includes('מושלם') || t1.includes('רצף')) && t2.includes('חודש שיא')) {
+    title = `חודש שיא ומאזן מושלם: ${pName}`;
+  } else if (t1.includes('טופ 10') && t2.includes('חודש שיא')) {
+    title = `חודש שיא וטופ 10 היסטורי: ${pName}`;
+  } else if (t1.includes('חודש שיא') && t2.includes('טופ 10')) {
+    title = `חודש שיא וטופ 10 היסטורי: ${pName}`;
+  } else if ((t1.includes('שיא') || t1.includes('טופ')) && (t2.includes('רצף') || t2.includes('אקשן'))) {
+    title = `שיא אישי ורצף לוהט: ${pName}`;
+  } else if (t1.includes('מלך הריבאי') && (t2.includes('רצף') || t2.includes('קאמבק'))) {
+    title = `מנוע אקשן ומהפך: ${pName}`;
+  } else {
+    title = `דאבל שיאים והישגים: ${pName}`;
+  }
+
+  const badge = 'דאבל שיאים אישי';
+
+  const d1Clean = primary.description.trim().replace(/[!.]+$/, '');
+  let d2Clean = secondary.description.trim().replace(/[!.]+$/, '');
+
+  if (pName && d2Clean.startsWith(pName)) {
+    d2Clean = d2Clean.slice(pName.length).trim();
+  }
+
+  const combinedDesc = `${d1Clean}, ובנוסף ${d2Clean}!`;
+
+  return {
+    id: `unified_${primary.id}_${secondary.id}`,
+    playerId: pId,
+    icon,
+    type: primary.type,
+    title,
+    playerName: pName,
+    badge,
+    description: combinedDesc,
+  };
+}
+
+/**
  * Detects milestone achievements, historic records broken, and notable highlights
  * that specifically took place during this period vs all prior games or within the period.
  */
@@ -204,7 +287,8 @@ function detectPeriodRecords(
   playerMap: Map<string, Player>,
   periodType: RecapPeriodType,
   year: number,
-  month?: number
+  month?: number,
+  yearGpCounts?: Map<string, number>
 ): PeriodRecordHighlight[] {
   const records: PeriodRecordHighlight[] = [];
   if (periodGames.length === 0) return records;
@@ -236,13 +320,18 @@ function detectPeriodRecords(
     const playerObj = playerMap.get(gp.playerId);
     const pName = playerObj?.name || gp.playerName || 'שחקן';
     const isGuest = playerObj?.type === 'guest';
+    const yearGamesCount = yearGpCounts ? (yearGpCounts.get(gp.playerId) || 0) : 99;
+    const isCameo = yearGamesCount <= 1;
+    const pPeriodCount = periodGP.filter(x => x.playerId === gp.playerId).length;
+    const isFrequentGuest = isGuest && (yearGamesCount >= 3 || pPeriodCount >= 2);
     const gObj = periodGames.find(x => x.id === gp.gameId);
     const dStr = gObj ? formatShortDate(gObj.date || gObj.createdAt) : '';
 
     const allTimeRank = allHistoricalProfits.filter(val => val > profitVal).length + 1;
 
-    // For guests: ONLY include if they achieved a legendary Top 3 all-time single win!
-    if (isGuest && allTimeRank > 3) {
+    // For 1-game cameos (<= 1 game in the entire year):
+    // ONLY include if they achieved a legendary Top 3 all-time single win in club history!
+    if (isCameo && allTimeRank > 3) {
       continue;
     }
 
@@ -250,11 +339,12 @@ function detectPeriodRecords(
 
     const pPriorGPs = priorGPs.filter(x => x.playerId === gp.playerId);
     const priorBest = pPriorGPs.reduce((m, x) => Math.max(m, Number(x.profit || 0)), 0);
-    const isCareerBest = pPriorGPs.length >= 3 && profitVal > priorBest + 15 && priorBest >= 80;
+    const isCareerBest = (!isGuest || isFrequentGuest) && !isCameo && pPriorGPs.length >= 3 && profitVal > priorBest + 15 && priorBest >= 80;
 
     if (allTimeRank === 1) {
       records.push({
         id: `all_time_rec_${gp.id}`,
+        playerId: gp.playerId,
         icon: '👑',
         type: 'group_record',
         title: 'שיא כל הזמנים בערב בודד!',
@@ -262,9 +352,11 @@ function detectPeriodRecords(
         badge: 'שיא מועדון היסטורי',
         description: `${pName}${isGuest ? ' (אורח)' : ''} ניפץ את שיא הרווח למשחק בודד בתולדות הקבוצה עם +₪${Math.round(profitVal)} (${dStr})!`,
       });
+      break;
     } else if (allTimeRank <= 10) {
       records.push({
         id: `all_time_top10_${gp.id}`,
+        playerId: gp.playerId,
         icon: '🌟',
         type: 'all_time_record',
         title: `טופ 10 של כל הזמנים (+₪${Math.round(profitVal)})`,
@@ -272,9 +364,11 @@ function detectPeriodRecords(
         badge: `מקום ${allTimeRank} בכל הזמנים`,
         description: `הזכייה של ${pName}${isGuest ? ' (אורח)' : ''} ב-+₪${Math.round(profitVal)} (${dStr}) נכנסה למקום ה-${allTimeRank} בשיאי כל הזמנים של המועדון${isCareerBest ? ' ומהווה שיא קריירה אישי!' : '!'}`,
       });
+      break; // At most one all-time single win spotlight per period
     } else if (isCareerBest) {
       records.push({
         id: `career_win_${gp.id}`,
+        playerId: gp.playerId,
         icon: '🚀',
         type: 'career_best_win',
         title: 'שיא קריירה בערב יחיד',
@@ -282,16 +376,20 @@ function detectPeriodRecords(
         badge: 'שיא אישי חדש',
         description: `${pName} ניפץ את שיא הרווח האישי לערב יחיד בקריירה: +₪${Math.round(profitVal)} (${dStr}), מעל שיאו הקודם (+₪${Math.round(priorBest)})!`,
       });
+      break;
     }
   }
 
   // 2. Career best month
   if (periodType === 'month' && month) {
     for (const [pId, pObj] of playerMap.entries()) {
-      if (pObj.type === 'guest') continue;
-      const pName = pObj.name;
+      const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+      const isCameo = yCnt <= 1;
       const pPeriodGPs = periodGP.filter(gp => gp.playerId === pId);
       if (pPeriodGPs.length === 0) continue;
+      const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pPeriodGPs.length >= 2);
+      if (isCameo || (pObj.type === 'guest' && !isFrequentGuest)) continue;
+      const pName = pObj.name;
       const periodProfit = pPeriodGPs.reduce((s, gp) => s + Number(gp.profit || 0), 0);
       if (periodProfit < 250) continue;
 
@@ -313,6 +411,7 @@ function detectPeriodRecords(
         if (periodProfit > priorBestMonth + 30 && priorBestMonth > 0) {
           records.push({
             id: `career_month_${pId}`,
+            playerId: pId,
             icon: '🌟',
             type: 'career_best_month',
             title: 'חודש שיא בכל הזמנים',
@@ -320,6 +419,7 @@ function detectPeriodRecords(
             badge: 'חודש שיא אישי',
             description: `${pName} רשם את החודש הרווחי ביותר שלו מאז ומעולם עם +₪${Math.round(periodProfit)} (הקודם: +₪${Math.round(priorBestMonth)})!`,
           });
+          break; // At most one career month record
         }
       }
     }
@@ -358,22 +458,61 @@ function detectPeriodRecords(
         }
       }
       if (topAttendees.length > 0 && topAttendees.length <= 3) {
+        const isSingle = topAttendees.length === 1;
+        const verb = isSingle ? 'הוביל' : 'הובילו';
+        const title = isSingle ? `שיאן הנוכחות ${periodNoun}` : `שיאני הנוכחות ${periodNoun}`;
         records.push({
           id: 'iron_man_top',
           icon: '🛡️',
           type: 'iron_man',
-          title: `שיאני הנוכחות ${periodNoun}`,
+          title,
           badge: `${maxAttendance}/${periodGames.length} משחקים`,
-          description: `${topAttendees.join(' ו-')} הובילו את הטבלה עם הנוכחות הגבוהה ביותר: ${maxAttendance} מתוך ${periodGames.length} ערבים!`,
+          description: `${topAttendees.join(' ו-')} ${verb} את הטבלה עם הנוכחות הגבוהה ביותר: ${maxAttendance} מתוך ${periodGames.length} ערבים!`,
         });
       }
     }
   }
 
+  // 4b. Rebuys / Action King record (gives prominent spotlight to action generators like Eyal / Segal)
+  let maxRebuysVal = 0;
+  let topRebuyPId = '';
+  for (const [pId, pObj] of playerMap.entries()) {
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+    const isCameo = yCnt <= 1;
+    const pGps = periodGP.filter(gp => gp.playerId === pId);
+    const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pGps.length >= 2);
+    if (isCameo || (pObj.type === 'guest' && !isFrequentGuest)) continue;
+    const totalR = pGps.reduce((s, x) => s + Number(x.rebuys || 0), 0);
+    if (totalR > maxRebuysVal) {
+      maxRebuysVal = totalR;
+      topRebuyPId = pId;
+    }
+  }
+  const minActionThreshold = periodType === 'month' ? 12 : 25;
+  if (topRebuyPId && maxRebuysVal >= minActionThreshold) {
+    const rebuyP = playerMap.get(topRebuyPId);
+    const pGps = periodGP.filter(gp => gp.playerId === topRebuyPId);
+    const avgR = (maxRebuysVal / (pGps.length || 1)).toFixed(1);
+    records.push({
+      id: `top_rebuys_${topRebuyPId}`,
+      playerId: topRebuyPId,
+      icon: '🎰',
+      type: 'streak',
+      title: 'מלך הריבאי ומחולל האקשן',
+      playerName: rebuyP?.name || '',
+      badge: `${maxRebuysVal} קניות ${periodNoun}`,
+      description: `${rebuyP?.name} הרעיד את השולחן ${periodNoun} עם ${maxRebuysVal} קניות (ממוצע ${avgR} לערב) והזרים ₪${Math.round(maxRebuysVal * 30).toLocaleString('he-IL')} לקופות המשחק!`,
+    });
+  }
+
   // 5. Streaks in period (COMBINED - at most one record, prevents repetitive streak cards!)
   const streakList: { pId: string; pName: string; streak: number }[] = [];
   for (const [pId, pObj] of playerMap.entries()) {
-    if (pObj.type === 'guest') continue;
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+    const isCameo = yCnt <= 1;
+    const pGps = periodGP.filter(gp => gp.playerId === pId);
+    const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pGps.length >= 2);
+    if (isCameo || (pObj.type === 'guest' && !isFrequentGuest)) continue;
     const pName = pObj.name;
     let streak = 0;
     let maxStreak = 0;
@@ -395,21 +534,32 @@ function detectPeriodRecords(
 
   streakList.sort((a, b) => b.streak - a.streak);
 
+  const perfectAccuracyHandledPIds = new Set<string>();
+
   if (streakList.length > 0) {
     const topStreakVal = streakList[0].streak;
     const topTied = streakList.filter(s => s.streak === topStreakVal);
     const runnersUp = streakList.filter(s => s.streak < topStreakVal && s.streak >= 3).slice(0, 2);
 
     let desc = '';
-    const title = `רצף הניצחונות של ${periodName}`;
-    const badge = `${topStreakVal} ניצחונות ברצף`;
+    let title = `רצף הניצחונות של ${periodName}`;
+    let badge = `${topStreakVal} ניצחונות ברצף`;
 
     if (topTied.length === 1) {
       const topP = topTied[0];
+      const topPGps = periodGP.filter(gp => gp.playerId === topP.pId);
+      const isPerfect = topPGps.length === topStreakVal && topPGps.length >= 3;
+      if (isPerfect) {
+        perfectAccuracyHandledPIds.add(topP.pId);
+        title = `מאזן מושלם ורצף ניצחונות`;
+        badge = `100% הצלחה (רצף ${topStreakVal})`;
+      }
       const runnersUpStr = runnersUp.length > 0
         ? ` (ואחריו ${runnersUp.map(r => `${r.pName} עם ${r.streak}`).join(' ו-')})`
         : '';
-      desc = `${topP.pName} רשם את רצף הניצחונות הארוך ביותר ${periodNoun} עם ${topStreakVal} ניצחונות רצופים${runnersUpStr}!`;
+      desc = isPerfect
+        ? `${topP.pName} נעל את ${periodName} במאזן מושלם של 100% הצלחה עם ${topStreakVal} ניצחונות מתוך ${topStreakVal} ערבים${runnersUpStr}!`
+        : `${topP.pName} רשם את רצף הניצחונות הארוך ביותר ${periodNoun} עם ${topStreakVal} ניצחונות רצופים${runnersUpStr}!`;
     } else {
       const names = topTied.map(t => t.pName).join(' ו-');
       desc = `${names} הובילו את ${periodName} עם רצף פנטסטי של ${topStreakVal} ניצחונות רצופים כל אחד!`;
@@ -417,6 +567,7 @@ function detectPeriodRecords(
 
     records.push({
       id: 'period_top_win_streak',
+      playerId: topTied.length === 1 ? topTied[0].pId : undefined,
       icon: '🔥',
       type: 'streak',
       title,
@@ -428,7 +579,11 @@ function detectPeriodRecords(
 
   // 6. The Big Comeback
   for (const [pId, pObj] of playerMap.entries()) {
-    if (pObj.type === 'guest') continue;
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+    const isCameo = yCnt <= 1;
+    const pGpsAll = periodGP.filter(gp => gp.playerId === pId);
+    const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pGpsAll.length >= 2);
+    if (isCameo || (pObj.type === 'guest' && !isFrequentGuest)) continue;
     const pName = pObj.name;
     const pGps = periodGames
       .map(g => periodGP.find(x => x.gameId === g.id && x.playerId === pId))
@@ -440,6 +595,7 @@ function detectPeriodRecords(
       if (firstHalfProfit <= -120 && totalProfit >= 80) {
         records.push({
           id: `comeback_${pId}`,
+          playerId: pId,
           icon: '🔄',
           type: 'big_comeback',
           title: `קאמבק ${periodName}`,
@@ -452,16 +608,20 @@ function detectPeriodRecords(
     }
   }
 
-  // 7. Perfect accuracy (100% win rate with >= 3 games)
+  // 7. Perfect accuracy (100% win rate with >= 3 games) — skipped if already combined in streak!
   for (const [pId, pObj] of playerMap.entries()) {
-    if (pObj.type === 'guest') continue;
-    const pName = pObj.name;
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+    const isCameo = yCnt <= 1;
     const pGps = periodGP.filter(gp => gp.playerId === pId);
+    const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pGps.length >= 2);
+    if (isCameo || (pObj.type === 'guest' && !isFrequentGuest) || perfectAccuracyHandledPIds.has(pId)) continue;
+    const pName = pObj.name;
     if (pGps.length >= 3) {
       const wins = pGps.filter(gp => Number(gp.profit || 0) > 0).length;
       if (wins === pGps.length) {
         records.push({
           id: `perfect_acc_${pId}`,
+          playerId: pId,
           icon: '🎯',
           type: 'streak',
           title: 'דיוק מושלם (100% הצלחה)',
@@ -474,17 +634,21 @@ function detectPeriodRecords(
     }
   }
 
-  // 8. Rollercoaster / Extreme Volatility in period
+  // 8. Rollercoaster / Extreme Volatility in period (for players not yet featured)
   for (const [pId, pObj] of playerMap.entries()) {
-    if (pObj.type === 'guest') continue;
-    const pName = pObj.name;
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 99;
+    const isCameo = yCnt <= 1;
     const pGps = periodGP.filter(gp => gp.playerId === pId);
+    const isFrequentGuest = pObj.type === 'guest' && (yCnt >= 3 || pGps.length >= 2);
+    if (isCameo || (pObj.type === 'guest' && !isFrequentGuest)) continue;
+    const pName = pObj.name;
     if (pGps.length >= 3) {
       const maxWin = pGps.reduce((m, x) => Math.max(m, Number(x.profit || 0)), 0);
       const maxLoss = pGps.reduce((m, x) => Math.min(m, Number(x.profit || 0)), 0);
       if (maxWin >= 180 && maxLoss <= -120) {
         records.push({
           id: `rollercoaster_${pId}`,
+          playerId: pId,
           icon: '🎢',
           type: 'streak',
           title: `רכבת הרים ${periodNoun}`,
@@ -519,7 +683,53 @@ function detectPeriodRecords(
     });
   }
 
-  return records.slice(0, 5);
+  // Consolidation / Unification:
+  // If any player achieved 2 (or more) significant records, unify them into a single compound card
+  // so neither milestone is lost, while avoiding duplicate cards for the same player.
+  const playerRecordsMap = new Map<string, PeriodRecordHighlight[]>();
+  const nonPlayerRecords: PeriodRecordHighlight[] = [];
+
+  for (const r of records) {
+    const pKey = r.playerId || (r.playerName && !r.playerName.includes(',') && !r.playerName.includes(' ו-') ? r.playerName : null);
+    if (!pKey || r.type === 'turbulent_game' || (r.type === 'iron_man' && r.description.includes(','))) {
+      nonPlayerRecords.push(r);
+    } else {
+      const list = playerRecordsMap.get(pKey) || [];
+      list.push(r);
+      playerRecordsMap.set(pKey, list);
+    }
+  }
+
+  const consolidated: PeriodRecordHighlight[] = [];
+  for (const [, pRecs] of playerRecordsMap.entries()) {
+    // If a player has substantive positive milestones, filter out pure volatility (rollercoaster)
+    const substantive = pRecs.filter(r => !r.id.startsWith('rollercoaster') && r.type !== 'rollercoaster');
+    const validRecs = substantive.length > 0 ? substantive : pRecs;
+
+    if (validRecs.length === 1) {
+      consolidated.push(validRecs[0]);
+    } else {
+      consolidated.push(combinePlayerRecords(validRecs[0], validRecs[1]));
+    }
+  }
+  consolidated.push(...nonPlayerRecords);
+
+  // Score records for priority display in top 5
+  function getRecordWeight(r: PeriodRecordHighlight): number {
+    if (r.id.startsWith('unified_') || (r.badge && r.badge.includes('דאבל'))) return 100;
+    if (r.id.startsWith('all_time_rec')) return 95;
+    if (r.id.startsWith('all_time_top10') || r.type === 'career_best_month') return 85;
+    if (r.type === 'career_best_win') return 80;
+    if (r.id.includes('win_streak') || r.id.startsWith('perfect_acc')) return 75;
+    if (r.id.startsWith('top_rebuys')) return 70;
+    if (r.id.startsWith('iron_man')) return 65;
+    if (r.type === 'big_comeback') return 60;
+    if (r.type === 'turbulent_game') return 55;
+    return 50;
+  }
+
+  consolidated.sort((a, b) => getRecordWeight(b) - getRecordWeight(a));
+  return consolidated.slice(0, 5);
 }
 
 /**
@@ -528,7 +738,7 @@ function detectPeriodRecords(
  */
 function detectPeriodStories(
   periodGames: Game[],
-  _periodGP: GamePlayer[],
+  periodGP: GamePlayer[],
   allGames: Game[],
   allGP: GamePlayer[],
   playerMap: Map<string, Player>,
@@ -536,12 +746,33 @@ function detectPeriodStories(
   champ: RecapPlayerEntry | undefined,
   periodType: RecapPeriodType,
   year: number,
-  month?: number
+  month?: number,
+  soloRecordPlayerIds?: Set<string>,
+  yearGpCounts?: Map<string, number>
 ): PeriodStory[] {
   const stories: PeriodStory[] = [];
   if (periodGames.length === 0) return stories;
 
+  // Prioritize players who haven't starred in Card 2 (Records),
+  // ensuring the entire circle of active players is represented!
   const usedPlayerIds = new Set<string>();
+  if (soloRecordPlayerIds) {
+    soloRecordPlayerIds.forEach(id => usedPlayerIds.add(id));
+  }
+
+  // Primary factor: appearances (games played). Secondary factor: player type (regular vs guest).
+  // 1-game cameo players (<= 1 game in the entire year) and infrequent guests are excluded.
+  // Guests who attended many games (>= 3 in year or >= 2 in period) CAN be included in stories!
+  for (const [pId, pObj] of playerMap.entries()) {
+    const yCnt = yearGpCounts ? (yearGpCounts.get(pId) || 0) : 0;
+    const pPeriodGps = periodGP.filter(gp => gp.playerId === pId);
+    const isCameo = yCnt <= 1;
+    const isGuest = pObj.type === 'guest';
+    const isFrequentGuest = isGuest && (yCnt >= 3 || pPeriodGps.length >= 2);
+    if (isCameo || (isGuest && !isFrequentGuest)) {
+      usedPlayerIds.add(pId);
+    }
+  }
 
   const periodNoun = periodType === 'year' ? 'בעונה' : periodType === 'h1' || periodType === 'h2' ? 'בחציון' : 'בחודש';
 
@@ -586,14 +817,13 @@ function detectPeriodStories(
     return d.getFullYear() === year && d.getTime() < periodStartDate.getTime();
   });
 
-  // Story 1: Chaser Overtake or Gap Closing in the top ranks (if prior games exist in season)
+  // Story 1: Chaser Overtake or Gap Closing / Defense in the top ranks (if prior games exist in season)
   if (gamesYearBefore.length > 0) {
     const priorTotalsSorted = [...yBefore.entries()].sort((a, b) => b[1].profit - a[1].profit);
     for (let rank = 1; rank <= 4; rank++) {
       const leaderBefore = priorTotalsSorted[rank - 1];
       const chaserBefore = priorTotalsSorted[rank];
       if (!leaderBefore || !chaserBefore) continue;
-      if (usedPlayerIds.has(chaserBefore[0])) continue;
 
       const gapBefore = leaderBefore[1].profit - chaserBefore[1].profit;
       const leaderAfterProfit = yThrough.get(leaderBefore[0])?.profit || 0;
@@ -603,37 +833,91 @@ function detectPeriodStories(
 
       // Check if chaser OVERTOOK leader
       if (chaserAfterProfit > leaderAfterProfit && gapBefore > 0) {
-        const newLead = Math.round(chaserAfterProfit - leaderAfterProfit);
-        stories.push({
-          id: `overtake_${chaserBefore[0]}`,
-          icon: '👑',
-          type: 'top_takeover',
-          title: `מהפך בפסגת עונת ${year}: ${chaserName}`,
-          badge: `מקום ${rank} בעונה`,
-          badgeVariant: 'green',
-          playerName: chaserName,
-          description: `${chaserName} משלים מהפך עונתי מרשים: עוקף את ${leaderName} ועולה למקום ה-${rank} בעונת ${year} עם יתרון של ₪${newLead.toLocaleString('he-IL')}!`,
-        });
-        usedPlayerIds.add(chaserBefore[0]);
-        break;
+        if (!usedPlayerIds.has(chaserBefore[0])) {
+          const newLead = Math.round(chaserAfterProfit - leaderAfterProfit);
+          const chaserNowRank = yThrough.get(chaserBefore[0])?.rank || rank;
+          const isTopSpot = chaserNowRank === 1;
+          const title = isTopSpot
+            ? `מהפך בפסגת עונת ${year}: ${chaserName}`
+            : chaserNowRank === 2
+            ? `כיבוש הסגנות בעונת ${year}: ${chaserName}`
+            : chaserNowRank === 3
+            ? `פריצה לפודיום עונת ${year}: ${chaserName}`
+            : `טיפוס למקום ה-${chaserNowRank} בעונת ${year}: ${chaserName}`;
+          const badge = isTopSpot ? `מקום 1 בעונה` : `מקום ${chaserNowRank} בעונה`;
+          const desc = isTopSpot
+            ? `${chaserName} משלים מהפך עונתי ענק: עוקף את ${leaderName} וכובש את הפסגה והמקום ה-1 בעונת ${year} עם יתרון של ₪${newLead.toLocaleString('he-IL')}!`
+            : `${chaserName} משלים מהפך מרשים: עוקף את ${leaderName} ועולה למקום ה-${chaserNowRank} בעונת ${year} עם יתרון של ₪${newLead.toLocaleString('he-IL')}!`;
+          stories.push({
+            id: `overtake_${chaserBefore[0]}`,
+            icon: isTopSpot ? '👑' : '🚀',
+            type: 'top_takeover',
+            title,
+            badge,
+            badgeVariant: 'green',
+            playerName: chaserName,
+            description: desc,
+          });
+          usedPlayerIds.add(chaserBefore[0]);
+          break;
+        }
       }
 
       // Check if chaser significantly narrowed gap (gapAfter > 0)
       const gapAfter = leaderAfterProfit - chaserAfterProfit;
       const closed = gapBefore - gapAfter;
       if (closed >= 250 && gapAfter > 0) {
-        stories.push({
-          id: `gap_closed_${chaserBefore[0]}`,
-          icon: '⚔️',
-          type: 'top_takeover',
-          title: `סגירת פערים בצמרת: ${chaserName}`,
-          badge: `סגירת ₪${Math.round(closed)}`,
-          badgeVariant: 'amber',
-          playerName: chaserName,
-          description: `${chaserName} סגר פער של ₪${Math.round(closed)} מול ${leaderName} במירוץ על המקום ה-${rank}, וצימצם את הפער ביניהם ל-₪${Math.round(gapAfter)} בלבד!`,
-        });
-        usedPlayerIds.add(chaserBefore[0]);
-        break;
+        const targetRank = rank;
+        const rankLabel = targetRank === 1
+          ? 'הפסגה והמקום ה-1'
+          : targetRank === 2
+          ? 'המקום ה-2 והסגנות'
+          : targetRank === 3
+          ? 'המקום ה-3 והפודיום'
+          : `המקום ה-${targetRank}`;
+
+        if (!usedPlayerIds.has(chaserBefore[0])) {
+          stories.push({
+            id: `gap_closed_${chaserBefore[0]}`,
+            icon: '⚔️',
+            type: 'top_takeover',
+            title: `סגירת פערים בצמרת: ${chaserName}`,
+            badge: `סגירת ₪${Math.round(closed)}`,
+            badgeVariant: 'amber',
+            playerName: chaserName,
+            description: `${chaserName} סגר פער של ₪${Math.round(closed)} מול ${leaderName} במירוץ על ${rankLabel}, וצימצם את הפער ביניהם ל-₪${Math.round(gapAfter)} בלבד!`,
+          });
+          usedPlayerIds.add(chaserBefore[0]);
+          break;
+        } else if (!usedPlayerIds.has(leaderBefore[0])) {
+          // If chaser was already featured (e.g. Oren in records), feature the LEADER defending their spot!
+          const leaderNowRank = yThrough.get(leaderBefore[0])?.rank || targetRank;
+          const isFirstPlace = leaderNowRank === 1;
+          const title = isFirstPlace
+            ? `קרב ההגנה על הפסגה: ${leaderName}`
+            : leaderNowRank === 2
+            ? `הקרב על הסגנות בצמרת: ${leaderName}`
+            : leaderNowRank === 3
+            ? `הקרב על הפודיום: ${leaderName}`
+            : `הקרב על המקום ה-${leaderNowRank}: ${leaderName}`;
+          const badge = isFirstPlace ? `שומר על הפסגה` : `שומר על מקום ${leaderNowRank}`;
+          const desc = isFirstPlace
+            ? `${leaderName} מגן בנחישות על הפסגה והמקום ה-1 בצמרת עונת ${year} מול המרדף הסוער של ${chaserName}, ומחזיק בפער של ₪${Math.round(gapAfter)}!`
+            : `${leaderName} מגן בנחישות על המקום ה-${leaderNowRank} בצמרת עונת ${year} מול המרדף הסוער של ${chaserName}, ומחזיק בפער של ₪${Math.round(gapAfter)}!`;
+
+          stories.push({
+            id: `title_defense_${leaderBefore[0]}`,
+            icon: '🛡️',
+            type: 'top_takeover',
+            title,
+            badge,
+            badgeVariant: 'amber',
+            playerName: leaderName,
+            description: desc,
+          });
+          usedPlayerIds.add(leaderBefore[0]);
+          break;
+        }
       }
     }
   }
@@ -659,6 +943,65 @@ function detectPeriodStories(
     }
   }
 
+  // Story 2b: Action Engine & Attendance (e.g. Segal / Eyal with high attendance & rebuys)
+  for (const p of allRanked) {
+    if (usedPlayerIds.has(p.playerId)) continue;
+    if (p.gamesPlayed >= Math.max(3, periodGames.length - 1) && p.totalRebuys >= 6) {
+      stories.push({
+        id: `action_anchor_${p.playerId}`,
+        icon: '🔥',
+        type: 'rank_surge',
+        title: `מנוע האקשן וההתמדה: ${p.playerName}`,
+        badge: `${p.gamesPlayed}/${periodGames.length} משחקים`,
+        badgeVariant: 'amber',
+        playerName: p.playerName,
+        description: `${p.playerName} הראה מחויבות ברזל עם ${p.gamesPlayed} התייצבויות מתוך ${periodGames.length} ערבים ${periodNoun}, דחף ${p.totalRebuys} קניות לקופה והיווה את הלב הפועם של האקשן סביב השולחן!`,
+      });
+      usedPlayerIds.add(p.playerId);
+      break;
+    }
+  }
+
+  // Story 2c: Season Top Tier Pillar (e.g. Eyal or Lichter anchoring top tier in season)
+  for (const p of allRanked) {
+    if (usedPlayerIds.has(p.playerId)) continue;
+    const t = yThrough.get(p.playerId);
+    if (t && t.rank <= 6 && t.profit > 0) {
+      stories.push({
+        id: `season_pillar_${p.playerId}`,
+        icon: '⚓',
+        type: 'rank_surge',
+        title: `עוגן בצמרת עונת ${year}: ${p.playerName}`,
+        badge: `מקום ${t.rank} בעונה`,
+        badgeVariant: 'blue',
+        playerName: p.playerName,
+        description: `${p.playerName} מבצר את מעמדו בצמרת עונת ${year} (מקום ${t.rank} עם רווח מצטבר של +₪${Math.round(t.profit)}) וממשיך להוות עמוד תווך סביב השולחן!`,
+      });
+      usedPlayerIds.add(p.playerId);
+      break;
+    }
+  }
+
+  // Story 2d: High Tempo & Aggression Catalyst (e.g. Lichter or Eyal driving high action / rebuys)
+  for (const p of allRanked) {
+    if (usedPlayerIds.has(p.playerId)) continue;
+    const avgRebuys = p.totalRebuys / (p.gamesPlayed || 1);
+    if (avgRebuys >= 3.8 && p.totalRebuys >= 8 && p.gamesPlayed >= 2) {
+      stories.push({
+        id: `high_tempo_${p.playerId}`,
+        icon: '⚡',
+        type: 'rank_surge',
+        title: `קצב משחק ואקשן גבוה: ${p.playerName}`,
+        badge: `${avgRebuys.toFixed(1)} קניות לערב`,
+        badgeVariant: 'amber',
+        playerName: p.playerName,
+        description: `${p.playerName} הזרים אנרגיה וקצב גבוה לקופות עם ${p.totalRebuys} קניות ב-${p.gamesPlayed} ערבים ${periodNoun} (ממוצע חריג של ${avgRebuys.toFixed(1)} לערב), ודחף את השולחן לרמות מתח גבוהות!`,
+      });
+      usedPlayerIds.add(p.playerId);
+      break;
+    }
+  }
+
   // Story 3: Check climbers in current year or all-time (player not yet used)
   const yearlyClimbers: { p: RecapPlayerEntry; delta: number; bRank: number; tRank: number }[] = [];
   for (const p of allRanked) {
@@ -675,15 +1018,18 @@ function detectPeriodStories(
 
   if (yearlyClimbers.length > 0) {
     const topC = yearlyClimbers[0];
+    const isBigJump = topC.delta >= 4;
     stories.push({
       id: `yearly_climber_${topC.p.playerId}`,
-      icon: '🚀',
+      icon: isBigJump ? '🚀' : '📈',
       type: 'rank_surge',
-      title: `זינוק בדירוג עונת ${year}: ${topC.p.playerName}`,
-      badge: `עלייה של ${topC.delta} מקומות`,
+      title: isBigJump ? `זינוק בדירוג עונת ${year}: ${topC.p.playerName}` : `התקדמות בדירוג עונת ${year}: ${topC.p.playerName}`,
+      badge: isBigJump ? `זינוק של ${topC.delta} מקומות` : `עלייה של ${topC.delta} שלבים`,
       badgeVariant: 'green',
       playerName: topC.p.playerName,
-      description: `${topC.p.playerName} מטפס ${topC.delta} שלבים בטבלת עונת ${year} ומזנק ממקום ${topC.bRank} למקום ה-${topC.tRank}!`,
+      description: isBigJump
+        ? `${topC.p.playerName} רושם זינוק ענק ומטפס ${topC.delta} שלבים בטבלת עונת ${year} ממקום ${topC.bRank} למקום ה-${topC.tRank}!`
+        : `${topC.p.playerName} מתקדם ${topC.delta} שלבים בטבלת עונת ${year} ומטפס ממקום ${topC.bRank} למקום ה-${topC.tRank}!`,
     });
     usedPlayerIds.add(topC.p.playerId);
   } else {
@@ -716,6 +1062,34 @@ function detectPeriodStories(
     }
   }
 
+  // Story 3b: Drops in season standings
+  const yearlyDrops: { p: RecapPlayerEntry; delta: number; bRank: number; tRank: number }[] = [];
+  for (const p of allRanked) {
+    if (usedPlayerIds.has(p.playerId)) continue;
+    const b = yBefore.get(p.playerId);
+    const t = yThrough.get(p.playerId);
+    if (!b || !t) continue;
+    const delta = t.rank - b.rank;
+    if (delta >= 2 && p.profit < 0) {
+      yearlyDrops.push({ p, delta, bRank: b.rank, tRank: t.rank });
+    }
+  }
+  yearlyDrops.sort((a, b) => b.delta - a.delta);
+  if (yearlyDrops.length > 0) {
+    const topDrop = yearlyDrops[0];
+    stories.push({
+      id: `yearly_drop_${topDrop.p.playerId}`,
+      icon: '📉',
+      type: 'rank_fall',
+      title: `נסיגה בדירוג עונת ${year}: ${topDrop.p.playerName}`,
+      badge: `ירידה של ${topDrop.delta} שלבים`,
+      badgeVariant: 'red',
+      playerName: topDrop.p.playerName,
+      description: `${topDrop.p.playerName} נסוג ${topDrop.delta} שלבים בטבלת עונת ${year} ממקום ${topDrop.bRank} למקום ה-${topDrop.tRank} בעקבות תקופה של ${topDrop.p.profit}₪.`,
+    });
+    usedPlayerIds.add(topDrop.p.playerId);
+  }
+
   // Story 4: The Sniper / High Precision Master (focusing on an active regular not yet used)
   const precisionCandidates = [...allRanked]
     .filter(p => !usedPlayerIds.has(p.playerId) && p.winRate >= 50 && p.gamesPlayed >= 3 && p.profit > 0)
@@ -736,27 +1110,75 @@ function detectPeriodStories(
     usedPlayerIds.add(precP.playerId);
   }
 
-  // Story 5: Resilient Grinder / Battling Tough Variance (regular player with lots of games facing cold deck)
-  const roughVolCandidates = [...allRanked]
-    .filter(p => !usedPlayerIds.has(p.playerId) && p.gamesPlayed >= Math.max(3, Math.ceil(periodGames.length * 0.4)) && p.profit <= -200)
+  // Story 5: Absent regular (established player with >= 3 games this year or >= 10 all-time who played 0 games this period)
+  if (periodGames.length >= 3) {
+    for (const [pId, pObj] of playerMap.entries()) {
+      if (pObj.type === 'guest' || usedPlayerIds.has(pId)) continue;
+      const allPriorGamesCount = allGP.filter(gp => gp.playerId === pId).length;
+      const priorYearCount = priorYearGPs.filter(gp => gp.playerId === pId).length;
+      // Core regular must have genuine volume (>= 5 games this year or >= 15 all-time)
+      if (priorYearCount < 5 && allPriorGamesCount < 15) continue;
+
+      const inPeriodGps = periodGP.filter(gp => gp.playerId === pId);
+      if (inPeriodGps.length === 0) {
+        stories.push({
+          id: `absent_${pId}`,
+          icon: '🏖️',
+          type: 'rank_fall',
+          title: `פגרה מהשולחן: ${pObj.name}`,
+          badge: `0 משחקים ${periodNoun}`,
+          badgeVariant: 'amber',
+          playerName: pObj.name,
+          description: `${pObj.name} לקח פגרה ${periodNoun} ולא התייצב לאף אחד מ-${periodGames.length} הערבים שהתקיימו. חסרונו הורגש באקשן סביב השולחן!`,
+        });
+        usedPlayerIds.add(pId);
+        break; // at most one absent regular story
+      }
+    }
+  }
+
+  // Story 6: Tough Period at the Table (authentic down-period description)
+  const roughCandidates = [...allRanked]
+    .filter(p => !usedPlayerIds.has(p.playerId) && p.profit <= -200 && p.gamesPlayed >= 2)
     .sort((a, b) => a.profit - b.profit);
 
-  if (roughVolCandidates.length > 0) {
-    const roughP = roughVolCandidates[0];
+  if (roughCandidates.length > 0) {
+    const roughP = roughCandidates[0];
+    const roughTitleNoun = periodType === 'year' ? 'עונה מאתגרת' : (periodType === 'h1' || periodType === 'h2') ? 'חציון מאתגר' : 'חודש קשוח';
     stories.push({
       id: `rough_volume_${roughP.playerId}`,
-      icon: '🛡️',
+      icon: '📉',
       type: 'rank_fall',
-      title: `לחימה מול סערת ואריאנס: ${roughP.playerName}`,
-      badge: 'סערת קלפים',
+      title: `${roughTitleNoun} בשולחן: ${roughP.playerName}`,
+      badge: `${roughP.profit}₪ ${periodNoun}`,
       badgeVariant: 'red',
       playerName: roughP.playerName,
-      description: `${roughP.playerName} התייצב ל-${roughP.gamesPlayed} ערבים ${periodNoun} ונלחם בעקביות מול גל חלוקות לא פשוט (${roughP.profit < 0 ? `-₪${Math.abs(roughP.profit)}` : `₪${roughP.profit}`}), אך ממשיך להיות עוגן של אקשן סביב השולחן.`,
+      description: `${roughP.playerName} חווה ${periodNoun} תקופה מאתגרת וספג הפסדים מצטברים של -₪${Math.abs(roughP.profit)} ב-${roughP.gamesPlayed} ערבים, אך ממשיך לספק נוכחות ואקשן סביב השולחן.`,
     });
     usedPlayerIds.add(roughP.playerId);
   }
 
-  // Story 6: Cementing Leader Status / Milestone
+  // Story 7: Action Generator (high rebuys among regular players)
+  const actionCandidates = [...allRanked]
+    .filter(p => !usedPlayerIds.has(p.playerId) && p.totalRebuys >= 4)
+    .sort((a, b) => b.totalRebuys - a.totalRebuys);
+
+  if (actionCandidates.length > 0) {
+    const actP = actionCandidates[0];
+    stories.push({
+      id: `action_gen_${actP.playerId}`,
+      icon: '🔥',
+      type: 'rank_surge',
+      title: `מחולל האקשן: ${actP.playerName}`,
+      badge: `${actP.totalRebuys} קניות`,
+      badgeVariant: 'amber',
+      playerName: actP.playerName,
+      description: `${actP.playerName} סיפק מנוע אקשן משמעותי ${periodNoun} עם ${actP.totalRebuys} קניות (ממוצע ${(actP.totalRebuys / actP.gamesPlayed).toFixed(1)} לערב)!`,
+    });
+    usedPlayerIds.add(actP.playerId);
+  }
+
+  // Story 8: Cementing Leader Status / Milestone
   if (champ && !usedPlayerIds.has(champ.playerId) && yThrough.get(champ.playerId)?.rank === 1 && champ.profit >= 300) {
     stories.push({
       id: `leader_cement_${champ.playerId}`,
@@ -852,6 +1274,21 @@ export function computePeriodRecap(
     }
   }
 
+  // Compute yearly and all-time attendance maps upfront
+  const yearGameIds = new Set(allGames.filter(g => getGameDate(g).getFullYear() === year).map(g => g.id));
+  const yearGpCounts = new Map<string, number>();
+  const allTimeGpCounts = new Map<string, number>();
+  allGP.forEach(gp => {
+    allTimeGpCounts.set(gp.playerId, (allTimeGpCounts.get(gp.playerId) || 0) + 1);
+    if (yearGameIds.has(gp.gameId)) {
+      yearGpCounts.set(gp.playerId, (yearGpCounts.get(gp.playerId) || 0) + 1);
+    }
+  });
+
+  const allHistoricalProfits = allGP
+    .map(gp => Number(gp.profit || 0))
+    .sort((a, b) => b - a);
+
   // Compute player stats (chronological order for streaks)
   const gameOrderIndex = new Map<string, number>();
   periodGames.forEach((g, idx) => gameOrderIndex.set(g.id, idx));
@@ -886,7 +1323,13 @@ export function computePeriodRecap(
           bestSingleWin = gp.profit;
           bestSingleWinDate = gDate;
         }
-        if (!globalBigHit || gp.profit > globalBigHit.profit) {
+
+        const yCnt = yearGpCounts.get(playerId) || 0;
+        const isGuestOr1Game = pObj?.type === 'guest' || yCnt <= 1;
+        const atRank = allHistoricalProfits.filter(v => v > gp.profit).length + 1;
+        // 1-game cameo/guest only qualifies for bigHit if it's a top 3 all-time single win in club history
+        const allowHit = !isGuestOr1Game || atRank <= 3;
+        if (allowHit && (!globalBigHit || gp.profit > globalBigHit.profit)) {
           globalBigHit = { playerName, profit: Math.round(gp.profit), date: gDate };
         }
       } else {
@@ -935,19 +1378,36 @@ export function computePeriodRecap(
 
   const podium = rankedList.slice(0, 3);
 
-  // Awards
-  // 1. Sniper (highest win rate among active players, tie-break by gamesPlayed then profit)
+  // Awards - Enforce that awards belong to regular players with sufficient games (never 1-game cameos)
+  const minAwardGames = periodType === 'month' ? Math.max(2, activeThreshold) : Math.max(3, activeThreshold);
+
+  // 1. Sniper (highest win rate among active players with >= minAwardGames; frequent guests eligible)
   const sniperCandidate = [...rankedList]
-    .filter(e => e.wins > 0)
+    .filter(e => {
+      const pObj = playerMap.get(e.playerId);
+      const yCnt = yearGpCounts.get(e.playerId) || 0;
+      const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+      return e.wins > 0 && e.gamesPlayed >= minAwardGames && isFrequent;
+    })
     .sort((a, b) => b.winRate - a.winRate || b.gamesPlayed - a.gamesPlayed || b.profit - a.profit)[0];
 
-  // 2. Hot streak (longest win streak in period across all players)
+  // 2. Hot streak (longest win streak in period across regular/frequent players)
   const streakCandidate = [...allPlayerEntries]
-    .filter(e => e.longestWinStreak >= 2)
+    .filter(e => {
+      const pObj = playerMap.get(e.playerId);
+      const yCnt = yearGpCounts.get(e.playerId) || 0;
+      const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+      return e.longestWinStreak >= 2 && isFrequent;
+    })
     .sort((a, b) => b.longestWinStreak - a.longestWinStreak || b.profit - a.profit)[0];
 
-  // 3. Rebuy King (highest average rebuys per game among active players, tie-break by totalRebuys then profit)
-  const eligibleForRebuy = rankedList.filter(e => e.totalRebuys > 0 && e.gamesPlayed > 0);
+  // 3. Rebuy King (highest average rebuys per game among active players)
+  const eligibleForRebuy = rankedList.filter(e => {
+    const pObj = playerMap.get(e.playerId);
+    const yCnt = yearGpCounts.get(e.playerId) || 0;
+    const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+    return e.totalRebuys > 0 && e.gamesPlayed >= (periodType === 'month' ? 2 : 3) && isFrequent;
+  });
   const atmCandidate = [...eligibleForRebuy].sort((a, b) => {
     const aAvg = a.totalRebuys / a.gamesPlayed;
     const bAvg = b.totalRebuys / b.gamesPlayed;
@@ -957,10 +1417,15 @@ export function computePeriodRecap(
     ? Math.round((atmCandidate.totalRebuys / atmCandidate.gamesPlayed) * 10) / 10
     : 0;
 
-  // 4. Fourth Award - guarantees a DISTINCT player from the Sniper!
+  // 4. Fourth Award - guarantees a DISTINCT player from the Sniper
   let fourthAward: FourthAward | undefined;
   const distinctStreakCandidate = [...allPlayerEntries]
-    .filter(e => e.playerName !== sniperCandidate?.playerName && e.longestWinStreak >= 2)
+    .filter(e => {
+      const pObj = playerMap.get(e.playerId);
+      const yCnt = yearGpCounts.get(e.playerId) || 0;
+      const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+      return e.playerName !== sniperCandidate?.playerName && e.longestWinStreak >= 2 && isFrequent;
+    })
     .sort((a, b) => b.longestWinStreak - a.longestWinStreak || b.profit - a.profit)[0];
 
   if (distinctStreakCandidate) {
@@ -974,7 +1439,12 @@ export function computePeriodRecap(
     };
   } else {
     const topAvgCandidate = [...rankedList]
-      .filter(e => e.playerName !== sniperCandidate?.playerName && e.avgProfit > 0)
+      .filter(e => {
+        const pObj = playerMap.get(e.playerId);
+        const yCnt = yearGpCounts.get(e.playerId) || 0;
+        const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+        return e.playerName !== sniperCandidate?.playerName && e.avgProfit > 0 && e.gamesPlayed >= minAwardGames && isFrequent;
+      })
       .sort((a, b) => b.avgProfit - a.avgProfit)[0];
 
     if (topAvgCandidate) {
@@ -988,7 +1458,12 @@ export function computePeriodRecap(
       };
     } else {
       const ironCandidate = [...allPlayerEntries]
-        .filter(e => e.playerName !== sniperCandidate?.playerName)
+        .filter(e => {
+          const pObj = playerMap.get(e.playerId);
+          const yCnt = yearGpCounts.get(e.playerId) || 0;
+          const isFrequent = pObj?.type !== 'guest' ? yCnt >= 2 : (yCnt >= 3 || e.gamesPlayed >= 2);
+          return e.playerName !== sniperCandidate?.playerName && isFrequent;
+        })
         .sort((a, b) => b.gamesPlayed - a.gamesPlayed || b.profit - a.profit)[0];
 
       if (ironCandidate) {
@@ -1064,8 +1539,17 @@ export function computePeriodRecap(
     playerMap,
     periodType,
     year,
-    month
+    month,
+    yearGpCounts
   );
+
+  const soloRecordPlayerIds = new Set<string>();
+  records.forEach(r => {
+    if (r.playerName && !r.playerName.includes(',')) {
+      const p = [...playerMap.values()].find(x => x.name === r.playerName);
+      if (p) soloRecordPlayerIds.add(p.id);
+    }
+  });
 
   const stories = detectPeriodStories(
     periodGames,
@@ -1077,8 +1561,55 @@ export function computePeriodRecap(
     podium[0],
     periodType,
     year,
-    month
+    month,
+    soloRecordPlayerIds,
+    yearGpCounts
   );
+
+  const coreRegularMap = new Map<string, {
+    playerId: string;
+    playerName: string;
+    gamesPlayed: number;
+    profit: number;
+    winRate: number;
+    totalRebuys: number;
+    status: string;
+  }>();
+
+  allPlayers.forEach(p => {
+    const isGuest = p.type === 'guest';
+    const yCnt = yearGpCounts.get(p.id) || 0;
+    const atCnt = allTimeGpCounts.get(p.id) || 0;
+    // Core members or frequent guests who attended many games
+    const isCore = (!isGuest && (yCnt >= 3 || (atCnt >= 15 && yCnt >= 1))) || (isGuest && (yCnt >= 3 || atCnt >= 15));
+    if (!isCore) return;
+
+    const pEntry = allPlayerEntries.find(e => e.playerId === p.id);
+    const gamesPlayed = pEntry ? pEntry.gamesPlayed : 0;
+    const profit = pEntry ? pEntry.profit : 0;
+    const winRate = pEntry ? pEntry.winRate : 0;
+    const totalRebuys = pEntry ? pEntry.totalRebuys : 0;
+    const status = gamesPlayed === 0
+      ? 'נעדר ולא שיחק כלל בתקופה זו (0 משחקים)'
+      : `${gamesPlayed} משחקים, ${profit >= 0 ? '+' : ''}₪${profit} (${winRate}% הצלחה, ${totalRebuys} קניות)`;
+
+    // Deduplicate by name if multiple player records exist with same name
+    const existing = coreRegularMap.get(p.name);
+    if (!existing || gamesPlayed > existing.gamesPlayed) {
+      coreRegularMap.set(p.name, {
+        playerId: p.id,
+        playerName: p.name,
+        gamesPlayed,
+        profit,
+        winRate,
+        totalRebuys,
+        status,
+      });
+    }
+  });
+
+  const regularPlayersSummary = [...coreRegularMap.values()]
+    .sort((a, b) => b.gamesPlayed - a.gamesPlayed || b.profit - a.profit);
 
   return {
     periodKey: buildPeriodKey(periodType, year, month),
@@ -1092,6 +1623,7 @@ export function computePeriodRecap(
     totalUniquePlayers: allPlayerEntries.length,
     activeThreshold,
     nonActivePlayers: nonActiveEntries,
+    regularPlayersSummary,
     totalPot,
     totalRebuys: Math.round(totalRebuys * 10) / 10,
     avgPotPerGame,

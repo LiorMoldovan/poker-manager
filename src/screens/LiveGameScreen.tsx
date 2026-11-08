@@ -2176,23 +2176,22 @@ const LiveGameScreen = () => {
                   type="button"
                   onClick={() => setEarlyExitPlayerId(player.id)}
                   title="סיום ערב מוקדם והזנת סה״כ צ׳יפים"
+                  aria-label="סיום ערב מוקדם"
                   style={{
                     background: 'rgba(148, 163, 184, 0.12)',
                     border: '1px solid rgba(148, 163, 184, 0.28)',
                     color: 'var(--text-muted)',
                     borderRadius: '6px',
-                    padding: '0.22rem 0.4rem',
-                    fontSize: '0.65rem',
-                    fontWeight: 600,
-                    fontFamily: 'Outfit, sans-serif',
+                    padding: '0.22rem 0.35rem',
+                    fontSize: '0.75rem',
                     cursor: 'pointer',
-                    whiteSpace: 'nowrap',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '0.15rem',
+                    justifyContent: 'center',
+                    lineHeight: 1,
                   }}
                 >
-                  🚪 סיים
+                  🚪
                 </button>
               </div>
             ) : null}

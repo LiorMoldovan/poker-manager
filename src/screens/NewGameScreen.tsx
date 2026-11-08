@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
@@ -269,6 +269,10 @@ const NewGameScreen = () => {
   }, [showPeriodDropdown]);
   const [publishedForecast, setPublishedForecast] = useState<ReturnType<typeof getPendingForecast>>(null);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
+  const publishedComboHistory = useMemo(() => {
+    if (!publishedForecast?.playerIds || publishedForecast.playerIds.length === 0) return null;
+    return getComboHistory(publishedForecast.playerIds);
+  }, [publishedForecast]);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Holds the source poll id (if user came here via "Start Scheduled Game")
@@ -425,9 +429,9 @@ const NewGameScreen = () => {
   const selectAll = () => {
     // Get IDs of players with type 'permanent' only
     const permanentIds = new Set(permanentPlayers.map(p => p.id));
-    const allPermanentSelected = permanentPlayers.length > 0 && 
+    const allPermanentSelected = permanentPlayers.length > 0 &&
       permanentPlayers.every(p => selectedIds.has(p.id));
-    
+
     if (allPermanentSelected) {
       // All permanent are selected - deselect ONLY permanent players
       setSelectedIds(prev => {
@@ -452,7 +456,7 @@ const NewGameScreen = () => {
       setError(t('newGame.emptyName'));
       return;
     }
-    
+
     if (getPlayerByName(trimmedName)) {
       setError(t('newGame.duplicateName'));
       return;
@@ -483,17 +487,17 @@ const NewGameScreen = () => {
       setError(t('newGame.activeGameExists'));
       return;
     }
-    
+
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     const hasLocations = (getSettings().locations ?? DEFAULT_LOCATIONS).length > 0;
     if (hasLocations && !location) {
       setError(t('newGame.selectLocation'));
       return;
     }
-    
+
     // Check if there's a pending forecast
     const { matches, pending, addedPlayers, removedPlayers } = checkForecastMatch(Array.from(selectedIds));
-    
+
     if (pending) {
       if (matches) {
         // 100% match - auto-link and proceed
@@ -509,13 +513,13 @@ const NewGameScreen = () => {
           });
           return forecast?.playerName || id;
         });
-        
+
         setMismatchInfo({
           addedPlayers: addedNames,
           removedPlayers: removedNames,
-          pendingDate: new Date(pending.createdAt).toLocaleDateString('he-IL', { 
-            weekday: 'short', 
-            day: 'numeric', 
+          pendingDate: new Date(pending.createdAt).toLocaleDateString('he-IL', {
+            weekday: 'short',
+            day: 'numeric',
             month: 'short',
             hour: '2-digit',
             minute: '2-digit'
@@ -528,12 +532,12 @@ const NewGameScreen = () => {
       startGameWithForecast(undefined);
     }
   };
-  
+
   const startGameWithForecast = async (forecasts?: GameForecast[]) => {
     hapticSuccess();
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     const game = createGame(Array.from(selectedIds), location || undefined, forecasts);
-    
+
     if (forecasts) {
       linkForecastToGame(game.id);
     }
@@ -659,7 +663,7 @@ const NewGameScreen = () => {
 
     navigate(`/live-game/${game.id}`, { state: { ttsLoading: willGenerateTTS } });
   };
-  
+
   // Handle mismatch: Generate new forecast
   const handleUpdateForecast = () => {
     setShowMismatchDialog(false);
@@ -667,7 +671,7 @@ const NewGameScreen = () => {
     setPublishedForecast(null);
     handleShowForecast(); // Generate new forecast for current players
   };
-  
+
   // Handle mismatch: Keep old forecast (only compare matching players)
   const handleKeepOldForecast = () => {
     setShowMismatchDialog(false);
@@ -676,7 +680,7 @@ const NewGameScreen = () => {
       startGameWithForecast(pending.forecasts);
     }
   };
-  
+
   // Handle mismatch: Start without forecast
   const handleStartWithoutForecast = () => {
     setShowMismatchDialog(false);
@@ -684,7 +688,7 @@ const NewGameScreen = () => {
     setPublishedForecast(null);
     startGameWithForecast(undefined);
   };
-  
+
   const handlePublishForecast = () => {
     publishPendingForecast(true);
     setPublishedForecast(getPendingForecast());
@@ -712,6 +716,9 @@ const NewGameScreen = () => {
     }));
     setAiForecasts(restored);
     if (publishedForecast.aiModel) setAiModelName(publishedForecast.aiModel);
+    if (publishedForecast.playerIds && publishedForecast.playerIds.length > 0) {
+      setComboHistory(getComboHistory(publishedForecast.playerIds));
+    }
     setShowForecast(true);
   };
 
@@ -721,12 +728,12 @@ const NewGameScreen = () => {
   };
 
   // ============ SMART FORECAST SYSTEM WITH DYNAMIC HIGHLIGHTS ============
-  
+
   const isFemale = (name: string): boolean => {
     const player = players.find(p => p.name === name);
     return player?.gender === 'female';
   };
-  
+
   interface RecentAnalysis {
     recentWins: number;
     recentLosses: number;
@@ -738,29 +745,29 @@ const NewGameScreen = () => {
     daysSinceLastGame: number;
     isActive: boolean; // played in last 2 months
   }
-  
+
   // Calculate days since last game
   const getDaysSinceLastGame = (stats: PlayerStats): number => {
     const lastGames = stats.lastGameResults || [];
     if (lastGames.length === 0) return 999;
-    
+
     const lastGameDate = lastGames[0]?.date;
     if (!lastGameDate) return 999;
-    
+
     const lastDate = new Date(lastGameDate);
     const now = new Date();
     return Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
   };
-  
+
   // Generate DYNAMIC personalized highlight based on ACTUAL recency
   const generateDynamicHighlight = (stats: PlayerStats, daysSince: number, playerName: string): string => {
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
     if (gamesCount === 0) return '';
-    
+
     const fem = isFemale(playerName);
     const g = (m: string, f: string) => fem ? f : m;
-    
+
     const recentWins = lastGames.filter(g2 => g2.profit > 0).length;
     const recentLosses = lastGames.filter(g2 => g2.profit < 0).length;
     const recentProfit = lastGames.reduce((sum, g2) => sum + g2.profit, 0);
@@ -770,18 +777,18 @@ const NewGameScreen = () => {
     const winPct = Math.round(stats.winPercentage);
     const totalProfit = Math.round(stats.totalProfit);
     const totalGames = stats.gamesPlayed;
-    
+
     // Find best and worst games
     const bestRecent = Math.max(...lastGames.map(g2 => g2.profit));
     const worstRecent = Math.min(...lastGames.map(g2 => g2.profit));
-    
+
     // Determine time context
     const isActive = daysSince <= 60; // played in last 2 months
     const monthsAgo = Math.floor(daysSince / 30);
-    
+
     // Collect all possible insights with CORRECT time context
     const insights: { priority: number; text: string }[] = [];
-    
+
     // === ACTIVE PLAYERS (played recently) ===
     if (isActive) {
       // HOT STREAK
@@ -794,7 +801,7 @@ const NewGameScreen = () => {
       } else if (streak === 2) {
         insights.push({ priority: 60, text: `שני נצחונות רצופים - אולי תחילת רצף חם?` });
       }
-      
+
       // COLD STREAK  
       if (streak <= -4) {
         insights.push({ priority: 100, text: `❄️ ${Math.abs(streak)} הפסדים ברצף - תקופה קשה, אבל כל רצף נשבר מתישהו` });
@@ -804,21 +811,21 @@ const NewGameScreen = () => {
       } else if (streak === -2) {
         insights.push({ priority: 60, text: `שני הפסדים אחרונים - הפעם ההזדמנות לשבור את הרצף` });
       }
-      
+
       // IMPROVEMENT vs HISTORY (only if active)
       if (recentAvg > overallAvg + 30) {
         insights.push({ priority: 90, text: `📈 שיפור דרמטי! ממוצע של \u200E+${recentAvg} במשחקים האחרונים, הרבה מעל הממוצע ההיסטורי (\u200E${overallAvg})` });
       } else if (recentAvg > overallAvg + 15 && gamesCount >= 4) {
         insights.push({ priority: 75, text: `📈 בעלייה ברורה: ממוצע ${recentAvg > 0 ? '\u200E+' : '\u200E'}${recentAvg} במשחקים האחרונים לעומת \u200E${overallAvg} בסה"כ` });
       }
-      
+
       // DECLINE vs HISTORY (only if active)
       if (recentAvg < overallAvg - 30) {
         insights.push({ priority: 90, text: `📉 ירידה חדה! ממוצע \u200E${recentAvg} במשחקים האחרונים - הרבה מתחת לממוצע ההיסטורי (${overallAvg > 0 ? '\u200E+' : '\u200E'}${overallAvg})` });
       } else if (recentAvg < overallAvg - 15 && gamesCount >= 4) {
         insights.push({ priority: 75, text: `📉 ירידה בביצועים: \u200E${recentAvg} ממוצע במשחקים האחרונים, לעומת ${overallAvg > 0 ? '\u200E+' : '\u200E'}${overallAvg} היסטורית` });
       }
-      
+
       // DOMINANT PERFORMANCE
       if (recentWins >= gamesCount - 1 && gamesCount >= 4) {
         insights.push({ priority: 85, text: `שליטה מוחלטת: ${recentWins} מתוך ${gamesCount} משחקים אחרונים ${g('סיים', 'סיימה')} ברווח!` });
@@ -826,7 +833,7 @@ const NewGameScreen = () => {
         insights.push({ priority: 85, text: `${g('מתקשה', 'מתקשה')} מאוד: רק ${recentWins} מתוך ${gamesCount} משחקים אחרונים ברווח` });
       }
     }
-    
+
     // === INACTIVE PLAYERS (haven't played in a while) - SARCASTIC! ===
     else {
       // Time since last game - with cynicism!
@@ -847,47 +854,47 @@ const NewGameScreen = () => {
         insights.push({ priority: 73, text: `⏰ לא ${g('היה', 'הייתה')} פה חודשיים. מה קרה, ${g('פחדת', 'פחדת')} מאיתנו?` });
       }
     }
-    
+
     // === HISTORICAL PATTERNS (always relevant) ===
-    
+
     // BIG WINS
     if (bestRecent >= 100) {
       insights.push({ priority: 70, text: `💰 הנצחון הגדול: \u200E+${bestRecent} - ${g('מוכיח שכשהוא בפורמה, הוא יכול', 'מוכיחה שכשהיא בפורמה, היא יכולה')} לקחת הרבה` });
     } else if (bestRecent >= 60 && recentAvg < 0) {
       insights.push({ priority: 65, text: `${g('יודע', 'יודעת')} לנצח גדול (\u200E+${bestRecent}) אבל לא ${g('עקבי', 'עקבית')}` });
     }
-    
+
     // BIG LOSSES
     if (worstRecent <= -100) {
       insights.push({ priority: 70, text: `💸 הפסד כואב של ${worstRecent} - ${g('יודע', 'יודעת')} גם ליפול חזק` });
     } else if (worstRecent <= -60 && recentAvg > 0) {
       insights.push({ priority: 65, text: `${g('גם כשהוא מפסיד, הוא מפסיד', 'גם כשהיא מפסידה, היא מפסידה')} גדול (${worstRecent}) - אבל בסופו של דבר ברווח` });
     }
-    
+
     // WIN RATE
     if (winPct >= 65) {
       insights.push({ priority: 70, text: `🎯 אחוז נצחון של ${winPct}% מתוך ${totalGames} משחקים - ${g('שחקן מנצח מובהק', 'שחקנית מנצחת מובהקת')}` });
     } else if (winPct <= 35 && totalGames >= 5) {
       insights.push({ priority: 70, text: `😅 רק ${winPct}% נצחונות מתוך ${totalGames} משחקים - אבל ${g('ממשיך', 'ממשיכה')} לנסות` });
     }
-    
+
     // COMEBACK POTENTIAL
     if (totalProfit < -200 && recentAvg > 10 && isActive) {
       insights.push({ priority: 80, text: `🔄 בדרך לקאמבק? ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)} בסה"כ, אבל בביצועים האחרונים יש שיפור` });
     } else if (totalProfit < -200) {
       insights.push({ priority: 65, text: `📊 ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)} לאורך ההיסטוריה - השאלה אם ${g('הוא למד', 'היא למדה')} משהו` });
     }
-    
+
     // LOSING THE EDGE
     if (totalProfit > 200 && recentAvg < -10 && isActive) {
       insights.push({ priority: 80, text: `⚠️ ${g('היה מרוויח', 'הייתה מרוויחה')} גדול (\u200E+${totalProfit} כולל) אבל הביצועים האחרונים מדאיגים` });
     }
-    
+
     // VOLATILE
     if (bestRecent - worstRecent > 150) {
       insights.push({ priority: 55, text: `🎢 ${g('שחקן', 'שחקנית')} של קיצוניות: בין \u200E+${bestRecent} ל-\u200E${Math.abs(worstRecent)} - ${g('איתו', 'איתה')} אף פעם לא יודעים` });
     }
-    
+
     // TOTAL PROFIT MILESTONES
     if (totalProfit > 500) {
       insights.push({ priority: 50, text: `💎 רווח כולל של \u200E+${totalProfit} מ-${totalGames} משחקים - ${g('אחד המנצחים הגדולים', 'אחת המנצחות הגדולות')}` });
@@ -895,12 +902,12 @@ const NewGameScreen = () => {
     } else if (totalProfit < -500) {
       insights.push({ priority: 50, text: `📊 ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)} לאורך ${totalGames} משחקים - הספונסר שלנו` });
     }
-    
+
     // BALANCED
     if (Math.abs(recentAvg) <= 5 && recentWins === recentLosses && gamesCount >= 4) {
       insights.push({ priority: 50, text: `⚖️ ${g('מאוזן', 'מאוזנת')} להפליא: ${recentWins} נצחונות ו-${recentLosses} הפסדים - לא נוטה לשום כיוון` });
     }
-    
+
     // DEFAULT summaries based on data quality
     if (totalGames >= 10) {
       insights.push({ priority: 35, text: `${totalGames} משחקים בהיסטוריה, ${winPct}% נצחונות, ממוצע ${overallAvg >= 0 ? '\u200E+' : '\u200E'}${overallAvg} למשחק` });
@@ -910,48 +917,48 @@ const NewGameScreen = () => {
     } else {
       insights.push({ priority: 25, text: `עדיין ${g('מתחיל', 'מתחילה')}: רק ${totalGames} משחקים בהיסטוריה` });
     }
-    
+
     // RANDOM SELECTION from top candidates
     insights.sort((a, b) => b.priority - a.priority);
-    
+
     if (insights.length === 0) return '';
     if (insights.length === 1) return insights[0].text;
-    
+
     // Get top tier (within 15 points of highest priority)
     const topPriority = insights[0].priority;
     const topTier = insights.filter(i => i.priority >= topPriority - 15);
-    
+
     // Weighted random selection
     const totalWeight = topTier.reduce((sum, i) => sum + i.priority, 0);
     let random = Math.random() * totalWeight;
-    
+
     for (const insight of topTier) {
       random -= insight.priority;
       if (random <= 0) return insight.text;
     }
-    
+
     return topTier[Math.floor(Math.random() * topTier.length)].text;
   };
-  
+
   const analyzeRecent = (stats: PlayerStats): RecentAnalysis => {
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
     const daysSinceLastGame = getDaysSinceLastGame(stats);
     const isActive = daysSinceLastGame <= 60;
-    
+
     if (gamesCount === 0) {
       return {
         recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0,
         gamesCount: 0, trend: 'stable', highlights: 'שחקן חדש', daysSinceLastGame: 0, isActive: false
       };
     }
-    
+
     const recentWins = lastGames.filter(g => g.profit > 0).length;
     const recentLosses = lastGames.filter(g => g.profit < 0).length;
     const recentProfit = lastGames.reduce((sum, g) => sum + g.profit, 0);
     const recentAvg = Math.round(recentProfit / gamesCount);
     const streak = stats.currentStreak;
-    
+
     // Determine trend (only relevant for active players)
     let trend: RecentAnalysis['trend'] = 'stable';
     if (isActive) {
@@ -960,16 +967,16 @@ const NewGameScreen = () => {
       else if (recentAvg > stats.avgProfit + 15) trend = 'improving';
       else if (recentAvg < stats.avgProfit - 15) trend = 'declining';
     }
-    
+
     // Generate dynamic personalized highlight with recency context
     const highlights = generateDynamicHighlight(stats, daysSinceLastGame, stats.playerName);
-    
+
     return { recentWins, recentLosses, recentProfit, recentAvg, gamesCount, trend, highlights, daysSinceLastGame, isActive };
   };
 
   // Generate CREATIVE forecast sentence - LONGER and more engaging with GENDER SUPPORT
   const generateCreativeSentence = (
-    name: string, 
+    name: string,
     _stats: PlayerStats,
     recent: RecentAnalysis,
     expectedOutcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss',
@@ -978,10 +985,10 @@ const NewGameScreen = () => {
     const { trend, isActive, daysSinceLastGame } = recent;
     const monthsAway = Math.floor(daysSinceLastGame / 30);
     const female = isFemale(name);
-    
+
     // Gender helper - returns [male, female] forms
     const g = (m: string, f: string) => female ? f : m;
-    
+
     // INACTIVE PLAYERS - returning after long break (SARCASTIC!)
     if (!isActive && monthsAway >= 12) {
       // Year+ absence - maximum sarcasm
@@ -994,7 +1001,7 @@ const NewGameScreen = () => {
       ];
       return yearAbsenceSentences[Math.floor(Math.random() * yearAbsenceSentences.length)];
     }
-    
+
     if (!isActive && monthsAway >= 6) {
       // Very long absence - extra sarcastic
       const veryLongAbsenceSentences = [
@@ -1008,7 +1015,7 @@ const NewGameScreen = () => {
       ];
       return veryLongAbsenceSentences[Math.floor(Math.random() * veryLongAbsenceSentences.length)];
     }
-    
+
     if (!isActive && monthsAway >= 3) {
       // Medium absence - moderately sarcastic
       const returningSentences = [
@@ -1022,7 +1029,7 @@ const NewGameScreen = () => {
       ];
       return returningSentences[Math.floor(Math.random() * returningSentences.length)];
     }
-    
+
     // Hot streak sentences - many options for variety
     if (trend === 'hot') {
       const sentences = [
@@ -1036,7 +1043,7 @@ const NewGameScreen = () => {
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
-    
+
     // Cold streak sentences
     if (trend === 'cold') {
       const sentences = [
@@ -1050,7 +1057,7 @@ const NewGameScreen = () => {
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
-    
+
     // Improving trend
     if (trend === 'improving') {
       const sentences = [
@@ -1063,7 +1070,7 @@ const NewGameScreen = () => {
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
-    
+
     // Declining trend
     if (trend === 'declining') {
       const sentences = [
@@ -1076,7 +1083,7 @@ const NewGameScreen = () => {
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
-    
+
     // Surprise prediction
     if (isSurprise) {
       if (expectedOutcome.includes('win')) {
@@ -1099,7 +1106,7 @@ const NewGameScreen = () => {
         return sentences[Math.floor(Math.random() * sentences.length)];
       }
     }
-    
+
     // Regular predictions - fun and dramatic with LONGER sentences
     switch (expectedOutcome) {
       case 'big_win':
@@ -1112,7 +1119,7 @@ const NewGameScreen = () => {
           `${name} לא ${g('בא', 'באה')} לשחק - ${g('הוא בא', 'היא באה')} לשלוט. וזה בדיוק מה ${g('שהוא כנראה יעשה', 'שהיא כנראה תעשה')}`,
         ];
         return bigWinSentences[Math.floor(Math.random() * bigWinSentences.length)];
-        
+
       case 'win':
         const winSentences = [
           `${name} בפורמה טובה ויש ${g('לו', 'לה')} סיכוי ממשי לצאת עם רווח יפה הפעם`,
@@ -1123,7 +1130,7 @@ const NewGameScreen = () => {
           `${name} ${g('בא מוכן ויודע', 'באה מוכנה ויודעת')} מה ${g('הוא עושה', 'היא עושה')} - צפו לערב טוב ${g('עבורו', 'עבורה')}`,
         ];
         return winSentences[Math.floor(Math.random() * winSentences.length)];
-        
+
       case 'slight_win':
         const slightWinSentences = [
           `${name} עם יתרון קטן אבל משמעותי - לא ${g('יגרום', 'תגרום')} לאף אחד לפחד, אבל בהחלט ${g('יכול', 'יכולה')} להפתיע`,
@@ -1134,7 +1141,7 @@ const NewGameScreen = () => {
           `${name} לא ${g('יגנוב', 'תגנוב')} את ההצגה, אבל בהחלט ${g('יכול', 'יכולה')} להפתיע ולסיים ברווח קטן`,
         ];
         return slightWinSentences[Math.floor(Math.random() * slightWinSentences.length)];
-        
+
       case 'neutral':
         const neutralSentences = [
           `${name} ${g('הוא', 'היא')} חידה מוחלטת הערב - הנתונים לא נותנים שום רמז לאיזה כיוון ${g('הוא', 'היא')} ילך`,
@@ -1145,7 +1152,7 @@ const NewGameScreen = () => {
           `${name} ${g('יכול', 'יכולה')} להפתיע לכל כיוון - גם ניצחון גדול וגם הפסד כואב אפשריים לגמרי`,
         ];
         return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
-        
+
       case 'slight_loss':
         const slightLossSentences = [
           `${name} ${g('צריך', 'צריכה')} קצת מזל הפעם - הנתונים לא לגמרי ${g('לצידו', 'לצידה')}, אבל זה לא אומר ${g('שהוא', 'שהיא')} לא ${g('יכול', 'יכולה')} להפוך את הקערה`,
@@ -1156,7 +1163,7 @@ const NewGameScreen = () => {
           `${name} ${g('יצטרך', 'תצטרך')} לעבוד קשה הפעם - היתרון לא ${g('לצידו', 'לצידה')}, אבל ${g('שחקנים טובים יודעים', 'שחקניות טובות יודעות')} איך להתגבר`,
         ];
         return slightLossSentences[Math.floor(Math.random() * slightLossSentences.length)];
-        
+
       case 'loss':
         const lossSentences = [
           `${name} לא בעמדה הכי טובה הערב - הנתונים מראים ${g('שהוא יצטרך', 'שהיא תצטרך')} הרבה מזל כדי לשנות את המגמה`,
@@ -1167,7 +1174,7 @@ const NewGameScreen = () => {
           `${name} לא ${g('במיטבו', 'במיטבה')} על פי הנתונים - השאלה היא האם ${g('הוא יצליח', 'היא תצליח')} להפתיע למרות הכל`,
         ];
         return lossSentences[Math.floor(Math.random() * lossSentences.length)];
-        
+
       case 'big_loss':
         const bigLossSentences = [
           `${name} ${g('הוא הספונסר הלא רשמי', 'היא הספונסרית הלא רשמית')} של הקבוצה - ${g('בזכותו', 'בזכותה')} כולנו מרוויחים יותר, ועל זה אנחנו מודים`,
@@ -1179,7 +1186,7 @@ const NewGameScreen = () => {
         ];
         return bigLossSentences[Math.floor(Math.random() * bigLossSentences.length)];
     }
-    
+
     return `${name} - ערב מסקרן ${g('מחכה לו', 'מחכה לה')}, נראה מה יקרה`;
   };
 
@@ -1187,7 +1194,7 @@ const NewGameScreen = () => {
   const getNewPlayerSentence = (name: string): string => {
     const female = isFemale(name);
     const g = (m: string, f: string) => female ? f : m;
-    
+
     const sentences = [
       `${name} ${g('נכנס', 'נכנסת')} למשחק בלי היסטוריה - דף חלק לגמרי. הפעם נתחיל לכתוב את הסיפור ${g('שלו', 'שלה')}`,
       `אין לנו שום מידע על ${name} - ${g('הוא יכול להיות גאון פוקר או הפסד מובטח', 'היא יכולה להיות גאונת פוקר או הפסד מובטח')}. הפעם נגלה`,
@@ -1487,23 +1494,23 @@ const NewGameScreen = () => {
         const teaserBase = `pfc-teaser-${new Date().toISOString().split('T')[0]}`;
         files.push(await canvasToForecastShareFile(teaserCanvas, teaserBase));
       }
-      
+
       // Split sorted forecasts into chunks (players only, no teaser)
       const chunks: any[][] = [];
       for (let i = 0; i < sortedForecasts.length; i += PLAYERS_PER_PAGE) {
         chunks.push(sortedForecasts.slice(i, i + PLAYERS_PER_PAGE));
       }
-      
+
       // Create a screenshot for each player chunk
       for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
         const chunk = chunks[chunkIndex];
         const totalPages = chunks.length + (hasTeaser ? 1 : 0);
         const pageNumber = chunkIndex + (hasTeaser ? 2 : 1);
         const pageNum = totalPages > 1 ? ` (${pageNumber}/${totalPages})` : '';
-        
+
         const container = document.createElement('div');
         container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
-        
+
         container.innerHTML = `
           <div style="text-align: center; margin-bottom: 1.25rem;">
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">${isAI ? '🤖' : '🔮'}</div>
@@ -1516,22 +1523,22 @@ const NewGameScreen = () => {
           </div>
           <div style="margin-bottom: 1rem;">
             ${chunk.map((forecast: any, index: number) => {
-              const isFirst = chunkIndex === 0 && index === 0;
-              const isSurprise = forecast.isSurprise || forecast.surprise;
-              const expected = forecast.expectedProfit ?? forecast.expected ?? 0;
-              const sentence = forecast.sentence || '';
-              const highlight = forecast.highlight || '';
-              const name = forecast.name || forecast.playerName || '';
-              
-              let bgColor = expected >= 0 ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)';
-              let borderColor = expected >= 0 ? '#22c55e' : '#ef4444';
-              
-              if (isSurprise) {
-                bgColor = 'rgba(168, 85, 247, 0.15)';
-                borderColor = '#a855f7';
-              }
-              
-              return `
+          const isFirst = chunkIndex === 0 && index === 0;
+          const isSurprise = forecast.isSurprise || forecast.surprise;
+          const expected = forecast.expectedProfit ?? forecast.expected ?? 0;
+          const sentence = forecast.sentence || '';
+          const highlight = forecast.highlight || '';
+          const name = forecast.name || forecast.playerName || '';
+
+          let bgColor = expected >= 0 ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)';
+          let borderColor = expected >= 0 ? '#22c55e' : '#ef4444';
+
+          if (isSurprise) {
+            bgColor = 'rgba(168, 85, 247, 0.15)';
+            borderColor = '#a855f7';
+          }
+
+          return `
                 <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: ${bgColor}; ${isRTL ? `border-right: 4px solid ${borderColor}` : `border-left: 4px solid ${borderColor}`};">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                     <span style="font-weight: 700; font-size: 1rem; color: #f1f5f9;">
@@ -1547,15 +1554,15 @@ const NewGameScreen = () => {
                   </div>
                 </div>
               `;
-            }).join('')}
+        }).join('')}
           </div>
           <div style="text-align: center; font-size: 0.65rem; color: #94a3b8; opacity: 0.5;">
             Poker Manager 🎲${isAI ? ' + AI' : ''}
           </div>
         `;
-        
+
         document.body.appendChild(container);
-        
+
         // Capture screenshot
         const canvas = await html2canvas(container, {
           backgroundColor: '#0f172a',
@@ -1594,7 +1601,7 @@ const NewGameScreen = () => {
     const currentYear = new Date().getFullYear();
     const currentHalf = new Date().getMonth() < 6 ? 1 : 2;
     const halfStartMonth = currentHalf === 1 ? 0 : 6;
-    
+
     // Helper to calculate player stats for a date range
     const calculateStatsForPeriod = (
       startDate?: Date,
@@ -1606,16 +1613,16 @@ const NewGameScreen = () => {
         if (endDate && gameDate > endDate) return false;
         return true;
       });
-      
+
       const playerStats = new Map<string, { name: string; profit: number; gamesPlayed: number }>();
-      
+
       for (const gp of allGamePlayers) {
         const game = filteredGames.find(g => g.id === gp.gameId);
         if (!game) continue;
-        
+
         const player = allPlayersList.find(p => p.id === gp.playerId);
         if (!player) continue;
-        
+
         const current = playerStats.get(player.name) || { name: player.name, profit: 0, gamesPlayed: 0 };
         playerStats.set(player.name, {
           name: player.name,
@@ -1623,17 +1630,17 @@ const NewGameScreen = () => {
           gamesPlayed: current.gamesPlayed + 1
         });
       }
-      
+
       return { playerStats, totalGames: filteredGames.length };
     };
-    
+
     // ALL-TIME rankings
     const { playerStats: allTimeStats, totalGames: allTimeTotalGames } = calculateStatsForPeriod();
     const allTimeThreshold = Math.ceil(allTimeTotalGames * 0.33);
     const allTimeActive = [...allTimeStats.values()]
       .filter(p => p.gamesPlayed >= allTimeThreshold)
       .sort((a, b) => b.profit - a.profit);
-    
+
     // CURRENT YEAR rankings
     const yearStart = new Date(currentYear, 0, 1);
     const { playerStats: yearStats, totalGames: yearTotalGames } = calculateStatsForPeriod(yearStart);
@@ -1641,7 +1648,7 @@ const NewGameScreen = () => {
     const yearActive = [...yearStats.values()]
       .filter(p => p.gamesPlayed >= yearThreshold)
       .sort((a, b) => b.profit - a.profit);
-    
+
     // CURRENT HALF rankings
     const halfStart = new Date(currentYear, halfStartMonth, 1);
     const halfEnd = new Date(currentYear, halfStartMonth + 6, 0);
@@ -1650,15 +1657,15 @@ const NewGameScreen = () => {
     const halfActive = [...halfStats.values()]
       .filter(p => p.gamesPlayed >= halfThreshold)
       .sort((a, b) => b.profit - a.profit);
-    
+
     return {
       allTime: {
         totalActivePlayers: allTimeActive.length,
         totalGames: allTimeTotalGames,
         threshold: allTimeThreshold,
-        rankings: allTimeActive.map((p, i) => ({ 
-          name: p.name, 
-          rank: i + 1, 
+        rankings: allTimeActive.map((p, i) => ({
+          name: p.name,
+          rank: i + 1,
           profit: p.profit,
           gamesPlayed: p.gamesPlayed
         }))
@@ -1668,9 +1675,9 @@ const NewGameScreen = () => {
         totalActivePlayers: yearActive.length,
         totalGames: yearTotalGames,
         threshold: yearThreshold,
-        rankings: yearActive.map((p, i) => ({ 
-          name: p.name, 
-          rank: i + 1, 
+        rankings: yearActive.map((p, i) => ({
+          name: p.name,
+          rank: i + 1,
           profit: p.profit,
           gamesPlayed: p.gamesPlayed
         }))
@@ -1681,9 +1688,9 @@ const NewGameScreen = () => {
         totalActivePlayers: halfActive.length,
         totalGames: halfTotalGames,
         threshold: halfThreshold,
-        rankings: halfActive.map((p, i) => ({ 
-          name: p.name, 
-          rank: i + 1, 
+        rankings: halfActive.map((p, i) => ({
+          name: p.name,
+          rank: i + 1,
           profit: p.profit,
           gamesPlayed: p.gamesPlayed
         }))
@@ -1698,10 +1705,10 @@ const NewGameScreen = () => {
       return;
     }
     if (overrideIds) setSelectedIds(overrideIds);
-    
+
     // Check if AI is available
     const hasAIKey = !!getGeminiApiKey();
-    
+
     if (hasAIKey) {
       // Use AI forecasts
       setShowForecast(true);
@@ -1709,16 +1716,16 @@ const NewGameScreen = () => {
       setAiError(null);
       setAiProxyDown(false);
       setAiForecasts(null);
-      
+
       try {
         const selectedPlayers = players.filter(p => ids.has(p.id));
         const allGames = getAllGames();
         const gameLocationMap = new Map(allGames.map(g => [g.id, g.location]));
-        
+
         const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
           const stats = getStatsForPlayer(player.id);
           const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
-          
+
           return {
             name: player.name,
             isFemale: isFemale(player.name),
@@ -1747,7 +1754,7 @@ const NewGameScreen = () => {
             isActive: daysSince <= 60
           };
         });
-        
+
         const globalRankings = calculateGlobalRankings();
 
         const settings = getSettings();
@@ -1780,7 +1787,7 @@ const NewGameScreen = () => {
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
-        
+
         if (err.message === 'NO_API_KEY' || err.message?.includes('aiKeyRequired')) {
           // No key configured — fall back to the static forecast silently.
           // The <AIKeyMissingNotice/> beneath the forecast button row
@@ -1816,10 +1823,10 @@ const NewGameScreen = () => {
           // Start countdown timer for rate limit
           setAiError('⏳ Rate limit reached. Retry countdown starting...');
           setRetryCountdown(60); // Start 60 second countdown
-          
+
           // Clear any existing timer
           if (retryTimerRef.current) clearInterval(retryTimerRef.current);
-          
+
           // Start countdown
           retryTimerRef.current = setInterval(() => {
             setRetryCountdown(prev => {
@@ -1831,7 +1838,7 @@ const NewGameScreen = () => {
               return prev - 1;
             });
           }, 1000);
-          
+
           // Don't fallback to static - let user retry
         } else {
           setAiError(`AI error: ${err.message}. Using static forecasts.`);
@@ -1843,7 +1850,7 @@ const NewGameScreen = () => {
       const staticForecasts = generateForecasts();
       setCachedForecasts(staticForecasts);
       setShowForecast(true);
-      
+
       // Save to pending forecast storage
       const forecastsToSave: GameForecast[] = staticForecasts.map(f => ({
         playerName: f.player.name,
@@ -1855,6 +1862,263 @@ const NewGameScreen = () => {
       setPublishedForecast(getPendingForecast());
     }
   };
+
+  const renderComboHistoryCard = (ch: ComboHistory) => (
+    <div style={{
+      padding: '0.85rem 1rem',
+      marginBottom: '1rem',
+      borderRadius: '12px',
+      background: ch.isFirstTime
+        ? (ch.nearCombo
+          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08))'
+          : 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))')
+        : 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08))',
+      border: `1px solid ${ch.isFirstTime ? (ch.nearCombo ? 'rgba(59, 130, 246, 0.3)' : 'rgba(34, 197, 94, 0.3)') : 'rgba(251, 191, 36, 0.3)'}`,
+      textAlign: isRTL ? 'right' : 'left',
+    }}>
+      {ch.isFirstTime ? (
+        ch.nearCombo ? (() => {
+          const nc = ch.nearCombo;
+          const diffPlayers = nc.differingPlayerNames;
+          const joinVerb = diffPlayers.length > 1
+            ? (diffPlayers.every(n => isPlayerFemale(n)) ? 'מצטרפות' : 'מצטרפים')
+            : (diffPlayers.length === 1 && isPlayerFemale(diffPlayers[0]) ? 'מצטרפת' : 'מצטרף');
+          const formattedDiffering = diffPlayers.length === 2
+            ? `${diffPlayers[0]} ו${diffPlayers[1]}`
+            : diffPlayers.length > 2
+              ? `${diffPlayers.slice(0, -1).join(', ')} ו${diffPlayers[diffPlayers.length - 1]}`
+              : diffPlayers.join(', ');
+          return (
+            <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+              <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
+              <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({nc.coreCount} מתוך {ch.playerCount} שחקנים)</strong>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                {nc.corePlayerNames.join(', ')} שיחקו יחד {nc.gamesPlayedTogether} פעמים בכל הזמנים {nc.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${nc.lastPlayedDateStr})` : `(מתוכם ${nc.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם {joinVerb} הערב {formattedDiffering}.
+              </div>
+              {nc.almostFullMatch && (() => {
+                const afm = nc.almostFullMatch;
+                const afmDiff = formatHebrewNames(afm.differingPlayerNames);
+                const afmTimeStr = formatTimeAttribution(
+                  afm.gamesPlayedTogether,
+                  afm.gamesThisYear,
+                  afm.gamesThisHalf,
+                  afm.lastPlayedDateStr,
+                  afm.monthsSinceLastPlayed
+                );
+                return (
+                  <div style={{
+                    fontSize: '0.78rem',
+                    color: '#38bdf8',
+                    marginTop: '0.4rem',
+                    borderTop: '1px solid rgba(59, 130, 246, 0.2)',
+                    paddingTop: '0.4rem',
+                  }}>
+                    💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {ch.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })() : (
+          <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+            <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
+            <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}
+            {t('newGame.newComboIntro', { count: ch.playerCount })}
+          </div>
+        )
+      ) : (
+        <div>
+          {/* Header */}
+          <div style={{ marginBottom: '0.75rem' }}>
+            <div style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>
+              <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
+              <strong style={{ color: '#fbbf24' }}>{t('newGame.returningCombo')}</strong>
+            </div>
+            <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+              {t('newGame.comboTimes', { count: ch.totalGamesWithCombo + 1, players: ch.playerCount })}{' '}
+              ({ch.totalGamesWithCombo} פעמים בכל הזמנים{ch.gamesThisYear > 0 ? `, מתוכם ${ch.gamesThisYear} ב-${new Date().getFullYear()}` : ch.lastPlayedDateStr ? `, פעם אחרונה: ${ch.lastPlayedDateStr}` : ''})
+            </div>
+            {ch.largerCore && (() => {
+              const lc = ch.largerCore;
+              const lcDiff = formatHebrewNames(lc.differingPlayerNames);
+              const lcTimeStr = formatTimeAttribution(
+                lc.gamesPlayedTogether,
+                lc.gamesThisYear,
+                lc.gamesThisHalf,
+                lc.lastPlayedDateStr,
+                lc.monthsSinceLastPlayed
+              );
+              return (
+                <div style={{
+                  fontSize: '0.76rem',
+                  color: '#38bdf8',
+                  marginTop: '0.35rem',
+                  borderTop: '1px solid rgba(251, 191, 36, 0.2)',
+                  paddingTop: '0.35rem',
+                }}>
+                  💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {ch.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.
+                </div>
+              );
+            })()}
+          </div>
+
+          {ch.totalGamesWithCombo === 1 ? (
+            /* === SINGLE GAME: compact result + unique insights === */
+            (() => {
+              const game = ch.previousGames[0];
+              if (!game) return null;
+              const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+              const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
+              const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
+              const topRebuyer = [...game.results].sort((a, b) => b.rebuys - a.rebuys)[0];
+              const winnersCount = game.results.filter(r => r.profit > 0).length;
+
+              const insights: { emoji: string; text: string; color: string }[] = [];
+              if (topRebuyer && topRebuyer.rebuys >= 3 && topRebuyer.playerName !== game.winnerName) {
+                insights.push({ emoji: '💸', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) אבל לא ניצח`, color: '#f59e0b' });
+              } else if (topRebuyer && topRebuyer.playerName === game.winnerName && topRebuyer.rebuys >= 3) {
+                insights.push({ emoji: '🔥', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) ובכל זאת ניצח`, color: '#4ade80' });
+              }
+              if (winnersCount === 1) {
+                insights.push({ emoji: '🎯', text: `רק מנצח אחד מתוך ${game.results.length} — ערב קשה`, color: '#a78bfa' });
+              } else if (winnersCount >= Math.ceil(game.results.length / 2)) {
+                insights.push({ emoji: '⚖️', text: `${winnersCount} מתוך ${game.results.length} סיימו ברווח — ערב מאוזן`, color: '#94a3b8' });
+              }
+              const loserRebuys = game.results[game.results.length - 1]?.rebuys || 0;
+              if (loserRebuys <= 1) {
+                insights.push({ emoji: '😱', text: `${game.loserName} הפסיד הכי הרבה עם רק קנייה אחת`, color: '#f87171' });
+              }
+
+              return (
+                <div>
+                  <div style={{ padding: '0.4rem 0.55rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', marginBottom: '0.5rem' }}>
+                    <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.2rem' }}>{dateStr} ({timeAgoStr})</div>
+                    <div style={{ fontSize: '0.8rem' }}>
+                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
+                      {'  '}
+                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({'\u200E'}{Math.round(game.loserProfit)})</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>
+                      {game.totalRebuys} קניות סה"כ • {game.results.length} שחקנים
+                    </div>
+                  </div>
+                  {insights.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.3rem' }}>
+                      {insights.map((ins, i) => (
+                        <div key={i} style={{ fontSize: '0.76rem', color: ins.color }}>
+                          {ins.emoji} {ins.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
+            /* === MULTIPLE GAMES: Leader/bottom + patterns + insights === */
+            <div>
+              {/* Combo leader + bottom with avg */}
+              {ch.playerStats.length >= 2 && (() => {
+                const top = ch.playerStats[0];
+                const bottom = ch.playerStats[ch.playerStats.length - 1];
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', textAlign: isRTL ? 'right' : 'left' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                      👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>{t('newGame.comboLeader')}</span>{' '}
+                      {top.playerName}{' '}
+                      <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
+                        ({top.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.totalProfit)})
+                      </span>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {top.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.avgProfit)} • {top.wins}/{ch.totalGamesWithCombo} נצחונות</span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                      📉 <span style={{ fontWeight: 600 }}>{t('newGame.comboBottom')}</span>{' '}
+                      {bottom.playerName}{' '}
+                      <span style={{ color: '#f87171' }}>
+                        ({bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.totalProfit)})
+                      </span>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.avgProfit)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Patterns */}
+              {(ch.playerStats.some(p => p.alwaysWon) || ch.playerStats.some(p => p.alwaysLost) || (ch.uniqueWinners.length === ch.totalGamesWithCombo) || ch.repeatWinners.length > 0) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', textAlign: isRTL ? 'right' : 'left' }}>
+                  {ch.playerStats.filter(p => p.alwaysWon).length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
+                      {t('newGame.alwaysProfit')}{' '}
+                      {ch.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${ch.totalGamesWithCombo})`).join(', ')}
+                    </div>
+                  )}
+                  {ch.playerStats.filter(p => p.alwaysLost).length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                      {t('newGame.alwaysLoss')}{' '}
+                      {ch.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
+                    </div>
+                  )}
+                  {ch.uniqueWinners.length === ch.totalGamesWithCombo && (
+                    <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
+                      {t('newGame.differentWinner')}
+                    </div>
+                  )}
+                  {ch.repeatWinners.length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+                      {t('newGame.multiWinners')}{' '}
+                      {ch.repeatWinners.map(w => `${w.name} (${w.count}/${ch.totalGamesWithCombo})`).join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Combo insights */}
+              {(() => {
+                const insights: string[] = [];
+                const avgRebuys = Math.round(ch.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / ch.totalGamesWithCombo);
+                const biggestWin = ch.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
+                const biggestLoss = ch.playerStats.reduce((worst, p) => p.worstResult < worst.profit ? { name: p.playerName, profit: p.worstResult } : worst, { name: '', profit: 0 });
+
+                if (avgRebuys > 0) insights.push(`📊 ממוצע ${avgRebuys} קניות למשחק בהרכב הזה`);
+                if (biggestWin.profit > 0) insights.push(`🏆 רווח שיא: ${biggestWin.name} \u200E+${Math.round(biggestWin.profit)}`);
+                if (biggestLoss.profit < 0) insights.push(`💸 הפסד שיא: ${biggestLoss.name} \u200E${Math.round(biggestLoss.profit)}`);
+                if (ch.spanDays > 30) insights.push(`📅 ההרכב הזה משחק יחד כבר ${Math.round(ch.spanDays / 30)} חודשים`);
+
+                if (insights.length === 0) return null;
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem', textAlign: isRTL ? 'right' : 'left' }}>
+                    {insights.map((insight, i) => (
+                      <div key={i} style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{insight}</div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Previous games */}
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', textAlign: isRTL ? 'right' : 'left' }}>
+                {t('newGame.previousGames')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
+                {ch.previousGames.slice(-3).map((game, i) => {
+                  const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                  return (
+                    <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', textAlign: isRTL ? 'right' : 'left' }}>
+                      <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
+                      <div>
+                        <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
+                        {'  '}
+                        <span style={{ color: '#f87171' }}>💀 {game.loserName} ({'\u200E'}{Math.round(game.loserProfit)})</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
 
   const renderPlayerTile = (player: Player, index: number) => (
@@ -1902,7 +2166,7 @@ const NewGameScreen = () => {
               </div>
             </div>
           </div>
-          
+
           <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
             <div style={{ marginBottom: '0.25rem' }}>
               📅 {new Date(activeGame.createdAt).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -1911,7 +2175,7 @@ const NewGameScreen = () => {
               👥 {activeGamePlayers.slice(0, 4).join(', ')}{activeGamePlayers.length > 4 ? ` +${activeGamePlayers.length - 4}` : ''}
             </div>
           </div>
-          
+
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={handleResumeGame}
@@ -2025,189 +2289,189 @@ const NewGameScreen = () => {
           never be reached by a member, but if it ever is we render
           nothing rather than leaking the form. */}
       {mode === 'new-game' && !isMember && (<>
-      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
-        {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '0.5rem' }}>
-            <div style={{ fontSize: '1.3rem' }}>👥</div>
-            <p style={{ margin: '0.2rem 0', fontWeight: '500', fontSize: '0.8rem' }}>{t('newGame.noPlayers')}</p>
-          </div>
-        ) : (
-          <>
-            {permanentPlayers.length > 0 && (
-              <>
-                <div style={{
-                  fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)',
-                  marginBottom: '0.35rem',
-                }}>
-                  {t('newGame.permanentPlayers')} ({permanentPlayers.length})
-                </div>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
-                  gap: '0.3rem'
-                }}>
-                  {permanentPlayers.map(renderPlayerTile)}
-                </div>
-              </>
+        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
+          {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '0.5rem' }}>
+              <div style={{ fontSize: '1.3rem' }}>👥</div>
+              <p style={{ margin: '0.2rem 0', fontWeight: '500', fontSize: '0.8rem' }}>{t('newGame.noPlayers')}</p>
+            </div>
+          ) : (
+            <>
+              {permanentPlayers.length > 0 && (
+                <>
+                  <div style={{
+                    fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)',
+                    marginBottom: '0.35rem',
+                  }}>
+                    {t('newGame.permanentPlayers')} ({permanentPlayers.length})
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+                    gap: '0.3rem'
+                  }}>
+                    {permanentPlayers.map(renderPlayerTile)}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          <button
+            onClick={() => setShowAddPlayer(true)}
+            style={{
+              width: '100%',
+              marginTop: permanentPlayers.length > 0 ? '0.4rem' : '0',
+              padding: '0.3rem',
+              border: '2px dashed var(--border)',
+              borderRadius: '6px',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              cursor: 'pointer'
+            }}
+          >
+            {t('newGame.addPlayer')}
+          </button>
+        </div>
+
+        {/* Guests Section */}
+        {permanentGuestPlayers.length > 0 && (
+          <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
+            <button
+              onClick={() => setShowPermanentGuests(!showPermanentGuests)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                color: 'var(--text)'
+              }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                {t('newGame.guestPlayers', { count: permanentGuestPlayers.length })}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {showPermanentGuests ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {showPermanentGuests && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+                gap: '0.3rem',
+                marginTop: '0.35rem'
+              }}>
+                {permanentGuestPlayers.map(renderPlayerTile)}
+              </div>
             )}
-          </>
+          </div>
         )}
 
-        <button 
-          onClick={() => setShowAddPlayer(true)}
-          style={{
-            width: '100%',
-            marginTop: permanentPlayers.length > 0 ? '0.4rem' : '0',
-            padding: '0.3rem',
-            border: '2px dashed var(--border)',
-            borderRadius: '6px',
-            background: 'transparent',
-            color: 'var(--text-muted)',
-            fontSize: '0.75rem',
-            cursor: 'pointer'
-          }}
-        >
-          {t('newGame.addPlayer')}
-        </button>
-      </div>
-
-      {/* Guests Section */}
-      {permanentGuestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
-          <button
-            onClick={() => setShowPermanentGuests(!showPermanentGuests)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              color: 'var(--text)'
-            }}
-          >
-            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              {t('newGame.guestPlayers', { count: permanentGuestPlayers.length })}
-            </span>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {showPermanentGuests ? '▲' : '▼'}
-            </span>
-          </button>
-          
-          {showPermanentGuests && (
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
-              gap: '0.3rem',
-              marginTop: '0.35rem'
-            }}>
-              {permanentGuestPlayers.map(renderPlayerTile)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Occasional Players Section */}
-      {guestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
-          <button
-            onClick={() => setShowGuests(!showGuests)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              color: 'var(--text)'
-            }}
-          >
-            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              {t('newGame.occasionalPlayers', { count: guestPlayers.length })}
-            </span>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {showGuests ? '▲' : '▼'}
-            </span>
-          </button>
-          
-          {showGuests && (
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
-              gap: '0.3rem',
-              marginTop: '0.35rem'
-            }}>
-              {guestPlayers.map(renderPlayerTile)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Location Selector */}
-      <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>{t('newGame.location')}</span>
-          {(getSettings().locations ?? DEFAULT_LOCATIONS).map(loc => (
+        {/* Occasional Players Section */}
+        {guestPlayers.length > 0 && (
+          <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
             <button
-              key={loc}
-              onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}
+              onClick={() => setShowGuests(!showGuests)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                color: 'var(--text)'
+              }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                {t('newGame.occasionalPlayers', { count: guestPlayers.length })}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {showGuests ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {showGuests && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+                gap: '0.3rem',
+                marginTop: '0.35rem'
+              }}>
+                {guestPlayers.map(renderPlayerTile)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Location Selector */}
+        <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>{t('newGame.location')}</span>
+            {(getSettings().locations ?? DEFAULT_LOCATIONS).map(loc => (
+              <button
+                key={loc}
+                onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}
+                style={{
+                  padding: '0.3rem 0.55rem',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  border: gameLocation === loc ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: gameLocation === loc ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                  color: gameLocation === loc ? 'var(--primary)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {loc}
+              </button>
+            ))}
+            <button
+              onClick={() => setGameLocation(gameLocation === 'other' ? '' : 'other')}
               style={{
                 padding: '0.3rem 0.55rem',
                 borderRadius: '6px',
                 fontSize: '0.72rem',
-                border: gameLocation === loc ? '2px solid var(--primary)' : '1px solid var(--border)',
-                background: gameLocation === loc ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                color: gameLocation === loc ? 'var(--primary)' : 'var(--text-muted)',
+                border: gameLocation === 'other' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                background: gameLocation === 'other' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                color: gameLocation === 'other' ? 'var(--primary)' : 'var(--text-muted)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
-              {loc}
+              {t('newGame.other')}
             </button>
-          ))}
-          <button
-            onClick={() => setGameLocation(gameLocation === 'other' ? '' : 'other')}
-            style={{
-              padding: '0.3rem 0.55rem',
-              borderRadius: '6px',
-              fontSize: '0.72rem',
-              border: gameLocation === 'other' ? '2px solid var(--primary)' : '1px solid var(--border)',
-              background: gameLocation === 'other' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-              color: gameLocation === 'other' ? 'var(--primary)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t('newGame.other')}
-          </button>
+          </div>
+          {gameLocation === 'other' && (
+            <input
+              type="text"
+              value={customLocation}
+              onChange={(e) => setCustomLocation(e.target.value)}
+              placeholder={t('newGame.locationPlaceholder')}
+              style={{
+                marginTop: '0.4rem',
+                width: '100%',
+                padding: '0.4rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '0.8rem'
+              }}
+            />
+          )}
         </div>
-        {gameLocation === 'other' && (
-          <input
-            type="text"
-            value={customLocation}
-            onChange={(e) => setCustomLocation(e.target.value)}
-            placeholder={t('newGame.locationPlaceholder')}
-            style={{
-              marginTop: '0.4rem',
-              width: '100%',
-              padding: '0.4rem',
-              borderRadius: '6px',
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              fontSize: '0.8rem'
-            }}
-          />
-        )}
-      </div>
 
-      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
-        {canUseAI && (
-            <button 
+        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
+          {canUseAI && (
+            <button
               className="btn btn-secondary"
               onClick={() => handleShowForecast()}
               disabled={selectedIds.size < 2}
@@ -2215,43 +2479,43 @@ const NewGameScreen = () => {
             >
               {t('newGame.forecast')}
             </button>
-        )}
-        {isAdmin && (
-          <>
-            {periodMarkers && isAdmin && (() => {
-              const autoValue = getAutoDetectedPeriodValue(periodMarkers);
-              const activeValue = periodOverride || autoValue;
-              const isOverridden = periodOverride !== null && periodOverride !== autoValue;
-              return (
-                <div style={{ flex: '1 1 0', minWidth: '0' }}>
-                  <button
-                    ref={periodTriggerRef}
-                    onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      padding: '0.5rem 0.35rem',
-                      borderRadius: '8px',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      background: activeValue === 'regular'
-                        ? 'rgba(100, 116, 139, 0.15)'
-                        : 'rgba(139, 92, 246, 0.2)',
-                      color: activeValue === 'regular' ? '#94a3b8' : '#a78bfa',
-                      border: `1px solid ${activeValue === 'regular' ? 'rgba(100, 116, 139, 0.25)' : 'rgba(139, 92, 246, 0.35)'}`,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.2rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{periodLabel(activeValue)}</span>
-                    {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>{t('newGame.manual')}</span>}
-                    <span style={{ fontSize: '0.55rem', opacity: 0.5, flexShrink: 0 }}>▼</span>
-                  </button>
-                  {/* Popover is portal'd to document.body and positioned
+          )}
+          {isAdmin && (
+            <>
+              {periodMarkers && isAdmin && (() => {
+                const autoValue = getAutoDetectedPeriodValue(periodMarkers);
+                const activeValue = periodOverride || autoValue;
+                const isOverridden = periodOverride !== null && periodOverride !== autoValue;
+                return (
+                  <div style={{ flex: '1 1 0', minWidth: '0' }}>
+                    <button
+                      ref={periodTriggerRef}
+                      onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        padding: '0.5rem 0.35rem',
+                        borderRadius: '8px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        background: activeValue === 'regular'
+                          ? 'rgba(100, 116, 139, 0.15)'
+                          : 'rgba(139, 92, 246, 0.2)',
+                        color: activeValue === 'regular' ? '#94a3b8' : '#a78bfa',
+                        border: `1px solid ${activeValue === 'regular' ? 'rgba(100, 116, 139, 0.25)' : 'rgba(139, 92, 246, 0.35)'}`,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.2rem',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{periodLabel(activeValue)}</span>
+                      {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>{t('newGame.manual')}</span>}
+                      <span style={{ fontSize: '0.55rem', opacity: 0.5, flexShrink: 0 }}>▼</span>
+                    </button>
+                    {/* Popover is portal'd to document.body and positioned
                       with `position: fixed` so it can't get trapped in
                       any ancestor stacking context (and so it sits
                       above the bottom-nav and any modal/banner). Opens
@@ -2260,88 +2524,88 @@ const NewGameScreen = () => {
                       above" behavior because this control lives near
                       the bottom of the new-game form, just above the
                       action buttons. */}
-                  {showPeriodDropdown && periodTriggerRect && createPortal(
-                    <>
-                      <div
-                        onClick={() => setShowPeriodDropdown(false)}
-                        style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
-                      />
-                      <div style={{
-                        position: 'fixed',
-                        left: periodTriggerRect.left,
-                        bottom: window.innerHeight - periodTriggerRect.top + 4,
-                        width: periodTriggerRect.width,
-                        minWidth: 200,
-                        maxHeight: '60vh',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        boxShadow: '0 -4px 16px rgba(0,0,0,0.3)',
-                        zIndex: 10000,
-                        overflow: 'hidden',
-                      }}>
-                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: isRTL ? 'right' : 'left' }}>
-                          {t('newGame.autoDetected', { period: periodLabel(autoValue) })}
+                    {showPeriodDropdown && periodTriggerRect && createPortal(
+                      <>
+                        <div
+                          onClick={() => setShowPeriodDropdown(false)}
+                          style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
+                        />
+                        <div style={{
+                          position: 'fixed',
+                          left: periodTriggerRect.left,
+                          bottom: window.innerHeight - periodTriggerRect.top + 4,
+                          width: periodTriggerRect.width,
+                          minWidth: 200,
+                          maxHeight: '60vh',
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          boxShadow: '0 -4px 16px rgba(0,0,0,0.3)',
+                          zIndex: 10000,
+                          overflow: 'hidden',
+                        }}>
+                          <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: isRTL ? 'right' : 'left' }}>
+                            {t('newGame.autoDetected', { period: periodLabel(autoValue) })}
+                          </div>
+                          {PERIOD_OPTIONS.map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => {
+                                const newOverride = opt.value === autoValue ? null : opt.value;
+                                setPeriodOverride(newOverride);
+                                setPeriodMarkers(applyPeriodOverride(periodMarkers, newOverride));
+                                setShowPeriodDropdown(false);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem 0.6rem',
+                                background: activeValue === opt.value ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                                border: 'none',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                color: activeValue === opt.value ? '#a78bfa' : 'var(--text)',
+                                fontSize: '0.78rem',
+                                cursor: 'pointer',
+                                textAlign: isRTL ? 'right' : 'left',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-start',
+                                gap: '0.4rem',
+                              }}
+                            >
+                              <span style={{ flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{periodLabel(opt.value)}</span>
+                              {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', flexShrink: 0 }}>{t('newGame.auto')}</span>}
+                              {activeValue === opt.value && <span style={{ fontSize: '0.7rem', flexShrink: 0 }}>✓</span>}
+                            </button>
+                          ))}
                         </div>
-                        {PERIOD_OPTIONS.map(opt => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              const newOverride = opt.value === autoValue ? null : opt.value;
-                              setPeriodOverride(newOverride);
-                              setPeriodMarkers(applyPeriodOverride(periodMarkers, newOverride));
-                              setShowPeriodDropdown(false);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '0.5rem 0.6rem',
-                              background: activeValue === opt.value ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-                              border: 'none',
-                              borderBottom: '1px solid rgba(255,255,255,0.05)',
-                              color: activeValue === opt.value ? '#a78bfa' : 'var(--text)',
-                              fontSize: '0.78rem',
-                              cursor: 'pointer',
-                              textAlign: isRTL ? 'right' : 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-start',
-                              gap: '0.4rem',
-                            }}
-                          >
-                            <span style={{ flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{periodLabel(opt.value)}</span>
-                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', flexShrink: 0 }}>{t('newGame.auto')}</span>}
-                            {activeValue === opt.value && <span style={{ fontSize: '0.7rem', flexShrink: 0 }}>✓</span>}
-                          </button>
-                        ))}
-                      </div>
-                    </>,
-                    document.body,
-                  )}
-                </div>
-              );
-            })()}
-          </>
-        )}
-        <button 
-          className="btn btn-primary"
-          onClick={handleStartGame}
-          disabled={selectedIds.size < 2}
-          style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
-        >
-          {t('newGame.startGame', { count: selectedIds.size })}
-        </button>
-      </div>
-      {/* No-AI-key explainer for the forecast row. Surfaces the WHY
+                      </>,
+                      document.body,
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+          <button
+            className="btn btn-primary"
+            onClick={handleStartGame}
+            disabled={selectedIds.size < 2}
+            style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
+          >
+            {t('newGame.startGame', { count: selectedIds.size })}
+          </button>
+        </div>
+        {/* No-AI-key explainer for the forecast row. Surfaces the WHY
           before the user taps Forecast — otherwise we silently fall
           back to a static forecast and the user wonders where the
           AI summary, surprises, and pre-game teaser went. Owner-only
           (member view stays clean; the forecast still works for them
           via the static path). */}
-      {isOwner && !getGeminiApiKey() && (
-        <div style={{ padding: '0 0.75rem', marginTop: '0.4rem' }}>
-          <AIKeyMissingNotice feature="forecast" />
-        </div>
-      )}
+        {isOwner && !getGeminiApiKey() && (
+          <div style={{ padding: '0 0.75rem', marginTop: '0.4rem' }}>
+            <AIKeyMissingNotice feature="forecast" />
+          </div>
+        )}
       </>)}
 
       {/* Published Forecast - visible to all roles when published, admin can see hidden */}
@@ -2380,7 +2644,7 @@ const NewGameScreen = () => {
             </div>
           )}
 
-          <div 
+          <div
             onClick={() => setPublishedExpanded(!publishedExpanded)}
             style={{ textAlign: 'center', marginBottom: publishedExpanded ? '0.75rem' : 0, cursor: 'pointer' }}
           >
@@ -2443,6 +2707,8 @@ const NewGameScreen = () => {
               </div>
             </div>
           )}
+
+          {publishedExpanded && publishedComboHistory && renderComboHistoryCard(publishedComboHistory)}
 
           {publishedExpanded && <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {[...publishedForecast.forecasts].sort((a, b) => b.expectedProfit - a.expectedProfit).map((f, idx) => {
@@ -2584,7 +2850,7 @@ const NewGameScreen = () => {
                 autoFocus
               />
             </div>
-            
+
             {/* Player Type Toggle */}
             <div className="input-group">
               <label className="label">{t('newGame.playerType')}</label>
@@ -2676,14 +2942,14 @@ const NewGameScreen = () => {
                 <AIProgressBar operationKey="forecast" />
               </div>
             )}
-            
+
             {/* AI Error message with countdown */}
             {aiError && (
-              <div style={{ 
-                padding: '0.75rem', 
+              <div style={{
+                padding: '0.75rem',
                 margin: '0.75rem',
-                borderRadius: '8px', 
-                background: retryCountdown ? 'rgba(59, 130, 246, 0.1)' : 'rgba(234, 179, 8, 0.1)', 
+                borderRadius: '8px',
+                background: retryCountdown ? 'rgba(59, 130, 246, 0.1)' : 'rgba(234, 179, 8, 0.1)',
                 borderLeft: `4px solid ${retryCountdown ? '#3B82F6' : '#EAB308'}`,
                 fontSize: '0.85rem',
                 color: retryCountdown ? '#3B82F6' : '#EAB308'
@@ -2696,7 +2962,7 @@ const NewGameScreen = () => {
                     <div>{t('newGame.rateLimit')}</div>
                     <div style={{ marginTop: '0.5rem' }}>
                       <button
-                        onClick={() => { 
+                        onClick={() => {
                           // Clear AI state and generate local forecast
                           setAiForecasts(null);
                           setAiError(null);
@@ -2726,7 +2992,7 @@ const NewGameScreen = () => {
                 )}
               </div>
             )}
-            
+
             {/* AI Forecasts */}
             {aiForecasts && !isLoadingAI && (
               <div ref={forecastRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
@@ -2770,278 +3036,23 @@ const NewGameScreen = () => {
                 )}
 
                 {/* Combo History indicator */}
-                {comboHistory && (
-                  <div style={{
-                    padding: '0.85rem 1rem',
-                    marginBottom: '1.25rem',
-                    borderRadius: '12px',
-                    background: comboHistory.isFirstTime
-                      ? (comboHistory.nearCombo
-                          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(37, 99, 235, 0.08))'
-                          : 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))')
-                      : 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08))',
-                    border: `1px solid ${comboHistory.isFirstTime ? (comboHistory.nearCombo ? 'rgba(59, 130, 246, 0.3)' : 'rgba(34, 197, 94, 0.3)') : 'rgba(251, 191, 36, 0.3)'}`,
-                    textAlign: isRTL ? 'right' : 'left',
-                  }}>
-                    {comboHistory.isFirstTime ? (
-                      comboHistory.nearCombo ? (() => {
-                        const nc = comboHistory.nearCombo;
-                        const diffPlayers = nc.differingPlayerNames;
-                        const joinVerb = diffPlayers.length > 1
-                          ? (diffPlayers.every(n => isPlayerFemale(n)) ? 'מצטרפות' : 'מצטרפים')
-                          : (diffPlayers.length === 1 && isPlayerFemale(diffPlayers[0]) ? 'מצטרפת' : 'מצטרף');
-                        const formattedDiffering = diffPlayers.length === 2
-                          ? `${diffPlayers[0]} ו${diffPlayers[1]}`
-                          : diffPlayers.length > 2
-                          ? `${diffPlayers.slice(0, -1).join(', ')} ו${diffPlayers[diffPlayers.length - 1]}`
-                          : diffPlayers.join(', ');
-                        return (
-                          <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
-                            <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
-                            <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({nc.coreCount} מתוך {comboHistory.playerCount} שחקנים)</strong>
-                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                              {nc.corePlayerNames.join(', ')} שיחקו יחד {nc.gamesPlayedTogether} פעמים בכל הזמנים {nc.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${nc.lastPlayedDateStr})` : `(מתוכם ${nc.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם {joinVerb} הערב {formattedDiffering}.
-                            </div>
-                            {nc.almostFullMatch && (() => {
-                              const afm = nc.almostFullMatch;
-                              const afmDiff = formatHebrewNames(afm.differingPlayerNames);
-                              const afmTimeStr = formatTimeAttribution(
-                                afm.gamesPlayedTogether,
-                                afm.gamesThisYear,
-                                afm.gamesThisHalf,
-                                afm.lastPlayedDateStr,
-                                afm.monthsSinceLastPlayed
-                              );
-                              return (
-                                <div style={{
-                                  fontSize: '0.78rem',
-                                  color: '#38bdf8',
-                                  marginTop: '0.4rem',
-                                  borderTop: '1px solid rgba(59, 130, 246, 0.2)',
-                                  paddingTop: '0.4rem',
-                                }}>
-                                  💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })() : (
-                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
-                          <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
-                          <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}
-                          {t('newGame.newComboIntro', { count: comboHistory.playerCount })}
-                        </div>
-                      )
-                    ) : (
-                      <div>
-                        {/* Header */}
-                        <div style={{ marginBottom: '0.75rem' }}>
-                          <div style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>
-                            <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
-                            <strong style={{ color: '#fbbf24' }}>{t('newGame.returningCombo')}</strong>
-                          </div>
-                          <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                            {t('newGame.comboTimes', { count: comboHistory.totalGamesWithCombo + 1, players: comboHistory.playerCount })}{' '}
-                            ({comboHistory.totalGamesWithCombo} פעמים בכל הזמנים{comboHistory.gamesThisYear > 0 ? `, מתוכם ${comboHistory.gamesThisYear} ב-${new Date().getFullYear()}` : comboHistory.lastPlayedDateStr ? `, פעם אחרונה: ${comboHistory.lastPlayedDateStr}` : ''})
-                          </div>
-                          {comboHistory.largerCore && (() => {
-                            const lc = comboHistory.largerCore;
-                            const lcDiff = formatHebrewNames(lc.differingPlayerNames);
-                            const lcTimeStr = formatTimeAttribution(
-                              lc.gamesPlayedTogether,
-                              lc.gamesThisYear,
-                              lc.gamesThisHalf,
-                              lc.lastPlayedDateStr,
-                              lc.monthsSinceLastPlayed
-                            );
-                            return (
-                              <div style={{
-                                fontSize: '0.76rem',
-                                color: '#38bdf8',
-                                marginTop: '0.35rem',
-                                borderTop: '1px solid rgba(251, 191, 36, 0.2)',
-                                paddingTop: '0.35rem',
-                              }}>
-                                💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {comboHistory.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {comboHistory.totalGamesWithCombo === 1 ? (
-                          /* === SINGLE GAME: compact result + unique insights === */
-                          (() => {
-                            const game = comboHistory.previousGames[0];
-                            if (!game) return null;
-                            const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
-                            const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
-                            const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
-                            const topRebuyer = [...game.results].sort((a, b) => b.rebuys - a.rebuys)[0];
-                            const winnersCount = game.results.filter(r => r.profit > 0).length;
-
-                            const insights: { emoji: string; text: string; color: string }[] = [];
-                            if (topRebuyer && topRebuyer.rebuys >= 3 && topRebuyer.playerName !== game.winnerName) {
-                              insights.push({ emoji: '💸', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) אבל לא ניצח`, color: '#f59e0b' });
-                            } else if (topRebuyer && topRebuyer.playerName === game.winnerName && topRebuyer.rebuys >= 3) {
-                              insights.push({ emoji: '🔥', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) ובכל זאת ניצח`, color: '#4ade80' });
-                            }
-                            if (winnersCount === 1) {
-                              insights.push({ emoji: '🎯', text: `רק מנצח אחד מתוך ${game.results.length} — ערב קשה`, color: '#a78bfa' });
-                            } else if (winnersCount >= Math.ceil(game.results.length / 2)) {
-                              insights.push({ emoji: '⚖️', text: `${winnersCount} מתוך ${game.results.length} סיימו ברווח — ערב מאוזן`, color: '#94a3b8' });
-                            }
-                            const loserRebuys = game.results[game.results.length - 1]?.rebuys || 0;
-                            if (loserRebuys <= 1) {
-                              insights.push({ emoji: '😱', text: `${game.loserName} הפסיד הכי הרבה עם רק קנייה אחת`, color: '#f87171' });
-                            }
-
-                            return (
-                              <div>
-                                <div style={{ padding: '0.4rem 0.55rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', marginBottom: '0.5rem' }}>
-                                  <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.2rem' }}>{dateStr} ({timeAgoStr})</div>
-                                  <div style={{ fontSize: '0.8rem' }}>
-                                    <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
-                                    {'  '}
-                                    <span style={{ color: '#f87171' }}>💀 {game.loserName} ({'\u200E'}{Math.round(game.loserProfit)})</span>
-                                  </div>
-                                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                    {game.totalRebuys} קניות סה"כ • {game.results.length} שחקנים
-                                  </div>
-                                </div>
-                                {insights.length > 0 && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.3rem' }}>
-                                    {insights.map((ins, i) => (
-                                      <div key={i} style={{ fontSize: '0.76rem', color: ins.color }}>
-                                        {ins.emoji} {ins.text}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          /* === MULTIPLE GAMES: Leader/bottom + patterns + insights === */
-                          <div>
-                            {/* Combo leader + bottom with avg */}
-                            {comboHistory.playerStats.length >= 2 && (() => {
-                              const top = comboHistory.playerStats[0];
-                              const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
-                              return (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', textAlign: isRTL ? 'right' : 'left' }}>
-                                  <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                    👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>{t('newGame.comboLeader')}</span>{' '}
-                                    {top.playerName}{' '}
-                                    <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
-                                      ({top.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.totalProfit)})
-                                    </span>
-                                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {top.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.avgProfit)} • {top.wins}/{comboHistory.totalGamesWithCombo} נצחונות</span>
-                                  </div>
-                                  <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                    📉 <span style={{ fontWeight: 600 }}>{t('newGame.comboBottom')}</span>{' '}
-                                    {bottom.playerName}{' '}
-                                    <span style={{ color: '#f87171' }}>
-                                      ({bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.totalProfit)})
-                                    </span>
-                                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.avgProfit)}</span>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-
-                            {/* Patterns */}
-                            {(comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) || comboHistory.repeatWinners.length > 0) && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', textAlign: isRTL ? 'right' : 'left' }}>
-                                {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
-                                  <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
-                                    {t('newGame.alwaysProfit')}{' '}
-                                    {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
-                                  </div>
-                                )}
-                                {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
-                                  <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
-                                    {t('newGame.alwaysLoss')}{' '}
-                                    {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
-                                  </div>
-                                )}
-                                {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
-                                  <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
-                                    {t('newGame.differentWinner')}
-                                  </div>
-                                )}
-                                {comboHistory.repeatWinners.length > 0 && (
-                                  <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
-                                    {t('newGame.multiWinners')}{' '}
-                                    {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Combo insights */}
-                            {(() => {
-                              const insights: string[] = [];
-                              const avgRebuys = Math.round(comboHistory.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / comboHistory.totalGamesWithCombo);
-                              const biggestWin = comboHistory.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
-                              const biggestLoss = comboHistory.playerStats.reduce((worst, p) => p.worstResult < worst.profit ? { name: p.playerName, profit: p.worstResult } : worst, { name: '', profit: 0 });
-
-                              if (avgRebuys > 0) insights.push(`📊 ממוצע ${avgRebuys} קניות למשחק בהרכב הזה`);
-                              if (biggestWin.profit > 0) insights.push(`🏆 רווח שיא: ${biggestWin.name} \u200E+${Math.round(biggestWin.profit)}`);
-                              if (biggestLoss.profit < 0) insights.push(`💸 הפסד שיא: ${biggestLoss.name} \u200E${Math.round(biggestLoss.profit)}`);
-                              if (comboHistory.spanDays > 30) insights.push(`📅 ההרכב הזה משחק יחד כבר ${Math.round(comboHistory.spanDays / 30)} חודשים`);
-
-                              if (insights.length === 0) return null;
-                              return (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem', textAlign: isRTL ? 'right' : 'left' }}>
-                                  {insights.map((insight, i) => (
-                                    <div key={i} style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{insight}</div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-
-                            {/* Previous games */}
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', textAlign: isRTL ? 'right' : 'left' }}>
-                              {t('newGame.previousGames')}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
-                              {comboHistory.previousGames.slice(-3).map((game, i) => {
-                                const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
-                                return (
-                                  <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', textAlign: isRTL ? 'right' : 'left' }}>
-                                    <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
-                                    <div>
-                                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
-                                      {'  '}
-                                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({'\u200E'}{Math.round(game.loserProfit)})</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {comboHistory && renderComboHistoryCard(comboHistory)}
 
                 {/* AI Player forecasts - sorted by expected profit (highest first) */}
                 <div style={{ marginBottom: '1rem' }}>
                   {[...aiForecasts].sort((a, b) => b.expectedProfit - a.expectedProfit).map((forecast, index) => {
                     const { name, expectedProfit, sentence, highlight, isSurprise } = forecast;
-                    
+
                     const getStyle = () => {
                       if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7' };
                       if (expectedProfit >= 0) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' };
                       return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' };
                     };
-                    
+
                     const style = getStyle();
-                    
+
                     return (
-                      <div 
+                      <div
                         key={name}
                         style={{
                           padding: '0.75rem 0.85rem',
@@ -3052,14 +3063,14 @@ const NewGameScreen = () => {
                         }}
                       >
                         {/* Name and amount */}
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           marginBottom: '0.4rem'
                         }}>
-                          <span style={{ 
-                            fontWeight: '700', 
+                          <span style={{
+                            fontWeight: '700',
                             fontSize: '1rem',
                             color: 'white',
                             display: 'flex',
@@ -3070,8 +3081,8 @@ const NewGameScreen = () => {
                             {name}
                             {isSurprise && <span>⚡</span>}
                           </span>
-                          <span style={{ 
-                            fontWeight: '700', 
+                          <span style={{
+                            fontWeight: '700',
                             fontSize: '1.05rem',
                             color: 'white',
                             fontFamily: 'system-ui'
@@ -3079,11 +3090,11 @@ const NewGameScreen = () => {
                             {expectedProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(expectedProfit))}
                           </span>
                         </div>
-                        
+
                         {/* AI Highlight */}
                         {highlight && (
-                          <div style={{ 
-                            fontSize: '0.78rem', 
+                          <div style={{
+                            fontSize: '0.78rem',
                             color: 'var(--text)',
                             opacity: 0.8,
                             marginBottom: '0.4rem',
@@ -3093,10 +3104,10 @@ const NewGameScreen = () => {
                             {highlight}
                           </div>
                         )}
-                        
+
                         {/* AI Creative sentence */}
-                        <div style={{ 
-                          fontSize: '0.85rem', 
+                        <div style={{
+                          fontSize: '0.85rem',
                           color: 'var(--text-muted)',
                           lineHeight: '1.45',
                           fontStyle: 'italic'
@@ -3109,10 +3120,10 @@ const NewGameScreen = () => {
                 </div>
 
                 {/* Footer */}
-                <div style={{ 
-                  textAlign: 'center', 
-                  marginTop: '0.75rem', 
-                  fontSize: '0.65rem', 
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '0.75rem',
+                  fontSize: '0.65rem',
                   color: 'var(--text-muted)',
                   opacity: 0.5
                 }}>
@@ -3162,17 +3173,17 @@ const NewGameScreen = () => {
                 <div style={{ marginBottom: '1rem' }}>
                   {[...cachedForecasts].sort((a, b) => b.expected - a.expected).map((forecast, index) => {
                     const { player, expected, sentence, highlights, gamesPlayed, isSurprise } = forecast;
-                    
+
                     const getStyle = () => {
                       if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7' };
                       if (expected >= 0) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' };
                       return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' };
                     };
-                    
+
                     const style = getStyle();
-                    
+
                     return (
-                      <div 
+                      <div
                         key={player.id}
                         style={{
                           padding: '0.75rem 0.85rem',
@@ -3183,14 +3194,14 @@ const NewGameScreen = () => {
                         }}
                       >
                         {/* Name and amount */}
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           marginBottom: '0.4rem'
                         }}>
-                          <span style={{ 
-                            fontWeight: '700', 
+                          <span style={{
+                            fontWeight: '700',
                             fontSize: '1rem',
                             color: 'white',
                             display: 'flex',
@@ -3200,8 +3211,8 @@ const NewGameScreen = () => {
                             {index === 0 && expected > 0 && <span>👑</span>}
                             {player.name}
                           </span>
-                          <span style={{ 
-                            fontWeight: '700', 
+                          <span style={{
+                            fontWeight: '700',
                             fontSize: '1.05rem',
                             color: 'white',
                             fontFamily: 'system-ui'
@@ -3209,11 +3220,11 @@ const NewGameScreen = () => {
                             {expected >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(expected))}
                           </span>
                         </div>
-                        
+
                         {/* Dynamic personalized highlight */}
                         {gamesPlayed > 0 && highlights && (
-                          <div style={{ 
-                            fontSize: '0.78rem', 
+                          <div style={{
+                            fontSize: '0.78rem',
                             color: 'var(--text)',
                             opacity: 0.8,
                             marginBottom: '0.4rem',
@@ -3223,10 +3234,10 @@ const NewGameScreen = () => {
                             {highlights}
                           </div>
                         )}
-                        
+
                         {/* Creative forecast sentence */}
-                        <div style={{ 
-                          fontSize: '0.85rem', 
+                        <div style={{
+                          fontSize: '0.85rem',
                           color: 'var(--text-muted)',
                           lineHeight: '1.45',
                           fontStyle: 'italic'
@@ -3239,8 +3250,8 @@ const NewGameScreen = () => {
                 </div>
 
                 {/* Legend */}
-                <div style={{ 
-                  display: 'flex', 
+                <div style={{
+                  display: 'flex',
                   justifyContent: 'center',
                   gap: '1.25rem',
                   fontSize: '0.7rem',
@@ -3263,10 +3274,10 @@ const NewGameScreen = () => {
                 </div>
 
                 {/* Footer */}
-                <div style={{ 
-                  textAlign: 'center', 
-                  marginTop: '0.75rem', 
-                  fontSize: '0.65rem', 
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '0.75rem',
+                  fontSize: '0.65rem',
                   color: 'var(--text-muted)',
                   opacity: 0.5
                 }}>
@@ -3279,19 +3290,19 @@ const NewGameScreen = () => {
             {(aiForecasts || cachedForecasts) && !isLoadingAI && (
               <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div className="actions">
-                  <button 
-                    className="btn btn-secondary" 
+                  <button
+                    className="btn btn-secondary"
                     onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}
                   >
                     {t('common.close')}
                   </button>
-                  <button 
-                    className="btn btn-primary" 
+                  <button
+                    className="btn btn-primary"
                     onClick={() => void shareForecast()}
                     disabled={isSharing}
-                >
-                  {isSharing ? t('common.capturing') : t('common.share')}
-                </button>
+                  >
+                    {isSharing ? t('common.capturing') : t('common.share')}
+                  </button>
                   {isAdmin && (() => {
                     const alreadyPublished = !!publishedForecast?.published;
                     return (
@@ -3316,7 +3327,7 @@ const NewGameScreen = () => {
           </div>
         </div>
       )}
-      
+
       {/* Forecast Mismatch Dialog */}
       {showMismatchDialog && mismatchInfo && (
         <div style={{
@@ -3345,11 +3356,11 @@ const NewGameScreen = () => {
             <p style={{ marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               {t('newGame.mismatchDesc', { date: mismatchInfo.pendingDate })}
             </p>
-            
+
             {/* Changes summary */}
-            <div style={{ 
-              background: 'var(--surface)', 
-              borderRadius: '10px', 
+            <div style={{
+              background: 'var(--surface)',
+              borderRadius: '10px',
               padding: '0.75rem',
               marginBottom: '1rem',
               fontSize: '0.85rem',
@@ -3366,16 +3377,16 @@ const NewGameScreen = () => {
                 </div>
               )}
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <button 
+              <button
                 className="btn btn-primary"
                 onClick={handleUpdateForecast}
                 style={{ width: '100%' }}
               >
                 {t('newGame.newForecast')}
               </button>
-              <button 
+              <button
                 className="btn btn-secondary"
                 onClick={handleKeepOldForecast}
                 style={{ width: '100%' }}
@@ -3385,9 +3396,9 @@ const NewGameScreen = () => {
                   {t('newGame.onlyMatched')}
                 </div>
               </button>
-              <button 
+              <button
                 onClick={handleStartWithoutForecast}
-                style={{ 
+                style={{
                   background: 'transparent',
                   border: 'none',
                   color: 'var(--text-muted)',
@@ -3402,7 +3413,7 @@ const NewGameScreen = () => {
           </div>
         </div>
       )}
-      
+
       {/* Abandon Game Confirmation Modal */}
       {showAbandonConfirm && (
         <div style={{
@@ -3432,14 +3443,14 @@ const NewGameScreen = () => {
               {t('newGame.abandonWarning')}
             </p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button 
+              <button
                 className="btn btn-secondary"
                 onClick={() => setShowAbandonConfirm(false)}
                 style={{ flex: 1 }}
               >
                 {t('newGame.abandonBack')}
               </button>
-              <button 
+              <button
                 className="btn btn-danger"
                 onClick={handleAbandonGame}
                 style={{ flex: 1 }}

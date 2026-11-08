@@ -340,10 +340,11 @@ const GraphsScreen = () => {
       setInsightsProxyDown(false);
       try {
         const dateFilter = getDateFilter();
+        const minGamesForInsights = (timePeriod === 'h1' || timePeriod === 'h2' || timePeriod === 'year' || timePeriod === 'all') ? 2 : 1;
         const stats = getPlayerStats(dateFilter)
           .filter(s => {
             const p = players.find(pl => pl.id === s.playerId);
-            return p && p.type === 'permanent' && s.gamesPlayed > 0;
+            return p && p.type === 'permanent' && s.gamesPlayed >= minGamesForInsights;
           })
           .sort((a, b) => b.totalProfit - a.totalProfit);
 
@@ -405,10 +406,11 @@ const GraphsScreen = () => {
     setInsightsProxyDown(false);
     try {
       const dateFilter = getDateFilter();
+      const minGamesForInsights = (timePeriod === 'h1' || timePeriod === 'h2' || timePeriod === 'year' || timePeriod === 'all') ? 2 : 1;
       const stats = getPlayerStats(dateFilter)
         .filter(s => {
           const p = players.find(pl => pl.id === s.playerId);
-          return p && p.type === 'permanent' && s.gamesPlayed > 0;
+          return p && p.type === 'permanent' && s.gamesPlayed >= minGamesForInsights;
         })
         .sort((a, b) => b.totalProfit - a.totalProfit);
 

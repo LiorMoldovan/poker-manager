@@ -208,9 +208,6 @@ export const PeriodRecapModal = ({
   const third = recap.podium[2];
 
   const restRanked = recap.allRanked.slice(3);
-  const halfRest = Math.ceil(restRanked.length / 2);
-  const restCol1 = restRanked.slice(0, halfRest);
-  const restCol2 = restRanked.slice(halfRest);
 
   const partsCount =
     1 +
@@ -605,110 +602,61 @@ export const PeriodRecapModal = ({
                 </div>
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: restRanked.length >= 2 ? 'repeat(2, 1fr)' : '1fr',
-                    gap: '0.25rem 0.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.24rem',
                   }}
                 >
-                  {/* Column 1 (reads vertically 4, 5, 6...) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem' }}>
-                    {restCol1.map(p => (
-                      <div
-                        key={p.playerId}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: 'rgba(255, 255, 255, 0.04)',
-                          padding: '0.22rem 0.45rem',
-                          borderRadius: '6px',
-                          border: '1px solid rgba(255, 255, 255, 0.05)',
-                          fontSize: '0.68rem',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
-                          <span style={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.64rem' }}>
-                            #{p.rank}
-                          </span>
-                          <span
-                            style={{
-                              color: '#f1f5f9',
-                              fontWeight: 700,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: '75px',
-                            }}
-                          >
-                            {p.playerName}
-                          </span>
-                          <span style={{ color: '#64748b', fontSize: '0.56rem' }}>({p.gamesPlayed} מש׳)</span>
-                        </div>
+                  {restRanked.map(p => (
+                    <div
+                      key={p.playerId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        padding: '0.26rem 0.55rem',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flex: '1 1 auto' }}>
+                        <span style={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.66rem', minWidth: '1.4rem' }}>
+                          #{p.rank}
+                        </span>
                         <span
                           style={{
-                            color: p.profit >= 0 ? '#4ade80' : '#f87171',
-                            direction: 'ltr',
+                            color: '#f1f5f9',
                             fontWeight: 700,
-                            fontSize: '0.68rem',
-                            flexShrink: 0,
+                            fontSize: '0.74rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                           }}
                         >
-                          {p.profit >= 0 ? '+' : ''}₪{p.profit}
+                          {p.playerName}
+                        </span>
+                        <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
+                          ({p.gamesPlayed} מש׳ · {p.winRate}%)
                         </span>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Column 2 (reads vertically 7, 8, 9...) */}
-                  {restCol2.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem' }}>
-                      {restCol2.map(p => (
-                        <div
-                          key={p.playerId}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            padding: '0.22rem 0.45rem',
-                            borderRadius: '6px',
-                            border: '1px solid rgba(255, 255, 255, 0.05)',
-                            fontSize: '0.68rem',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
-                            <span style={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.64rem' }}>
-                              #{p.rank}
-                            </span>
-                            <span
-                              style={{
-                                color: '#f1f5f9',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: '75px',
-                              }}
-                            >
-                              {p.playerName}
-                            </span>
-                            <span style={{ color: '#64748b', fontSize: '0.56rem' }}>({p.gamesPlayed} מש׳)</span>
-                          </div>
-                          <span
-                            style={{
-                              color: p.profit >= 0 ? '#4ade80' : '#f87171',
-                              direction: 'ltr',
-                              fontWeight: 700,
-                              fontSize: '0.68rem',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {p.profit >= 0 ? '+' : ''}₪{p.profit}
-                          </span>
-                        </div>
-                      ))}
+                      <span
+                        style={{
+                          color: p.profit >= 0 ? '#4ade80' : '#f87171',
+                          direction: 'ltr',
+                          fontWeight: 700,
+                          fontSize: '0.72rem',
+                          flexShrink: 0,
+                          padding: '0.08rem 0.4rem',
+                          background: p.profit >= 0 ? 'rgba(74, 222, 128, 0.08)' : 'rgba(248, 113, 113, 0.08)',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {p.profit >= 0 ? '+' : ''}₪{p.profit}
+                      </span>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
