@@ -23,8 +23,9 @@ import { StyledSelect, StyledSelectOption } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { analyzeTrends, formatTrendsForAI } from '../utils/trendAnalysis';
+import PlayerStyleTab from '../components/PlayerStyleTab';
 
-type ViewMode = 'cumulative' | 'headToHead' | 'impact';
+type ViewMode = 'cumulative' | 'headToHead' | 'impact' | 'style';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 
 // Color palette for players - stable mapping by player ID
@@ -941,11 +942,11 @@ const GraphsScreen = () => {
       let withoutProfit = 0, withoutGames = 0, withoutWins = 0;
 
       for (const game of filteredGames) {
-        const gps = gamePlayers.filter(gp => gp.gameId === game.id);
-        const selectedGp = gps.find(gp => gp.playerId === impactPlayerId);
+        const byPlayer = gamePlayersByGameId.get(game.id);
+        const selectedGp = byPlayer?.get(impactPlayerId);
         if (!selectedGp) continue;
 
-        const otherPlayed = gps.some(gp => gp.playerId === other.id);
+        const otherPlayed = byPlayer?.has(other.id) ?? false;
 
         if (otherPlayed) {
           withProfit += selectedGp.profit;
@@ -982,7 +983,7 @@ const GraphsScreen = () => {
 
     results.sort((a, b) => b.impact - a.impact);
     return results;
-  }, [impactPlayerId, filteredGames, gamePlayers, impactComparisonPlayers, getPlayerColor]);
+  }, [impactPlayerId, filteredGames, gamePlayersByGameId, impactComparisonPlayers, getPlayerColor]);
 
   const getTimeframeLabel = () => {
     if (recentLimit !== null && viewMode !== 'impact') {
@@ -1100,7 +1101,7 @@ const GraphsScreen = () => {
 
       {/* View Mode Toggle */}
       <div className="card" style={{ padding: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.35rem' }}>
           <button 
             className="btn btn-sm btn-secondary"
             onClick={() => {
@@ -1111,7 +1112,7 @@ const GraphsScreen = () => {
               }
               setViewMode('cumulative');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'cumulative' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.2rem', fontSize: '0.7rem', whiteSpace: 'nowrap', ...(viewMode === 'cumulative' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.trends')}
           </button>
@@ -1125,7 +1126,7 @@ const GraphsScreen = () => {
               }
               setViewMode('headToHead');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'headToHead' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.2rem', fontSize: '0.7rem', whiteSpace: 'nowrap', ...(viewMode === 'headToHead' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.headToHead')}
           </button>
@@ -1138,9 +1139,23 @@ const GraphsScreen = () => {
               }
               setViewMode('impact');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'impact' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.2rem', fontSize: '0.7rem', whiteSpace: 'nowrap', ...(viewMode === 'impact' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.impact')}
+          </button>
+          <button 
+            className="btn btn-sm btn-secondary"
+            onClick={() => {
+              if (viewMode === 'impact' && prevTimePeriodRef.current) {
+                setTimePeriod(prevTimePeriodRef.current.period);
+                setSelectedYear(prevTimePeriodRef.current.year);
+                prevTimePeriodRef.current = null;
+              }
+              setViewMode('style');
+            }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.2rem', fontSize: '0.7rem', whiteSpace: 'nowrap', ...(viewMode === 'style' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
+          >
+            {t('graphs.styleTab')}
           </button>
         </div>
       </div>
@@ -1205,16 +1220,16 @@ const GraphsScreen = () => {
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('all'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('all'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'all' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'all' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1222,16 +1237,16 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('year'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('year'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'year' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'year' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'year' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'year' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'year' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'year' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1239,16 +1254,16 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('h1'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('h1'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'h1' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'h1' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'h1' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'h1' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'h1' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'h1' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1256,16 +1271,16 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('h2'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('h2'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'h2' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'h2' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'h2' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'h2' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'h2' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'h2' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1273,16 +1288,16 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('month'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('month'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'month' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'month' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'month' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'month' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'month' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'month' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1290,16 +1305,16 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('custom'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); prevTimePeriodRef.current = null; setRecentLimit(null); setTimePeriod('custom'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'custom' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === 'custom' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'custom' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: recentLimit === null && timePeriod === 'custom' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: recentLimit === null && timePeriod === 'custom' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: recentLimit === null && timePeriod === 'custom' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -1312,7 +1327,7 @@ const GraphsScreen = () => {
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.yearLabel')}</span>
                   <StyledSelect<string>
                     value={String(selectedYear)}
-                    onChange={(next) => setSelectedYear(parseInt(next))}
+                    onChange={(next) => { prevTimePeriodRef.current = null; setRecentLimit(null); setSelectedYear(parseInt(next)); }}
                     options={getAvailableYears().map(year => ({ value: String(year), label: String(year) }))}
                     variant="green"
                     size="sm"
@@ -1324,7 +1339,7 @@ const GraphsScreen = () => {
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>{t('stats.monthLabel')}</span>
                       <StyledSelect<string>
                         value={String(selectedMonth)}
-                        onChange={(next) => setSelectedMonth(parseInt(next))}
+                        onChange={(next) => { prevTimePeriodRef.current = null; setRecentLimit(null); setSelectedMonth(parseInt(next)); }}
                         options={Array.from({ length: 12 }, (_, monthIndex) => {
                           const value = monthIndex + 1;
                           const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
@@ -1349,7 +1364,7 @@ const GraphsScreen = () => {
                   <input
                     type="date"
                     value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    onChange={(e) => { prevTimePeriodRef.current = null; setRecentLimit(null); setCustomStartDate(e.target.value); }}
                     className="custom-date-input"
                     style={{
                       padding: '0.3rem 0.5rem',
@@ -1366,7 +1381,7 @@ const GraphsScreen = () => {
                   <input
                     type="date"
                     value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    onChange={(e) => { prevTimePeriodRef.current = null; setRecentLimit(null); setCustomEndDate(e.target.value); }}
                     min={customStartDate || undefined}
                     className="custom-date-input"
                     style={{
@@ -1383,7 +1398,7 @@ const GraphsScreen = () => {
                   {(customStartDate || customEndDate) && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCustomStartDate(''); setCustomEndDate(''); }}
+                      onClick={(e) => { e.stopPropagation(); prevTimePeriodRef.current = null; setRecentLimit(null); setCustomStartDate(''); setCustomEndDate(''); }}
                       style={{
                         padding: '0.2rem 0.4rem', fontSize: '0.65rem', borderRadius: '4px',
                         border: '1px solid var(--border)', background: 'var(--surface)',
@@ -1399,8 +1414,8 @@ const GraphsScreen = () => {
           )}
         </div>
 
-        {/* Player Filter - Only show for cumulative view */}
-        {viewMode === 'cumulative' && (() => {
+        {/* Player Filter - Show for cumulative & style views */}
+        {(viewMode === 'cumulative' || viewMode === 'style') && (() => {
           const permanentList = players.filter(p => (p.type || 'permanent') === 'permanent');
           const guestList = players
             .filter(p => p.type === 'permanent_guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
@@ -1999,12 +2014,7 @@ const GraphsScreen = () => {
       {/* 🔎 TABLE TREND ANALYSIS CARD (headline + tap-to-expand evidence) */}
       {viewMode === 'cumulative' && trendAnalysis.conclusions.length > 0 && (
         <div className="card" style={{ padding: '0.85rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.55rem', gap: '0.4rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.trendAnalysis')}</h2>
-            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-              {t('graphs.trendAnalysisHint')}
-            </span>
-          </div>
+          <h2 className="card-title" style={{ marginBottom: '0.55rem' }}>{t('graphs.trendAnalysis')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
             {trendAnalysis.conclusions.map(c => {
               const isExpanded = expandedConclusionId === c.id;
@@ -2448,11 +2458,13 @@ const GraphsScreen = () => {
                   flex: 1, 
                   textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '600',
+                  direction: 'ltr',
+                  unicodeBidi: 'isolate',
                   color: headToHeadData.player1Stats.biggestLoss >= headToHeadData.player2Stats.biggestLoss 
                     ? 'var(--text)' 
                     : 'var(--danger)'
                 }}>
-                  {cleanNumber(headToHeadData.player1Stats.biggestLoss)}
+                  {'\u200E'}{cleanNumber(headToHeadData.player1Stats.biggestLoss)}
                 </div>
                 <div style={{ 
                   padding: '0.25rem 0.75rem',
@@ -2469,11 +2481,13 @@ const GraphsScreen = () => {
                   flex: 1, 
                   textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '600',
+                  direction: 'ltr',
+                  unicodeBidi: 'isolate',
                   color: headToHeadData.player2Stats.biggestLoss >= headToHeadData.player1Stats.biggestLoss 
                     ? 'var(--text)' 
                     : 'var(--danger)'
                 }}>
-                  {cleanNumber(headToHeadData.player2Stats.biggestLoss)}
+                  {'\u200E'}{cleanNumber(headToHeadData.player2Stats.biggestLoss)}
                 </div>
               </div>
             </div>
@@ -2494,6 +2508,158 @@ const GraphsScreen = () => {
               </span>
             </div>
           </div>
+
+          {/* Cumulative Comparison Chart — placed right under Stats Comparison for quick mobile access */}
+          {headToHeadData.cumulativeComparison.length > 0 && (
+            <div className="card">
+              <h2 className="card-title mb-2">{t('graphs.cumulativeComparison')}</h2>
+
+              {/* Mobile-friendly pinned scrub bar for H2H */}
+              {(() => {
+                const activePt = activeH2HIdx !== null ? headToHeadData.cumulativeComparison[activeH2HIdx] : null;
+                if (!activePt) return null;
+                const gap = Math.abs(activePt.p1 - activePt.p2);
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.4rem',
+                    padding: '0.35rem 0.55rem',
+                    marginBottom: '0.4rem',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    flexWrap: 'wrap',
+                  }}>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+                      {t('graphs.gameNum', { n: activePt.gameIndex })} • {activePt.date}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#10B981', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                        {activePt.p1 > 0 ? '\u200E+' : '\u200E'}{cleanNumber(activePt.p1)}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>|</span>
+                      <span style={{ color: '#3B82F6', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                        {activePt.p2 > 0 ? '\u200E+' : '\u200E'}{cleanNumber(activePt.p2)}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        ({t('graphs.gapLabel', { val: cleanNumber(gap) })})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveH2HIdx(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        padding: '0 0.2rem',
+                        lineHeight: 1,
+                      }}
+                      aria-label="Clear"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })()}
+
+              <div style={{ 
+                width: '100%', 
+                height: '280px',
+                marginLeft: '-10px',
+              }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart 
+                    data={headToHeadData.cumulativeComparison} 
+                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
+                    onMouseMove={(state) => {
+                      const rawIdx = state?.activeTooltipIndex;
+                      const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
+                      if (!Number.isNaN(idx) && idx >= 0 && idx < headToHeadData.cumulativeComparison.length) {
+                        setActiveH2HIdx(idx);
+                      }
+                    }}
+                    onMouseLeave={() => setActiveH2HIdx(null)}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+                    <XAxis 
+                      dataKey="gameIndex" 
+                      ticks={h2hXAxisTicks}
+                      tickFormatter={(idx) => headToHeadData.cumulativeComparison[Number(idx) - 1]?.shortDate || ''}
+                      padding={{ left: 8, right: 8 }}
+                      stroke="var(--text-muted)" 
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="var(--text-muted)" 
+                      fontSize={10}
+                      tickFormatter={(value) => cleanNumber(value)}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      content={() => null}
+                      cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeWidth: 1 }}
+                    />
+                    <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
+                    <Line
+                      type="monotone"
+                      dataKey="p1"
+                      name={headToHeadData.player1Stats.playerName}
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="p2"
+                      name={headToHeadData.player2Stats.playerName}
+                      stroke="#3B82F6"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Custom Legend for H2H */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                gap: '1.5rem',
+                padding: '0.5rem 0',
+                marginTop: '0.5rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10B981' }} />
+                  <span style={{ color: '#10B981', fontWeight: '600', fontSize: '0.8rem' }}>
+                    {headToHeadData.player1Stats.playerName}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3B82F6' }} />
+                  <span style={{ color: '#3B82F6', fontWeight: '600', fontSize: '0.8rem' }}>
+                    {headToHeadData.player2Stats.playerName}
+                  </span>
+                </div>
+              </div>
+              <div style={{ 
+                textAlign: 'center', 
+                fontSize: '0.65rem', 
+                color: 'var(--text-muted)',
+                marginTop: '0.25rem' 
+              }}>
+                {t('graphs.onlySharedGames')}
+              </div>
+            </div>
+          )}
 
           {/* 🏆 DIRECT BATTLES */}
           <div className="card">
@@ -2948,157 +3114,6 @@ const GraphsScreen = () => {
             </div>
           </div>
 
-          {/* Cumulative Comparison Chart */}
-          {headToHeadData.cumulativeComparison.length > 0 && (
-            <div className="card">
-              <h2 className="card-title mb-2">{t('graphs.cumulativeComparison')}</h2>
-
-              {/* Mobile-friendly pinned scrub bar for H2H */}
-              {(() => {
-                const activePt = activeH2HIdx !== null ? headToHeadData.cumulativeComparison[activeH2HIdx] : null;
-                if (!activePt) return null;
-                const gap = Math.abs(activePt.p1 - activePt.p2);
-                return (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.4rem',
-                    padding: '0.35rem 0.55rem',
-                    marginBottom: '0.4rem',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    fontSize: '0.7rem',
-                    flexWrap: 'wrap',
-                  }}>
-                    <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
-                      {t('graphs.gameNum', { n: activePt.gameIndex })} • {activePt.date}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#10B981', fontWeight: '700', direction: 'ltr' }}>
-                        {activePt.p1 > 0 ? '+' : ''}{cleanNumber(activePt.p1)}
-                      </span>
-                      <span style={{ color: 'var(--text-muted)' }}>|</span>
-                      <span style={{ color: '#3B82F6', fontWeight: '700', direction: 'ltr' }}>
-                        {activePt.p2 > 0 ? '+' : ''}{cleanNumber(activePt.p2)}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        ({t('graphs.gapLabel', { val: cleanNumber(gap) })})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveH2HIdx(null)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        padding: '0 0.2rem',
-                        lineHeight: 1,
-                      }}
-                      aria-label="Clear"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                );
-              })()}
-
-              <div style={{ 
-                width: '100%', 
-                height: '280px',
-                marginLeft: '-10px',
-              }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart 
-                    data={headToHeadData.cumulativeComparison} 
-                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
-                    onMouseMove={(state) => {
-                      const rawIdx = state?.activeTooltipIndex;
-                      const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
-                      if (!Number.isNaN(idx) && idx >= 0 && idx < headToHeadData.cumulativeComparison.length) {
-                        setActiveH2HIdx(idx);
-                      }
-                    }}
-                    onMouseLeave={() => setActiveH2HIdx(null)}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-                    <XAxis 
-                      dataKey="gameIndex" 
-                      ticks={h2hXAxisTicks}
-                      tickFormatter={(idx) => headToHeadData.cumulativeComparison[Number(idx) - 1]?.shortDate || ''}
-                      padding={{ left: 8, right: 8 }}
-                      stroke="var(--text-muted)" 
-                      fontSize={10}
-                      tickLine={false}
-                    />
-                    <YAxis 
-                      stroke="var(--text-muted)" 
-                      fontSize={10}
-                      tickFormatter={(value) => cleanNumber(value)}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip
-                      content={() => null}
-                      cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeWidth: 1 }}
-                    />
-                    <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                    <Line
-                      type="monotone"
-                      dataKey="p1"
-                      name={headToHeadData.player1Stats.playerName}
-                      stroke="#10B981"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 5 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="p2"
-                      name={headToHeadData.player2Stats.playerName}
-                      stroke="#3B82F6"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              {/* Custom Legend for H2H */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                gap: '1.5rem',
-                padding: '0.5rem 0',
-                marginTop: '0.5rem',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10B981' }} />
-                  <span style={{ color: '#10B981', fontWeight: '600', fontSize: '0.8rem' }}>
-                    {headToHeadData.player1Stats.playerName}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3B82F6' }} />
-                  <span style={{ color: '#3B82F6', fontWeight: '600', fontSize: '0.8rem' }}>
-                    {headToHeadData.player2Stats.playerName}
-                  </span>
-                </div>
-              </div>
-              <div style={{ 
-                textAlign: 'center', 
-                fontSize: '0.65rem', 
-                color: 'var(--text-muted)',
-                marginTop: '0.25rem' 
-              }}>
-                {t('graphs.onlySharedGames')}
-              </div>
-            </div>
-          )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
             <button
@@ -3181,7 +3196,6 @@ const GraphsScreen = () => {
             const limited = impactData
               .filter(r => isLowConf(r))
               .sort((a, b) => confidenceScore(b) - confidenceScore(a));
-            const formatSignedShekelLocal = (value: number) => `\u200E${value > 0 ? '+' : value < 0 ? '-' : ''}${cleanNumber(Math.abs(value))}`;
 
             const getImpactIcon = (row: typeof impactData[0], isLimited: boolean): string | null => {
               if (isLimited) return null;
@@ -3211,99 +3225,13 @@ const GraphsScreen = () => {
               const avgWithoutColor = avgWithoutRounded === 0 ? 'var(--text-muted)' : avgWithoutRounded > 0 ? '#10B981' : '#EF4444';
               const totalGames = row.withGames + row.withoutGames;
               const withPct = totalGames > 0 ? (row.withGames / totalGames) * 100 : 50;
-              const rowInsightLines = (() => {
-                const lines: string[] = [];
-                const wrWith = Math.round(row.winRateWith);
-                const wrWithout = Math.round(row.winRateWithout);
-                const wrDelta = wrWith - wrWithout;
-                const minSide = Math.min(row.withGames, row.withoutGames);
-                const totalWith = Math.round(row.totalWith);
-                const avgW = Math.round(row.avgWith);
-                const avgWo = Math.round(row.avgWithout);
-                const together = row.withGames;
-                const apart = row.withoutGames;
-                const total = together + apart;
-                const pctTogether = Math.round((together / total) * 100);
-                const winsWithCount = row.withWins;
-                const winsWithoutCount = row.withoutWins;
-                const lossesWithCount = together - winsWithCount;
-
-                if (minSide >= 2 && wrWithout === 0 && wrWith > 0) {
-                  lines.push(`0 נצחונות בלעדיו ב-${apart} משחקים, ${wrWith}% כשמשחקים ביחד`);
-                } else if (minSide >= 2 && wrWith === 0 && wrWithout > 0) {
-                  lines.push(`0 נצחונות ביחד ב-${together} משחקים, ${wrWithout}% בלעדיו`);
-                } else if (wrWith === 100 && together >= 3) {
-                  lines.push(`${together} מתוך ${together} נצחונות ביחד — רצף מושלם`);
-                } else if (wrWithout === 100 && apart >= 3) {
-                  lines.push(`${apart} מתוך ${apart} נצחונות בלעדיו`);
-                }
-
-                if (avgW > 0 && avgWo < 0) {
-                  const ratio = Math.abs(avgW) > Math.abs(avgWo) ? Math.round(Math.abs(avgW) / Math.max(1, Math.abs(avgWo))) : null;
-                  lines.push(ratio && ratio >= 2
-                    ? `הופך הפסד ממוצע של ${cleanNumber(Math.abs(avgWo))} לרווח של ${cleanNumber(avgW)} — פי ${ratio}`
-                    : `הופך ממפסיד (${formatSignedShekelLocal(avgWo)}) למרוויח (${formatSignedShekelLocal(avgW)}) למשחק`);
-                } else if (avgW < 0 && avgWo > 0) {
-                  lines.push(`הופך ממרוויח (${formatSignedShekelLocal(avgWo)}) למפסיד (${formatSignedShekelLocal(avgW)}) למשחק`);
-                } else if (avgW > 0 && avgWo > 0 && avgW > avgWo * 1.5 && avgW > 10) {
-                  lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} איתו לעומת ${formatSignedShekelLocal(avgWo)} בלעדיו`);
-                } else if (avgW < 0 && avgWo < 0 && Math.abs(avgW) > Math.abs(avgWo) * 1.5) {
-                  lines.push(`הפסד גדל מ-${cleanNumber(Math.abs(avgWo))} ל-${cleanNumber(Math.abs(avgW))} למשחק איתו`);
-                }
-
-                if (Math.abs(wrDelta) >= 8 && !lines.some(l => l.includes('נצחונות'))) {
-                  lines.push(`${wrWith}% נצחונות איתו (${winsWithCount}/${together}) לעומת ${wrWithout}% בלעדיו (${winsWithoutCount}/${apart})`);
-                }
-
-                if (together >= 5 && lossesWithCount <= 1 && wrWith >= 80 && !lines.some(l => l.includes('רצף'))) {
-                  lines.push(`הפסיד ${lossesWithCount === 0 ? 'אפס' : 'רק פעם אחת'} ב-${together} משחקים משותפים`);
-                }
-
-                if (avgW > 0 && avgWo > 0 && Math.abs(row.impact) < 8 && together >= 5 && apart >= 3 && lines.length < 2) {
-                  lines.push(`רווח יציב בשני המצבים — ${row.otherPlayerName} לא באמת משנה את התמונה`);
-                } else if (avgW < 0 && avgWo < 0 && Math.abs(row.impact) < 8 && together >= 5 && apart >= 3 && lines.length < 2) {
-                  lines.push(`הפסד עקבי גם איתו וגם בלעדיו — הבעיה לא ב${row.otherPlayerName}`);
-                }
-
-                if (wrWith >= 60 && wrWithout >= 60 && together >= 5 && apart >= 3 && lines.length < 2) {
-                  lines.push(`אחוז נצחונות גבוה בשני המצבים — ${wrWith}% ביחד, ${wrWithout}% בנפרד`);
-                } else if (wrWith <= 35 && wrWithout <= 35 && together >= 5 && apart >= 3 && lines.length < 2) {
-                  lines.push(`אחוז נצחונות נמוך בשני המצבים — ${wrWith}% ביחד, ${wrWithout}% בנפרד`);
-                }
-
-                if (pctTogether >= 80 && together >= 10) {
-                  lines.push(`משחקים ביחד ${pctTogether}% מהזמן (${together} מתוך ${total})`);
-                } else if (pctTogether <= 20 && apart >= 10) {
-                  lines.push(`לעתים נדירות ביחד — רק ${together} מתוך ${total} משחקים`);
-                }
-
-                if (Math.abs(totalWith) >= 100) {
-                  lines.push(totalWith > 0
-                    ? `סה"כ \u200E+${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
-                    : `סה"כ \u200E-${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
-                }
-
-                if (lines.length === 0) {
-                  const impactRound = Math.round(row.impact);
-                  if (impactRound > 0) {
-                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה חיובית`);
-                  } else if (impactRound < 0) {
-                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה שלילית`);
-                  } else {
-                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה ניטרלית`);
-                  }
-                  lines.push(`${winsWithCount} נצחונות מתוך ${together} ביחד, ${winsWithoutCount} מתוך ${apart} בלעדיו`);
-                }
-
-                return lines.slice(0, 2);
-              })();
 
               return (
                 <div key={row.otherPlayerId} style={{
                   padding: '0.75rem',
                   background: 'var(--surface)',
                   borderRadius: '10px',
-                  borderLeft: `4px solid ${impactColor}`,
+                  borderInlineStart: `4px solid ${impactColor}`,
                   opacity: isLimited ? 0.65 : 1,
                 }}>
                   {/* Top row: Name + Impact badge */}
@@ -3311,7 +3239,7 @@ const GraphsScreen = () => {
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
-                    marginBottom: rowInsightLines ? '0.25rem' : '0.6rem',
+                    marginBottom: '0.5rem',
                   }}>
                     <span style={{
                       fontWeight: '700',
@@ -3335,20 +3263,13 @@ const GraphsScreen = () => {
                         fontWeight: '700', 
                         fontSize: '0.95rem',
                         color: impactColor,
+                        direction: 'ltr',
+                        unicodeBidi: 'isolate',
                       }}>
-                        {isZero ? '0' : `${row.impact > 0 ? '\u200E+' : ''}${cleanNumber(row.impact)}`}
+                        {isZero ? '0' : `${row.impact > 0 ? '\u200E+' : '\u200E'}${cleanNumber(row.impact)}`}
                       </span>
                     </div>
                   </div>
-                  {rowInsightLines && (
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      {rowInsightLines.map((line, li) => (
-                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4', textAlign: 'start' }}>
-                          {li === 0 ? '💡' : '📊'} {line}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                   
                   {/* Two cards side by side */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -4027,12 +3948,26 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginTop: '0.6rem',
                 }}>
-                  Impact = avg profit difference + win rate alignment • {getTimeframeLabel()}
+                  {t('graphs.impactFormula', { label: getTimeframeLabel() })}
                 </div>
               </div>
             );
           })()}
         </>
+      )}
+
+      {/* PLAYER STYLE & RADAR TAB */}
+      {viewMode === 'style' && filteredGames.length > 0 && (
+        <PlayerStyleTab
+          games={filteredGames}
+          allGames={allGames}
+          players={players}
+          selectedPlayers={selectedPlayers}
+          onTogglePlayer={togglePlayer}
+          gamePlayersByGameId={gamePlayersByGameId}
+          getPlayerColor={getPlayerColor}
+          timeframeLabel={getTimeframeLabel()}
+        />
       )}
 
       {/* Empty State */}

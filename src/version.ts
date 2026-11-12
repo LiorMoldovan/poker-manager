@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.41.0';
+export const APP_VERSION = '6.42.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.42.0',
+    date: '2026-11-12',
+    changes: [
+      '🎭 טאב סגנון חדש עם מפת 4 רבעים',
+      '🕸️ גרף עכביש אישי מול ממוצע השולחן',
+      '📊 ניתוח אופי מבוסס ריבאיים, סטיית תקן ורווחיות',
+      '👥 בחירת אורחים ספציפיים ושיתוף מהיר לוואטסאפ',
+    ],
+  },
   {
     version: '6.41.0',
     date: '2026-11-12',
