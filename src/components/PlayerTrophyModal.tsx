@@ -340,7 +340,7 @@ export const PlayerTrophyModal = ({
                         direction: 'ltr',
                       }}
                     >
-                      {ym.yearProfit >= 0 ? '+' : ''}₪{ym.yearProfit.toLocaleString('he-IL')}
+                      {ym.yearProfit >= 0 ? '+' : '-'}₪{Math.abs(ym.yearProfit).toLocaleString('he-IL')}
                     </span>
 
                     <button

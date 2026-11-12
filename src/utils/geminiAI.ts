@@ -4522,7 +4522,8 @@ export const generateGraphInsights = async (
   playerStats: PlayerStats[],
   periodLabel: string,
   totalGames: number,
-  isEarlyPeriod: boolean
+  isEarlyPeriod: boolean,
+  trendContext?: string
 ): Promise<string> => {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
@@ -4569,10 +4570,10 @@ export const generateGraphInsights = async (
 💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 📊 טבלת השחקנים (${totalGames} משחקים${isEarlyPeriod ? ', התקופה רק התחילה' : ''}):
-${playerLines}
+${playerLines}${trendContext ? `\n\n📈 מגמות וקשרים שנמצאו בגרף:\n${trendContext}` : ''}
 ${buildTraitBlock(sorted.map(p => p.playerName))}
 ✍️ מה לכלול:
-- מגמות: מי שולט? מי עולה? מי בנפילה?
+- מגמות והסברים: מי שולט? מי עולה או נופל? שלב את נקודות המפנה והקשרים מהגרף (למשל הצלבות בין שחקנים) כשזה רלוונטי
 - יריבויות ומרדפים: מי רודף את מי בטבלה? מהם הפערים?
 - מומנטום: מי ברצף חם ומי בקרח? מי שובר שיאים?
 - תחזית/ניחוש: מה צפוי בהמשך? מי יפתיע?

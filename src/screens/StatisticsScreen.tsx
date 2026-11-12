@@ -5607,8 +5607,8 @@ const StatisticsScreen = () => {
                     const cabinet = playerTrophyCabinets.get(player.playerId);
                     return (
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}), animation: index < 10 ? 'contentFadeIn 0.25s ease-out backwards' : undefined, animationDelay: index < 10 ? `${index * 0.05}s` : undefined }}>
-              <div className="card-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <div className="card-header" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', minWidth: 0 }}>
                   <h3 className="card-title" style={{ margin: 0, ...(isMe ? meNameStyle : {}) }}>
                     {player.playerName}
                     {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
@@ -5641,12 +5641,12 @@ const StatisticsScreen = () => {
                     </button>
                   )}
                 </div>
-                <span className={getProfitColor(player.totalProfit)} style={{ fontSize: '1.25rem', fontWeight: '700' }}>
+                <span className={getProfitColor(player.totalProfit)} style={{ fontSize: '1.25rem', fontWeight: '700', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{formatCurrency(Math.abs(player.totalProfit))}
                 </span>
               </div>
 
-              {/* Single-Row Mobile Trophy Bar (up to 4 compact pills, taps open PlayerTrophyModal) */}
+              {/* Single-Row Mobile Trophy Bar (wraps cleanly on narrow screens, taps open PlayerTrophyModal) */}
               {cabinet && cabinet.compactPills.length > 0 && (
                 <button
                   type="button"
@@ -5666,7 +5666,7 @@ const StatisticsScreen = () => {
                     fontFamily: 'inherit',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'nowrap', overflow: 'hidden', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', minWidth: 0, flex: 1 }}>
                     {cabinet.compactPills.map(pill => (
                       <span
                         key={pill.id}
@@ -5726,13 +5726,13 @@ const StatisticsScreen = () => {
               {player.lastGameResults && player.lastGameResults.length > 0 && (
                 <div style={{ marginBottom: '0.75rem' }}>
                   <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>{t('stats.lastGames', { n: Math.min(6, player.lastGameResults.length) })}</div>
-                  <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
-                    {player.lastGameResults.slice(0, 6).reverse().map((game, i) => {
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.35rem', alignItems: 'flex-start' }}>
+                    {(isRTL ? player.lastGameResults.slice(0, 6) : player.lastGameResults.slice(0, 6).reverse()).map((game) => {
                       const gameDate = new Date(game.date);
                       const dateStr = gameDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
                       return (
                       <div 
-                        key={i}
+                        key={game.gameId}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
                             navigate(`/game/${game.gameId}`, { state: { from: 'players', viewMode: 'players', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });

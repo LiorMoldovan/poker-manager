@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   ReferenceLine,
+  Tooltip,
 } from 'recharts';
 import { Player, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraphInsights, saveGraphInsights } from '../database/storage';
@@ -21,6 +22,7 @@ import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { StyledSelect, StyledSelectOption } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
+import { analyzeTrends, formatTrendsForAI } from '../utils/trendAnalysis';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
@@ -44,8 +46,38 @@ const PLAYER_COLORS = [
 interface CumulativeDataPoint {
   gameIndex: number;
   date: string;
+  shortDate: string;
   gameId: string;
-  [playerName: string]: string | number;
+  [playerId: string]: string | number;
+}
+
+/**
+ * Returns up to `maxTicks` evenly spaced 1-based `gameIndex` values
+ * (always including first and last when length > 1) so mobile X-axes
+ * never crowd or overlap regardless of total game count.
+ */
+function computeEvenTicks(length: number, maxTicks = 5): number[] {
+  if (length <= 0) return [];
+  if (length <= maxTicks) {
+    return Array.from({ length }, (_, i) => i + 1);
+  }
+  const ticks: number[] = [1];
+  const step = (length - 1) / (maxTicks - 1);
+  for (let i = 1; i < maxTicks - 1; i++) {
+    ticks.push(Math.round(1 + i * step));
+  }
+  ticks.push(length);
+  return Array.from(new Set(ticks));
+}
+
+function formatSmartAxisDate(date: Date, useMonthYear: boolean): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  if (useMonthYear) {
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${mm}/${yy}`;
+  }
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${dd}/${mm}`;
 }
 
 interface HeadToHeadStat {
@@ -67,6 +99,8 @@ const GraphsScreen = () => {
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
+  const [showPermanentGuestsInSelector, setShowPermanentGuestsInSelector] = useState(false);
+  const [showOccasionalGuestsInSelector, setShowOccasionalGuestsInSelector] = useState(false);
   const [showTimePeriod, setShowTimePeriod] = useState(false);
   
   
@@ -104,6 +138,7 @@ const GraphsScreen = () => {
   
   // Impact view state
   const [impactPlayerId, setImpactPlayerId] = useState<string>('');
+  const [includeGuestsInImpact, setIncludeGuestsInImpact] = useState(false);
   const [showLimitedData, setShowLimitedData] = useState(false);
   const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
@@ -123,9 +158,16 @@ const GraphsScreen = () => {
   const [insightsModelName, setInsightsModelName] = useState<string>('');
   const insightsGenRef = useRef(false);
   const chartRef = useRef<HTMLDivElement>(null);
+  const h2hShareRef = useRef<HTMLDivElement>(null);
   const insightsRef = useRef<HTMLDivElement>(null);
   const [isSharingChart, setIsSharingChart] = useState(false);
+  const [isSharingH2H, setIsSharingH2H] = useState(false);
   const [isSharingInsights, setIsSharingInsights] = useState(false);
+  const [highlightedPlayerIds, setHighlightedPlayerIds] = useState<string[]>([]);
+  const [expandedConclusionId, setExpandedConclusionId] = useState<string | null>(null);
+  const [recentLimit, setRecentLimit] = useState<number | null>(null);
+  const [activeCumulativeIdx, setActiveCumulativeIdx] = useState<number | null>(null);
+  const [activeH2HIdx, setActiveH2HIdx] = useState<number | null>(null);
 
   const handleShareSection = async (ref: React.RefObject<HTMLDivElement | null>, setSharing: (v: boolean) => void, title: string) => {
     if (!ref.current) return;
@@ -137,30 +179,67 @@ const GraphsScreen = () => {
     finally { setSharing(false); }
   };
 
-  // Options for the Head-to-Head + Impact player pickers: permanents flat at
-  // the top, regular guests behind one collapsible header. Plain `guest`
-  // players are left out on purpose — there are dozens of them and they play
-  // too rarely for the comparison to say anything, so including them would
-  // bury the useful picks in a list nobody wants to scroll.
-  const comparisonPlayerOptions = useMemo<StyledSelectOption<string>[]>(() => {
-    const order: Player['type'][] = ['permanent', 'permanent_guest'];
-    return order.flatMap(type =>
-      players
-        .filter(p => (p.type || 'permanent') === type)
-        .map(p => ({
-          value: p.id,
-          label: p.name,
-          group: type === 'permanent' ? undefined : t('settings.players.groupPermanentGuest'),
-        }))
-    );
-  }, [players, t]);
+  // O(1) lookup map: gameId -> (playerId -> GamePlayer)
+  const gamePlayersByGameId = useMemo(() => {
+    const map = new Map<string, Map<string, GamePlayer>>();
+    for (const gp of gamePlayers) {
+      let byPlayer = map.get(gp.gameId);
+      if (!byPlayer) {
+        byPlayer = new Map<string, GamePlayer>();
+        map.set(gp.gameId, byPlayer);
+      }
+      byPlayer.set(gp.playerId, gp);
+    }
+    return map;
+  }, [gamePlayers]);
 
-  // Scope of the Impact view's "other players" loop — deliberately NARROWER
-  // than the picker above. A guest with three games produces a with/without
-  // delta that's noise, so they can be the subject of the comparison but not
-  // a row in it.
+  // Options for the Head-to-Head + Impact player pickers: permanents flat at
+  // the top, regular guests + occasional players behind collapsible headers.
+  // Occasional players are filtered to those who actually played at least once
+  // (sorted by total games descending) so the list stays practical.
+  const totalGamesByPlayerId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const gp of gamePlayers) {
+      counts.set(gp.playerId, (counts.get(gp.playerId) || 0) + 1);
+    }
+    return counts;
+  }, [gamePlayers]);
+
+  const comparisonPlayerOptions = useMemo<StyledSelectOption<string>[]>(() => {
+    const perms = players
+      .filter(p => (p.type || 'permanent') === 'permanent')
+      .map(p => ({ value: p.id, label: p.name }));
+    const regularGuests = players
+      .filter(p => p.type === 'permanent_guest')
+      .sort((a, b) => (totalGamesByPlayerId.get(b.id) || 0) - (totalGamesByPlayerId.get(a.id) || 0))
+      .map(p => ({
+        value: p.id,
+        label: p.name,
+        group: t('settings.players.groupPermanentGuest'),
+      }));
+    const occasionals = players
+      .filter(p => p.type === 'guest' && ((totalGamesByPlayerId.get(p.id) || 0) > 0 || p.id === player1Id || p.id === player2Id || p.id === impactPlayerId))
+      .sort((a, b) => (totalGamesByPlayerId.get(b.id) || 0) - (totalGamesByPlayerId.get(a.id) || 0))
+      .map(p => ({
+        value: p.id,
+        label: p.name,
+        group: t('history.occasional'),
+      }));
+    return [...perms, ...regularGuests, ...occasionals];
+  }, [players, totalGamesByPlayerId, player1Id, player2Id, impactPlayerId, t]);
+
+  // Scope of the Impact view's "other players" loop — defaults to permanents
+  // only (`includeGuestsInImpact === false`) so sparse guests don't clutter
+  // the rows, with an opt-in toggle to also compare against regular guests.
   const impactComparisonPlayers = useMemo(
-    () => players.filter(p => p.type === 'permanent'),
+    () => players.filter(p =>
+      p.type === 'permanent' || (includeGuestsInImpact && p.type === 'permanent_guest')
+    ),
+    [players, includeGuestsInImpact]
+  );
+
+  const regularGuestsCount = useMemo(
+    () => players.filter(p => p.type === 'permanent_guest').length,
     [players]
   );
 
@@ -218,6 +297,7 @@ const GraphsScreen = () => {
   // ─── AI Graph Insights helpers ───
 
   const getInsightsKey = useCallback(() => {
+    if (recentLimit !== null) return `recent-${recentLimit}`;
     if (timePeriod === 'all') return 'all';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1-${selectedYear}`;
@@ -225,9 +305,10 @@ const GraphsScreen = () => {
     if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
     if (timePeriod === 'custom') return `custom-${customStartDate || 'x'}-${customEndDate || 'x'}`;
     return 'all';
-  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [recentLimit, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const getInsightsPeriodLabel = useCallback(() => {
+    if (recentLimit !== null) return `${recentLimit} המשחקים האחרונים`;
     if (timePeriod === 'all') return 'כל הזמנים';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `חציון ראשון ${selectedYear}`;
@@ -238,9 +319,17 @@ const GraphsScreen = () => {
       return `${months[selectedMonth - 1]} ${selectedYear}`;
     }
     return '';
-  }, [timePeriod, selectedYear, selectedMonth, formatCustomRangeHebrewForAI]);
+  }, [recentLimit, timePeriod, selectedYear, selectedMonth, formatCustomRangeHebrewForAI]);
 
   const getDateFilter = useCallback((): { start?: Date; end?: Date } | undefined => {
+    if (recentLimit !== null) {
+      const recent = allGames.slice(-recentLimit);
+      if (recent.length === 0) return undefined;
+      return {
+        start: new Date(recent[0].date),
+        end: new Date(recent[recent.length - 1].date),
+      };
+    }
     const year = selectedYear;
     switch (timePeriod) {
       case 'h1': return { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
@@ -290,8 +379,11 @@ const GraphsScreen = () => {
     return years;
   };
 
-  // Filter games by time period
+  // Filter games by time period (or quick last-N-games limit)
   const filteredGames = useMemo(() => {
+    if (recentLimit !== null && viewMode !== 'impact') {
+      return allGames.slice(-recentLimit);
+    }
     return allGames.filter(game => {
       const gameDate = new Date(game.date);
       const year = selectedYear;
@@ -319,12 +411,32 @@ const GraphsScreen = () => {
           return true;
       }
     });
-  }, [allGames, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [allGames, recentLimit, viewMode, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  // Lineup-aware trend, turning point & pair correlation analysis
+  const trendAnalysis = useMemo(
+    () => analyzeTrends(filteredGames, players, gamePlayersByGameId, selectedPlayers),
+    [filteredGames, players, gamePlayersByGameId, selectedPlayers]
+  );
+
+  // Game count per player in the currently filtered period (used to sort and
+  // filter guest/occasional tiers in the cumulative trends selector).
+  const periodGamesByPlayerId = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map(g => g.id));
+    const counts = new Map<string, number>();
+    for (const gp of gamePlayers) {
+      if (filteredIds.has(gp.gameId)) {
+        counts.set(gp.playerId, (counts.get(gp.playerId) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [filteredGames, gamePlayers]);
 
   // Auto-generate insights when cache is empty for this period (owner, or
   // a non-owner admin who set a personal device key).
   useEffect(() => {
     if (!canUseAI) return;
+    if (recentLimit !== null) return;
     if (insightsGenRef.current || insightsLoading) return;
     if (!getGeminiApiKey()) return;
     if (filteredGames.length === 0) return;
@@ -361,7 +473,8 @@ const GraphsScreen = () => {
           ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
           : totalGames <= 3;
 
-        const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
+        const trendCtx = formatTrendsForAI(trendAnalysis);
+        const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod, trendCtx));
         const modelDisplay = getModelDisplayName(getLastUsedModel());
         saveGraphInsights(key, text, modelDisplay);
         setInsightsText(text);
@@ -428,7 +541,8 @@ const GraphsScreen = () => {
         ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
         : totalGames <= 3;
 
-      const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
+      const trendCtx = formatTrendsForAI(trendAnalysis);
+      const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod, trendCtx));
       const key = getInsightsKey();
       const modelDisplay = getModelDisplayName(getLastUsedModel());
       saveGraphInsights(key, text, modelDisplay);
@@ -463,43 +577,92 @@ const GraphsScreen = () => {
     return playerColorMap.get(playerId) || '#888888';
   }, [playerColorMap]);
 
-  // Calculate cumulative profit data
+  // Clear active scrub/highlight state when filters or selections change
+  useEffect(() => {
+    setActiveCumulativeIdx(null);
+    setExpandedConclusionId(null);
+  }, [filteredGames, selectedPlayers]);
+
+  useEffect(() => {
+    setActiveH2HIdx(null);
+  }, [filteredGames, player1Id, player2Id]);
+
+  useEffect(() => {
+    setHighlightedPlayerIds(prev => prev.filter(id => selectedPlayers.has(id)));
+  }, [selectedPlayers]);
+
+  const toggleHighlightPlayer = useCallback((playerId: string) => {
+    setHighlightedPlayerIds(prev => {
+      if (prev.includes(playerId)) return prev.filter(id => id !== playerId);
+      if (prev.length < 2) return [...prev, playerId];
+      return [playerId];
+    });
+  }, []);
+
+  const focusSignalPlayers = useCallback((playerIds: string[]) => {
+    if (playerIds.length === 0) return;
+    const isAlreadyFocused =
+      highlightedPlayerIds.length === playerIds.length &&
+      playerIds.every(id => highlightedPlayerIds.includes(id));
+    if (isAlreadyFocused) {
+      setHighlightedPlayerIds([]);
+      return;
+    }
+    setSelectedPlayers(prev => {
+      if (playerIds.every(id => prev.has(id))) return prev;
+      const next = new Set(prev);
+      playerIds.forEach(id => next.add(id));
+      return next;
+    });
+    setHighlightedPlayerIds(playerIds);
+    chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightedPlayerIds]);
+
+  // Calculate cumulative profit data (keyed by playerId to prevent name-collision bugs)
   const cumulativeData: CumulativeDataPoint[] = useMemo(() => {
     const data: CumulativeDataPoint[] = [];
     const playerCumulatives: Record<string, number> = {};
-    
-    // Initialize all selected players with 0
+
     selectedPlayers.forEach(playerId => {
       playerCumulatives[playerId] = 0;
     });
 
+    const firstDate = filteredGames.length > 0 ? new Date(filteredGames[0].date) : null;
+    const lastDate = filteredGames.length > 0 ? new Date(filteredGames[filteredGames.length - 1].date) : null;
+    const spanDays = firstDate && lastDate ? (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24) : 0;
+    const useMonthYearAxis = (recentLimit === null && timePeriod === 'all') || spanDays > 180;
+
     filteredGames.forEach((game, gameIndex) => {
       const gameDate = new Date(game.date);
       const dateStr = gameDate.toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      
+      const shortDate = formatSmartAxisDate(gameDate, useMonthYearAxis);
+
       const dataPoint: CumulativeDataPoint = {
         gameIndex: gameIndex + 1,
         date: dateStr,
+        shortDate,
         gameId: game.id,
       };
 
-      // Update cumulative for each selected player
+      const byPlayer = gamePlayersByGameId.get(game.id);
       selectedPlayers.forEach(playerId => {
-        const gp = gamePlayers.find(
-          g => g.gameId === game.id && g.playerId === playerId
-        );
+        const gp = byPlayer?.get(playerId);
         if (gp) {
           playerCumulatives[playerId] += gp.profit;
         }
-        const playerName = getPlayerName(playerId);
-        dataPoint[playerName] = playerCumulatives[playerId];
+        dataPoint[playerId] = playerCumulatives[playerId];
       });
 
       data.push(dataPoint);
     });
 
     return data;
-  }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName, isRTL]);
+  }, [filteredGames, gamePlayersByGameId, selectedPlayers, isRTL, timePeriod, recentLimit]);
+
+  const cumulativeXAxisTicks = useMemo(
+    () => computeEvenTicks(cumulativeData.length, 5),
+    [cumulativeData.length]
+  );
 
   // Head-to-head comparison data
   const headToHeadData = useMemo(() => {
@@ -653,32 +816,44 @@ const GraphsScreen = () => {
     const cumulativeComparison: Array<{
       gameIndex: number;
       date: string;
-      [key: string]: string | number;
+      shortDate: string;
+      p1: number;
+      p2: number;
     }> = [];
-    
+
+    const firstSharedDate = sharedGamesOrdered.length > 0 ? new Date(sharedGamesOrdered[0].date) : null;
+    const lastSharedDate = sharedGamesOrdered.length > 0 ? new Date(sharedGamesOrdered[sharedGamesOrdered.length - 1].date) : null;
+    const sharedSpanDays = firstSharedDate && lastSharedDate
+      ? (lastSharedDate.getTime() - firstSharedDate.getTime()) / (1000 * 60 * 60 * 24)
+      : 0;
+    const useMonthYearH2H = timePeriod === 'all' || sharedSpanDays > 180;
+
     let p1Cumulative = 0;
     let p2Cumulative = 0;
     let gameIdx = 0;
 
     sharedGamesOrdered.forEach(game => {
       gameIdx++;
-      const p1Game = player1Games.find(g => g.gameId === game.id);
-      const p2Game = player2Games.find(g => g.gameId === game.id);
-      
+      const byPlayer = gamePlayersByGameId.get(game.id);
+      const p1Game = byPlayer?.get(player1Id);
+      const p2Game = byPlayer?.get(player2Id);
+
       if (p1Game) p1Cumulative += p1Game.profit;
       if (p2Game) p2Cumulative += p2Game.profit;
 
-      const dateStr = new Date(game.date).toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: '2-digit' 
+      const gameDate = new Date(game.date);
+      const dateStr = gameDate.toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
       });
 
       cumulativeComparison.push({
         gameIndex: gameIdx,
         date: dateStr,
-        [player1Stats.playerName]: p1Cumulative,
-        [player2Stats.playerName]: p2Cumulative,
+        shortDate: formatSmartAxisDate(gameDate, useMonthYearH2H),
+        p1: p1Cumulative,
+        p2: p2Cumulative,
       });
     });
 
@@ -697,7 +872,12 @@ const GraphsScreen = () => {
       volatility: { p1: p1Volatility, p2: p2Volatility },
       winRateSplit,
     };
-  }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName, isRTL]);
+  }, [player1Id, player2Id, filteredGames, gamePlayers, gamePlayersByGameId, getPlayerName, isRTL, timePeriod]);
+
+  const h2hXAxisTicks = useMemo(
+    () => computeEvenTicks(headToHeadData?.cumulativeComparison.length || 0, 5),
+    [headToHeadData?.cumulativeComparison.length]
+  );
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -805,6 +985,9 @@ const GraphsScreen = () => {
   }, [impactPlayerId, filteredGames, gamePlayers, impactComparisonPlayers, getPlayerColor]);
 
   const getTimeframeLabel = () => {
+    if (recentLimit !== null && viewMode !== 'impact') {
+      return t('graphs.lastNGamesLabel', { n: recentLimit });
+    }
     const locale = language === 'he' ? 'he-IL' : 'en-US';
     if (timePeriod === 'all') return t('stats.allTimeLabel');
     if (timePeriod === 'custom') {
@@ -830,39 +1013,83 @@ const GraphsScreen = () => {
     return '';
   };
 
-  // Custom Legend component with colored names
-  const CustomLegend = () => (
-    <div style={{ 
-      display: 'flex', 
-      flexWrap: 'wrap', 
-      justifyContent: 'center',
-      gap: '0.5rem',
-      padding: '0.5rem 0',
-      marginTop: '0.5rem',
-    }}>
-      {sortedPlayerIds.map(playerId => (
-        <div key={playerId} style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '0.25rem',
-          fontSize: '0.7rem',
-        }}>
-          <div style={{ 
-            width: '8px', 
-            height: '8px', 
-            borderRadius: '50%', 
-            background: getPlayerColor(playerId) 
-          }} />
-          <span style={{ 
-            color: getPlayerColor(playerId), 
-            fontWeight: '600' 
-          }}>
-            {getPlayerName(playerId)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+  // Interactive Legend sorted by final cumulative profit descending (tapping a pill highlights that player)
+  const legendPlayerIds = useMemo(() => {
+    const lastPoint = cumulativeData[cumulativeData.length - 1];
+    if (!lastPoint) return sortedPlayerIds;
+    return [...sortedPlayerIds].sort((a, b) => {
+      const aVal = Number(lastPoint[a] ?? 0);
+      const bVal = Number(lastPoint[b] ?? 0);
+      return bVal - aVal;
+    });
+  }, [sortedPlayerIds, cumulativeData]);
+
+  const CustomLegend = () => {
+    const lastPoint = cumulativeData[cumulativeData.length - 1];
+    const hasHighlight = highlightedPlayerIds.length > 0;
+    return (
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: '0.35rem',
+        padding: '0.5rem 0 0.15rem',
+        marginTop: '0.35rem',
+      }}>
+        {legendPlayerIds.map(playerId => {
+          const color = getPlayerColor(playerId);
+          const isHighlighted = highlightedPlayerIds.includes(playerId);
+          const isDimmed = hasHighlight && !isHighlighted;
+          const finalVal = lastPoint ? Number(lastPoint[playerId] ?? 0) : null;
+          return (
+            <button
+              key={playerId}
+              type="button"
+              onClick={() => toggleHighlightPlayer(playerId)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.72rem',
+                padding: '0.28rem 0.55rem',
+                borderRadius: '999px',
+                border: isHighlighted ? `1.5px solid ${color}` : '1px solid var(--border)',
+                background: isHighlighted ? `${color}24` : 'var(--surface)',
+                opacity: isDimmed ? 0.45 : 1,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: color,
+                flexShrink: 0,
+              }} />
+              <span style={{
+                color,
+                fontWeight: isHighlighted ? '700' : '600',
+              }}>
+                {getPlayerName(playerId)}
+              </span>
+              {finalVal !== null && (
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: '700',
+                  color: finalVal > 0 ? '#10B981' : finalVal < 0 ? '#EF4444' : 'var(--text-muted)',
+                  direction: 'ltr',
+                  unicodeBidi: 'isolate',
+                }}>
+                  {finalVal > 0 ? '\u200E+' : ''}{cleanNumber(finalVal)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="fade-in">
@@ -920,6 +1147,39 @@ const GraphsScreen = () => {
 
       {/* Filters Card - Always visible */}
       <div className="card" style={{ padding: '0.75rem' }}>
+        {/* Quick Last-N-Games Pills (Trends & H2H) */}
+        {viewMode !== 'impact' && allGames.length >= 5 && (
+          <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.6rem' }}>
+            {[
+              { label: t('graphs.byFilter'), val: null as number | null },
+              ...(allGames.length >= 10 ? [{ label: t('graphs.recent10'), val: 10 as number | null }] : []),
+              { label: t('graphs.recent5'), val: 5 as number | null },
+            ].map(opt => {
+              const active = recentLimit === opt.val;
+              return (
+                <button
+                  key={String(opt.val)}
+                  type="button"
+                  onClick={() => setRecentLimit(opt.val)}
+                  style={{
+                    flex: 1,
+                    padding: '0.32rem 0.4rem',
+                    fontSize: '0.7rem',
+                    fontWeight: active ? '700' : '500',
+                    borderRadius: '8px',
+                    border: active ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                    background: active ? 'rgba(16, 185, 129, 0.14)' : 'var(--surface)',
+                    color: active ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Time Period Filter */}
         <div style={{ 
           marginBottom: '0.75rem',
@@ -936,7 +1196,7 @@ const GraphsScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${language === 'he' ? formatHebrewHalf(timePeriod === 'h1' ? 1 : 2, selectedYear) : `${timePeriod.toUpperCase()} ${selectedYear}`})`}
+              {t('stats.timePeriod')} {recentLimit !== null && viewMode !== 'impact' ? `(${t('graphs.lastNGamesLabel', { n: recentLimit })})` : timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${language === 'he' ? formatHebrewHalf(timePeriod === 'h1' ? 1 : 2, selectedYear) : `${timePeriod.toUpperCase()} ${selectedYear}`})`}
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
           </button>
@@ -945,7 +1205,7 @@ const GraphsScreen = () => {
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('all'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('all'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -962,7 +1222,7 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('year'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('year'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -979,7 +1239,7 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h1'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('h1'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -996,7 +1256,7 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h2'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('h2'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -1013,7 +1273,7 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('month'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('month'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -1030,7 +1290,7 @@ const GraphsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('custom'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setRecentLimit(null); setTimePeriod('custom'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -1140,109 +1400,233 @@ const GraphsScreen = () => {
         </div>
 
         {/* Player Filter - Only show for cumulative view */}
-        {viewMode === 'cumulative' && (
-          <>
-            <button 
-              type="button"
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerSelector(!showPlayerSelector); }}
-              style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                width: '100%',
-                padding: 0,
-                marginBottom: showPlayerSelector ? '0.5rem' : 0,
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--text)'
-              }}
-            >
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                {t('graphs.filterPlayers', {
-                  selected: selectedPlayers.size,
-                  total: players.filter(p => p.type === 'permanent').length,
-                })}
-              </span>
-              <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
-                {showPlayerSelector ? '▲' : '▼'}
-              </span>
-            </button>
-            
-            {showPlayerSelector && (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllPermanent(); }}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('common.selectAll')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      e.preventDefault(); 
-                      setSelectedPlayers(new Set()); 
-                    }}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('common.clear')}
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {players
-                    .filter(p => p.type === 'permanent')
-                    .map((player) => {
-                      const isSelected = selectedPlayers.has(player.id);
-                      const color = getPlayerColor(player.id);
-                      return (
-                        <button
-                          type="button"
-                          key={player.id}
-                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePlayer(player.id); }}
-                          style={{
-                            padding: '0.4rem 0.65rem',
-                            borderRadius: '16px',
-                            border: isSelected 
-                              ? `2px solid ${color}` 
-                              : '2px solid var(--border)',
-                            background: isSelected 
-                              ? `${color}22` 
-                              : 'var(--surface)',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: '600',
-                            color: isSelected ? color : 'var(--text-muted)',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          {isSelected && '✓ '}{player.name}
-                        </button>
-                      );
-                    })}
-                </div>
-              </>
-            )}
-          </>
-        )}
+        {viewMode === 'cumulative' && (() => {
+          const permanentList = players.filter(p => (p.type || 'permanent') === 'permanent');
+          const guestList = players
+            .filter(p => p.type === 'permanent_guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
+            .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
+          const occasionalList = players
+            .filter(p => p.type === 'guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
+            .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
+
+          const selectedPermCount = permanentList.filter(p => selectedPlayers.has(p.id)).length;
+          const selectedGuestCount = players.filter(p => (p.type || 'permanent') !== 'permanent' && selectedPlayers.has(p.id)).length;
+          const selectedPermGuestsCount = guestList.filter(p => selectedPlayers.has(p.id)).length;
+          const selectedOccasionalCount = occasionalList.filter(p => selectedPlayers.has(p.id)).length;
+
+          const renderPlayerPill = (player: Player, showGameCount = false) => {
+            const isSelected = selectedPlayers.has(player.id);
+            const color = getPlayerColor(player.id);
+            const gamesInPeriod = periodGamesByPlayerId.get(player.id) || 0;
+            return (
+              <button
+                type="button"
+                key={player.id}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePlayer(player.id); }}
+                style={{
+                  padding: '0.4rem 0.65rem',
+                  borderRadius: '16px',
+                  border: isSelected 
+                    ? `2px solid ${color}` 
+                    : '2px solid var(--border)',
+                  background: isSelected 
+                    ? `${color}22` 
+                    : 'var(--surface)',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  color: isSelected ? color : 'var(--text-muted)',
+                  transition: 'all 0.15s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
+                <span>{isSelected && '✓ '}{player.name}</span>
+                {showGameCount && gamesInPeriod > 0 && (
+                  <span style={{ fontSize: '0.65rem', opacity: 0.7, fontWeight: '500' }}>
+                    ({gamesInPeriod})
+                  </span>
+                )}
+              </button>
+            );
+          };
+
+          return (
+            <>
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerSelector(!showPlayerSelector); }}
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: 0,
+                  marginBottom: showPlayerSelector ? '0.5rem' : 0,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text)'
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                  {selectedGuestCount > 0
+                    ? t('graphs.filterPlayersWithGuests', {
+                        selected: selectedPermCount,
+                        total: permanentList.length,
+                        guests: selectedGuestCount,
+                      })
+                    : t('graphs.filterPlayers', {
+                        selected: selectedPermCount,
+                        total: permanentList.length,
+                      })}
+                </span>
+                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+                  {showPlayerSelector ? '▲' : '▼'}
+                </span>
+              </button>
+              
+              {showPlayerSelector && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllPermanent(); }}
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {selectedGuestCount > 0 ? t('graphs.selectRegularsOnly') : t('common.selectAll')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        e.preventDefault(); 
+                        setSelectedPlayers(new Set()); 
+                      }}
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('common.clear')}
+                    </button>
+                  </div>
+
+                  {/* Permanent Players */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {permanentList.map(player => renderPlayerPill(player, false))}
+                  </div>
+
+                  {/* Regular Guests Section (collapsible) */}
+                  {guestList.length > 0 && (
+                    <div style={{ marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPermanentGuestsInSelector(v => !v); }}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%',
+                          padding: 0,
+                          marginBottom: showPermanentGuestsInSelector ? '0.4rem' : 0,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text)',
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                          <span>{t('graphs.guestPlayersSection', { count: guestList.length })}</span>
+                          {selectedPermGuestsCount > 0 && (
+                            <span style={{
+                              background: 'var(--primary)',
+                              color: '#fff',
+                              borderRadius: '999px',
+                              padding: '0.05rem 0.4rem',
+                              fontSize: '0.62rem',
+                              fontWeight: '700',
+                            }}>
+                              {selectedPermGuestsCount}
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          {showPermanentGuestsInSelector ? '▲' : '▼'}
+                        </span>
+                      </button>
+                      {showPermanentGuestsInSelector && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {guestList.map(player => renderPlayerPill(player, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Occasional Guests Section (collapsible) */}
+                  {occasionalList.length > 0 && (
+                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowOccasionalGuestsInSelector(v => !v); }}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%',
+                          padding: 0,
+                          marginBottom: showOccasionalGuestsInSelector ? '0.4rem' : 0,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text)',
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                          <span>{t('graphs.occasionalPlayersSection', { count: occasionalList.length })}</span>
+                          {selectedOccasionalCount > 0 && (
+                            <span style={{
+                              background: 'var(--primary)',
+                              color: '#fff',
+                              borderRadius: '999px',
+                              padding: '0.05rem 0.4rem',
+                              fontSize: '0.62rem',
+                              fontWeight: '700',
+                            }}>
+                              {selectedOccasionalCount}
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          {showOccasionalGuestsInSelector ? '▲' : '▼'}
+                        </span>
+                      </button>
+                      {showOccasionalGuestsInSelector && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {occasionalList.map(player => renderPlayerPill(player, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Head-to-Head Player Selection */}
@@ -1256,19 +1640,38 @@ const GraphsScreen = () => {
               <StyledSelect<string>
                 value={player1Id}
                 onChange={setPlayer1Id}
-                options={comparisonPlayerOptions}
+                options={comparisonPlayerOptions.filter(o => o.value !== player2Id)}
                 variant="green"
                 size="md"
                 fullWidth
                 title={t('graphs.select2Players')}
               />
             </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: '700' }}>🆚</span>
+            <button
+              type="button"
+              onClick={() => {
+                setPlayer1Id(player2Id);
+                setPlayer2Id(player1Id);
+              }}
+              title={t('graphs.swapPlayers')}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '1.2rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                padding: '0.2rem',
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              🆚
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <StyledSelect<string>
                 value={player2Id}
                 onChange={setPlayer2Id}
-                options={comparisonPlayerOptions}
+                options={comparisonPlayerOptions.filter(o => o.value !== player1Id)}
                 variant="green"
                 size="md"
                 fullWidth
@@ -1287,53 +1690,301 @@ const GraphsScreen = () => {
             fontSize: '0.7rem', 
             color: 'var(--text-muted)',
             textAlign: 'center',
-            marginBottom: '0.5rem' 
+            marginBottom: '0.4rem' 
           }}>
             {getTimeframeLabel()} • {filteredGames.length} {t('common.games')}
           </div>
-          <div style={{ 
-            width: '100%', 
-            height: '320px',
-            marginLeft: '-10px',
-          }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart 
-                data={cumulativeData} 
-                margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+
+          {selectedPlayers.size === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              <p style={{ marginBottom: '0.6rem' }}>{t('graphs.selectAtLeastOne')}</p>
+              <button
+                type="button"
+                onClick={selectAllPermanent}
+                className="btn btn-sm btn-secondary"
+                style={{ fontSize: '0.75rem' }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-                <XAxis 
-                  dataKey="gameIndex" 
-                  stroke="var(--text-muted)" 
-                  fontSize={10}
-                  tickLine={false}
-                />
-                <YAxis 
-                  stroke="var(--text-muted)" 
-                  fontSize={10}
-                  tickFormatter={(value) => cleanNumber(value)}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                {sortedPlayerIds.map((playerId) => (
-                  <Line
-                    key={playerId}
-                    type="monotone"
-                    dataKey={getPlayerName(playerId)}
-                    stroke={getPlayerColor(playerId)}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <CustomLegend />
+                {t('graphs.selectRegularsOnly')}
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Mobile-friendly pinned scrub bar (never covers the chart) */}
+              {(() => {
+                const activePoint = activeCumulativeIdx !== null ? cumulativeData[activeCumulativeIdx] : null;
+                if (!activePoint) {
+                  return (
+                    <div style={{
+                      fontSize: '0.65rem',
+                      color: 'var(--text-muted)',
+                      textAlign: 'center',
+                      padding: '0.28rem 0.5rem',
+                      marginBottom: '0.35rem',
+                      opacity: 0.75,
+                    }}>
+                      {t('graphs.tapHint')}
+                    </div>
+                  );
+                }
+
+                const byPlayer = gamePlayersByGameId.get(activePoint.gameId);
+
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.4rem',
+                    padding: '0.35rem 0.55rem',
+                    marginBottom: '0.35rem',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    flexWrap: 'wrap',
+                  }}>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                      {t('graphs.gameNum', { n: activePoint.gameIndex })} • {activePoint.date}
+                    </span>
+                    {highlightedPlayerIds.length > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {highlightedPlayerIds.map(focusId => {
+                          const cumVal = Number(activePoint[focusId] ?? 0);
+                          const gp = byPlayer?.get(focusId);
+                          const color = getPlayerColor(focusId);
+                          return (
+                            <div key={focusId} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span style={{ color, fontWeight: '700' }}>{getPlayerName(focusId)}</span>
+                              <span style={{
+                                fontWeight: '700',
+                                color: cumVal > 0 ? '#10B981' : cumVal < 0 ? '#EF4444' : 'var(--text)',
+                                direction: 'ltr',
+                              }}>
+                                {cumVal > 0 ? '+' : ''}{cleanNumber(cumVal)}
+                              </span>
+                              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                                ({gp
+                                  ? `${gp.profit > 0 ? '+' : ''}${cleanNumber(gp.profit)}`
+                                  : t('graphs.didNotPlay')})
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {[...sortedPlayerIds]
+                          .sort((a, b) => Number(activePoint[b] ?? 0) - Number(activePoint[a] ?? 0))
+                          .slice(0, 3)
+                          .map(pid => {
+                            const val = Number(activePoint[pid] ?? 0);
+                            return (
+                              <span key={pid} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: getPlayerColor(pid) }} />
+                                <span style={{ color: getPlayerColor(pid), fontWeight: '600' }}>{getPlayerName(pid)}</span>
+                                <span style={{ fontWeight: '700', color: val > 0 ? '#10B981' : val < 0 ? '#EF4444' : 'var(--text-muted)', direction: 'ltr' }}>
+                                  {val > 0 ? '+' : ''}{cleanNumber(val)}
+                                </span>
+                              </span>
+                            );
+                          })}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCumulativeIdx(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        padding: '0 0.2rem',
+                        lineHeight: 1,
+                      }}
+                      aria-label="Clear"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })()}
+
+              <div style={{ 
+                width: '100%', 
+                height: '320px',
+                marginLeft: '-10px',
+              }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart 
+                    data={cumulativeData} 
+                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
+                    onMouseMove={(state) => {
+                      const rawIdx = state?.activeTooltipIndex;
+                      const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
+                      if (!Number.isNaN(idx) && idx >= 0 && idx < cumulativeData.length) {
+                        setActiveCumulativeIdx(idx);
+                      }
+                    }}
+                    onMouseLeave={() => setActiveCumulativeIdx(null)}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+                    <XAxis 
+                      dataKey="gameIndex" 
+                      ticks={cumulativeXAxisTicks}
+                      tickFormatter={(idx) => cumulativeData[Number(idx) - 1]?.shortDate || ''}
+                      padding={{ left: 8, right: 8 }}
+                      stroke="var(--text-muted)" 
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="var(--text-muted)" 
+                      fontSize={10}
+                      tickFormatter={(value) => cleanNumber(value)}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      content={() => null}
+                      cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeWidth: 1 }}
+                    />
+                    <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
+                    {sortedPlayerIds.map((playerId) => {
+                      const hasHighlight = highlightedPlayerIds.length > 0;
+                      const isHighlighted = highlightedPlayerIds.includes(playerId);
+                      const isDimmed = hasHighlight && !isHighlighted;
+                      return (
+                        <Line
+                          key={playerId}
+                          type="monotone"
+                          dataKey={playerId}
+                          name={getPlayerName(playerId)}
+                          stroke={getPlayerColor(playerId)}
+                          strokeWidth={isHighlighted ? 3.5 : isDimmed ? 1.5 : 2}
+                          strokeOpacity={isDimmed ? 0.16 : 1}
+                          dot={false}
+                          activeDot={isDimmed ? false : { r: isHighlighted ? 5 : 3.5, strokeWidth: 0 }}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <CustomLegend />
+
+              {/* Focused player(s) quick summary strip: Peak/Trough + Turning Point + H2H shortcut */}
+              {highlightedPlayerIds.length === 1 && (() => {
+                const summary = trendAnalysis.playerSummaries.get(highlightedPlayerIds[0]);
+                if (!summary) return null;
+                return (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.45rem 0.6rem',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <span>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('graphs.peakLabel')} </span>
+                          <span style={{ color: '#10B981', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                            {summary.peakProfit > 0 ? '\u200E+' : ''}{cleanNumber(summary.peakProfit)}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}> ({summary.peakDate})</span>
+                        </span>
+                        <span>
+                          <span style={{ color: 'var(--text-muted)' }}>{t('graphs.troughLabel')} </span>
+                          <span style={{ color: '#EF4444', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                            {'\u200E'}{cleanNumber(summary.troughProfit)}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}> ({summary.troughDate})</span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHighlightedPlayerIds([])}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.65rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0,
+                        }}
+                      >
+                        {t('graphs.clearFocus')}
+                      </button>
+                    </div>
+                    {summary.turningPoint && (
+                      <div style={{ color: 'var(--text)', fontSize: '0.68rem' }}>
+                        📍 מפנה ב-{summary.turningPoint.date}: {summary.turningPoint.hint}
+                      </div>
+                    )}
+                    {summary.contextHint && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.66rem' }}>
+                        👥 {summary.contextHint}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {highlightedPlayerIds.length === 2 && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlayer1Id(highlightedPlayerIds[0]);
+                      setPlayer2Id(highlightedPlayerIds[1]);
+                      setViewMode('headToHead');
+                    }}
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '0.28rem 0.65rem',
+                      borderRadius: '999px',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      color: '#34d399',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🆚 {t('graphs.openInH2H')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHighlightedPlayerIds([])}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.68rem',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    {t('graphs.clearFocus')}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
-      {viewMode === 'cumulative' && cumulativeData.length > 0 && (
+      {viewMode === 'cumulative' && cumulativeData.length > 0 && selectedPlayers.size > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
           <button
             onClick={() => handleShareSection(chartRef, setIsSharingChart, 'cumulative-profit')}
@@ -1342,6 +1993,126 @@ const GraphsScreen = () => {
           >
             {isSharingChart ? t('common.capturing') : t('common.share')}
           </button>
+        </div>
+      )}
+
+      {/* 🔎 TABLE TREND ANALYSIS CARD (headline + tap-to-expand evidence) */}
+      {viewMode === 'cumulative' && trendAnalysis.conclusions.length > 0 && (
+        <div className="card" style={{ padding: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.55rem', gap: '0.4rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.trendAnalysis')}</h2>
+            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+              {t('graphs.trendAnalysisHint')}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+            {trendAnalysis.conclusions.map(c => {
+              const isExpanded = expandedConclusionId === c.id;
+              const isFocused =
+                c.focusPlayerIds.length > 0 &&
+                highlightedPlayerIds.length === c.focusPlayerIds.length &&
+                c.focusPlayerIds.every(id => highlightedPlayerIds.includes(id));
+
+              return (
+                <div
+                  key={c.id}
+                  style={{
+                    borderRadius: '8px',
+                    background: isExpanded ? 'rgba(139, 92, 246, 0.08)' : 'var(--surface)',
+                    border: isExpanded ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid var(--border)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedConclusionId(prev => prev === c.id ? null : c.id)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.65rem',
+                      background: 'none',
+                      border: 'none',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      cursor: 'pointer',
+                      textAlign: 'start',
+                      color: 'var(--text)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.78rem', fontWeight: '700', lineHeight: 1.35 }}>
+                      {c.icon} {c.headline}
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div style={{
+                      padding: '0 0.65rem 0.6rem',
+                      borderTop: '1px solid var(--border)',
+                      marginTop: '0.1rem',
+                      paddingTop: '0.45rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.28rem',
+                    }}>
+                      {c.evidence.map((line, i) => (
+                        <div key={i} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.45, display: 'flex', gap: '0.35rem' }}>
+                          <span style={{ color: '#A78BFA', flexShrink: 0 }}>•</span>
+                          <span>{line}</span>
+                        </div>
+                      ))}
+
+                      {c.focusPlayerIds.length > 0 && (
+                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => focusSignalPlayers(c.focusPlayerIds)}
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '0.24rem 0.55rem',
+                              borderRadius: '999px',
+                              border: isFocused ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid var(--border)',
+                              background: isFocused ? 'rgba(139, 92, 246, 0.16)' : 'var(--card)',
+                              color: isFocused ? '#C4B5FD' : 'var(--text)',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🎯 {isFocused ? t('graphs.clearFocus') : t('graphs.highlightOnChart')}
+                          </button>
+                          {c.focusPlayerIds.length === 2 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPlayer1Id(c.focusPlayerIds[0]);
+                                setPlayer2Id(c.focusPlayerIds[1]);
+                                setViewMode('headToHead');
+                              }}
+                              style={{
+                                fontSize: '0.68rem',
+                                padding: '0.24rem 0.55rem',
+                                borderRadius: '999px',
+                                border: '1px solid rgba(16, 185, 129, 0.4)',
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                color: '#34d399',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              🆚 {t('graphs.openInH2H')}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1470,8 +2241,18 @@ const GraphsScreen = () => {
       )}
 
       {/* HEAD-TO-HEAD COMPARISON */}
-      {viewMode === 'headToHead' && headToHeadData && (
+      {viewMode === 'headToHead' && headToHeadData && headToHeadData.sharedGamesCount === 0 && (
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-icon">🆚</div>
+            <p>{t('graphs.noSharedGames')}</p>
+            <p className="text-muted">{getTimeframeLabel()}</p>
+          </div>
+        </div>
+      )}
+      {viewMode === 'headToHead' && headToHeadData && headToHeadData.sharedGamesCount > 0 && (
         <>
+          <div ref={h2hShareRef}>
           {/* Stats Comparison */}
           <div className="card">
             <h2 className="card-title mb-2">{t('graphs.statsComparison')}</h2>
@@ -1936,7 +2717,7 @@ const GraphsScreen = () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Win</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.bigWinShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.bigWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -1947,7 +2728,7 @@ const GraphsScreen = () => {
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.bigWin}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Win</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.winShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.smallWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -1958,7 +2739,7 @@ const GraphsScreen = () => {
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.smallWin}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Loss</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.lossShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.smallLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -1969,7 +2750,7 @@ const GraphsScreen = () => {
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.smallLoss}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Loss</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.bigLossShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.bigLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -1989,29 +2770,29 @@ const GraphsScreen = () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Win</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.bigWinShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.bigWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
                           height: '100%',
-                          background: '#3B82F6',
+                          background: '#10B981',
                         }} />
                       </div>
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.bigWin}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Win</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.winShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.smallWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
                           height: '100%',
-                          background: '#93C5FD',
+                          background: '#6EE7B7',
                         }} />
                       </div>
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.smallWin}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Loss</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.lossShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.smallLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -2022,7 +2803,7 @@ const GraphsScreen = () => {
                       <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.smallLoss}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Loss</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>{t('graphs.bigLossShort')}</span>
                       <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
                         <div style={{ 
                           width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.bigLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
@@ -2171,6 +2952,61 @@ const GraphsScreen = () => {
           {headToHeadData.cumulativeComparison.length > 0 && (
             <div className="card">
               <h2 className="card-title mb-2">{t('graphs.cumulativeComparison')}</h2>
+
+              {/* Mobile-friendly pinned scrub bar for H2H */}
+              {(() => {
+                const activePt = activeH2HIdx !== null ? headToHeadData.cumulativeComparison[activeH2HIdx] : null;
+                if (!activePt) return null;
+                const gap = Math.abs(activePt.p1 - activePt.p2);
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.4rem',
+                    padding: '0.35rem 0.55rem',
+                    marginBottom: '0.4rem',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    flexWrap: 'wrap',
+                  }}>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+                      {t('graphs.gameNum', { n: activePt.gameIndex })} • {activePt.date}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#10B981', fontWeight: '700', direction: 'ltr' }}>
+                        {activePt.p1 > 0 ? '+' : ''}{cleanNumber(activePt.p1)}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>|</span>
+                      <span style={{ color: '#3B82F6', fontWeight: '700', direction: 'ltr' }}>
+                        {activePt.p2 > 0 ? '+' : ''}{cleanNumber(activePt.p2)}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        ({t('graphs.gapLabel', { val: cleanNumber(gap) })})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveH2HIdx(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        padding: '0 0.2rem',
+                        lineHeight: 1,
+                      }}
+                      aria-label="Clear"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div style={{ 
                 width: '100%', 
                 height: '280px',
@@ -2179,11 +3015,22 @@ const GraphsScreen = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart 
                     data={headToHeadData.cumulativeComparison} 
-                    margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
+                    onMouseMove={(state) => {
+                      const rawIdx = state?.activeTooltipIndex;
+                      const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
+                      if (!Number.isNaN(idx) && idx >= 0 && idx < headToHeadData.cumulativeComparison.length) {
+                        setActiveH2HIdx(idx);
+                      }
+                    }}
+                    onMouseLeave={() => setActiveH2HIdx(null)}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
                     <XAxis 
                       dataKey="gameIndex" 
+                      ticks={h2hXAxisTicks}
+                      tickFormatter={(idx) => headToHeadData.cumulativeComparison[Number(idx) - 1]?.shortDate || ''}
+                      padding={{ left: 8, right: 8 }}
                       stroke="var(--text-muted)" 
                       fontSize={10}
                       tickLine={false}
@@ -2195,10 +3042,15 @@ const GraphsScreen = () => {
                       tickLine={false}
                       axisLine={false}
                     />
+                    <Tooltip
+                      content={() => null}
+                      cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeWidth: 1 }}
+                    />
                     <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
                     <Line
                       type="monotone"
-                      dataKey={headToHeadData.player1Stats.playerName}
+                      dataKey="p1"
+                      name={headToHeadData.player1Stats.playerName}
                       stroke="#10B981"
                       strokeWidth={3}
                       dot={false}
@@ -2206,7 +3058,8 @@ const GraphsScreen = () => {
                     />
                     <Line
                       type="monotone"
-                      dataKey={headToHeadData.player2Stats.playerName}
+                      dataKey="p2"
+                      name={headToHeadData.player2Stats.playerName}
                       stroke="#3B82F6"
                       strokeWidth={3}
                       dot={false}
@@ -2246,6 +3099,16 @@ const GraphsScreen = () => {
               </div>
             </div>
           )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+            <button
+              onClick={() => handleShareSection(h2hShareRef, setIsSharingH2H, 'head-to-head')}
+              disabled={isSharingH2H}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+            >
+              {isSharingH2H ? t('common.capturing') : t('common.share')}
+            </button>
+          </div>
         </>
       )}
 
@@ -2254,8 +3117,36 @@ const GraphsScreen = () => {
         <>
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '0.5rem' }}>
-              {t('graphs.selectPlayer')}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '0.5rem',
+              gap: '0.5rem',
+            }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                {t('graphs.selectPlayer')}
+              </span>
+              {regularGuestsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIncludeGuestsInImpact(v => !v)}
+                  style={{
+                    padding: '0.22rem 0.55rem',
+                    fontSize: '0.68rem',
+                    fontWeight: '600',
+                    borderRadius: '999px',
+                    border: includeGuestsInImpact ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                    background: includeGuestsInImpact ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: includeGuestsInImpact ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {includeGuestsInImpact ? '✓ ' : ''}{t('graphs.includeGuestsInComparison', { count: regularGuestsCount })}
+                </button>
+              )}
             </div>
             <StyledSelect<string>
               value={impactPlayerId}

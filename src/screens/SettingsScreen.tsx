@@ -54,7 +54,7 @@ import {
   type ScheduleEmailVariantId,
 } from '../utils/previewScheduleEmails';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
-import { fetchActivityLog, getDeviceId, getCurrentSessionTimestamp } from '../utils/activityLogger';
+import { fetchActivityLog, fetchActivitySummary, ActivityUserSummary, getDeviceId, getCurrentSessionTimestamp } from '../utils/activityLogger';
 import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingData';
 import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -205,6 +205,7 @@ const SettingsScreen = () => {
 
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [activitySummary, setActivitySummary] = useState<ActivityUserSummary[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
@@ -1056,11 +1057,13 @@ const SettingsScreen = () => {
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const [entries, trainingData] = await Promise.all([
+      const [entries, summaryRows, trainingData] = await Promise.all([
         fetchActivityLog(isSuperAdmin ? groupMgmt?.currentUserId : undefined),
+        fetchActivitySummary(),
         fetchTrainingAnswers(),
       ]);
       setActivityLog(entries.reverse());
+      setActivitySummary(summaryRows);
       setTrainingPlayers(trainingData?.players || []);
     } catch (err) {
       setActivityError(err instanceof Error ? err.message : t('settings.activity.loadError'));
@@ -6536,14 +6539,40 @@ const SettingsScreen = () => {
               return { name: nameByKey.get(bestKey) || bestKey.slice(0, 8), days: max, sessions: userSessions.get(bestKey) || 0 };
             })();
 
+            const formatScreenName = (screen: string): string => {
+              if (language !== 'he') return screen;
+              const heMap: Record<string, string> = {
+                Home: 'בית',
+                Schedule: 'תאום משחק',
+                'Poll Link': 'תאום משחק',
+                Statistics: 'סטטיסטיקות',
+                History: 'היסטוריה',
+                Graphs: 'גרפים',
+                Settings: 'הגדרות',
+                'Live Game': 'משחק חי',
+                'Chip Entry': 'ספירת צ׳יפים',
+                'Game Details': 'פרטי משחק',
+                Training: 'אימון',
+                'Shared Training': 'אימון משותף',
+                Trivia: 'טריוויה',
+                'New Game': 'משחק חדש',
+                Other: 'אחר',
+              };
+              return heMap[screen] || screen;
+            };
+
             const lastVisitor = (() => {
               if (activityLog.length === 0) return null;
               const latest = activityLog.reduce((a, b) =>
                 new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a
               );
               const name = nameOf(latest);
-              const ago = Math.floor((now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime()) / 60000);
-              const agoLabel = ago < 60 ? `${ago}${language === 'he' ? ' דק׳' : 'm'}` : `${Math.floor(ago / 60)}${language === 'he' ? ' שע׳' : 'h'}`;
+              const ago = Math.max(0, Math.floor((now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime()) / 60000));
+              const agoLabel = ago < 60
+                ? `${ago}${language === 'he' ? ' דק׳' : 'm'}`
+                : ago < 1440
+                  ? `${Math.floor(ago / 60)}${language === 'he' ? ' שע׳' : 'h'}`
+                  : `${Math.floor(ago / 1440)}${language === 'he' ? ' י׳' : 'd'}`;
               return { name, agoLabel };
             })();
 
@@ -6599,30 +6628,74 @@ const SettingsScreen = () => {
             const todaySlotIdx = _hourNow < 6 ? 0 : _hourNow < 12 ? 1 : _hourNow < 18 ? 2 : 3;
             const todayDayIdx = now.getDay();
 
-            const userStats = Array.from(userMap.entries()).map(([groupKey, entries]) => {
+            const summaryByUserId = new Map<string, ActivityUserSummary>();
+            for (const s of activitySummary) {
+              summaryByUserId.set(s.userId, s);
+            }
+            const effectiveDuration = (min: number): number => Math.min(Math.max(0, min || 0), 180);
+
+            const excludedUserId = isSuperAdmin ? groupMgmt?.currentUserId : undefined;
+            const seenUserKeys = new Set<string>(userMap.keys());
+            const inactiveMembers = activityMembers.filter(m =>
+              m.userId && m.userId !== excludedUserId && !seenUserKeys.has(m.userId)
+            );
+
+            type UserStatRow = {
+              groupKey: string;
+              name: string;
+              sessions30d: number;
+              avgDuration: number;
+              daysSince: number;
+              latestEntry: ActivityLogEntry | null;
+              latestTs: number;
+              entries: ActivityLogEntry[];
+              memberRole: string;
+              summary?: ActivityUserSummary;
+            };
+
+            const activeUserStats: UserStatRow[] = Array.from(userMap.entries()).map(([groupKey, entries]) => {
               const last30 = entries.filter(e => now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs);
               const uniqueDays30d = new Set(last30.map(e => new Date(e.lastActive || e.timestamp).toDateString())).size;
-              const totalMin = last30.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+              const totalMin = last30.reduce((s, e) => s + effectiveDuration(e.sessionDuration || 0), 0);
               const latest = entries.reduce((a, b) => new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a);
-              const latestDate = new Date(latest.lastActive || latest.timestamp);
+              const summary = summaryByUserId.get(groupKey);
+              const summaryTs = summary?.lastActiveAt ? new Date(summary.lastActiveAt).getTime() : 0;
+              const latestEntryTs = new Date(latest.lastActive || latest.timestamp).getTime();
+              const latestDate = new Date(Math.max(latestEntryTs, summaryTs));
               const latestDay = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate());
               const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
               const daysSince = Math.round((todayDay.getTime() - latestDay.getTime()) / oneDayMs);
               const name = nameByKey.get(groupKey) || groupKey.slice(0, 8);
-              const member = activityMembers.find(m => m.playerName === name || m.displayName === name);
+              const member = activityMembers.find(m => m.userId === groupKey || m.playerName === name || m.displayName === name);
               const memberRole = member?.role || latest.role || 'member';
-              return { groupKey, name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, latestTs: latestDate.getTime(), entries, memberRole };
-              // Sort by the *full* timestamp of each member's most recent
-              // activity, not the day-rounded `daysSince`. The previous
-              // `daysSince`-only ordering bucketed everyone who visited
-              // today together (and likewise for yesterday, two days ago,
-              // …) so within each bucket the rendered order followed the
-              // arbitrary `userMap` iteration order rather than real
-              // recency. Descending `latestTs` puts the member who was
-              // last active 5 minutes ago above the one who logged in
-              // 8 hours ago, which is what "recent entrance" actually
-              // means at the per-row level.
-            }).sort((a, b) => b.latestTs - a.latestTs);
+              return { groupKey, name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, latestTs: latestDate.getTime(), entries, memberRole, summary };
+            });
+
+            const missingUserStats: UserStatRow[] = inactiveMembers.map(m => {
+              const summary = summaryByUserId.get(m.userId);
+              const latestTs = summary?.lastActiveAt ? new Date(summary.lastActiveAt).getTime() : 0;
+              let daysSince = 9999;
+              if (latestTs > 0) {
+                const latestDate = new Date(latestTs);
+                const latestDay = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate());
+                const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                daysSince = Math.round((todayDay.getTime() - latestDay.getTime()) / oneDayMs);
+              }
+              return {
+                groupKey: m.userId,
+                name: m.playerName || m.displayName || m.email?.split('@')[0] || m.userId.slice(0, 8),
+                sessions30d: 0,
+                avgDuration: 0,
+                daysSince,
+                latestEntry: null,
+                latestTs,
+                entries: [],
+                memberRole: m.role || 'member',
+                summary,
+              };
+            });
+
+            const userStats = [...activeUserStats, ...missingUserStats].sort((a, b) => b.latestTs - a.latestTs);
 
 
 
@@ -6698,7 +6771,7 @@ const SettingsScreen = () => {
                             fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '12px',
                             background: 'rgba(16, 185, 129, 0.15)', color: '#34d399',
                           }}>
-                            {name}{screen ? ` (${screen})` : ''}
+                            {name}{screen ? ` (${formatScreenName(screen)})` : ''}
                           </span>
                         );
                       })}
@@ -6925,8 +6998,9 @@ const SettingsScreen = () => {
                 {userStats.map((user) => {
                   const isExpanded = expandedUser === user.groupKey;
                   const roleInfo = getRoleInfo(user.memberRole);
-                  const isActive = user.daysSince === 0;
-                  const borderColor = isActive ? 'rgba(16, 185, 129, 0.4)' : user.daysSince > 7 ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)';
+                  const neverVisited = user.latestTs === 0;
+                  const isActive = !neverVisited && user.daysSince === 0;
+                  const borderColor = isActive ? 'rgba(16, 185, 129, 0.4)' : (neverVisited || user.daysSince > 7) ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)';
                   return (
                     <div key={user.groupKey}>
                       <div
@@ -6954,9 +7028,15 @@ const SettingsScreen = () => {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <span style={{
                               fontSize: '0.62rem', fontWeight: 600,
-                              color: isActive ? '#10B981' : user.daysSince > 7 ? '#ef4444' : '#f59e0b',
+                              color: isActive ? '#10B981' : (neverVisited || user.daysSince > 7) ? '#ef4444' : '#f59e0b',
                             }}>
-                              {isActive ? t('settings.activity.activeTodayBadge') : user.daysSince > 30 ? t('settings.activity.weeksAgo', { weeks: Math.round(user.daysSince / 7) }) : t('settings.activity.daysAgo', { days: user.daysSince })}
+                              {neverVisited
+                                ? (language === 'he' ? 'טרם נכנס' : 'Never visited')
+                                : isActive
+                                  ? t('settings.activity.activeTodayBadge')
+                                  : user.daysSince > 30
+                                    ? t('settings.activity.weeksAgo', { weeks: Math.round(user.daysSince / 7) })
+                                    : t('settings.activity.daysAgo', { days: user.daysSince })}
                             </span>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                               {isExpanded ? '▲' : '▼'}
@@ -6967,11 +7047,11 @@ const SettingsScreen = () => {
                         {/* Row 2: actual last-login time (+ session length).
                             Shown only when collapsed — the expanded panel below
                             details the same data, so we avoid duplicating it. */}
-                        {!isExpanded && (() => {
+                        {!isExpanded && user.latestTs > 0 && (() => {
                           const le = user.latestEntry;
-                          const lastDate = new Date(le.lastActive || le.timestamp);
+                          const lastDate = new Date(user.latestTs);
                           const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                          const dur = Math.round(le.sessionDuration || 0);
+                          const dur = le ? Math.round(effectiveDuration(le.sessionDuration || 0)) : 0;
                           return (
                             <div style={{
                               display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -6993,52 +7073,28 @@ const SettingsScreen = () => {
                           background: 'var(--surface)', marginBottom: '0.4rem',
                           border: `1px solid ${borderColor}`, borderTop: '1px solid var(--border)',
                         }}>
-                          {(() => {
+                          {neverVisited ? (
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.4rem 0' }}>
+                              {language === 'he' ? 'אין כניסות מתועדות עבור משתמש זה' : 'No recorded visits for this user yet'}
+                            </div>
+                          ) : (() => {
                             const lastEntry = user.latestEntry;
-                            const lastDate = new Date(lastEntry.lastActive || lastEntry.timestamp);
+                            const lastDate = new Date(user.latestTs);
                             const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                            // Stored DB value. For OTHER users / OTHER devices
-                            // this is always what we render — we don't have a
-                            // live clock for someone else's session.
-                            const storedMin = lastEntry.sessionDuration || 0;
-                            // For the viewer's OWN current session we override
-                            // with wall-clock elapsed time since the row was
-                            // INSERTed. The DB value is throttled (5-min
-                            // interval + 2-min cooldown), so a user parked on
-                            // this very screen for 6 minutes would otherwise
-                            // see "< 1 דק׳" until the next push catches up.
-                            // We identify "this is my live session" by
-                            // matching the row's timestamp against the
-                            // in-process `currentSessionTimestamp` —
-                            // bulletproof because that variable holds the
-                            // exact value the row was INSERTed with and
-                            // resets only on logout / session end. The
-                            // 60-second ticker re-runs this every minute so
-                            // the value advances on its own. max(stored,
-                            // live) ensures we never shrink a value already
-                            // persisted.
-                            const isOwnLiveSession =
-                              lastEntry.deviceId === ownDeviceId
+                            const storedMin = lastEntry ? effectiveDuration(lastEntry.sessionDuration || 0) : 0;
+                            const isOwnLiveSession = !!lastEntry
+                              && lastEntry.deviceId === ownDeviceId
                               && currentSessionTs !== null
                               && lastEntry.timestamp === currentSessionTs;
-                            const liveMin = isOwnLiveSession
-                              ? (now.getTime() - new Date(lastEntry.timestamp).getTime()) / 60000
+                            const liveMin = isOwnLiveSession && lastEntry
+                              ? effectiveDuration((now.getTime() - new Date(lastEntry.timestamp).getTime()) / 60000)
                               : 0;
                             const lastSessionMin = Math.max(storedMin, liveMin);
-                            const lastSessionScreens = (lastEntry.screensVisited || []).slice();
+                            const lastSessionScreens = lastEntry ? (lastEntry.screensVisited || []).slice() : [];
 
-                            // Format minutes for display. `sessionDuration` is
-                            // rounded to whole minutes upstream
-                            // (`activityLogger.ts:269`) so we can't render
-                            // sub-minute precision — for very short sessions
-                            // we show "< 1 דק׳" / "< 1 min" instead of "0
-                            // דק׳" which would imply the visit didn't happen.
                             const formatDuration = (min: number): string => {
                               if (min < 1) return language === 'he' ? '< 1 דק׳' : '< 1 min';
                               if (min < 60) return `${Math.round(min)} ${language === 'he' ? 'דק׳' : 'min'}`;
-                              // Multi-hour totals get an "Xh Ym" form so a
-                              // power user with 547 minutes reads as "9 שע׳
-                              // 7 דק׳" instead of an opaque "547 דק׳".
                               const h = Math.floor(min / 60);
                               const m = Math.round(min % 60);
                               const hLbl = language === 'he' ? 'שע׳' : 'h';
@@ -7046,24 +7102,12 @@ const SettingsScreen = () => {
                               return m > 0 ? `${h} ${hLbl} ${m} ${mLbl}` : `${h} ${hLbl}`;
                             };
 
-                            // Stats in two scopes:
-                            //   - last 30 days (recent activity window)
-                            //   - all-time (total time invested in the app)
-                            // Previously this section labelled itself
-                            // "30 days" but the totals were summed across
-                            // `user.entries` (all-time), so a member with
-                            // 91 lifetime sessions and 8 minutes in the
-                            // current month read as "91 sessions in the
-                            // last 30 days" — wrong. We compute both
-                            // windows explicitly below and surface them
-                            // under separate headings so each number
-                            // means what its label says.
                             const last30 = user.entries.filter(e =>
                               now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs,
                             );
                             const sessions30d = last30.length;
-                            const min30d = last30.reduce((s, e) => s + (e.sessionDuration || 0), 0);
-                            const days30d = user.sessions30d; // unique active days, last 30
+                            const min30d = last30.reduce((s, e) => s + effectiveDuration(e.sessionDuration || 0), 0);
+                            const days30d = user.sessions30d;
                             const screenCounts30d: Record<string, number> = {};
                             for (const e of last30) {
                               for (const s of e.screensVisited) {
@@ -7072,11 +7116,17 @@ const SettingsScreen = () => {
                             }
                             const screens30dSorted = Object.entries(screenCounts30d).sort((a, b) => b[1] - a[1]);
 
-                            const totalSessions = user.entries.length;
-                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
-                            const totalUniqueDays = new Set(
-                              user.entries.map(e => new Date(e.lastActive || e.timestamp).toDateString()),
-                            ).size;
+                            const totalSessions = user.summary ? user.summary.totalSessions : user.entries.length;
+                            const totalMin = user.summary
+                              ? user.summary.totalMinutes
+                              : user.entries.reduce((s, e) => s + effectiveDuration(e.sessionDuration || 0), 0);
+                            const totalUniqueDays = user.summary
+                              ? user.summary.totalUniqueDays
+                              : new Set(user.entries.map(e => new Date(e.lastActive || e.timestamp).toDateString())).size;
+
+                            const recentVisits = [...user.entries]
+                              .sort((a, b) => new Date(b.lastActive || b.timestamp).getTime() - new Date(a.lastActive || a.timestamp).getTime())
+                              .slice(1, 5);
 
                             const sectionLabelStyle: React.CSSProperties = {
                               fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)',
@@ -7101,18 +7151,12 @@ const SettingsScreen = () => {
                                   </div>
                                   <div style={statRowStyle}>
                                     <span>🕐 {lastStr}</span>
-                                    {/* Always render the duration, even for
-                                        sub-1-minute sessions. The previous
-                                        `>= 1` gate hid useful information
-                                        ("they bounced after 30 seconds")
-                                        and made the row feel inconsistent
-                                        across members. */}
-                                    <span>⏱️ {formatDuration(lastSessionMin)}</span>
+                                    {lastEntry && <span>⏱️ {formatDuration(lastSessionMin)}</span>}
                                   </div>
                                   {lastSessionScreens.length > 0 ? (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                                       {lastSessionScreens.map((screen, idx) => (
-                                        <span key={`${screen}-${idx}`} style={chipStyle}>{screen}</span>
+                                        <span key={`${screen}-${idx}`} style={chipStyle}>{formatScreenName(screen)}</span>
                                       ))}
                                     </div>
                                   ) : (
@@ -7122,12 +7166,38 @@ const SettingsScreen = () => {
                                   )}
                                 </div>
 
+                                {recentVisits.length > 0 && (
+                                  <>
+                                    <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                      <div style={sectionLabelStyle}>
+                                        🕒 {language === 'he' ? 'כניסות קודמות' : 'Recent visits'}
+                                      </div>
+                                      {recentVisits.map((v, vi) => {
+                                        const vd = new Date(v.lastActive || v.timestamp);
+                                        const vStr = vd.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                                        const vDur = formatDuration(effectiveDuration(v.sessionDuration || 0));
+                                        const vScreens = (v.screensVisited || []).map(formatScreenName).join(' · ');
+                                        return (
+                                          <div key={`${v.timestamp}-${vi}`} style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            gap: '0.4rem', fontSize: '0.6rem', color: 'var(--text-muted)',
+                                          }}>
+                                            <span style={{ whiteSpace: 'nowrap' }}>{vStr} ({vDur})</span>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
+                                              {vScreens || '—'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+
                                 {/* divider */}
                                 <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
 
-                                {/* ── Last 30 days ── all numbers in this
-                                     block are scoped to the last 30 days,
-                                     including the screens chip cloud. */}
+                                {/* ── Last 30 days ── */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                   <div style={sectionLabelStyle}>
                                     📈 {language === 'he' ? '30 ימים אחרונים' : 'Last 30 days'}
@@ -7141,7 +7211,7 @@ const SettingsScreen = () => {
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                                       {screens30dSorted.map(([screen, count]) => (
                                         <span key={screen} style={chipStyle}>
-                                          {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
+                                          {formatScreenName(screen)} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
                                         </span>
                                       ))}
                                     </div>
@@ -7155,12 +7225,7 @@ const SettingsScreen = () => {
                                 {/* divider */}
                                 <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
 
-                                {/* ── All-time totals ── single line: a
-                                     member's lifetime engagement with the
-                                     app at a glance. Surfaces the "time
-                                     spent" headline that was previously
-                                     hidden inside the 30-day block under a
-                                     mislabelled total. */}
+                                {/* ── All-time totals ── */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                   <div style={sectionLabelStyle}>
                                     🌍 {language === 'he' ? 'כל הזמן' : 'All time'}
@@ -7210,7 +7275,7 @@ const SettingsScreen = () => {
                     {dayNames.map((day, di) => {
                       const isToday = di === todayDayIdx;
                       return (
-                        <>
+                        <Fragment key={`row-${di}`}>
                           <div key={`label-${di}`} style={{
                             color: isToday ? 'var(--primary)' : 'var(--text-muted)',
                             fontWeight: isToday ? 700 : 400,
@@ -7257,7 +7322,7 @@ const SettingsScreen = () => {
                               </div>
                             );
                           })}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </div>

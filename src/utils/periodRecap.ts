@@ -2032,6 +2032,7 @@ export function computeAllPlayerTrophies(): Map<string, PlayerTrophyCabinet> {
       if (!cab) continue;
 
       const yearEntry = yearRecap?.allRanked.find(e => e.playerId === p.id);
+      const yearAnyEntry = yearEntry || yearRecap?.nonActivePlayers.find(e => e.playerId === p.id);
       const h1Entry = h1Recap?.allRanked.find(e => e.playerId === p.id);
       const h2Entry = h2Recap?.allRanked.find(e => e.playerId === p.id);
 
@@ -2059,15 +2060,17 @@ export function computeAllPlayerTrophies(): Map<string, PlayerTrophyCabinet> {
         }
 
         const pRanked = mRecap.allRanked.find(e => e.playerId === p.id);
+        const pAny = pRanked || mRecap.nonActivePlayers.find(e => e.playerId === p.id);
         // Check if player played at all even if below active threshold
-        const playedAny = pRanked
-          ? pRanked.gamesPlayed
+        const playedAny = pAny
+          ? pAny.gamesPlayed
           : playerMonthGames.get(`${p.id}|${y}|${m}`) || 0;
 
         if (playedAny > 0) playedInYear = true;
 
-        const profit = pRanked ? pRanked.profit : 0;
-        const rank = pRanked && pRanked.profit > 0 ? pRanked.rank : pRanked ? pRanked.rank : null;
+        const mCompleted = y < curY || (y === curY && m < curM);
+        const profit = pAny ? pAny.profit : 0;
+        const rank = pRanked ? pRanked.rank : null;
 
         monthsCells.push({
           year: y,
@@ -2077,11 +2080,11 @@ export function computeAllPlayerTrophies(): Map<string, PlayerTrophyCabinet> {
           playerGames: playedAny,
           profit,
           rank,
-          isChamp: rank === 1 && profit > 0,
-          isSilver: rank === 2 && profit > 0,
-          isBronze: rank === 3 && profit > 0,
-          isSniper: mRecap.awards.sniper?.playerName === p.name,
-          isBigHit: mRecap.awards.bigHit?.playerName === p.name,
+          isChamp: mCompleted && rank === 1 && profit > 0,
+          isSilver: mCompleted && rank === 2 && profit > 0,
+          isBronze: mCompleted && rank === 3 && profit > 0,
+          isSniper: mCompleted && mRecap.awards.sniper?.playerName === p.name,
+          isBigHit: mCompleted && mRecap.awards.bigHit?.playerName === p.name,
         });
       }
 
@@ -2090,7 +2093,7 @@ export function computeAllPlayerTrophies(): Map<string, PlayerTrophyCabinet> {
           year: y,
           isYearChamp: yearCompleted && yearEntry?.rank === 1 && (yearEntry?.profit || 0) > 0 && (yearRecap?.gamesCount || 0) >= 4,
           yearRank: yearEntry?.rank || null,
-          yearProfit: yearEntry?.profit || 0,
+          yearProfit: yearAnyEntry?.profit || 0,
           isH1Champ: h1Completed && h1Entry?.rank === 1 && (h1Entry?.profit || 0) > 0 && (h1Recap?.gamesCount || 0) >= 4,
           h1Rank: h1Entry?.rank || null,
           isH2Champ: h2Completed && h2Entry?.rank === 1 && (h2Entry?.profit || 0) > 0 && (h2Recap?.gamesCount || 0) >= 4,

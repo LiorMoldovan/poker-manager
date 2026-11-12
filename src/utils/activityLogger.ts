@@ -1,15 +1,24 @@
 import { ActivityLogEntry, DeviceFingerprint, PermissionRole } from '../types';
-import { supabase } from '../database/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 import { isObserverMode } from '../auth/observerMode';
 
 const DEVICE_ID_KEY = 'poker_device_id';
 const MAX_LOG_ENTRIES = 1000;
 const ACTIVITY_BUFFER_KEY = 'poker_activity_buffer';
-const ACTIVITY_LAST_PUSH_KEY = 'poker_activity_last_push';
 const ACTIVITY_PUSH_COOLDOWN_MS = 2 * 60 * 1000; // throttle session row updates (2 min)
 
 let currentSessionTimestamp: string | null = null;
+let lastPushAt = 0;
+let cachedAccessToken: string | null = null;
+
+supabase.auth.getSession().then(({ data }) => {
+  cachedAccessToken = data.session?.access_token ?? null;
+}).catch(() => {});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedAccessToken = session?.access_token ?? null;
+});
 
 const generateUUID = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -111,21 +120,25 @@ export const getDeviceInfo = (): string => {
 const ROUTE_NAMES: Record<string, string> = {
   '/': 'Home',
   '/new-game': 'Home',
+  '/schedule': 'Schedule',
   '/statistics': 'Statistics',
   '/history': 'History',
   '/settings': 'Settings',
   '/graphs': 'Graphs',
   '/training': 'Training',
+  '/trivia': 'Trivia',
 };
 
 export const getScreenName = (pathname: string): string => {
-  if (ROUTE_NAMES[pathname]) return ROUTE_NAMES[pathname];
-  if (pathname.startsWith('/live-game/')) return 'Live Game';
-  if (pathname.startsWith('/chip-entry/')) return 'Chip Entry';
-  if (pathname.startsWith('/game-summary/') || pathname.startsWith('/game/')) return 'Game Details';
-  if (pathname.startsWith('/shared-training')) return 'Shared Training';
-  if (pathname.startsWith('/training/')) return 'Training';
-  if (pathname.startsWith('/p/')) return 'Poll Link';
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  if (ROUTE_NAMES[clean]) return ROUTE_NAMES[clean];
+  if (clean.startsWith('/live-game/')) return 'Live Game';
+  if (clean.startsWith('/chip-entry/')) return 'Chip Entry';
+  if (clean.startsWith('/game-summary/') || clean.startsWith('/game/')) return 'Game Details';
+  if (clean.startsWith('/shared-training')) return 'Shared Training';
+  if (clean.startsWith('/training/')) return 'Training';
+  if (clean.startsWith('/trivia/')) return 'Trivia';
+  if (clean.startsWith('/p/')) return 'Schedule';
   return 'Other';
 };
 
@@ -187,12 +200,11 @@ const loadSessionBuffer = (): ActivityLogEntry | null => {
 };
 
 const shouldPushNow = (): boolean => {
-  const last = parseInt(localStorage.getItem(ACTIVITY_LAST_PUSH_KEY) || '0', 10);
-  return Date.now() - last >= ACTIVITY_PUSH_COOLDOWN_MS;
+  return Date.now() - lastPushAt >= ACTIVITY_PUSH_COOLDOWN_MS;
 };
 
 const markPushed = (): void => {
-  localStorage.setItem(ACTIVITY_LAST_PUSH_KEY, Date.now().toString());
+  lastPushAt = Date.now();
 };
 
 export const logActivity = async (role: PermissionRole, playerName?: string, userId?: string, initialScreens: string[] = []): Promise<void> => {
@@ -218,6 +230,7 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
   };
 
   currentSessionTimestamp = entry.timestamp;
+  lastPushAt = 0;
   saveSessionBuffer(entry);
 
   const gid = getGroupId();
@@ -303,12 +316,33 @@ export const updateSessionActivity = async (
   if (keepalive || shouldPushNow()) {
     const entry = loadSessionBuffer();
     if (!entry) return;
-    await supabase.from('activity_log').update({
+    const payload = {
       screens_visited: entry.screensVisited,
       session_duration: entry.sessionDuration,
       last_active: entry.lastActive,
-    }).eq('device_id', entry.deviceId).eq('timestamp', entry.timestamp);
+    };
     markPushed();
+    if (keepalive && cachedAccessToken) {
+      const qs = new URLSearchParams({
+        device_id: `eq.${entry.deviceId}`,
+        timestamp: `eq.${entry.timestamp}`,
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/activity_log?${qs.toString()}`, {
+        method: 'PATCH',
+        keepalive: true,
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${cachedAccessToken}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+      return;
+    }
+    await supabase.from('activity_log').update(payload)
+      .eq('device_id', entry.deviceId)
+      .eq('timestamp', entry.timestamp);
   }
 };
 
@@ -339,6 +373,34 @@ export const fetchActivityLog = async (excludeUserId?: string): Promise<Activity
   }));
 };
 
+export interface ActivityUserSummary {
+  userId: string;
+  totalSessions: number;
+  totalUniqueDays: number;
+  totalMinutes: number;
+  lastActiveAt: string | null;
+}
+
+export const fetchActivitySummary = async (): Promise<ActivityUserSummary[]> => {
+  const gid = getGroupId();
+  if (!gid) return [];
+  const { data, error } = await supabase.rpc('get_group_activity_summary', { p_group_id: gid });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<{
+    user_id: string;
+    total_sessions: number | string;
+    total_unique_days: number | string;
+    total_minutes: number | string;
+    last_active_at: string | null;
+  }>).map(r => ({
+    userId: r.user_id,
+    totalSessions: Number(r.total_sessions) || 0,
+    totalUniqueDays: Number(r.total_unique_days) || 0,
+    totalMinutes: Number(r.total_minutes) || 0,
+    lastActiveAt: r.last_active_at || null,
+  }));
+};
+
 export const deleteActivityEntry = async (deviceId: string, timestamp: string): Promise<boolean> => {
   const { error } = await supabase.from('activity_log')
     .delete()
@@ -365,6 +427,7 @@ export const clearActivityLog = async (): Promise<boolean> => {
 
 export const resetSession = (): void => {
   currentSessionTimestamp = null;
+  lastPushAt = 0;
 };
 
 // Exposed for UIs that need to render a live elapsed-time view of the

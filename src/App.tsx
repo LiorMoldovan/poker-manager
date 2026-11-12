@@ -1,4 +1,4 @@
-﻿import { Component, useEffect, useState, useRef, useCallback, useMemo, createContext, useContext, Suspense, lazy } from 'react';
+import { Component, useEffect, useState, useRef, useCallback, useMemo, createContext, useContext, Suspense, lazy } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PermissionRole } from './types';
@@ -784,8 +784,14 @@ function SupabaseApp() {
     }
   }, [subscribeToPush]);
 
-  // Activity tracking — one session per app load, screens accumulated via navigation effect
+  // Activity tracking — splits into a new session after >15 min away
+  // (e.g. mobile PWA reopened from background hours/days later) so
+  // background time never inflates session_duration or overwrites an
+  // older visit's last_active.
+  const SESSION_SPLIT_GAP_MS = 15 * 60 * 1000;
   const sessionStartRef = useRef<number | null>(null);
+  const hiddenAtRef = useRef<number | null>(null);
+  const lastActiveTickRef = useRef<number>(Date.now());
   const screensVisitedRef = useRef<Set<string>>(new Set());
   const isTrackingRef = useRef(false);
   const activityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -795,7 +801,7 @@ function SupabaseApp() {
   const pushSessionUpdate = useCallback((keepalive = false) => {
     if (!isTrackingRef.current || !sessionStartRef.current) return;
     const screens = Array.from(screensVisitedRef.current);
-    const duration = (Date.now() - sessionStartRef.current) / 60000;
+    const duration = Math.max(0, (Date.now() - sessionStartRef.current) / 60000);
     updateSessionActivity(screens, duration, keepalive).catch(() => {});
   }, []);
 
@@ -811,19 +817,54 @@ function SupabaseApp() {
   // tear down and rebuild the session. Without this the effect re-fires every
   // ~hour and inserts a duplicate row.
   const userId = auth.user?.id ?? null;
+  const startActivitySession = useCallback(() => {
+    if (!role || !userId) return;
+    const now = Date.now();
+    sessionStartRef.current = now;
+    lastActiveTickRef.current = now;
+    hiddenAtRef.current = null;
+    const initialScreen = getScreenName(locationRef.current);
+    screensVisitedRef.current = new Set([initialScreen]);
+    isTrackingRef.current = true;
+    logActivity(role, playerName || undefined, userId, [initialScreen]).catch(() => {});
+  }, [role, userId, playerName]);
+
   useEffect(() => {
     if (!dataReady || !role || !userId || auth.loading) return;
-    sessionStartRef.current = Date.now();
-    screensVisitedRef.current = new Set([getScreenName(locationRef.current)]);
-    isTrackingRef.current = true;
+    startActivitySession();
 
-    const initialScreen = getScreenName(locationRef.current);
-    logActivity(role, playerName || undefined, userId, [initialScreen]).catch(() => {});
-
-    activityIntervalRef.current = setInterval(() => pushSessionUpdate(), 5 * 60 * 1000);
+    activityIntervalRef.current = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastActiveTickRef.current > SESSION_SPLIT_GAP_MS) {
+        resetSession();
+        startActivitySession();
+        return;
+      }
+      lastActiveTickRef.current = now;
+      pushSessionUpdate();
+    }, 5 * 60 * 1000);
 
     const handleVisChange = () => {
-      if (document.visibilityState === 'hidden') pushSessionUpdate(true);
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+        pushSessionUpdate(true);
+      } else if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        const hiddenAt = hiddenAtRef.current;
+        hiddenAtRef.current = null;
+        const gap = hiddenAt ? now - hiddenAt : now - lastActiveTickRef.current;
+        if (gap > SESSION_SPLIT_GAP_MS) {
+          resetSession();
+          startActivitySession();
+        } else {
+          if (gap > 0 && sessionStartRef.current) {
+            sessionStartRef.current += gap;
+          }
+          lastActiveTickRef.current = now;
+          pushSessionUpdate();
+        }
+      }
     };
     document.addEventListener('visibilitychange', handleVisChange);
 
@@ -836,14 +877,20 @@ function SupabaseApp() {
       if (activityIntervalRef.current) clearInterval(activityIntervalRef.current);
       document.removeEventListener('visibilitychange', handleVisChange);
     };
-  }, [dataReady, role, userId, auth.loading, playerName, pushSessionUpdate]);
+  }, [dataReady, role, userId, auth.loading, startActivitySession, pushSessionUpdate]);
 
   useEffect(() => {
-    if (isTrackingRef.current) {
-      screensVisitedRef.current.add(getScreenName(location.pathname));
-      pushSessionUpdate();
+    if (!isTrackingRef.current) return;
+    const now = Date.now();
+    if (now - lastActiveTickRef.current > SESSION_SPLIT_GAP_MS) {
+      resetSession();
+      startActivitySession();
+      return;
     }
-  }, [location.pathname, pushSessionUpdate]);
+    lastActiveTickRef.current = now;
+    screensVisitedRef.current.add(getScreenName(location.pathname));
+    pushSessionUpdate();
+  }, [location.pathname, startActivitySession, pushSessionUpdate]);
 
   // Install prompt — capture beforeinstallprompt for Android/Chrome
   useEffect(() => {
