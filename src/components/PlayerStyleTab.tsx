@@ -297,7 +297,7 @@ export default function PlayerStyleTab({
     return [
       {
         label: '🎯 אחוז נצחונות',
-        explain: 'תדירות סיום ערב ברווח בתקופה הנבחרת',
+        explain: 'תדירות סיום ערב בפלוס בתקופה הנבחרת',
         realVal: `${Math.round(selectedProfile.winRate)}% (שולחן ${Math.round(analysis.groupAvgWinRate)}%)`,
         score: selectedProfile.radar.winRate,
         groupScore: g.winRate,
@@ -320,7 +320,7 @@ export default function PlayerStyleTab({
       },
       {
         label: '🔄 קאמבק מריבאי',
-        explain: 'יכולת לחזור לרווח בערבי קניות מרובות בתקופה',
+        explain: 'יכולת לסיים בפלוס בערבי קניות מרובות בתקופה',
         realVal: selectedProfile.comebackLabel,
         score: selectedProfile.radar.comeback,
         groupScore: g.comeback,

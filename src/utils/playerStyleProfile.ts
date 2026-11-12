@@ -354,13 +354,13 @@ export function computeGroupStyleProfiles(
       comebackLabel = `${wins.length}/${n} ערבים חיוביים`;
     } else if (highRebuyNights.length >= 2 && (highRebuyShare >= 0.15 || avgRebuys >= 2.2)) {
       const pct = Math.round((highRebuyWins / highRebuyNights.length) * 100);
-      comebackLabel = `${highRebuyWins}/${highRebuyNights.length} רווח ב-4+ ריבאיים (${pct}%)`;
+      comebackLabel = `${highRebuyWins}/${highRebuyNights.length} בפלוס ב-4+ ריבאיים (${pct}%)`;
     } else if (twoPlusRebuyNights.length >= 2) {
       const pct = Math.round((twoPlusWins / twoPlusRebuyNights.length) * 100);
-      comebackLabel = `${twoPlusWins}/${twoPlusRebuyNights.length} רווח ב-2+ ריבאיים (${pct}%)`;
+      comebackLabel = `${twoPlusWins}/${twoPlusRebuyNights.length} בפלוס ב-2+ ריבאיים (${pct}%)`;
     } else if (mediumPlusRebuyNights.length >= 2) {
       const pct = Math.round((medPlusWins / mediumPlusRebuyNights.length) * 100);
-      comebackLabel = `${medPlusWins}/${mediumPlusRebuyNights.length} רווח ב-3+ ריבאיים (${pct}%)`;
+      comebackLabel = `${medPlusWins}/${mediumPlusRebuyNights.length} בפלוס ב-3+ ריבאיים (${pct}%)`;
     } else {
       comebackLabel = `${lowRebuyNights.length}/${trackedRebuyGames} מש׳ ב-0–2 ריבאיים`;
     }
@@ -471,7 +471,7 @@ export function computeGroupStyleProfiles(
     const zBigLoss = zScore(s.bigLossRate, grp.bigLossRateMean, grp.bigLossRateStd);
 
     // ─── Credible Period-Scoped Style & Archetype Classification ───
-    const isProfitable = s.avgProfit >= 0;
+    const isProfitable = s.totalProfit > 0;
     const isTrulyLowRebuy = rebuysTracked && s.avgRebuys <= 2.2;
     const isBelowAvgRebuy = rebuysTracked && s.avgRebuys <= grp.rebuyMean && s.avgRebuys <= 2.85;
     const isHighRebuy =
@@ -486,6 +486,7 @@ export function computeGroupStyleProfiles(
     const isBipolarRollercoaster =
       !isProfitable &&
       !isTrulyLowRebuy &&
+      s.trackedRebuyGames >= s.gamesPlayed * 0.5 &&
       s.lowRebuyAvg !== null &&
       s.highRebuyAvg !== null &&
       s.lowRebuyAvg >= 30 &&
@@ -502,7 +503,9 @@ export function computeGroupStyleProfiles(
 
     // Style badge (what the period's numbers prove about Solid vs Aggressive)
     let styleBadge = 'מאוזן';
-    if (isTrulyLowRebuy && s.downsideDev <= grp.downStdMean * 1.1) {
+    if (!rebuysTracked || s.trackedRebuyGames === 0) {
+      styleBadge = s.stdDev <= grp.stdDevMean ? 'סולידי ויציב בתוצאות' : 'תנודתי לשני הכיוונים';
+    } else if (isTrulyLowRebuy && s.downsideDev <= grp.downStdMean * 1.1) {
       styleBadge = 'סולידי ומחושב (מוכח בנתונים)';
     } else if (isHighRebuy && s.stdDev >= 145) {
       styleBadge = 'אגרסיבי ותנודתי מאוד';
@@ -518,6 +521,8 @@ export function computeGroupStyleProfiles(
       styleBadge = 'מבוקר בקניות (מתחת לממוצע השולחן)';
     } else if (s.stdDev >= 135) {
       styleBadge = 'תנודתי לשני הכיוונים';
+    } else if (s.avgRebuys > grp.rebuyMean) {
+      styleBadge = s.highRebuyGames >= 2 ? 'נוטה לערבי ריבאיים מרובים' : 'קניות מעל ממוצע השולחן';
     } else {
       styleBadge = 'מבוקר בקניות';
     }
@@ -529,9 +534,12 @@ export function computeGroupStyleProfiles(
       if (profitRank === 1 && s.winRate >= 68 && isTrulyLowRebuy) {
         emoji = '👑';
         title = 'השליט המחושב של השולחן';
-      } else if (isTrulyLowRebuy && s.stdDev <= 115 && s.bigLosses <= 1) {
+      } else if (isTrulyLowRebuy && s.stdDev <= 115 && s.bigLosses === 0) {
         emoji = '🪨';
         title = 'הסלע היציב (אפס התרסקויות)';
+      } else if (isTrulyLowRebuy && s.stdDev <= 115 && s.bigLosses <= 1) {
+        emoji = '🪨';
+        title = 'הסלע היציב של השולחן';
       } else if (isTrulyLowRebuy && hasSecondHalfSurge) {
         emoji = '🚀';
         title = 'הצלף שבמומנטום עלייה';
@@ -541,9 +549,9 @@ export function computeGroupStyleProfiles(
       } else if (isHighRebuy && (s.stdDev >= 150 || s.bigWins >= 3)) {
         emoji = '🦈';
         title = 'כריש הקופות והאקשן';
-      } else if (isBigPotActionPlayer) {
+      } else if (isBigPotActionPlayer || styleBadge === 'תנודתי לשני הכיוונים') {
         emoji = s.gamesPlayed >= 100 ? '🔥' : '⚡';
-        title = s.gamesPlayed >= 100 ? 'מרתוניסט האקשן הדו-כיווני' : 'שחקן הקופות הגדולות';
+        title = s.gamesPlayed >= 100 ? 'מרתוניסט האקשן הדו-כיווני' : 'שחקן האקשן הדו-כיווני';
       } else {
         emoji = '⚖️';
         title = 'הטקטיקן המאוזן';
@@ -681,73 +689,80 @@ export function computeGroupStyleProfiles(
 
     // ─── Unique, Period-Pure Summary Sentence (`description`) ───
     const rankStr =
-      profitRank === 1
-        ? 'מוביל את השולחן (#1)'
-        : profitRank === totalPlayersInGroup
-          ? `מדורג #${profitRank} מתוך ${totalPlayersInGroup}`
-          : `מדורג #${profitRank} ברווח`;
+      s.totalProfit > 0
+        ? profitRank === 1
+          ? 'מוביל את השולחן (#1)'
+          : `מדורג #${profitRank} מתוך ${totalPlayersInGroup} (בפלוס)`
+        : s.totalProfit < 0
+          ? `מדורג #${profitRank} מתוך ${totalPlayersInGroup} (במינוס)`
+          : `מדורג #${profitRank} מתוך ${totalPlayersInGroup} (מאוזן על 0₪)`;
 
     const bigWinsTxt = fmtFemCount(s.bigWins, 'זכייה גדולה', 'זכיות גדולות');
     const bigLossesTxt = fmtCount(s.bigLosses, 'הפסד גדול', 'הפסדים גדולים');
-    const highRebuyNightsTxt = fmtCount(s.highRebuyGames, 'ערב של 4+ ריבאיים', 'ערבי 4+ ריבאיים');
+    const highRebuyNightsTxt =
+      s.highRebuyGames === 1 ? 'ערב אחד של 4+ ריבאיים' : `${s.highRebuyGames} ערבי 4+ ריבאיים`;
 
     let description = '';
     if (isProfitable && isTrulyLowRebuy && s.winRate >= 68) {
       description = `${rankStr} עם ${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות (${Math.round(s.winRate)}% נצחונות) ו-${s.avgRebuys.toFixed(1)} ריבאיים בלבד למשחק — סטיית התקן (${cleanNumber(Math.round(s.stdDev))}₪) נובעת מזכיות גדולות ולא מסיכון`;
     } else if (isProfitable && isTrulyLowRebuy && hasSecondHalfSurge) {
       description = `${rankStr} עם ${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} משחקים (${Math.round(s.winRate)}% נצחונות, ממוצע ${fmtSigned(s.avgProfit)}₪) — זינק מ-${fmtSigned(s.firstHalfAvg)}₪ בחצי הראשון של התקופה ל-${fmtSigned(s.secondHalfAvg)}₪ בחצי השני תוך שמירה על ${s.avgRebuys.toFixed(1)} ריבאיים`;
-    } else if (isProfitable && isHighRebuy) {
+    } else if (isProfitable && isHighRebuy && s.highRebuyGames >= 2 && s.trackedRebuyGames >= s.gamesPlayed * 0.5) {
       description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳) עם סטיית תקן גבוהה (${cleanNumber(Math.round(s.stdDev))}₪) ו-${s.avgRebuys.toFixed(1)} ריבאיים לערב — מוכיח שגם עם ${highRebuyNightsTxt} אפשר לסיים בפלוס`;
     } else if (isProfitable && s.stdDev <= 115) {
-      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ${Math.round(s.winRate)}% נצחונות) עם סטיית תקן נמוכה (${cleanNumber(Math.round(s.stdDev))}₪) ו-${s.avgRebuys.toFixed(1)} ריבאיים — בונה פלוס עקבי בלי התרסקויות`;
+      const crashFreeNote = s.bigLosses === 0 ? 'בלי התרסקויות' : 'בתנודתיות נמוכה';
+      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ${Math.round(s.winRate)}% נצחונות) עם סטיית תקן נמוכה (${cleanNumber(Math.round(s.stdDev))}₪) ו-${s.avgRebuys.toFixed(1)} ריבאיים — בונה פלוס עקבי ${crashFreeNote}`;
     } else if (isProfitable) {
       description = `${rankStr} עם ${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות · סטיית תקן ${cleanNumber(Math.round(s.stdDev))}₪ (${bigWinsTxt} מול ${bigLossesTxt}) וקצב של ${s.avgRebuys.toFixed(1)} ריבאיים לערב`;
     } else if (s.avgRebuys >= 3.95 || (rebuyRank === totalPlayersInGroup && s.avgRebuys >= 3.7)) {
       description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות, ממוצע ${fmtSigned(s.avgProfit)}₪) — מייצר קצב ריבאיים גבוה במיוחד (${s.avgRebuys.toFixed(1)} למשחק, שיא ${s.maxRebuys}, מול ממוצע שולחן ${grp.rebuyMean.toFixed(1)}) עם סטיית תקן ${cleanNumber(Math.round(s.stdDev))}₪ והפסד ממוצע ${fmtSigned(s.avgLossSize)}₪`;
     } else if (isBipolarRollercoaster && s.lowRebuyAvg !== null && s.highRebuyAvg !== null) {
-      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳) — הפער אצלו קיצוני: ב-${s.lowRebuyGames} משחקים של עד 2 ריבאיים הוא מורווח ${fmtSigned(s.lowRebuyAvg)}₪ למשחק, אך ב-${highRebuyNightsTxt} צונח ל-${fmtSigned(s.highRebuyAvg)}₪`;
+      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳) — הפער אצלו קיצוני: ב-${s.lowRebuyGames} משחקים של עד 2 ריבאיים הממוצע שלו חיובי (${fmtSigned(s.lowRebuyAvg)}₪ למשחק), אך ב-${highRebuyNightsTxt} הוא מתרסק לממוצע ${fmtSigned(s.highRebuyAvg)}₪`;
     } else if (s.winsCount === 0) {
       description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות, ממוצע ${fmtSigned(s.avgProfit)}₪) — טרם רשם ערב חיובי בתקופה זו (קצב של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק וסטיית תקן ${cleanNumber(Math.round(s.stdDev))}₪)`;
     } else if (isHighRebuy) {
       description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ממוצע ${fmtSigned(s.avgProfit)}₪) — נכנס לקצב גבוה של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (מול ממוצע שולחן ${grp.rebuyMean.toFixed(1)}) עם ${bigLossesTxt} מול ${bigWinsTxt} (${Math.round(s.winRate)}% נצחונות)`;
     } else if (isBelowAvgRebuy && s.avgWinSize >= grp.avgWinMean * 0.75 && s.winRate <= 38) {
-      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ממוצע ${fmtSigned(s.avgProfit)}₪) — שומר על משמעת קניות (${s.avgRebuys.toFixed(1)} ריבאיים, מתחת לממוצע השולחן ${grp.rebuyMean.toFixed(1)}) וניצחון ממוצע יפה (${fmtSigned(s.avgWinSize)}₪), אך מנצח רק ב-${Math.round(s.winRate)}% מהערבים`;
+      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ממוצע ${fmtSigned(s.avgProfit)}₪) — שומר על משמעת קניות (${s.avgRebuys.toFixed(1)} ריבאיים, מתחת לממוצע השולחן ${grp.rebuyMean.toFixed(1)}) וזכייה ממוצעת של ${fmtSigned(s.avgWinSize)}₪ בניצחונות, אך מנצח רק ב-${Math.round(s.winRate)}% מהערבים`;
     } else if (isBelowAvgRebuy) {
-      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ממוצע ${fmtSigned(s.avgProfit)}₪) — שומר על קניות מבוקרות (${s.avgRebuys.toFixed(1)} ריבאיים, שיא ${s.maxRebuys}) ותנודות מתונות (σ=${cleanNumber(Math.round(s.stdDev))}₪), אך ניצחון ממוצע של ${fmtSigned(s.avgWinSize)}₪ ב-${Math.round(s.winRate)}% מהערבים לא מכסה את ההפסדים`;
+      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} מש׳, ממוצע ${fmtSigned(s.avgProfit)}₪) — שומר על קניות מבוקרות (${s.avgRebuys.toFixed(1)} ריבאיים, שיא ${s.maxRebuys}) ותנודות מתונות (σ=${cleanNumber(Math.round(s.stdDev))}₪), אך זכייה ממוצעת של ${fmtSigned(s.avgWinSize)}₪ ב-${Math.round(s.winRate)}% מהערבים לא מכסה את ההפסדים`;
     } else {
-      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות, ${Math.round(s.winRate)}% נצחונות) — קצב של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק מול ניצחון ממוצע של ${fmtSigned(s.avgWinSize)}₪ (${bigWinsTxt} מול ${bigLossesTxt})`;
+      description = `${rankStr} (${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות, ${Math.round(s.winRate)}% נצחונות) — קצב של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק מול זכייה ממוצעת של ${fmtSigned(s.avgWinSize)}₪ בניצחונות (${bigWinsTxt} מול ${bigLossesTxt})`;
     }
 
     // ─── 4 Deeply Personalized Period-Scoped Proof Bullets (`traits`) ───
     const traits: string[] = [];
 
     // Bullet 1: Period Balance, Appearances, Win/Loss Sizing & Payoff Ratio
+    const winsPhrase = s.winsCount === 1 ? 'בניצחון אחד' : `ב-${s.winsCount} ניצחונות`;
+    const lossesPhrase = s.lossesCount === 1 ? 'ובהפסד אחד' : `וב-${s.lossesCount} הפסדים`;
     const winLossSizingStr =
       s.winsCount === 0
-        ? `טרם רשם ערב חיובי בתקופה זו (הפסד ממוצע ${fmtSigned(s.avgLossSize)}₪ לערב)`
+        ? `טרם רשם ערב חיובי בתקופה זו (הפסד ממוצע ${fmtSigned(s.avgLossSize)}₪ ב-${s.lossesCount} הפסדים)`
         : s.lossesCount === 0
-          ? `ניצח בכל הופעותיו בתקופה זו (רווח ממוצע ${fmtSigned(s.avgWinSize)}₪ לערב)`
-          : `כשהוא מנצח מרוויח בממוצע ${fmtSigned(s.avgWinSize)}₪ וכשהוא מפסיד ${fmtSigned(s.avgLossSize)}₪ (יחס רווח/הפסד ×${s.payoffRatio.toFixed(2)})`;
+          ? `ניצח בכל ${s.winsCount} הופעותיו בתקופה זו (זכייה ממוצעת ${fmtSigned(s.avgWinSize)}₪ לערב)`
+          : `${winsPhrase} זכה בממוצע ב-${fmtSigned(s.avgWinSize)}₪ ${lossesPhrase} הפסיד בממוצע ${fmtSigned(s.avgLossSize)}₪ (יחס זכייה/הפסד ×${s.payoffRatio.toFixed(2)})`;
 
+    const balanceState = s.totalProfit > 0 ? 'חיובי' : s.totalProfit < 0 ? 'שלילי' : 'מאוזן';
     traits.push(
-      `מאזן בתקופה הנבחרת: סה״כ ${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות (מקום ${profitRank}/${totalPlayersInGroup}, ממוצע ${fmtSigned(s.avgProfit)}₪, ${Math.round(s.winRate)}% נצחונות) · ${winLossSizingStr}`
+      `מאזן בתקופה הנבחרת (${balanceState}): סה״כ ${fmtSigned(s.totalProfit)}₪ ב-${s.gamesPlayed} הופעות (מקום ${profitRank}/${totalPlayersInGroup}, ממוצע ${fmtSigned(s.avgProfit)}₪, ${Math.round(s.winRate)}% נצחונות) · ${winLossSizingStr}`
     );
 
     // Bullet 2: Standard Deviation (σ), Symmetric Upside vs Downside Semideviation, Big vs Small Wins/Losses
     const stdProof =
-      s.upStd >= s.downsideDev * 1.45
-        ? `מוטה חזק למעלה (תנודת רווח ${cleanNumber(Math.round(s.upStd))}₪ מול סיכון הפסד של ${cleanNumber(Math.round(s.downsideDev))}₪ בלבד)`
+      isProfitable && s.upStd >= s.downsideDev * 1.45
+        ? `מוטה חזק למעלה (תנודה חיובית ${cleanNumber(Math.round(s.upStd))}₪ מול סיכון הפסד של ${cleanNumber(Math.round(s.downsideDev))}₪ בלבד)`
         : s.downsideDev >= s.upStd * 1.25
-          ? `מוטה לצד ההפסדים (סיכון הפסד ${cleanNumber(Math.round(s.downsideDev))}₪ מול תנודת רווח ${cleanNumber(Math.round(s.upStd))}₪)`
-          : `דו-כיוונית (תנודת רווח ${cleanNumber(Math.round(s.upStd))}₪ מול סיכון הפסד ${cleanNumber(Math.round(s.downsideDev))}₪)`;
+          ? `מוטה לצד ההפסדים (סיכון הפסד ${cleanNumber(Math.round(s.downsideDev))}₪ מול תנודה חיובית ${cleanNumber(Math.round(s.upStd))}₪)`
+          : `דו-כיוונית (תנודה חיובית ${cleanNumber(Math.round(s.upStd))}₪ מול סיכון הפסד ${cleanNumber(Math.round(s.downsideDev))}₪)`;
 
     const bigWinCountStr =
-      s.bigWins === 1 ? `ניצחון גדול אחד (${bigSwingThreshold}₪+)` : `${s.bigWins} ניצחונות גדולים (${bigSwingThreshold}₪+)`;
-    const smallWinCountStr = s.smallWins === 1 ? '1 קטן' : `${s.smallWins} קטנים`;
+      s.bigWins === 1 ? `זכייה גדולה אחת (${bigSwingThreshold}₪+)` : `${s.bigWins} זכיות גדולות (${bigSwingThreshold}₪+)`;
+    const smallWinCountStr = s.smallWins === 1 ? 'וקטנה אחת' : `ו-${s.smallWins} קטנות`;
     const bigLossCountStr = fmtCount(s.bigLosses, 'הפסד גדול', 'הפסדים גדולים');
-    const smallLossCountStr = s.smallLosses === 1 ? '1 קטן' : `${s.smallLosses} קטנים`;
+    const smallLossCountStr = s.smallLosses === 1 ? 'וקטן אחד' : `ו-${s.smallLosses} קטנים`;
     traits.push(
-      `סטיית תקן ותנודתיות בתקופה: σ=${cleanNumber(Math.round(s.stdDev))}₪ (ממוצע שולחן ${cleanNumber(Math.round(grp.stdDevMean))}₪) — ${stdProof} · ${bigWinCountStr} ו-${smallWinCountStr}, מול ${bigLossCountStr} ו-${smallLossCountStr} (שיא ${fmtSigned(s.bestWin)}₪, שפל ${fmtSigned(s.worstLoss)}₪)`
+      `סטיית תקן ותנודתיות בתקופה: σ=${cleanNumber(Math.round(s.stdDev))}₪ (ממוצע שולחן ${cleanNumber(Math.round(grp.stdDevMean))}₪) — ${stdProof} · ${bigWinCountStr} ${smallWinCountStr}, מול ${bigLossCountStr} ${smallLossCountStr} (שיא ${fmtSigned(s.bestWin)}₪, שפל ${fmtSigned(s.worstLoss)}₪)`
     );
 
     // Bullet 3: Rebuy Proof within the selected period (Solid vs Aggressive verification with exact numbers)
@@ -759,11 +774,18 @@ export function computeGroupStyleProfiles(
             ? `#${rebuyRank} הכי הרבה ריבאיים בשולחן`
             : `מקום ${rebuyRank}/${totalPlayersInGroup} מהנמוך לגבוה (ממוצע שולחן ${grp.rebuyMean.toFixed(1)})`;
 
+      const trackedScopeNote =
+        s.trackedRebuyGames < s.gamesPlayed
+          ? `ב-${s.trackedRebuyGames} מש׳ מתועדי ריבאי · ${styleBadge}`
+          : styleBadge;
+
       let splitProof = '';
       if (s.lowRebuyGames >= 1 && s.highRebuyGames >= 1 && s.lowRebuyAvg !== null && s.highRebuyAvg !== null) {
         const comebackPart =
           s.rebuyComebackRate !== null && s.highRebuyGames >= 2
-            ? `, חזר לרווח ב-${Math.round(s.rebuyComebackRate)}% מערבי ${heavyRebuyThreshold}+ ריבאיים`
+            ? Math.round(s.rebuyComebackRate) === 0
+              ? `, הפסיד בכל ${s.highRebuyGames} ערבי ה-${heavyRebuyThreshold}+ ריבאיים`
+              : `, סיים בפלוס ב-${Math.round(s.rebuyComebackRate)}% מערבי ${heavyRebuyThreshold}+ ריבאיים`
             : '';
         splitProof = ` · בערבים מבוקרים (0–2 ריבאיים, ${s.lowRebuyGames} מש׳): ממוצע ${fmtSigned(s.lowRebuyAvg)}₪ לעומת ${fmtSigned(s.highRebuyAvg)}₪ בערבי ${heavyRebuyThreshold}+ ריבאיים (${s.highRebuyGames} מש׳${comebackPart})`;
       } else if (s.lowRebuyGames >= 2 && s.lowRebuyAvg !== null) {
@@ -773,7 +795,7 @@ export function computeGroupStyleProfiles(
       }
 
       traits.push(
-        `מבחן הריבאיים בתקופה (${styleBadge}): ממוצע ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (${rebuyRankDesc}, שיא ${s.maxRebuys})${splitProof}`
+        `מבחן הריבאיים בתקופה (${trackedScopeNote}): ממוצע ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (${rebuyRankDesc}, שיא ${s.maxRebuys})${splitProof}`
       );
     } else if (s.gamesPlayed === 1) {
       traits.push(`עקביות תוצאות (${styleBadge}): תוצאה של ${fmtSigned(s.bestWin)}₪ בהופעה היחידה בתקופה`);
@@ -785,9 +807,25 @@ export function computeGroupStyleProfiles(
 
     // Bullet 4: Within-Period Trajectory & Momentum (First Half vs Second Half of Selected Period)
     if (s.gamesPlayed >= 4) {
+      let halfChangeLabel = '';
+      if (Math.abs(halfDelta) >= 18) {
+        if (s.firstHalfAvg < 0 && s.secondHalfAvg < 0) {
+          halfChangeLabel =
+            halfDelta > 0
+              ? `צמצום ההפסד הממוצע ב-${fmtSigned(halfDelta)}₪ למשחק`
+              : `העמקת ההפסד ב-${fmtSigned(halfDelta)}₪ למשחק`;
+        } else if (s.firstHalfAvg >= 0 && s.secondHalfAvg < 0) {
+          halfChangeLabel = `מעבר מפלוס למינוס (${fmtSigned(halfDelta)}₪ למשחק)`;
+        } else if (s.firstHalfAvg < 0 && s.secondHalfAvg >= 0) {
+          halfChangeLabel = `מעבר ממינוס לפלוס (${fmtSigned(halfDelta)}₪ למשחק)`;
+        } else {
+          halfChangeLabel =
+            halfDelta > 0 ? `עלייה של ${fmtSigned(halfDelta)}₪ למשחק` : `ירידה של ${fmtSigned(halfDelta)}₪ למשחק`;
+        }
+      }
       const momentumStr =
         Math.abs(halfDelta) >= 18
-          ? `פתיחת התקופה (${s.firstHalfCount} מש׳ ראשונים): ממוצע ${fmtSigned(s.firstHalfAvg)}₪ ← המשך התקופה (${s.secondHalfCount} מש׳ אחרונים): ממוצע ${fmtSigned(s.secondHalfAvg)}₪ (${halfDelta > 0 ? `קפיצה של ${fmtSigned(halfDelta)}₪ למשחק` : `ירידה של ${fmtSigned(halfDelta)}₪ למשחק`})`
+          ? `פתיחת התקופה (${s.firstHalfCount} מש׳ ראשונים): ממוצע ${fmtSigned(s.firstHalfAvg)}₪ ← המשך התקופה (${s.secondHalfCount} מש׳ אחרונים): ממוצע ${fmtSigned(s.secondHalfAvg)}₪ (${halfChangeLabel})`
           : `יציבות לאורך התקופה: ${s.firstHalfCount} מש׳ ראשונים בממוצע ${fmtSigned(s.firstHalfAvg)}₪ מול ${s.secondHalfCount} מש׳ אחרונים בממוצע ${fmtSigned(s.secondHalfAvg)}₪`;
       const rebuyTrendStr =
         s.firstHalfRebuys !== null && s.secondHalfRebuys !== null && Math.abs(s.secondHalfRebuys - s.firstHalfRebuys) >= 0.4
