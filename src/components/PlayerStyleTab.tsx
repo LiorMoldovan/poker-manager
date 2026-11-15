@@ -703,17 +703,18 @@ export default function PlayerStyleTab({
 
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.35rem 0.2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.15rem' }}>
                 <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ניצחון / הפסד</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.18rem', direction: 'ltr', lineHeight: 1.2 }}>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#10B981' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.18rem', direction: 'rtl', lineHeight: 1.2 }}>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#10B981', direction: 'ltr', unicodeBidi: 'isolate' }}>
                     {selectedProfile.winsCount > 0 ? `+${cleanNumber(Math.round(selectedProfile.avgWinSize))}` : '0'}
                   </span>
                   <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>/</span>
-                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#EF4444' }}>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#EF4444', direction: 'ltr', unicodeBidi: 'isolate' }}>
                     {selectedProfile.lossesCount > 0 ? `-${cleanNumber(Math.round(Math.abs(selectedProfile.avgLossSize)))}` : '0'}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', lineHeight: 1.1 }}>
-                  תנודתיות: ±{cleanNumber(Math.round(selectedProfile.stdDev))}₪
+                <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', lineHeight: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.15rem' }}>
+                  <span>תנודתיות:</span>
+                  <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>±{cleanNumber(Math.round(selectedProfile.stdDev))}₪</span>
                 </div>
               </div>
 
@@ -784,8 +785,11 @@ export default function PlayerStyleTab({
                 <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
                   <strong style={{ color: 'var(--text)' }}>ציון 0–100 בכל קודקוד:</strong> מחושב מ-{selectedProfile.gamesPlayed} משחקי השחקן בתקופה (שטח רחב = חזק יותר)
                 </div>
-                <div style={{ color: 'var(--text-muted)', marginBottom: '0.28rem' }}>
+                <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
                   <strong style={{ color: 'var(--text)' }}>הקו המקווקו:</strong> ממוצע השולחן בתקופה (בולט מעבר לקו = מעל הממוצע)
+                </div>
+                <div style={{ color: 'var(--text-muted)', marginBottom: '0.28rem' }}>
+                  <strong style={{ color: 'var(--text)' }}>מדד תנודתיות (±₪):</strong> מנעד התנודה הטיפוסי בערב רגיל (נמוך = סלע יציב, גבוה = ערבים סוערים לשני הכיוונים)
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem', borderTop: '1px solid var(--border)', paddingTop: '0.3rem' }}>
                   {radarBreakdownRows.map((row, idx) => (
