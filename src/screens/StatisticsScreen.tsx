@@ -15,6 +15,7 @@ import AIKeyMissingNotice from '../components/AIKeyMissingNotice';
 import { StyledSelect } from '../components/StyledSelect';
 import { withAITiming } from '../utils/aiTiming';
 import { hapticTap } from '../utils/haptics';
+import { trackScreen } from '../utils/activityLogger';
 import {
   computeAllPlayerTrophies,
   computeMonthlyHallOfFame,
@@ -91,6 +92,16 @@ const StatisticsScreen = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [playerSubTab, setPlayerSubTab] = useState<PlayerSubTab>('stats');
   const [recordsSubTab, setRecordsSubTab] = useState<RecordsSubTab>('global');
+
+  useEffect(() => {
+    if (viewMode === 'table') {
+      trackScreen('Statistics: Table');
+    } else if (viewMode === 'records') {
+      trackScreen(recordsSubTab === 'playerRecords' ? 'Statistics: Player Records' : 'Statistics: Records');
+    } else if (viewMode === 'players') {
+      trackScreen(playerSubTab === 'stories' ? 'Statistics: Stories' : 'Statistics: Players');
+    }
+  }, [viewMode, recordsSubTab, playerSubTab]);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss' | 'avgGainLoss'>('profit');
   // Show/hide the tiny "gap to player above" sub-number under each

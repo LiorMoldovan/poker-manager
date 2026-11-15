@@ -3,7 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PermissionRole } from './types';
 import { hasPermission } from './permissions';
-import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
+import { logActivity, updateSessionActivity, getScreenName, resetSession, onTrackScreen } from './utils/activityLogger';
 import { setObserverMode } from './auth/observerMode';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
@@ -860,11 +860,33 @@ function SupabaseApp() {
     sessionStartRef.current = now;
     lastActiveTickRef.current = now;
     hiddenAtRef.current = null;
-    const initialScreen = getScreenName(locationRef.current);
+    const initialScreen = getScreenName(locationRef.current, location.search);
     screensVisitedRef.current = new Set([initialScreen]);
     isTrackingRef.current = true;
     logActivity(role, playerName || undefined, userId, [initialScreen]).catch(() => {});
   }, [role, userId, playerName]);
+
+  const handleTrackScreen = useCallback((screenName: string) => {
+    if (!isTrackingRef.current) return;
+    const now = Date.now();
+    if (now - lastActiveTickRef.current > SESSION_SPLIT_GAP_MS) {
+      resetSession();
+      startActivitySession();
+      return;
+    }
+    lastActiveTickRef.current = now;
+    if (screenName.includes(':')) {
+      const parent = screenName.split(':')[0].trim();
+      screensVisitedRef.current.delete(parent);
+    }
+    screensVisitedRef.current.delete(screenName);
+    screensVisitedRef.current.add(screenName);
+    pushSessionUpdate();
+  }, [startActivitySession, pushSessionUpdate]);
+
+  useEffect(() => {
+    return onTrackScreen(handleTrackScreen);
+  }, [handleTrackScreen]);
 
   useEffect(() => {
     if (!dataReady || !role || !userId || auth.loading) return;
@@ -925,9 +947,15 @@ function SupabaseApp() {
       return;
     }
     lastActiveTickRef.current = now;
-    screensVisitedRef.current.add(getScreenName(location.pathname));
+    const screen = getScreenName(location.pathname, location.search);
+    if (screen.includes(':')) {
+      const parent = screen.split(':')[0].trim();
+      screensVisitedRef.current.delete(parent);
+    }
+    screensVisitedRef.current.delete(screen);
+    screensVisitedRef.current.add(screen);
     pushSessionUpdate();
-  }, [location.pathname, startActivitySession, pushSessionUpdate]);
+  }, [location.pathname, location.search, startActivitySession, pushSessionUpdate]);
 
   // Install prompt — capture beforeinstallprompt for Android/Chrome
   useEffect(() => {

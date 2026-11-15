@@ -24,6 +24,7 @@ import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { analyzeTrends, formatTrendsForAI } from '../utils/trendAnalysis';
 import PlayerStyleTab from '../components/PlayerStyleTab';
+import { trackScreen } from '../utils/activityLogger';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact' | 'style';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
@@ -95,6 +96,16 @@ interface HeadToHeadStat {
 const GraphsScreen = () => {
   const { t, isRTL, language } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('cumulative');
+
+  useEffect(() => {
+    const modeMap: Record<ViewMode, string> = {
+      cumulative: 'Graphs: Trends',
+      headToHead: 'Graphs: Head to Head',
+      impact: 'Graphs: Impact',
+      style: 'Graphs: Style',
+    };
+    trackScreen(modeMap[viewMode] || 'Graphs');
+  }, [viewMode]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [allGames, setAllGames] = useState<Game[]>([]);
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);

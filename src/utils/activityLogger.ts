@@ -121,25 +121,135 @@ const ROUTE_NAMES: Record<string, string> = {
   '/': 'Home',
   '/new-game': 'Home',
   '/schedule': 'Schedule',
-  '/statistics': 'Statistics',
+  '/statistics': 'Statistics: Table',
   '/history': 'History',
-  '/settings': 'Settings',
-  '/graphs': 'Graphs',
+  '/settings': 'Settings: Group',
+  '/graphs': 'Graphs: Trends',
   '/training': 'Training',
   '/trivia': 'Trivia',
 };
 
-export const getScreenName = (pathname: string): string => {
+const SETTINGS_TAB_MAP: Record<string, string> = {
+  group: 'Settings: Group',
+  game: 'Settings: Game',
+  chips: 'Settings: Chips',
+  players: 'Settings: Players',
+  backup: 'Settings: Backup',
+  about: 'Settings: About',
+  activity: 'Settings: Activity',
+  ai: 'Settings: Services',
+  training: 'Settings: Training',
+  triviaReports: 'Settings: Trivia Reports',
+  superadmin: 'Settings: Super Admin',
+  push: 'Settings: Push',
+  report: 'Settings: Report',
+};
+
+export const getScreenName = (pathname: string, search = ''): string => {
   const clean = pathname.replace(/\/+$/, '') || '/';
+  if (clean === '/settings' && search) {
+    try {
+      const p = new URLSearchParams(search);
+      const tab = p.get('tab');
+      if (tab && SETTINGS_TAB_MAP[tab]) return SETTINGS_TAB_MAP[tab];
+    } catch { /* search param parse fallback */ }
+  }
+  if (clean === '/training/play') return 'Training: Play';
+  if (clean === '/training/quick') return 'Training: Quick';
+  if (clean === '/shared-training/play') return 'Shared Training: Play';
+  if (clean.startsWith('/shared-training')) return 'Shared Training';
+  if (clean === '/trivia/play') return 'Trivia: Play';
+  if (clean.startsWith('/p/')) return 'Schedule: Poll';
   if (ROUTE_NAMES[clean]) return ROUTE_NAMES[clean];
   if (clean.startsWith('/live-game/')) return 'Live Game';
   if (clean.startsWith('/chip-entry/')) return 'Chip Entry';
   if (clean.startsWith('/game-summary/') || clean.startsWith('/game/')) return 'Game Details';
-  if (clean.startsWith('/shared-training')) return 'Shared Training';
   if (clean.startsWith('/training/')) return 'Training';
   if (clean.startsWith('/trivia/')) return 'Trivia';
-  if (clean.startsWith('/p/')) return 'Schedule';
   return 'Other';
+};
+
+export const formatScreenName = (screen: string, language: string = 'he'): string => {
+  if (language !== 'he') return screen;
+  const heMap: Record<string, string> = {
+    // Top-level screens / backwards compat
+    Home: 'בית',
+    Schedule: 'תאום משחק',
+    'Poll Link': 'תאום משחק',
+    Statistics: 'סטטיסטיקות',
+    History: 'היסטוריה',
+    Graphs: 'גרפים',
+    Settings: 'הגדרות',
+    'Live Game': 'משחק חי',
+    'Chip Entry': 'ספירת צ׳יפים',
+    'Game Details': 'פרטי משחק',
+    Training: 'אימון',
+    'Shared Training': 'אימון משותף',
+    Trivia: 'טריוויה',
+    'New Game': 'משחק חדש',
+    Other: 'אחר',
+
+    // Graphs sub-views
+    'Graphs: Trends': 'גרפים: מגמות',
+    'Graphs: Head to Head': 'גרפים: ראש בראש',
+    'Graphs: Impact': 'גרפים: השפעה',
+    'Graphs: Style': 'גרפים: אופי',
+
+    // Statistics sub-views
+    'Statistics: Table': 'סטטיסטיקות: טבלה',
+    'Statistics: Records': 'סטטיסטיקות: שיאים',
+    'Statistics: Players': 'סטטיסטיקות: שחקנים',
+    'Statistics: Stories': 'סטטיסטיקות: סיפורי שחקן',
+    'Statistics: Player Records': 'סטטיסטיקות: שיאי שחקן',
+
+    // Settings tabs
+    'Settings: Group': 'הגדרות: קבוצה',
+    'Settings: Game': 'הגדרות: משחק',
+    'Settings: Chips': 'הגדרות: צ׳יפים',
+    'Settings: Players': 'הגדרות: שחקנים',
+    'Settings: Backup': 'הגדרות: גיבוי',
+    'Settings: Services': 'הגדרות: שירותים',
+    'Settings: Push': 'הגדרות: התראות',
+    'Settings: Activity': 'הגדרות: פעילות',
+    'Settings: Training': 'הגדרות: אימון',
+    'Settings: Trivia Reports': 'הגדרות: דוחות טריוויה',
+    'Settings: Super Admin': 'הגדרות: סופר אדמין',
+    'Settings: Report': 'הגדרות: דיווח תוצאה',
+    'Settings: About': 'הגדרות: אודות',
+
+    // Training, Trivia & Schedule
+    'Training: Play': 'אימון: משחק',
+    'Training: Quick': 'אימון: מהיר',
+    'Shared Training: Play': 'אימון משותף: משחק',
+    'Trivia: Play': 'טריוויה: משחק',
+    'Schedule: Poll': 'תאום משחק: סקר',
+  };
+
+  if (heMap[screen]) return heMap[screen];
+
+  if (screen.includes(':')) {
+    const parts = screen.split(':');
+    const parent = parts[0].trim();
+    const sub = parts.slice(1).join(':').trim();
+    const parentTr = heMap[parent] || parent;
+    return `${parentTr}: ${sub}`;
+  }
+
+  return screen;
+};
+
+type ScreenTrackListener = (screenName: string) => void;
+const screenTrackListeners = new Set<ScreenTrackListener>();
+
+export const onTrackScreen = (listener: ScreenTrackListener): (() => void) => {
+  screenTrackListeners.add(listener);
+  return () => { screenTrackListeners.delete(listener); };
+};
+
+export const trackScreen = (screenName: string): void => {
+  screenTrackListeners.forEach(fn => {
+    try { fn(screenName); } catch { /* listener error protection */ }
+  });
 };
 
 const getGPURenderer = (): string => {

@@ -54,7 +54,7 @@ import {
   type ScheduleEmailVariantId,
 } from '../utils/previewScheduleEmails';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
-import { fetchActivityLog, fetchActivitySummary, ActivityUserSummary, getDeviceId, getCurrentSessionTimestamp } from '../utils/activityLogger';
+import { fetchActivityLog, fetchActivitySummary, ActivityUserSummary, getDeviceId, getCurrentSessionTimestamp, trackScreen, formatScreenName as formatScreenNameFromLogger } from '../utils/activityLogger';
 import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingData';
 import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -393,6 +393,25 @@ const SettingsScreen = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  useEffect(() => {
+    const tabMap: Record<TabId, string> = {
+      group: 'Settings: Group',
+      game: 'Settings: Game',
+      chips: 'Settings: Chips',
+      players: 'Settings: Players',
+      backup: 'Settings: Backup',
+      about: 'Settings: About',
+      activity: 'Settings: Activity',
+      ai: 'Settings: Services',
+      training: 'Settings: Training',
+      triviaReports: 'Settings: Trivia Reports',
+      superadmin: 'Settings: Super Admin',
+      push: 'Settings: Push',
+      report: 'Settings: Report',
+    };
+    trackScreen(tabMap[activeTab] || 'Settings');
+  }, [activeTab]);
   const [wizardStepIdx, setWizardStepIdx] = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -6539,27 +6558,7 @@ const SettingsScreen = () => {
               return { name: nameByKey.get(bestKey) || bestKey.slice(0, 8), days: max, sessions: userSessions.get(bestKey) || 0 };
             })();
 
-            const formatScreenName = (screen: string): string => {
-              if (language !== 'he') return screen;
-              const heMap: Record<string, string> = {
-                Home: 'בית',
-                Schedule: 'תאום משחק',
-                'Poll Link': 'תאום משחק',
-                Statistics: 'סטטיסטיקות',
-                History: 'היסטוריה',
-                Graphs: 'גרפים',
-                Settings: 'הגדרות',
-                'Live Game': 'משחק חי',
-                'Chip Entry': 'ספירת צ׳יפים',
-                'Game Details': 'פרטי משחק',
-                Training: 'אימון',
-                'Shared Training': 'אימון משותף',
-                Trivia: 'טריוויה',
-                'New Game': 'משחק חדש',
-                Other: 'אחר',
-              };
-              return heMap[screen] || screen;
-            };
+            const formatScreenName = (screen: string): string => formatScreenNameFromLogger(screen, language);
 
             const lastVisitor = (() => {
               if (activityLog.length === 0) return null;
