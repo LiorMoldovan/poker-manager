@@ -99,9 +99,11 @@ const GraphsScreen = () => {
   const [allGames, setAllGames] = useState<Game[]>([]);
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+  const [styleSelectedPlayers, setStyleSelectedPlayers] = useState<Set<string> | null>(null);
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
   const [showPermanentGuestsInSelector, setShowPermanentGuestsInSelector] = useState(false);
   const [showOccasionalGuestsInSelector, setShowOccasionalGuestsInSelector] = useState(false);
+  const [showInactiveInStyleSelector, setShowInactiveInStyleSelector] = useState(false);
   const [showTimePeriod, setShowTimePeriod] = useState(false);
   
   
@@ -283,6 +285,7 @@ const GraphsScreen = () => {
         .filter(p => p.type === 'permanent')
         .map(p => p.id);
       setSelectedPlayers(new Set(permanentPlayerIds));
+      setStyleSelectedPlayers(null);
       
       if (permanentPlayerIds.length >= 2) {
         setPlayer1Id(permanentPlayerIds[0]);
@@ -432,6 +435,30 @@ const GraphsScreen = () => {
     }
     return counts;
   }, [filteredGames, gamePlayers]);
+
+  // Active players in the currently filtered period (played at least 1 game in filteredGames).
+  // Category-neutral: includes permanent, regular guests, and occasional guests equally.
+  const activePeriodPlayerIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of players) {
+      if ((periodGamesByPlayerId.get(p.id) || 0) > 0) {
+        set.add(p.id);
+      }
+    }
+    return set;
+  }, [players, periodGamesByPlayerId]);
+
+  // Style view effective selected players: defaults to all active players in the period,
+  // or user's explicit manual selection if they interacted with the filter in style mode.
+  const effectiveStylePlayers = useMemo(() => {
+    if (styleSelectedPlayers !== null) return styleSelectedPlayers;
+    return activePeriodPlayerIds;
+  }, [styleSelectedPlayers, activePeriodPlayerIds]);
+
+  // Whenever the period changes (new filteredGames), reset manual style selection so it defaults to the active players in that new period
+  useEffect(() => {
+    setStyleSelectedPlayers(null);
+  }, [filteredGames]);
 
   // Auto-generate insights when cache is empty for this period (owner, or
   // a non-owner admin who set a personal device key).
@@ -882,17 +909,32 @@ const GraphsScreen = () => {
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
-    setSelectedPlayers(prev => {
-      const next = new Set(prev);
-      if (next.has(playerId)) {
-        if (next.size > 1) {
-          next.delete(playerId);
+    if (viewMode === 'style') {
+      setStyleSelectedPlayers(prev => {
+        const base = prev ?? new Set(activePeriodPlayerIds);
+        const next = new Set(base);
+        if (next.has(playerId)) {
+          if (next.size > 1) {
+            next.delete(playerId);
+          }
+        } else {
+          next.add(playerId);
         }
-      } else {
-        next.add(playerId);
-      }
-      return next;
-    });
+        return next;
+      });
+    } else {
+      setSelectedPlayers(prev => {
+        const next = new Set(prev);
+        if (next.has(playerId)) {
+          if (next.size > 1) {
+            next.delete(playerId);
+          }
+        } else {
+          next.add(playerId);
+        }
+        return next;
+      });
+    }
   };
 
   // Select all permanent players
@@ -1419,21 +1461,32 @@ const GraphsScreen = () => {
 
         {/* Player Filter - Show for cumulative & style views */}
         {(viewMode === 'cumulative' || viewMode === 'style') && (() => {
+          const isStyle = viewMode === 'style';
+          const currentSelected = isStyle ? effectiveStylePlayers : selectedPlayers;
+
           const permanentList = players.filter(p => (p.type || 'permanent') === 'permanent');
           const guestList = players
-            .filter(p => p.type === 'permanent_guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
+            .filter(p => p.type === 'permanent_guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || currentSelected.has(p.id)))
             .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
           const occasionalList = players
-            .filter(p => p.type === 'guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
+            .filter(p => p.type === 'guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || currentSelected.has(p.id)))
             .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
 
-          const selectedPermCount = permanentList.filter(p => selectedPlayers.has(p.id)).length;
-          const selectedGuestCount = players.filter(p => (p.type || 'permanent') !== 'permanent' && selectedPlayers.has(p.id)).length;
-          const selectedPermGuestsCount = guestList.filter(p => selectedPlayers.has(p.id)).length;
-          const selectedOccasionalCount = occasionalList.filter(p => selectedPlayers.has(p.id)).length;
+          // In style view, all players active in the period are presented by default regardless of category
+          const styleActiveList = players
+            .filter(p => (periodGamesByPlayerId.get(p.id) || 0) > 0)
+            .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
+          const styleInactiveList = players
+            .filter(p => (periodGamesByPlayerId.get(p.id) || 0) === 0)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          const selectedPermCount = permanentList.filter(p => currentSelected.has(p.id)).length;
+          const selectedGuestCount = players.filter(p => (p.type || 'permanent') !== 'permanent' && currentSelected.has(p.id)).length;
+          const selectedPermGuestsCount = guestList.filter(p => currentSelected.has(p.id)).length;
+          const selectedOccasionalCount = occasionalList.filter(p => currentSelected.has(p.id)).length;
 
           const renderPlayerPill = (player: Player, showGameCount = false) => {
-            const isSelected = selectedPlayers.has(player.id);
+            const isSelected = currentSelected.has(player.id);
             const color = getPlayerColor(player.id);
             const gamesInPeriod = periodGamesByPlayerId.get(player.id) || 0;
             return (
@@ -1489,7 +1542,9 @@ const GraphsScreen = () => {
                 }}
               >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  {selectedGuestCount > 0
+                  {isStyle
+                    ? `${currentSelected.size} מתוך ${activePeriodPlayerIds.size} שחקנים פעילים בתקופה`
+                    : selectedGuestCount > 0
                     ? t('graphs.filterPlayersWithGuests', {
                         selected: selectedPermCount,
                         total: permanentList.length,
@@ -1507,138 +1562,241 @@ const GraphsScreen = () => {
               
               {showPlayerSelector && (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllPermanent(); }}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {selectedGuestCount > 0 ? t('graphs.selectRegularsOnly') : t('common.selectAll')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        e.preventDefault(); 
-                        setSelectedPlayers(new Set()); 
-                      }}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('common.clear')}
-                    </button>
-                  </div>
+                  {isStyle ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setStyleSelectedPlayers(new Set(activePeriodPlayerIds)); }}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.7rem',
+                              borderRadius: '4px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {t('common.selectAll')} ({activePeriodPlayerIds.size})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setStyleSelectedPlayers(new Set(players.filter(p => (p.type || 'permanent') === 'permanent' && (periodGamesByPlayerId.get(p.id) || 0) > 0).map(p => p.id)));
+                            }}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.7rem',
+                              borderRadius: '4px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {t('graphs.selectRegularsOnly')}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            e.preventDefault(); 
+                            setStyleSelectedPlayers(new Set()); 
+                          }}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.7rem',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {t('common.clear')}
+                        </button>
+                      </div>
 
-                  {/* Permanent Players */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    {permanentList.map(player => renderPlayerPill(player, false))}
-                  </div>
+                      {/* Active players in the period (regardless of category) */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                        {styleActiveList.map(player => renderPlayerPill(player, true))}
+                      </div>
 
-                  {/* Regular Guests Section (collapsible) */}
-                  {guestList.length > 0 && (
-                    <div style={{ marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPermanentGuestsInSelector(v => !v); }}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          width: '100%',
-                          padding: 0,
-                          marginBottom: showPermanentGuestsInSelector ? '0.4rem' : 0,
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text)',
-                        }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                          <span>{t('graphs.guestPlayersSection', { count: guestList.length })}</span>
-                          {selectedPermGuestsCount > 0 && (
-                            <span style={{
-                              background: 'var(--primary)',
-                              color: '#fff',
-                              borderRadius: '999px',
-                              padding: '0.05rem 0.4rem',
-                              fontSize: '0.62rem',
-                              fontWeight: '700',
-                            }}>
-                              {selectedPermGuestsCount}
+                      {/* Inactive players in this period (collapsible) */}
+                      {styleInactiveList.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowInactiveInStyleSelector(v => !v); }}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              width: '100%',
+                              padding: 0,
+                              marginBottom: showInactiveInStyleSelector ? '0.4rem' : 0,
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: 'var(--text)',
+                            }}
+                          >
+                            <span style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                              לא שיחקו בתקופה ({styleInactiveList.length})
                             </span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                              {showInactiveInStyleSelector ? '▲' : '▼'}
+                            </span>
+                          </button>
+                          {showInactiveInStyleSelector && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                              {styleInactiveList.map(player => renderPlayerPill(player, false))}
+                            </div>
                           )}
-                        </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                          {showPermanentGuestsInSelector ? '▲' : '▼'}
-                        </span>
-                      </button>
-                      {showPermanentGuestsInSelector && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                          {guestList.map(player => renderPlayerPill(player, true))}
                         </div>
                       )}
-                    </div>
-                  )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllPermanent(); }}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.7rem',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {selectedGuestCount > 0 ? t('graphs.selectRegularsOnly') : t('common.selectAll')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            e.preventDefault(); 
+                            setSelectedPlayers(new Set()); 
+                          }}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.7rem',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {t('common.clear')}
+                        </button>
+                      </div>
 
-                  {/* Occasional Guests Section (collapsible) */}
-                  {occasionalList.length > 0 && (
-                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowOccasionalGuestsInSelector(v => !v); }}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          width: '100%',
-                          padding: 0,
-                          marginBottom: showOccasionalGuestsInSelector ? '0.4rem' : 0,
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text)',
-                        }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                          <span>{t('graphs.occasionalPlayersSection', { count: occasionalList.length })}</span>
-                          {selectedOccasionalCount > 0 && (
-                            <span style={{
-                              background: 'var(--primary)',
-                              color: '#fff',
-                              borderRadius: '999px',
-                              padding: '0.05rem 0.4rem',
-                              fontSize: '0.62rem',
-                              fontWeight: '700',
-                            }}>
-                              {selectedOccasionalCount}
+                      {/* Permanent Players */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                        {permanentList.map(player => renderPlayerPill(player, false))}
+                      </div>
+
+                      {/* Regular Guests Section (collapsible) */}
+                      {guestList.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPermanentGuestsInSelector(v => !v); }}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              width: '100%',
+                              padding: 0,
+                              marginBottom: showPermanentGuestsInSelector ? '0.4rem' : 0,
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: 'var(--text)',
+                            }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                              <span>{t('graphs.guestPlayersSection', { count: guestList.length })}</span>
+                              {selectedPermGuestsCount > 0 && (
+                                <span style={{
+                                  background: 'var(--primary)',
+                                  color: '#fff',
+                                  borderRadius: '999px',
+                                  padding: '0.05rem 0.4rem',
+                                  fontSize: '0.62rem',
+                                  fontWeight: '700',
+                                }}>
+                                  {selectedPermGuestsCount}
+                                </span>
+                              )}
                             </span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                              {showPermanentGuestsInSelector ? '▲' : '▼'}
+                            </span>
+                          </button>
+                          {showPermanentGuestsInSelector && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                              {guestList.map(player => renderPlayerPill(player, true))}
+                            </div>
                           )}
-                        </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                          {showOccasionalGuestsInSelector ? '▲' : '▼'}
-                        </span>
-                      </button>
-                      {showOccasionalGuestsInSelector && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                          {occasionalList.map(player => renderPlayerPill(player, true))}
                         </div>
                       )}
-                    </div>
+
+                      {/* Occasional Guests Section (collapsible) */}
+                      {occasionalList.length > 0 && (
+                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowOccasionalGuestsInSelector(v => !v); }}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              width: '100%',
+                              padding: 0,
+                              marginBottom: showOccasionalGuestsInSelector ? '0.4rem' : 0,
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: 'var(--text)',
+                            }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                              <span>{t('graphs.occasionalPlayersSection', { count: occasionalList.length })}</span>
+                              {selectedOccasionalCount > 0 && (
+                                <span style={{
+                                  background: 'var(--primary)',
+                                  color: '#fff',
+                                  borderRadius: '999px',
+                                  padding: '0.05rem 0.4rem',
+                                  fontSize: '0.62rem',
+                                  fontWeight: '700',
+                                }}>
+                                  {selectedOccasionalCount}
+                                </span>
+                              )}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                              {showOccasionalGuestsInSelector ? '▲' : '▼'}
+                            </span>
+                          </button>
+                          {showOccasionalGuestsInSelector && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                              {occasionalList.map(player => renderPlayerPill(player, true))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -3964,7 +4122,7 @@ const GraphsScreen = () => {
         <PlayerStyleTab
           games={filteredGames}
           players={players}
-          selectedPlayers={selectedPlayers}
+          selectedPlayers={effectiveStylePlayers}
           gamePlayersByGameId={gamePlayersByGameId}
           getPlayerColor={getPlayerColor}
           timeframeLabel={getTimeframeLabel()}

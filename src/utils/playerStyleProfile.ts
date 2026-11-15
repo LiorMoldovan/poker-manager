@@ -214,12 +214,12 @@ export function computeGroupStyleProfiles(
   options?: StyleProfileOptions
 ): GroupStyleAnalysis {
   const selectedIds = options?.selectedPlayerIds;
-  const includePermGuests = options?.includePermanentGuests ?? false;
-  const includeOccGuests = options?.includeOccasionalGuests ?? false;
+  const includePermGuests = options?.includePermanentGuests ?? true;
+  const includeOccGuests = options?.includeOccasionalGuests ?? true;
 
-  const permMinGames = games.length >= 10 ? 4 : games.length >= 6 ? 3 : games.length >= 2 ? 2 : 1;
-  const guestMinGames = games.length >= 10 ? 2 : 1;
-
+  // Active player in period: participated in at least 1 game in the selected period.
+  // Full edge-case protection for beginning of a new period (1–3 games):
+  // Every player who played even 1 game in the new period is included, regardless of category (permanent, regular guest, occasional guest).
   const periodTrackingMap = buildTrackingMap(games, gamePlayersByGameId);
 
   const allPositiveProfits: number[] = [];
@@ -234,19 +234,15 @@ export function computeGroupStyleProfiles(
   for (const p of players) {
     const pType = (p.type || 'permanent') as 'permanent' | 'permanent_guest' | 'guest';
 
-    let minReq = permMinGames;
     if (selectedIds) {
       if (!selectedIds.has(p.id)) continue;
-      // When a user explicitly selects a guest (or filters down to specific players), include them if they played >= 1 game in the period
-      minReq = pType === 'permanent' && selectedIds.size >= 5 ? permMinGames : 1;
     } else {
       if (pType === 'permanent_guest' && !includePermGuests) continue;
       if (pType === 'guest' && !includeOccGuests) continue;
-      minReq = pType === 'permanent' ? permMinGames : guestMinGames;
     }
 
     const nights = collectPlayerNights(p.id, games, gamePlayersByGameId, periodTrackingMap);
-    if (nights.length < minReq) continue;
+    if (nights.length < 1) continue;
 
     eligiblePlayers.push({ player: p, nights });
 
@@ -254,21 +250,6 @@ export function computeGroupStyleProfiles(
       if (r.profit > 0) allPositiveProfits.push(r.profit);
       if (r.profit < 0) allNegativeProfitsAbs.push(Math.abs(r.profit));
       if (r.extraRebuys !== null) allTrackedExtraRebuys.push(r.extraRebuys);
-    }
-  }
-
-  // Fallback: if selectedIds filtered out everyone due to permMinGames in a sparse selection, relax to >= 1 game
-  if (eligiblePlayers.length === 0 && selectedIds && selectedIds.size > 0) {
-    for (const p of players) {
-      if (!selectedIds.has(p.id)) continue;
-      const nights = collectPlayerNights(p.id, games, gamePlayersByGameId, periodTrackingMap);
-      if (nights.length < 1) continue;
-      eligiblePlayers.push({ player: p, nights });
-      for (const r of nights) {
-        if (r.profit > 0) allPositiveProfits.push(r.profit);
-        if (r.profit < 0) allNegativeProfitsAbs.push(Math.abs(r.profit));
-        if (r.extraRebuys !== null) allTrackedExtraRebuys.push(r.extraRebuys);
-      }
     }
   }
 
@@ -297,10 +278,14 @@ export function computeGroupStyleProfiles(
   // Extra rebuys: 0–2 is normal/controlled; 4+ extra rebuys (5+ total entries = 150₪+) is heavy.
   // Only treat the period as rebuy-tracked when at least 40% of games in the selected period tracked rebuys,
   // so historical/All-Time periods aren't skewed by a tiny subset of recent tracked games.
+  // Protection for beginning of a new period (1–2 games): if even 1 game tracked rebuys, track them.
   const controlledRebuyMax = 2;
   const heavyRebuyThreshold = 4;
   const trackedGamesInPeriod = Array.from(periodTrackingMap.values()).filter(Boolean).length;
-  const rebuysTracked = trackedGamesInPeriod >= Math.max(2, Math.ceil(games.length * 0.4));
+  const rebuysTracked =
+    games.length <= 2
+      ? trackedGamesInPeriod >= 1
+      : trackedGamesInPeriod >= Math.max(2, Math.ceil(games.length * 0.4));
 
   const baseStats = eligiblePlayers.map(({ player, nights }) => {
     const n = nights.length;
@@ -846,11 +831,15 @@ export function computeGroupStyleProfiles(
     let description = '';
     if (!rebuysTracked || s.trackedRebuyGames === 0) {
       if (isProfitable && isClassifiedSolid) {
-        description = `מציג משחק מבוקר ושליטה גבוהה בקצב — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ ${andBigLossesOnlyTxt}.`;
+        description = s.lossesCount === 0
+          ? `מציג פתיחה מושלמת ושליטה מלאה — ניצח ב-100% מ-${s.gamesPlayed} המשחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ לערב וללא אף הפסד.`
+          : `מציג משחק מבוקר ושליטה גבוהה בקצב — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (isProfitable) {
         description = `שחקן קופות גדולות עם פוטנציאל התפוצצות גבוה — למרות תנודות רחבות בין ${fmtSigned(s.worstLoss)}₪ ל-${fmtSigned(s.bestWin)}₪, ${bigWinsTxt} בממוצע של ${fmtSigned(s.avgWinSize)}₪ לניצחון מחזיקות אותו ביתרון יציב.`;
       } else if (isClassifiedSolid) {
-        description = `שומר על שליטה ונמנע מנפילות כבדות עם הפסד ממוצע מתון של ${fmtSigned(s.avgLossSize)}₪, אך מיעוט ערבים חיוביים עם ${winsTxt} בלבד מתוך ${s.gamesPlayed} משחקים משאיר את המאזן שלו מתחת לקו ה-0₪.`;
+        description = s.winsCount === 0
+          ? `שומר על קו שמרני אך טרם רשם ערב חיובי ב-${s.gamesPlayed} משחקים בתקופה, עם הפסד ממוצע של ${fmtSigned(s.avgLossSize)}₪.`
+          : `שומר על שליטה ונמנע מנפילות כבדות עם הפסד ממוצע מתון של ${fmtSigned(s.avgLossSize)}₪, אך מיעוט ערבים חיוביים עם ${winsTxt} בלבד מתוך ${s.gamesPlayed} משחקים משאיר את המאזן שלו מתחת לקו ה-0₪.`;
       } else {
         description = `מעורב בערבים סוערים וקופות עמוקות — למרות שבערבי ניצחון הוא גורף ${fmtSigned(s.avgWinSize)}₪ בממוצע, ${bigLossesTxt} עד שפל של ${fmtSigned(s.worstLoss)}₪ ב-${s.gamesPlayed} משחקים הכריעו את המאזן שלו.`;
       }
@@ -864,6 +853,8 @@ export function computeGroupStyleProfiles(
         description = `משלב משמעת ברזל עם יכולת סגירת ערבים קטלנית — ניצח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה, רשם ${bigWinsTxt} עד ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (s.bigLosses === 0 && s.gamesPlayed >= 6) {
         description = `העוגן היציב של השולחן — מפגין בקרת נזקים מושלמת ללא אף הפסד כבד לאורך ${s.gamesPlayed} משחקים, כשהערב החלש ביותר שלו נעצר ב-${fmtSigned(s.worstLoss)}₪ בלבד.`;
+      } else if (s.lossesCount === 0) {
+        description = `שליטה מושלמת בתקופה — מנצח ב-100% מ-${s.gamesPlayed} המשחקים עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ וללא אף ערב שלילי.`;
       } else if (s.avgWinSize >= Math.abs(s.avgLossSize)) {
         description = `מייצר רווחיות שקטה ועקבית — שומר על קור רוח בקניות ומנפק רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ בלבד בערבים שליליים.`;
       } else {
@@ -880,19 +871,27 @@ export function computeGroupStyleProfiles(
       // Bottom-Left Quadrant: Negative & Solid (below-average rebuys)
       if (s.winsCount > 0 && s.avgWinSize >= Math.abs(s.avgLossSize) * 0.90) {
         description = `שומר על משמעת טובה ואינו מתפרע בקניות, אך חווה תקופת יובש — בערבי ניצחון הוא מרוויח יפה עם ${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהמינוס נובע בעיקר מבצורת של ${winsTxt} בלבד ב-${s.gamesPlayed} משחקים.`;
+      } else if (s.winsCount === 0) {
+        description = `מתקשה להיכנס לקצב בתקופה — טרם רשם ערב חיובי ב-${s.gamesPlayed} משחקים, עם הפסד ממוצע של ${fmtSigned(s.avgLossSize)}₪ למשחק.`;
       } else {
         description = `שומר על משחק זהיר ונמנע מנפילות כבדות, אך מתקשה לייצר פריצות דרך — רווח צנוע של ${fmtSigned(s.avgWinSize)}₪ ${inWinsTxt} אינו מספיק כדי לקזז את ההפסדים המצטברים.`;
       }
     } else {
       // Bottom-Right Quadrant: Negative & Above-Average Rebuys
       if (isPassiveRebuyBleeder) {
-        description = `קצב הקניות שלו (${s.avgRebuys.toFixed(1)} ריבאיים למשחק לעומת ${grp.rebuyMean.toFixed(1)} בשולחן) משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
+        const winSummary = s.winsCount === 0
+          ? 'וטרם הצליח לרשום ערב חיובי בתקופה'
+          : `וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע`;
+        description = `קצב הקניות שלו (${s.avgRebuys.toFixed(1)} ריבאיים למשחק לעומת ${grp.rebuyMean.toFixed(1)} בשולחן) משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, ${winSummary}, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
       } else if (isBipolarRollercoaster) {
         description = `שחקן של שני קצוות — יודע לדרוס את השולחן עם זכיות של עד ${fmtSigned(s.bestWin)}₪, אך מתקשה לעצור בערבים שמשתבשים ונגרר לריבאיים מרובים עד שיא של ${s.maxRebuys} כניסות בערב.`;
       } else if (s.avgRebuys >= grp.rebuyMean + 1.2) {
         description = `מכתיב קצב משחק סוער עם ממוצע של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (מול ${grp.rebuyMean.toFixed(1)} בשולחן) — משחק ללא מעצורים שיוצר ערבי שיא מלהיבים, אך סופג בורות עמוקים מדי לסגירה בערבים שבהם הקלפים לא מתחברים.`;
       } else {
-        description = `משחק בקצב מעורבות גבוה — למרות שרשם ${inWinsTxt} רווח נאה של ${fmtSigned(s.avgWinSize)}₪, הערבים שבהם נגרר לקניות מרובות ו-${bigLossesTxt} משכו את המאזן שלו מתחת לקו ה-0₪.`;
+        const winLossContext = s.winsCount === 0
+          ? `הערבים שבהם נגרר לקניות מרובות ו-${bigLossesTxt} ללא אף ערב של רווח משכו את המאזן שלו מתחת לקו ה-0₪.`
+          : `למרות שרשם ${inWinsTxt} רווח נאה של ${fmtSigned(s.avgWinSize)}₪, הערבים שבהם נגרר לקניות מרובות ו-${bigLossesTxt} משכו את המאזן שלו מתחת לקו ה-0₪.`;
+        description = `משחק בקצב מעורבות גבוה — ${winLossContext}`;
       }
     }
 
@@ -1353,14 +1352,35 @@ export function computeGroupStyleProfiles(
       topic: 'sizing_vs_frequency',
       lensId: 'fallback_sizing',
       score: 55,
-      text: `יחס ניצחונות מול הפסדים: סיים ברווח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון לעומת ${fmtSigned(s.avgLossSize)}₪ בערבי הפסד.`,
+      text:
+        s.gamesPlayed === 1
+          ? `פתיחת תקופה: ${s.totalProfit > 0 ? `פתח את התקופה בערב חיובי עם רווח של ${fmtSigned(s.totalProfit)}₪` : s.totalProfit < 0 ? `פתח את התקופה בהפסד של ${fmtSigned(s.totalProfit)}₪` : `פתח את התקופה במאזן מאופס של 0₪`}${rebuysTracked && s.trackedRebuyGames > 0 ? ` (רשם ${s.avgRebuys.toFixed(0)} ריבאיים)` : ''}.`
+          : `יחס ניצחונות מול הפסדים: סיים ברווח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה ${s.winsCount > 0 ? `עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון` : ''}${s.winsCount > 0 && s.lossesCount > 0 ? ' לעומת ' : ''}${s.lossesCount > 0 ? `הפסד ממוצע של ${fmtSigned(s.avgLossSize)}₪ בערבי הפסד` : ''}.`,
     });
-    candidates.push({
-      topic: 'trajectory',
-      lensId: 'fallback_trajectory',
-      score: 50,
-      text: `חלוקה בין חצאי התקופה: בחצי הראשון של התקופה רשם ממוצע של ${fmtSigned(s.firstHalfAvg)}₪ למשחק לעומת ${fmtSigned(s.secondHalfAvg)}₪ למשחק בחצי השני.`,
-    });
+
+    if (s.gamesPlayed >= 4) {
+      candidates.push({
+        topic: 'trajectory',
+        lensId: 'fallback_trajectory',
+        score: 50,
+        text: `חלוקה בין חצאי התקופה: בחצי הראשון של התקופה רשם ממוצע של ${fmtSigned(s.firstHalfAvg)}₪ למשחק לעומת ${fmtSigned(s.secondHalfAvg)}₪ למשחק בחצי השני.`,
+      });
+    } else {
+      if (rebuysTracked && s.trackedRebuyGames > 0) {
+        candidates.push({
+          topic: 'rebuy_split',
+          lensId: 'early_period_rebuys',
+          score: 52,
+          text: `קצב קניות בפתיחת תקופה: רשם ממוצע של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק ב-${s.gamesPlayed} ${s.gamesPlayed === 1 ? 'המשחק ששוחק' : 'המשחקים ששוחקו'} בתקופה.`,
+        });
+      }
+      candidates.push({
+        topic: 'trajectory',
+        lensId: 'early_period_status',
+        score: 48,
+        text: `תחילת תקופה: נדרשים משחקים נוספים לביסוס מדדי סגנון ומגמות מובהקות.`,
+      });
+    }
 
     // Apply Period-Level Diversity Penalty so the same lensId isn't overused across every player in the group
     const scoredCandidates = candidates.map(c => {
