@@ -312,10 +312,8 @@ export default function PlayerStyleTab({
       },
       {
         label: '🛡️ יציבות ושליטה בסיכון',
-        explain: 'מיעוט ריבאיים והימנעות מהפסדים כבדים',
-        realVal: hasRebuyData
-          ? `${bigLossesWord} ב-${n} משחקי התקופה · ${selectedProfile.avgRebuys.toFixed(1)} ריבאיים לעומת ${analysis.groupAvgRebuys.toFixed(1)} בשולחן`
-          : `${bigLossesWord} ב-${n} משחקי התקופה · הפסד ממוצע ${fmtSigned(selectedProfile.avgLossSize)}₪`,
+        explain: 'שליטה במנעד התנודתיות והימנעות מהפסדים כבדים',
+        realVal: `תנודתיות שגרתית (סטיית תקן) של ±${cleanNumber(Math.round(selectedProfile.stdDev))}₪ לערב מול ±${cleanNumber(Math.round(analysis.groupAvgStdDev))}₪ בשולחן · ${bigLossesWord}`,
         score: selectedProfile.radar.consistency,
         groupScore: g.consistency,
       },
@@ -715,7 +713,7 @@ export default function PlayerStyleTab({
                   </span>
                 </div>
                 <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', lineHeight: 1.1 }}>
-                  ממוצע ב-₪ לערב
+                  תנודתיות: ±{cleanNumber(Math.round(selectedProfile.stdDev))}₪
                 </div>
               </div>
 

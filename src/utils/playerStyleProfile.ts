@@ -856,7 +856,10 @@ export function computeGroupStyleProfiles(
       }
     } else if (isProfitable && isClassifiedSolid) {
       if (s.avgRebuys <= 1.5 && profitRank === 1) {
-        description = `משחק כמעט תמיד על כניסה בודדת וממעט מאוד בריבאיים — שולט בשולחן עם ${Math.round(s.winRate)}% ניצחונות ב-${s.gamesPlayed} משחקים ופותח פער בפסגה בזכות ${bigWinsTxt} עד שיא של ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
+        const rebuyContext = s.avgRebuys <= grp.rebuyMean - 0.9
+          ? ` עם ${s.avgRebuys.toFixed(1)} ריבאיים בלבד למשחק (לעומת ${grp.rebuyMean.toFixed(1)} בשולחן)`
+          : '';
+        description = `משחק כמעט תמיד על כניסה בודדת וממעט מאוד בריבאיים${rebuyContext} — שולט בשולחן עם ${Math.round(s.winRate)}% ניצחונות ב-${s.gamesPlayed} משחקים ופותח פער בפסגה בזכות ${bigWinsTxt} עד שיא של ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (s.winRate >= 70 && s.bigWins >= 3) {
         description = `משלב משמעת ברזל עם יכולת סגירת ערבים קטלנית — ניצח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה, רשם ${bigWinsTxt} עד ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (s.bigLosses === 0 && s.gamesPlayed >= 6) {
@@ -883,11 +886,11 @@ export function computeGroupStyleProfiles(
     } else {
       // Bottom-Right Quadrant: Negative & Above-Average Rebuys
       if (isPassiveRebuyBleeder) {
-        description = `קצב הקניות שלו משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
+        description = `קצב הקניות שלו (${s.avgRebuys.toFixed(1)} ריבאיים למשחק לעומת ${grp.rebuyMean.toFixed(1)} בשולחן) משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
       } else if (isBipolarRollercoaster) {
         description = `שחקן של שני קצוות — יודע לדרוס את השולחן עם זכיות של עד ${fmtSigned(s.bestWin)}₪, אך מתקשה לעצור בערבים שמשתבשים ונגרר לריבאיים מרובים עד שיא של ${s.maxRebuys} כניסות בערב.`;
-      } else if (s.avgRebuys >= grp.rebuyMean + 1.5) {
-        description = `מכתיב קצב משחק סוער עם מעורבות בקופות גדולות — משחק ללא מעצורים שיוצר ערבי שיא מלהיבים, אך סופג בורות עמוקים מדי לסגירה בערבים שבהם הקלפים לא מתחברים.`;
+      } else if (s.avgRebuys >= grp.rebuyMean + 1.2) {
+        description = `מכתיב קצב משחק סוער עם ממוצע של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (מול ${grp.rebuyMean.toFixed(1)} בשולחן) — משחק ללא מעצורים שיוצר ערבי שיא מלהיבים, אך סופג בורות עמוקים מדי לסגירה בערבים שבהם הקלפים לא מתחברים.`;
       } else {
         description = `משחק בקצב מעורבות גבוה — למרות שרשם ${inWinsTxt} רווח נאה של ${fmtSigned(s.avgWinSize)}₪, הערבים שבהם נגרר לקניות מרובות ו-${bigLossesTxt} משכו את המאזן שלו מתחת לקו ה-0₪.`;
       }
@@ -1200,7 +1203,17 @@ export function computeGroupStyleProfiles(
         topic: 'extreme_swings',
         lensId: 'all_or_nothing_swings',
         score: 84 + (extremeNights / s.gamesPlayed) * 12,
-        text: `שחקן ללא הילוך אמצעי: ב-${extremeNights} מתוך ${s.gamesPlayed} משחקיו בתקופה שהם ${extremePct}% מהערבים הוא סיים בתנודה חריגה של ±${bigSwingThreshold}₪ ומעלה עם ${s.bigWins} זכיות ענק מול ${s.bigLosses} הפסדים כבדים — כמעט ללא ערבים שקטים באמצע.`,
+        text: `שחקן ללא הילוך אמצעי: רושם תנודתיות גבוהה (סטיית תקן של ±${Math.round(s.stdDev)}₪ לערב מול ±${Math.round(grp.stdDevMean)}₪ בשולחן) — ב-${extremeNights} מתוך ${s.gamesPlayed} משחקים (${extremePct}% מהערבים) סיים בתנודה חריגה של ±${bigSwingThreshold}₪ ומעלה עם ${s.bigWins} זכיות ענק מול ${s.bigLosses} הפסדים כבדים.`,
+      });
+    }
+
+    // Lens 4C: Low-Volatility Anchor (Extremely narrow standard deviation band vs table)
+    if (s.gamesPlayed >= 8 && s.stdDev <= grp.stdDevMean * 0.78 && s.bigLosses === 0) {
+      candidates.push({
+        topic: 'fortress',
+        lensId: 'low_volatility_anchor',
+        score: 87,
+        text: `עוגן יציבות במנעד צר: שומר על תנודתיות נמוכה במיוחד (סטיית תקן של ±${Math.round(s.stdDev)}₪ לערב בלבד לעומת ±${Math.round(grp.stdDevMean)}₪ בשולחן) — מנהל משחק סולידי שנמנע לחלוטין מבורות כבדים לאורך כל ${s.gamesPlayed} משחקיו בתקופה.`,
       });
     }
 
