@@ -398,7 +398,7 @@ export function computeGroupStyleProfiles(
     const extraRebuyVals = trackedNights.map(x => x.extraRebuys);
     const avgRebuys = trackedRebuyGames > 0 ? meanOf(extraRebuyVals) : 0;
     const stdRebuys = trackedRebuyGames > 1 ? stdDevOf(extraRebuyVals) : 0;
-    const maxRebuys = trackedRebuyGames > 0 ? Number(cleanNumber(Math.max(...extraRebuyVals))) : 0;
+    const maxRebuys = trackedRebuyGames > 0 ? Math.max(...extraRebuyVals) : 0;
 
     const zeroRebuyNights = trackedNights.filter(x => x.extraRebuys === 0);
     const zeroOneRebuyNights = trackedNights.filter(x => x.extraRebuys <= 1);
@@ -615,8 +615,6 @@ export function computeGroupStyleProfiles(
 
     // ─── Credible Rebuy-Centric Style & Archetype Classification (Anchored to Group Average Rebuys) ───
     const isProfitable = s.totalProfit > 0;
-    const grpRebuyStr = grp.rebuyMean.toFixed(1);
-    const playerRebuyStr = s.avgRebuys.toFixed(1);
 
     // Passive-bleed rebuyer detection: buys more rebuys than table average (`avgRebuys > grp.rebuyMean`),
     // yet doesn't build big winning pots (`bigWins === 0` or small `avgWinSize` relative to group).
@@ -848,50 +846,50 @@ export function computeGroupStyleProfiles(
     let description = '';
     if (!rebuysTracked || s.trackedRebuyGames === 0) {
       if (isProfitable && isClassifiedSolid) {
-        description = `שולט בשולחן מהצד הסולידי של המפה — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ בערבי הפסד ${andBigLossesOnlyTxt}.`;
+        description = `מציג משחק מבוקר ושליטה גבוהה בקצב — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה עם רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בערבי ניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (isProfitable) {
-        description = `שחקן קופות גדולות מהצד האגרסיבי של המפה — רושם תנודות רחבות בין ${fmtSigned(s.worstLoss)}₪ ל-${fmtSigned(s.bestWin)}₪, אך ${bigWinsTxt} בממוצע של ${fmtSigned(s.avgWinSize)}₪ לניצחון מכסים בקלות על ערבי ההפסד שלו.`;
+        description = `שחקן קופות גדולות עם פוטנציאל התפוצצות גבוה — למרות תנודות רחבות בין ${fmtSigned(s.worstLoss)}₪ ל-${fmtSigned(s.bestWin)}₪, ${bigWinsTxt} בממוצע של ${fmtSigned(s.avgWinSize)}₪ לניצחון מחזיקות אותו ביתרון יציב.`;
       } else if (isClassifiedSolid) {
-        description = `משחק בסגנון מבוקר בצד השמאלי של המפה ונמנע מנפילות חריגות עם הפסד ממוצע מתון של ${fmtSigned(s.avgLossSize)}₪, אך ${winsTxt} בלבד מתוך ${s.gamesPlayed} משחקים משאירים את המאזן התקופתי שלו מתחת לקו ה-0₪.`;
+        description = `שומר על שליטה ונמנע מנפילות כבדות עם הפסד ממוצע מתון של ${fmtSigned(s.avgLossSize)}₪, אך מיעוט ערבים חיוביים עם ${winsTxt} בלבד מתוך ${s.gamesPlayed} משחקים משאיר את המאזן שלו מתחת לקו ה-0₪.`;
       } else {
-        description = `מעורב בערבים סוערים בצד הימני של המפה — למרות שבערבי ניצחון הוא גורף ${fmtSigned(s.avgWinSize)}₪ בממוצע, ${bigLossesTxt} עד שפל של ${fmtSigned(s.worstLoss)}₪ ב-${s.gamesPlayed} משחקים משכו את המאזן שלו למטה.`;
+        description = `מעורב בערבים סוערים וקופות עמוקות — למרות שבערבי ניצחון הוא גורף ${fmtSigned(s.avgWinSize)}₪ בממוצע, ${bigLossesTxt} עד שפל של ${fmtSigned(s.worstLoss)}₪ ב-${s.gamesPlayed} משחקים הכריעו את המאזן שלו.`;
       }
     } else if (isProfitable && isClassifiedSolid) {
       if (s.avgRebuys <= 1.5 && profitRank === 1) {
-        description = `משחק בסגנון הקרוב ביותר לפריזאאוט בשולחן — בזמן שהממוצע הקבוצתי עומד על ${grpRebuyStr} ריבאיים לערב, הוא מסתפק ב-${playerRebuyStr} בלבד, מנצח ב-${Math.round(s.winRate)}% מהמשחקים ופותח פער בפסגה בזכות ${bigWinsTxt} עד שיא של ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
+        description = `משחק כמעט תמיד על כניסה בודדת וממעט מאוד בריבאיים — שולט בשולחן עם ${Math.round(s.winRate)}% ניצחונות ב-${s.gamesPlayed} משחקים ופותח פער בפסגה בזכות ${bigWinsTxt} עד שיא של ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (s.winRate >= 70 && s.bigWins >= 3) {
-        description = `משלב משמעת קניות של ${playerRebuyStr} ריבאיים למשחק מול ${grpRebuyStr} בשולחן עם יכולת סגירת ערבים קטלנית — ניצח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה, רשם ${bigWinsTxt} עד ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
+        description = `משלב משמעת ברזל עם יכולת סגירת ערבים קטלנית — ניצח ב-${s.winsCount} מתוך ${s.gamesPlayed} משחקים בתקופה, רשם ${bigWinsTxt} עד ${fmtSigned(s.bestWin)}₪ ${andBigLossesOnlyTxt}.`;
       } else if (s.bigLosses === 0 && s.gamesPlayed >= 6) {
-        description = `השחקן הבטוח ביותר בשולחן נגד התרסקויות — שומר על קצב של ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בממוצע הקבוצתי, עבר ${s.gamesPlayed} משחקים שלמים בלי אף הפסד כבד ועצר את הערב הגרוע ביותר שלו ב-${fmtSigned(s.worstLoss)}₪ בלבד.`;
+        description = `העוגן היציב של השולחן — מפגין בקרת נזקים מושלמת ללא אף הפסד כבד לאורך ${s.gamesPlayed} משחקים, כשהערב החלש ביותר שלו נעצר ב-${fmtSigned(s.worstLoss)}₪ בלבד.`;
       } else if (s.avgWinSize >= Math.abs(s.avgLossSize)) {
-        description = `מייצר רווחיות שקטה בצד הסולידי של המפה עם ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בשולחן — כשהוא מנצח הוא גורף ${fmtSigned(s.avgWinSize)}₪ בממוצע מול ${fmtSigned(s.avgLossSize)}₪ בלבד בערבי הפסד.`;
+        description = `מייצר רווחיות שקטה ועקבית — שומר על קור רוח בקניות ומנפק רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ בניצחון מול הפסד מתון של ${fmtSigned(s.avgLossSize)}₪ בלבד בערבים שליליים.`;
       } else {
-        description = `מייצר רווחיות עקבית בצד הסולידי של המפה עם ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בשולחן — שומר על ${Math.round(s.winRate)}% ניצחונות ב-${s.gamesPlayed} משחקים שמחזיקים אותו בפלוס מצטבר של ${fmtSigned(s.totalProfit)}₪.`;
+        description = `מייצר רווחיות עקבית בזכות יציבות גבוהה — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה שמחזיקים אותו בפלוס מצטבר של ${fmtSigned(s.totalProfit)}₪.`;
       }
     } else if (isProfitable) {
       // Top-Right Quadrant: Profitable & Aggressive (above-average rebuys)
       if (s.avgRebuys >= grp.rebuyMean + 0.5) {
-        description = `חי על קופות ענק בצד האגרסיבי של המפה — קונה ${playerRebuyStr} ריבאיים בממוצע לערב לעומת ${grpRebuyStr} בשולחן ומוכן לספוג ערבים קשים כדי לתפוס את ערבי ההתפוצצות שלו, שבהם הוא גורף ${fmtSigned(s.avgWinSize)}₪ בממוצע לניצחון ועד שיא של ${fmtSigned(s.bestWin)}₪.`;
+        description = `חי על קופות ענק ומשחק ללא פחד — מוכן לספוג ערבים קשים כדי לתפוס את ערבי ההתפוצצות שלו, שבהם הוא מנפק רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ לניצחון ועד שיא של ${fmtSigned(s.bestWin)}₪.`;
       } else {
-        description = `מנהל משחק דו-כיווני פעיל מימין לקו האמצע עם ${playerRebuyStr} ריבאיים למשחק מול ${grpRebuyStr} בשולחן — למרות ${bigLossesTxt} בתקופה, ${bigWinsTxt} ושיא של ${fmtSigned(s.bestWin)}₪ משאירים אותו בטריטוריה הירוקה.`;
+        description = `שחקן אקשן דומיננטי שמייצר תנועה רבה סביב השולחן — למרות ${bigLossesTxt} בתקופה, ${bigWinsTxt} וערב שיא של ${fmtSigned(s.bestWin)}₪ משאירים אותו בטריטוריה החיובית.`;
       }
     } else if (isClassifiedSolid) {
       // Bottom-Left Quadrant: Negative & Solid (below-average rebuys)
       if (s.winsCount > 0 && s.avgWinSize >= Math.abs(s.avgLossSize) * 0.90) {
-        description = `נמצא בצד הסולידי של המפה בזכות משמעת קניות של ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בשולחן — בערבי ניצחון הוא מרוויח יפה עם ${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהמינוס התקופתי נובע מבצורת של ${winsTxt} בלבד ב-${s.gamesPlayed} משחקים ולא מהתפרעויות.`;
+        description = `שומר על משמעת טובה ואינו מתפרע בקניות, אך חווה תקופת יובש — בערבי ניצחון הוא מרוויח יפה עם ${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהמינוס נובע בעיקר מבצורת של ${winsTxt} בלבד ב-${s.gamesPlayed} משחקים.`;
       } else {
-        description = `שומר על שליטה בקניות עם ${playerRebuyStr} ריבאיים למשחק מול ${grpRebuyStr} בממוצע השולחן ונמנע מערבי קצה פרועים, אך רווח ממוצע צנוע של ${fmtSigned(s.avgWinSize)}₪ ${inWinsTxt} מתקשה לכסות על הפסד ממוצע של ${fmtSigned(s.avgLossSize)}₪ בערבים שלילים.`;
+        description = `שומר על משחק זהיר ונמנע מנפילות כבדות, אך מתקשה לייצר פריצות דרך — רווח צנוע של ${fmtSigned(s.avgWinSize)}₪ ${inWinsTxt} אינו מספיק כדי לקזז את ההפסדים המצטברים.`;
       }
     } else {
       // Bottom-Right Quadrant: Negative & Above-Average Rebuys
       if (isPassiveRebuyBleeder) {
-        description = `המיקום שלו בצד הימני של המפה נובע מ-${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בשולחן, אך לא מאגרסיביות — הוא כמעט לא בונה קופות ענק, וגם ${inWinsTxt} מתוך ${s.gamesPlayed} משחקים הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהקניות החוזרות משקפות שחיקה הדרגתית וניסיון להישאר במשחק.`;
+        description = `קצב הקניות שלו משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
       } else if (isBipolarRollercoaster) {
-        description = `שחקן של שני קצוות — יודע לדרוס את השולחן עם זכיות של עד ${fmtSigned(s.bestWin)}₪ כשמשחק מבוקר, אך חוצה את ממוצע הקניות הקבוצתי עם ${playerRebuyStr} ריבאיים מול ${grpRebuyStr} בשולחן בגלל ${s.highRebuyGames} ערבים שבהם נגרר ל-4+ ריבאיים עד שיא של ${s.maxRebuys} כניסות.`;
+        description = `שחקן של שני קצוות — יודע לדרוס את השולחן עם זכיות של עד ${fmtSigned(s.bestWin)}₪, אך מתקשה לעצור בערבים שמשתבשים ונגרר לריבאיים מרובים עד שיא של ${s.maxRebuys} כניסות בערב.`;
       } else if (s.avgRebuys >= grp.rebuyMean + 1.5) {
-        description = `מוביל את קצב הקניות בשולחן עם ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בממוצע הקבוצתי ועד שיא של ${s.maxRebuys} כניסות בערב — סגנון עתיר אש שמייצר בורות עמוקים מדי לסגירה בערב אחד.`;
+        description = `מכתיב קצב משחק סוער עם מעורבות בקופות גדולות — משחק ללא מעצורים שיוצר ערבי שיא מלהיבים, אך סופג בורות עמוקים מדי לסגירה בערבים שבהם הקלפים לא מתחברים.`;
       } else {
-        description = `משחק בקצב קניות גבוה מהשולחן עם ${playerRebuyStr} ריבאיים למשחק לעומת ${grpRebuyStr} בממוצע הקבוצתי — למרות שרשם ${inWinsTxt} רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪, הערבים שבהם נגרר לריבאיים מרובים ו-${bigLossesTxt} משכו את המאזן שלו מתחת לקו ה-0₪.`;
+        description = `משחק בקצב מעורבות גבוה — למרות שרשם ${inWinsTxt} רווח נאה של ${fmtSigned(s.avgWinSize)}₪, הערבים שבהם נגרר לקניות מרובות ו-${bigLossesTxt} משכו את המאזן שלו מתחת לקו ה-0₪.`;
       }
     }
 

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.43.0';
+export const APP_VERSION = '6.43.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.43.1',
+    date: '2026-11-15',
+    changes: [
+      '🎯 תיקון חישוב שיא כניסות לערב',
+      '✍️ אפיון טבעי ומגוון לפרופיל השחקן',
+      '🗣️ פישוט ניסוחים והסרת מונחים מבלבלים',
+    ],
+  },
   {
     version: '6.43.0',
     date: '2026-11-15',

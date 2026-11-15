@@ -1415,20 +1415,23 @@ export const generateAIForecasts = async (
       fit.forEach((v, i) => { consensusShape[i] += v / templates.length; });
     }
   } else {
-    // Synthetic fallback based on poker group averages
+    // Synthetic fallback based on real group historical distributions (typical 8p: +240, +130, +50...)
     const winnersCount = n <= 7 ? 3 : 4;
     const losersCount = n - winnersCount;
-    const topWin = 100;
-    for (let i = 0; i < winnersCount; i++) consensusShape[i] = Math.round(topWin / (1 + i * 0.5));
+    const topWin = n <= 7 ? 210 : 240;
+    for (let i = 0; i < winnersCount; i++) consensusShape[i] = Math.round(topWin / (1 + i * 0.7));
     const posSum = consensusShape.slice(0, winnersCount).reduce((a, b) => a + b, 0);
+    const loserWeights = Array.from({ length: losersCount }, (_, i) => 1 + i * 0.4);
+    const loserWeightSum = loserWeights.reduce((a, b) => a + b, 0);
     for (let i = 0; i < losersCount; i++) {
-      consensusShape[winnersCount + i] = -Math.round(posSum / losersCount);
+      consensusShape[winnersCount + i] = -Math.round(posSum * loserWeights[losersCount - 1 - i] / loserWeightSum);
     }
   }
 
-  // Damping factor (0.65x) accounts for regression to the mean and prevents extreme outlier numbers
-  const DAMPING = 0.65;
-  let template = consensusShape.map(v => Math.round(v * DAMPING));
+  // Realistic scale (0.88x) — ensures authentic poker night magnitudes (winners +190..+240, losers -150..-200)
+  // while preventing extreme freak outliers (e.g. +460)
+  const REALISTIC_SCALE = 0.88;
+  let template = consensusShape.map(v => Math.round(v * REALISTIC_SCALE));
   const templateMean = template.reduce((s, v) => s + v, 0) / n;
   template = template.map(v => Math.round(v - templateMean));
   const residualSum = template.reduce((s, v) => s + v, 0);
