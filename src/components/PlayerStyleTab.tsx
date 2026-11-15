@@ -17,16 +17,13 @@ import {
 import { Game, GamePlayer, Player } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { computeGroupStyleProfiles, PlayerStyleMetrics } from '../utils/playerStyleProfile';
-import { captureAndSplit, shareFiles, shareToWhatsApp } from '../utils/sharing';
-import { StyledSelect, StyledSelectOption } from './StyledSelect';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { useTranslation } from '../i18n';
 
 interface PlayerStyleTabProps {
   games: Game[];
-  allGames?: Game[];
   players: Player[];
   selectedPlayers: Set<string>;
-  onTogglePlayer: (playerId: string) => void;
   gamePlayersByGameId: Map<string, Map<string, GamePlayer>>;
   getPlayerColor: (id: string) => string;
   timeframeLabel: string;
@@ -55,13 +52,16 @@ const fmtSigned = (n: number): string => {
  */
 function computeSmartScatterPoints(
   profiles: PlayerStyleMetrics[],
+  xMinDomain: number,
+  xMaxDomain: number,
   yMinDomain: number,
   yMaxDomain: number
 ): ScatterPointItem[] {
   if (profiles.length === 0) return [];
   const plotW = 280;
   const plotH = 210;
-  const ySpan = Math.max(50, yMaxDomain - yMinDomain);
+  const xSpan = Math.max(15, xMaxDomain - xMinDomain);
+  const ySpan = Math.max(20, yMaxDomain - yMinDomain);
 
   const raw: Array<{ p: PlayerStyleMetrics; x: number; y: number; px: number; py: number }> = [];
   for (const p of profiles) {
@@ -70,11 +70,11 @@ function computeSmartScatterPoints(
     // Deterministic de-clustering if two dots have near-identical coordinates
     for (const prev of raw) {
       if (Math.abs(prev.x - x) <= 2 && Math.abs(prev.y - y) <= 4) {
-        const canMoveRight = x < 46 || (x >= 50 && x <= 90);
-        x = canMoveRight ? x + 3 : Math.max(14, x - 3);
+        const canMoveRight = x < 46 || (x >= 50 && x <= xMaxDomain - 4);
+        x = canMoveRight ? x + 2 : Math.max(xMinDomain + 2, x - 2);
       }
     }
-    const px = (x / 105) * plotW;
+    const px = ((x - xMinDomain) / xSpan) * plotW;
     const py = ((yMaxDomain - y) / ySpan) * plotH;
     raw.push({ p, x, y, px, py });
   }
@@ -176,58 +176,23 @@ function computeSmartScatterPoints(
 
 export default function PlayerStyleTab({
   games,
-  allGames,
   players,
   selectedPlayers,
-  onTogglePlayer,
   gamePlayersByGameId,
   getPlayerColor,
   timeframeLabel,
 }: PlayerStyleTabProps) {
   const { t } = useTranslation();
 
-  const [showPermGuestsPicker, setShowPermGuestsPicker] = useState(false);
-  const [showOccGuestsPicker, setShowOccGuestsPicker] = useState(false);
-  const [showMapHelp, setShowMapHelp] = useState(true);
-  const [showRadarHelp, setShowRadarHelp] = useState(true);
-
-  // Per-player game count in the currently selected period (for sorting & displaying guest pills)
-  const periodGamesByPlayerId = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const g of games) {
-      const byP = gamePlayersByGameId.get(g.id);
-      byP?.forEach((_, pid) => {
-        counts.set(pid, (counts.get(pid) || 0) + 1);
-      });
-    }
-    return counts;
-  }, [games, gamePlayersByGameId]);
-
-  const { permGuestList, occGuestList } = useMemo(() => {
-    const pg = players
-      .filter(p => p.type === 'permanent_guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
-      .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
-    const og = players
-      .filter(p => p.type === 'guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || selectedPlayers.has(p.id)))
-      .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
-    return { permGuestList: pg, occGuestList: og };
-  }, [players, periodGamesByPlayerId, selectedPlayers]);
-
-  const selectedPermGuestsCount = useMemo(
-    () => permGuestList.filter(p => selectedPlayers.has(p.id)).length,
-    [permGuestList, selectedPlayers]
-  );
-  const selectedOccGuestsCount = useMemo(
-    () => occGuestList.filter(p => selectedPlayers.has(p.id)).length,
-    [occGuestList, selectedPlayers]
-  );
+  const [showMapHelp, setShowMapHelp] = useState(false);
+  const [showRadarHelp, setShowRadarHelp] = useState(false);
 
   const analysis = useMemo(
     () =>
-      computeGroupStyleProfiles(games, players, gamePlayersByGameId, getPlayerColor, allGames, {
+      computeGroupStyleProfiles(games, players, gamePlayersByGameId, getPlayerColor, {
         selectedPlayerIds: selectedPlayers,
       }),
-    [games, allGames, players, gamePlayersByGameId, getPlayerColor, selectedPlayers]
+    [games, players, gamePlayersByGameId, getPlayerColor, selectedPlayers]
   );
 
   const [selectedId, setSelectedId] = useState<string>('');
@@ -247,31 +212,61 @@ export default function PlayerStyleTab({
     [analysis.profiles, selectedId]
   );
 
-  const playerSelectOptions = useMemo<StyledSelectOption<string>[]>(() => {
-    return analysis.profiles.map(p => ({
-      value: p.playerId,
-      label: `${p.archetype.emoji} ${p.playerName} (${fmtSigned(p.totalProfit)}₪ · ${p.gamesPlayed} מש׳)`,
-      group:
-        p.playerType === 'permanent_guest'
-          ? t('settings.players.groupPermanentGuest')
-          : p.playerType === 'guest'
-            ? t('history.occasional')
-            : undefined,
-    }));
-  }, [analysis.profiles, t]);
-
-  const { yMinDomain, yMaxDomain } = useMemo(() => {
-    if (analysis.profiles.length === 0) return { yMinDomain: -100, yMaxDomain: 100 };
+  const { xMinDomain, xMaxDomain, yMinDomain, yMaxDomain, xTicks, yTicks } = useMemo(() => {
+    if (analysis.profiles.length === 0) {
+      return {
+        xMinDomain: 25,
+        xMaxDomain: 75,
+        yMinDomain: -50,
+        yMaxDomain: 50,
+        xTicks: [25, 50, 75],
+        yTicks: [-50, 0, 50],
+      };
+    }
+    const xs = analysis.profiles.map(p => Math.round(p.volatility));
     const ys = analysis.profiles.map(p => Math.round(p.avgProfit));
-    return {
-      yMinDomain: Math.floor(Math.min(-30, Math.min(...ys) - 25) / 10) * 10,
-      yMaxDomain: Math.ceil(Math.max(30, Math.max(...ys) + 30) / 10) * 10,
+
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const xPad = Math.max(3, Math.round((maxX - minX) * 0.1));
+    const xMin = Math.max(0, Math.floor((minX - xPad) / 5) * 5);
+    const xMax = Math.min(100, Math.ceil((maxX + xPad) / 5) * 5);
+
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const yPad = Math.max(6, Math.round(Math.max(16, maxY - minY) * 0.12));
+    const yMin = Math.floor((minY - yPad) / 5) * 5;
+    const yMax = Math.ceil((maxY + yPad) / 5) * 5;
+
+    const buildTicks = (lo: number, hi: number, includeVal?: number): number[] => {
+      const span = Math.max(10, hi - lo);
+      const rawStep = span / 4;
+      const step = rawStep <= 5 ? 5 : rawStep <= 10 ? 10 : rawStep <= 20 ? 20 : rawStep <= 25 ? 25 : 50;
+      const set = new Set<number>([lo, hi]);
+      const first = Math.ceil(lo / step) * step;
+      for (let v = first; v <= hi; v += step) {
+        if (v - lo >= step * 0.35 && hi - v >= step * 0.35) set.add(v);
+      }
+      if (includeVal !== undefined && includeVal >= lo && includeVal <= hi) {
+        set.add(includeVal);
+      }
+      return Array.from(set).sort((a, b) => a - b);
     };
-  }, [analysis.profiles]);
+
+    const midX = Math.round(analysis.medianVolatility);
+    return {
+      xMinDomain: xMin,
+      xMaxDomain: Math.max(xMin + 10, xMax),
+      yMinDomain: yMin,
+      yMaxDomain: Math.max(yMin + 10, yMax),
+      xTicks: buildTicks(xMin, Math.max(xMin + 10, xMax), midX),
+      yTicks: buildTicks(yMin, Math.max(yMin + 10, yMax), 0),
+    };
+  }, [analysis.profiles, analysis.medianVolatility]);
 
   const scatterData = useMemo(
-    () => computeSmartScatterPoints(analysis.profiles, yMinDomain, yMaxDomain),
-    [analysis.profiles, yMinDomain, yMaxDomain]
+    () => computeSmartScatterPoints(analysis.profiles, xMinDomain, xMaxDomain, yMinDomain, yMaxDomain),
+    [analysis.profiles, xMinDomain, xMaxDomain, yMinDomain, yMaxDomain]
   );
 
   const radarData = useMemo(() => {
@@ -290,47 +285,60 @@ export default function PlayerStyleTab({
     if (!selectedProfile) return [];
     const g = analysis.groupAvgRadar;
     const hasRebuyData = selectedProfile.trackedRebuyGames > 0;
+    const n = selectedProfile.gamesPlayed;
+    const bigWinsWord =
+      selectedProfile.bigWins === 0
+        ? `ללא זכיות מעל ${analysis.bigSwingThreshold}₪`
+        : selectedProfile.bigWins === 1
+          ? `זכייה אחת מעל ${analysis.bigSwingThreshold}₪`
+          : `${selectedProfile.bigWins} זכיות מעל ${analysis.bigSwingThreshold}₪`;
+    const bigLossesWord =
+      selectedProfile.bigLosses === 0
+        ? `ללא הפסדים מעל ${analysis.bigSwingThreshold}₪`
+        : selectedProfile.bigLosses === 1
+          ? `רשם הפסד אחד מעל ${analysis.bigSwingThreshold}₪`
+          : `רשם ${selectedProfile.bigLosses} הפסדים מעל ${analysis.bigSwingThreshold}₪`;
     const upsideReal =
-      selectedProfile.avgWinSize > 0
-        ? `ממוצע ניצחון ${fmtSigned(selectedProfile.avgWinSize)}₪ · ${selectedProfile.bigWins} גדולים`
-        : `שיא ערב ${fmtSigned(selectedProfile.bestWin)}₪ · 0 גדולים`;
+      selectedProfile.winsCount > 0
+        ? `רווח ממוצע ${fmtSigned(selectedProfile.avgWinSize)}₪ בניצחון · ${bigWinsWord} מתוך ${selectedProfile.winsCount} ניצחונות בתקופה`
+        : `ללא ניצחונות ב-${n} משחקי התקופה`;
     return [
       {
-        label: '🎯 אחוז נצחונות',
-        explain: 'תדירות סיום ערב בפלוס בתקופה הנבחרת',
-        realVal: `${Math.round(selectedProfile.winRate)}% (שולחן ${Math.round(analysis.groupAvgWinRate)}%)`,
+        label: '🎯 נצחונות',
+        explain: 'אחוז הערבים שהסתיימו ברווח',
+        realVal: `ניצח ב-${selectedProfile.winsCount} מתוך ${n} משחקי התקופה · ${Math.round(selectedProfile.winRate)}% לעומת ${Math.round(analysis.groupAvgWinRate)}% בשולחן`,
         score: selectedProfile.radar.winRate,
         groupScore: g.winRate,
       },
       {
-        label: '🛡️ שליטה בסיכון',
-        explain: 'הימנעות מהפסדי ענק ומריבאיים מיותרים בתקופה',
+        label: '🛡️ יציבות ושליטה בסיכון',
+        explain: 'מיעוט ריבאיים והימנעות מהפסדים כבדים',
         realVal: hasRebuyData
-          ? `${selectedProfile.bigLosses} הפסדים גדולים · ${selectedProfile.avgRebuys.toFixed(1)} ריבאי`
-          : `${selectedProfile.bigLosses} הפסדים גדולים · σ=${cleanNumber(Math.round(selectedProfile.downsideDev))}₪`,
+          ? `${bigLossesWord} ב-${n} משחקי התקופה · ${selectedProfile.avgRebuys.toFixed(1)} ריבאיים לעומת ${analysis.groupAvgRebuys.toFixed(1)} בשולחן`
+          : `${bigLossesWord} ב-${n} משחקי התקופה · הפסד ממוצע ${fmtSigned(selectedProfile.avgLossSize)}₪`,
         score: selectedProfile.radar.consistency,
         groupScore: g.consistency,
       },
       {
-        label: '💥 עוצמת פיק',
-        explain: 'גודל זכייה ממוצעת וערבי קצה חיוביים בתקופה',
+        label: '💥 גודל זכיות',
+        explain: 'גובה הרווח בערבי ניצחון וזכיות גדולות',
         realVal: upsideReal,
         score: selectedProfile.radar.upside,
         groupScore: g.upside,
       },
       {
-        label: '🔄 קאמבק מריבאי',
-        explain: 'יכולת לסיים בפלוס בערבי קניות מרובות בתקופה',
+        label: '🔄 קאמבק',
+        explain: hasRebuyData ? 'סיום ברווח בערבים עם ריבאיים מרובים' : 'חזרה לניצחון מיד אחרי ערב הפסד',
         realVal: selectedProfile.comebackLabel,
         score: selectedProfile.radar.comeback,
         groupScore: g.comeback,
       },
       {
         label: '🔥 אקשן וקופות',
-        explain: 'כמות ריבאיים וגודל התנודות בשולחן בתקופה',
+        explain: 'קצב כניסות חוזרות ומעורבות בקופות גדולות',
         realVal: hasRebuyData
-          ? `σ=${cleanNumber(Math.round(selectedProfile.stdDev))}₪ · ${selectedProfile.avgRebuys.toFixed(1)} ריבאי/מש׳`
-          : `σ=${cleanNumber(Math.round(selectedProfile.stdDev))}₪ · תנודה ${cleanNumber(Math.round(selectedProfile.avgAbsSwing))}₪`,
+          ? `ממוצע ${selectedProfile.avgRebuys.toFixed(1)} ריבאיים מול ${analysis.groupAvgRebuys.toFixed(1)} בשולחן · שיא עד ${selectedProfile.maxRebuys} ריבאיים בערב`
+          : `תנודה ממוצעת של ±${cleanNumber(Math.round(selectedProfile.avgAbsSwing))}₪ לערב · טווח בין ${fmtSigned(selectedProfile.worstLoss)}₪ ל-${fmtSigned(selectedProfile.bestWin)}₪`,
         score: selectedProfile.radar.action,
         groupScore: g.action,
       },
@@ -352,84 +360,6 @@ export default function PlayerStyleTab({
     }
   };
 
-  const handleWhatsAppSharePlayer = () => {
-    if (!selectedProfile) return;
-    const LTR = '\u200E';
-    const lines = [
-      `🎭 *פרופיל אופי וסגנון משחק — ${selectedProfile.playerName}* (${timeframeLabel})`,
-      `${selectedProfile.archetype.emoji} *${selectedProfile.archetype.title}* | תג סגנון: *${selectedProfile.archetype.styleBadge}*`,
-      `${selectedProfile.archetype.description}`,
-      ``,
-      `📊 *מדדים מרכזיים (${timeframeLabel}):*`,
-      `${LTR}• סה״כ בתקופה: *${fmtSigned(selectedProfile.totalProfit)}₪* (${selectedProfile.gamesPlayed} משחקים, ממוצע ${fmtSigned(selectedProfile.avgProfit)}₪)`,
-      `${LTR}• סטיית תקן (σ): *${cleanNumber(Math.round(selectedProfile.stdDev))}₪* | זכיות/הפסדים ${analysis.bigSwingThreshold}₪+: *${selectedProfile.bigWins}* זכיות מול *${selectedProfile.bigLosses}* הפסדים`,
-      `${LTR}• ריבאיים למשחק: *${selectedProfile.avgRebuys.toFixed(1)}* (ממוצע שולחן ${analysis.groupAvgRebuys.toFixed(1)})`,
-      ``,
-      `🔍 *הוכחות מהנתונים:*`,
-      ...selectedProfile.traits.map(tr => `• ${tr}`),
-    ];
-    shareToWhatsApp(lines.join('\n'));
-  };
-
-  const handleWhatsAppShareGroup = () => {
-    const LTR = '\u200E';
-    const lines = [
-      `🎭 *מפת סגנון ואופי השחקנים* (${timeframeLabel})`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      ...analysis.profiles.map(
-        (p, idx) =>
-          `${LTR}${idx + 1}. ${p.archetype.emoji} *${p.playerName}* — *${p.archetype.title}*\n   סה״כ ${fmtSigned(p.totalProfit)}₪ (${p.gamesPlayed} מש׳, ממוצע ${fmtSigned(p.avgProfit)}₪) | σ=${cleanNumber(Math.round(p.stdDev))}₪ | ${p.avgRebuys.toFixed(1)} ריבאי/מש׳`
-      ),
-    ];
-    shareToWhatsApp(lines.join('\n'));
-  };
-
-  const handleToggleGuestPill = (guestId: string) => {
-    const wasSelected = selectedPlayers.has(guestId);
-    onTogglePlayer(guestId);
-    if (!wasSelected) {
-      setSelectedId(guestId);
-    }
-  };
-
-  const renderSpecificGuestPill = (guest: Player) => {
-    const isSel = selectedPlayers.has(guest.id);
-    const color = getPlayerColor(guest.id);
-    const gamesInPeriod = periodGamesByPlayerId.get(guest.id) || 0;
-    return (
-      <button
-        key={guest.id}
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          handleToggleGuestPill(guest.id);
-        }}
-        style={{
-          padding: '0.32rem 0.6rem',
-          borderRadius: '16px',
-          border: isSel ? `2px solid ${color}` : '1.5px solid var(--border)',
-          background: isSel ? `${color}22` : 'var(--surface)',
-          cursor: 'pointer',
-          fontSize: '0.75rem',
-          fontWeight: '600',
-          color: isSel ? color : 'var(--text-muted)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.25rem',
-          transition: 'all 0.15s ease',
-        }}
-      >
-        <span>{isSel && '✓ '}{guest.name}</span>
-        {gamesInPeriod > 0 && (
-          <span style={{ fontSize: '0.62rem', opacity: 0.75, fontWeight: '500' }}>
-            ({gamesInPeriod})
-          </span>
-        )}
-      </button>
-    );
-  };
-
   if (analysis.profiles.length === 0) {
     return (
       <div className="card">
@@ -444,121 +374,33 @@ export default function PlayerStyleTab({
 
   const chartKey = `${timeframeLabel}-${games.length}-${analysis.profiles.map(p => p.playerId).join(',')}`;
 
+  const shareBtnStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.35rem',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    padding: '0.42rem 0.95rem',
+    background: 'var(--surface)',
+    color: 'var(--text-muted)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+  };
+
   return (
     <>
-      {/* Specific Guest Selection Card (matches Trends/Graphs screen pattern — pick individual guests!) */}
-      {(permGuestList.length > 0 || occGuestList.length > 0) && (
-        <div className="card" style={{ padding: '0.6rem 0.75rem', marginBottom: '0.6rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              👥 הוספת אורחים ספציפיים לניתוח ({timeframeLabel}):
-            </span>
-            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-              {permGuestList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowPermGuestsPicker(v => !v)}
-                  style={{
-                    padding: '0.25rem 0.58rem',
-                    fontSize: '0.7rem',
-                    fontWeight: '600',
-                    borderRadius: '999px',
-                    border: selectedPermGuestsCount > 0 || showPermGuestsPicker ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                    background: selectedPermGuestsCount > 0 ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: selectedPermGuestsCount > 0 ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                  }}
-                >
-                  <span>🏠 אורחים קבועים ({permGuestList.length})</span>
-                  {selectedPermGuestsCount > 0 && (
-                    <span style={{
-                      background: 'var(--primary)',
-                      color: '#fff',
-                      borderRadius: '999px',
-                      padding: '0.02rem 0.38rem',
-                      fontSize: '0.62rem',
-                      fontWeight: '700',
-                    }}>
-                      {selectedPermGuestsCount}
-                    </span>
-                  )}
-                  <span style={{ fontSize: '0.65rem' }}>{showPermGuestsPicker ? '▲' : '▼'}</span>
-                </button>
-              )}
-              {occGuestList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowOccGuestsPicker(v => !v)}
-                  style={{
-                    padding: '0.25rem 0.58rem',
-                    fontSize: '0.7rem',
-                    fontWeight: '600',
-                    borderRadius: '999px',
-                    border: selectedOccGuestsCount > 0 || showOccGuestsPicker ? '1.5px solid #3B82F6' : '1px solid var(--border)',
-                    background: selectedOccGuestsCount > 0 ? 'rgba(59, 130, 246, 0.15)' : 'var(--surface)',
-                    color: selectedOccGuestsCount > 0 ? '#60A5FA' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                  }}
-                >
-                  <span>👤 שחקנים מזדמנים ({occGuestList.length})</span>
-                  {selectedOccGuestsCount > 0 && (
-                    <span style={{
-                      background: '#3B82F6',
-                      color: '#fff',
-                      borderRadius: '999px',
-                      padding: '0.02rem 0.38rem',
-                      fontSize: '0.62rem',
-                      fontWeight: '700',
-                    }}>
-                      {selectedOccGuestsCount}
-                    </span>
-                  )}
-                  <span style={{ fontSize: '0.65rem' }}>{showOccGuestsPicker ? '▲' : '▼'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {showPermGuestsPicker && permGuestList.length > 0 && (
-            <div style={{ marginTop: '0.5rem', paddingTop: '0.45rem', borderTop: '1px dashed var(--border)' }}>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                בחר אורחים קבועים להצגה במפה ובעכביש (מספר המשחקים בתקופה בסוגריים):
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.38rem' }}>
-                {permGuestList.map(guest => renderSpecificGuestPill(guest))}
-              </div>
-            </div>
-          )}
-
-          {showOccGuestsPicker && occGuestList.length > 0 && (
-            <div style={{ marginTop: '0.5rem', paddingTop: '0.45rem', borderTop: '1px dashed var(--border)' }}>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                בחר שחקנים מזדמנים להצגה במפה ובעכביש (מספר המשחקים בתקופה בסוגריים):
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.38rem' }}>
-                {occGuestList.map(guest => renderSpecificGuestPill(guest))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 1. Group 4-Quadrant Map */}
+      {/* 1. Group 4-Quadrant Style Map */}
       <div ref={mapCardRef} className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
           <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.styleMapTitle')}</h2>
           <button
             type="button"
             onClick={() => setShowMapHelp(v => !v)}
             style={{
-              fontSize: '0.66rem',
-              padding: '0.18rem 0.5rem',
+              fontSize: '0.65rem',
+              padding: '0.16rem 0.48rem',
               borderRadius: '999px',
               border: '1px solid var(--border)',
               background: 'var(--surface)',
@@ -567,68 +409,70 @@ export default function PlayerStyleTab({
               flexShrink: 0,
             }}
           >
-            {showMapHelp ? 'הסתר הסבר ▲' : 'איך קוראים את הגרף? ▼'}
+            {showMapHelp ? 'הסתר הסבר ▲' : 'איך קוראים? ▼'}
           </button>
         </div>
 
-        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-          תקופה נבחרת: <strong style={{ color: 'var(--text)' }}>{timeframeLabel}</strong> ({games.length} משחקים) • {analysis.profiles.length} שחקנים • לחץ על שחקן לניתוח
+        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.45rem' }}>
+          <strong style={{ color: 'var(--text)' }}>{timeframeLabel}</strong> · {games.length} משחקים · {analysis.profiles.length} שחקנים
         </div>
 
-        {/* Clear How-to-Read Guide Box + 4 Quadrants Legend (OUTSIDE chart so text never overlaps dots!) */}
         {showMapHelp && (
-          <div style={{
-            padding: '0.55rem 0.65rem',
-            marginBottom: '0.6rem',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            fontSize: '0.67rem',
-            lineHeight: 1.45,
-          }}>
-            <div style={{ fontWeight: '700', color: 'var(--text)', marginBottom: '0.25rem' }}>
-              📖 איך קוראים את מפת הסגנון?
+          <div
+            dir="rtl"
+            style={{
+              padding: '0.45rem 0.55rem',
+              marginBottom: '0.5rem',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              fontSize: '0.64rem',
+              lineHeight: 1.45,
+              textAlign: 'right',
+            }}
+          >
+            <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
+              <strong style={{ color: 'var(--text)' }}>ציר X (מדד אגרסיביות וריבאיים 0–100):</strong> מבוסס בעיקר על כמות הריבאיים למשחק ביחס לממוצע הקבוצה וגודל הקופות (ימינה = ריבאיים ואקשן גבוהים יותר)
             </div>
-            <div style={{ color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-              • <strong>ציר אנכי (Y — למעלה/למטה):</strong> ממוצע רווח או הפסד למשחק ב-₪ בתקופה הנבחרת (מעל קו ה-0 = מורווח, מתחת = מופסד).<br />
-              • <strong>ציר אופקי (X — שמאל/ימין):</strong> מדד תנודתיות ואגרסיביות בתקופה הנבחרת (0–100) המשלב קצב ריבאיים, סטיית תקן (σ) ועומק הפסדים. הקו האנכי המקווקו הוא קו האמצע ({analysis.medianVolatility}).
+            <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
+              <strong style={{ color: 'var(--text)' }}>ציר Y (ממוצע ב-₪):</strong> רווח או הפסד ממוצע למשחק בתקופה
+            </div>
+            <div style={{ color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+              <strong style={{ color: 'var(--text)' }}>הקווים המקווקווים:</strong> אופקי (0₪) = גבול רווח/הפסד · אנכי (50) = ממוצע הריבאיים והאקשן של השולחן
             </div>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: '0.3rem',
-              fontSize: '0.62rem',
+              gap: '0.25rem',
+              fontSize: '0.6rem',
               direction: 'ltr',
             }}>
-              <div dir="rtl" style={{ padding: '0.28rem 0.4rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right', wordBreak: 'break-word' }}>
-                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה (רווחי וסולידי):</strong> מרוויח עם מעט ריבאיים והפסדים קטנים
+              <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
+                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה:</strong> מרוויח וסולידי
               </div>
-              <div dir="rtl" style={{ padding: '0.28rem 0.4rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right', wordBreak: 'break-word' }}>
-                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה (רווחי ואגרסיבי):</strong> מרוויח דרך קופות ענק וריבאיים רבים
+              <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
+                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה:</strong> מרוויח ואגרסיבי
               </div>
-              <div dir="rtl" style={{ padding: '0.28rem 0.4rem', borderRadius: '6px', background: 'rgba(148, 163, 184, 0.08)', border: '1px solid var(--border)', textAlign: 'right', wordBreak: 'break-word' }}>
-                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה (מופסד וסולידי):</strong> קניות מבוקרות אך חסר זכיות גדולות
+              <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(148, 163, 184, 0.08)', border: '1px solid var(--border)', textAlign: 'right' }}>
+                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה:</strong> מופסד וסולידי
               </div>
-              <div dir="rtl" style={{ padding: '0.28rem 0.4rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', textAlign: 'right', wordBreak: 'break-word' }}>
-                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה (מופסד ותנודתי):</strong> ריבאיים מרובים או הפסדים כבדים
+              <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', textAlign: 'right' }}>
+                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה:</strong> מופסד ואגרסיבי
               </div>
             </div>
           </div>
         )}
 
-        {/* Y-axis clear title bar */}
-        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.15rem', paddingRight: '0.2rem' }}>
-          ↕ <strong>ציר אנכי (Y):</strong> ממוצע רווח / הפסד למשחק ב{timeframeLabel} (₪)
-        </div>
-
-        <div style={{ position: 'relative', width: '100%', height: '275px', direction: 'ltr' }}>
+        <div style={{ position: 'relative', width: '100%', height: '265px', direction: 'ltr' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart key={chartKey} margin={{ top: 22, right: 24, bottom: 18, left: 2 }}>
+            <ScatterChart key={chartKey} margin={{ top: 20, right: 24, bottom: 16, left: 2 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.4} />
               <XAxis
                 type="number"
                 dataKey="x"
-                domain={[0, 105]}
+                domain={[xMinDomain, xMaxDomain]}
+                ticks={xTicks}
+                allowDataOverflow
                 stroke="var(--text-muted)"
                 fontSize={10}
                 tickLine={false}
@@ -638,6 +482,8 @@ export default function PlayerStyleTab({
                 type="number"
                 dataKey="y"
                 domain={[yMinDomain, yMaxDomain]}
+                ticks={yTicks}
+                allowDataOverflow
                 stroke="var(--text-muted)"
                 fontSize={10}
                 width={38}
@@ -645,8 +491,12 @@ export default function PlayerStyleTab({
                 axisLine={false}
                 tickFormatter={(v) => cleanNumber(v)}
               />
-              <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 4" opacity={0.75} />
-              <ReferenceLine x={Math.round(analysis.medianVolatility)} stroke="var(--text-muted)" strokeDasharray="4 4" opacity={0.75} />
+              {yMinDomain <= 0 && yMaxDomain >= 0 && (
+                <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 4" opacity={0.75} />
+              )}
+              {xMinDomain <= Math.round(analysis.medianVolatility) && xMaxDomain >= Math.round(analysis.medianVolatility) && (
+                <ReferenceLine x={Math.round(analysis.medianVolatility)} stroke="var(--text-muted)" strokeDasharray="4 4" opacity={0.75} />
+              )}
               <Scatter
                 data={scatterData}
                 isAnimationActive={false}
@@ -674,7 +524,6 @@ export default function PlayerStyleTab({
                       style={{ cursor: 'pointer' }}
                       onClick={() => setSelectedId(item.playerId)}
                     >
-                      {/* Invisible touch target for effortless mobile tapping */}
                       <circle cx={cx} cy={cy} r={16} fill="transparent" />
                       <circle
                         cx={cx}
@@ -713,99 +562,77 @@ export default function PlayerStyleTab({
           </ResponsiveContainer>
         </div>
 
-        {/* Mobile-clean X-axis explanation bar */}
+        {/* Clean 1-line mobile-safe axis bar */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '0.25rem',
-          fontSize: '0.6rem',
+          fontSize: '0.58rem',
           color: 'var(--text-muted)',
-          padding: '0.28rem 0.5rem',
-          marginTop: '0.25rem',
+          padding: '0.22rem 0.45rem',
+          marginTop: '0.2rem',
           background: 'var(--surface)',
           borderRadius: '6px',
           border: '1px solid var(--border)',
           direction: 'ltr',
-          whiteSpace: 'nowrap',
         }}>
-          <span>← סולידי ומבוקר (0)</span>
-          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: תנודתיות</span>
-          <span>אגרסיבי ותנודתי (100) →</span>
+          <span>← סולידי</span>
+          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: מדד אגרסיביות · ציר Y: ממוצע ₪</span>
+          <span>אגרסיבי →</span>
         </div>
 
-        {/* Player Dropdown + Tappable Pills */}
-        <div style={{ marginTop: '0.65rem' }}>
-          <div style={{ marginBottom: '0.45rem' }}>
-            <StyledSelect<string>
-              value={selectedProfile?.playerId || ''}
-              onChange={setSelectedId}
-              options={playerSelectOptions}
-              variant="green"
-              size="md"
-              fullWidth
-              title="בחר שחקן לניתוח אופי"
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.35rem' }}>
-            {analysis.profiles.map(p => {
-              const isSel = p.playerId === selectedProfile?.playerId;
-              return (
-                <button
-                  key={p.playerId}
-                  type="button"
-                  onClick={() => setSelectedId(p.playerId)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.28rem',
-                    padding: '0.28rem 0.58rem',
-                    fontSize: '0.72rem',
-                    fontWeight: isSel ? '700' : '600',
-                    borderRadius: '999px',
-                    border: isSel ? `1.5px solid ${p.color}` : '1px solid var(--border)',
-                    background: isSel ? `${p.color}24` : 'var(--surface)',
-                    color: isSel ? p.color : 'var(--text-muted)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span>{p.archetype.emoji}</span>
-                  <span>{p.playerName}</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* Tappable Player Pills */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.35rem', marginTop: '0.55rem' }}>
+          {analysis.profiles.map(p => {
+            const isSel = p.playerId === selectedProfile?.playerId;
+            return (
+              <button
+                key={p.playerId}
+                type="button"
+                onClick={() => setSelectedId(p.playerId)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.28rem',
+                  padding: '0.28rem 0.58rem',
+                  fontSize: '0.72rem',
+                  fontWeight: isSel ? '700' : '600',
+                  borderRadius: '999px',
+                  border: isSel ? `1.5px solid ${p.color}` : '1px solid var(--border)',
+                  background: isSel ? `${p.color}24` : 'var(--surface)',
+                  color: isSel ? p.color : 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>{p.archetype.emoji}</span>
+                <span>{p.playerName}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Share buttons for Group Map */}
-      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.5rem', marginTop: '-0.4rem', marginBottom: '0.65rem' }}>
+      {/* Single Identical Image Share Button below Map Card */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.35rem', marginBottom: '0.65rem' }}>
         <button
           type="button"
           onClick={() => handleShareImage(mapCardRef, setIsSharingMap, 'poker-style-map')}
           disabled={isSharingMap}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.72rem', padding: '0.38rem 0.75rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+          style={shareBtnStyle}
         >
-          {isSharingMap ? t('common.capturing') : '📸 שתף מפה (תמונה)'}
-        </button>
-        <button
-          type="button"
-          onClick={handleWhatsAppShareGroup}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.72rem', padding: '0.38rem 0.75rem', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
-        >
-          📲 שתף דירוג בוואטסאפ
+          {isSharingMap ? t('common.capturing') : t('common.share')}
         </button>
       </div>
 
-      {/* 2. Personal Player Radar & Deep Profile Card */}
+      {/* 2. Personal Player Spider & Analysis Card */}
       {selectedProfile && (
         <>
           <div ref={playerCardRef} className="card">
-            {/* Header: Archetype + Style Credibility Badge + Period Total Profit */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            {/* Header: Archetype + Style Badge + Period Total Profit */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.45rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', minWidth: 0 }}>
-                <span style={{ fontSize: '1.5rem', lineHeight: 1.1, flexShrink: 0 }}>{selectedProfile.archetype.emoji}</span>
+                <span style={{ fontSize: '1.45rem', lineHeight: 1.1, flexShrink: 0 }}>{selectedProfile.archetype.emoji}</span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '0.92rem', fontWeight: '700', color: selectedProfile.color }}>
@@ -824,8 +651,8 @@ export default function PlayerStyleTab({
                       {selectedProfile.archetype.styleBadge}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.12rem' }}>
-                    נתוני תקופה נבחרת: <strong style={{ color: 'var(--text)' }}>{timeframeLabel}</strong>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.12rem' }}>
+                    <strong style={{ color: 'var(--text)' }}>{timeframeLabel}</strong> · {selectedProfile.gamesPlayed} משחקים בתקופה
                   </div>
                 </div>
               </div>
@@ -840,18 +667,18 @@ export default function PlayerStyleTab({
                   {fmtSigned(selectedProfile.totalProfit)}₪
                 </div>
                 <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                  {selectedProfile.gamesPlayed} מש׳ (#{selectedProfile.profitRank}/{selectedProfile.totalPlayersInGroup})
+                  מקום {selectedProfile.profitRank}/{selectedProfile.totalPlayersInGroup}
                 </div>
               </div>
             </div>
 
-            {/* Unique Personalized Summary Paragraph */}
+            {/* Natural Summary Sentence */}
             <div style={{
               fontSize: '0.73rem',
               color: 'var(--text)',
               lineHeight: 1.45,
-              padding: '0.45rem 0.6rem',
-              marginBottom: '0.55rem',
+              padding: '0.42rem 0.58rem',
+              marginBottom: '0.5rem',
               background: 'var(--surface)',
               borderRadius: '8px',
               borderRight: `3px solid ${selectedProfile.color}`,
@@ -859,12 +686,12 @@ export default function PlayerStyleTab({
               {selectedProfile.archetype.description}
             </div>
 
-            {/* 4-Metric Statistical Strip (Mobile-responsive, with aligned Wins over Wins and Losses over Losses) */}
+            {/* 4-Metric Statistical Strip */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               gap: '0.32rem',
-              marginBottom: '0.55rem',
+              marginBottom: '0.5rem',
             }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.35rem 0.2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.15rem' }}>
                 <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ממוצע למשחק</div>
@@ -877,16 +704,21 @@ export default function PlayerStyleTab({
               </div>
 
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.35rem 0.2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.15rem' }}>
-                <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>סטיית תקן (σ)</div>
-                <div style={{ fontSize: '0.76rem', fontWeight: '700', color: 'var(--text)', direction: 'ltr', unicodeBidi: 'isolate', lineHeight: 1.2 }}>
-                  {cleanNumber(Math.round(selectedProfile.stdDev))}₪
+                <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ניצחון / הפסד</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.18rem', direction: 'ltr', lineHeight: 1.2 }}>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#10B981' }}>
+                    {selectedProfile.winsCount > 0 ? `+${cleanNumber(Math.round(selectedProfile.avgWinSize))}` : '0'}
+                  </span>
+                  <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>/</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#EF4444' }}>
+                    {selectedProfile.lossesCount > 0 ? `-${cleanNumber(Math.round(Math.abs(selectedProfile.avgLossSize)))}` : '0'}
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.52rem', color: 'var(--text-muted)', lineHeight: 1.1 }}>
-                  שולחן: {cleanNumber(Math.round(analysis.groupAvgStdDev))}₪
+                <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', lineHeight: 1.1 }}>
+                  ממוצע ב-₪ לערב
                 </div>
               </div>
 
-              {/* Vertically paired columns so green win count sits directly above זכיות and red loss count sits directly above הפסדים */}
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.35rem 0.2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.12rem' }}>
                 <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ערבי ±{analysis.bigSwingThreshold}₪+</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.22rem', direction: 'rtl' }}>
@@ -903,27 +735,27 @@ export default function PlayerStyleTab({
               </div>
 
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.35rem 0.2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.15rem' }}>
-                <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ריבאיים למשחק</div>
+                <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', lineHeight: 1.15 }}>ריבאי למשחק</div>
                 <div style={{ fontSize: '0.76rem', fontWeight: '700', color: 'var(--text)', direction: 'ltr', unicodeBidi: 'isolate', lineHeight: 1.2 }}>
                   {selectedProfile.trackedRebuyGames > 0 ? selectedProfile.avgRebuys.toFixed(1) : '—'}
                 </div>
                 <div style={{ fontSize: '0.52rem', color: 'var(--text-muted)', lineHeight: 1.1 }}>
-                  שולחן: {analysis.groupAvgRebuys.toFixed(1)}
+                  {selectedProfile.trackedRebuyGames > 0 ? `שולחן: ${analysis.groupAvgRebuys.toFixed(1)}` : 'ללא מעקב'}
                 </div>
               </div>
             </div>
 
-            {/* Spider / Radar Header + Toggleable Explanation */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
-              <span style={{ fontSize: '0.73rem', fontWeight: '700', color: 'var(--text)' }}>
-                🕸️ גרף עכביש — 5 ממדי המשחק של {selectedProfile.playerName} ({timeframeLabel})
+            {/* Spider / Radar Header + Collapsible Explanation Toggle (matching Style Map) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text)', minWidth: 0 }}>
+                🕸️ 5 ממדי המשחק — {selectedProfile.playerName}
               </span>
               <button
                 type="button"
                 onClick={() => setShowRadarHelp(v => !v)}
                 style={{
-                  fontSize: '0.64rem',
-                  padding: '0.15rem 0.45rem',
+                  fontSize: '0.65rem',
+                  padding: '0.16rem 0.48rem',
                   borderRadius: '999px',
                   border: '1px solid var(--border)',
                   background: 'var(--surface)',
@@ -932,24 +764,55 @@ export default function PlayerStyleTab({
                   flexShrink: 0,
                 }}
               >
-                {showRadarHelp ? 'הסתר פירוט ▲' : 'מה אומר העכביש? ▼'}
+                {showRadarHelp ? 'הסתר הסבר ▲' : 'איך קוראים? ▼'}
               </button>
             </div>
 
-            <div style={{ width: '100%', height: '235px', direction: 'ltr' }}>
+            {/* Closed-by-default Explanation Window for Spider Chart */}
+            {showRadarHelp && (
+              <div
+                dir="rtl"
+                style={{
+                  padding: '0.45rem 0.55rem',
+                  marginBottom: '0.5rem',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  fontSize: '0.63rem',
+                  lineHeight: 1.45,
+                  textAlign: 'right',
+                }}
+              >
+                <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  <strong style={{ color: 'var(--text)' }}>ציון 0–100 בכל קודקוד:</strong> מחושב מ-{selectedProfile.gamesPlayed} משחקי השחקן בתקופה (שטח רחב = חזק יותר)
+                </div>
+                <div style={{ color: 'var(--text-muted)', marginBottom: '0.28rem' }}>
+                  <strong style={{ color: 'var(--text)' }}>הקו המקווקו:</strong> ממוצע השולחן בתקופה (בולט מעבר לקו = מעל הממוצע)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem', borderTop: '1px solid var(--border)', paddingTop: '0.3rem' }}>
+                  {radarBreakdownRows.map((row, idx) => (
+                    <div key={idx} style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>
+                      <strong style={{ color: 'var(--text)' }}>{row.label}:</strong> {row.explain}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ width: '100%', height: '225px', direction: 'ltr' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart
                   key={`${chartKey}-${selectedProfile.playerId}`}
                   cx="50%"
                   cy="50%"
-                  outerRadius="60%"
-                  margin={{ top: 10, right: 26, bottom: 10, left: 26 }}
+                  outerRadius="58%"
+                  margin={{ top: 10, right: 32, bottom: 10, left: 32 }}
                   data={radarData}
                 >
                   <PolarGrid stroke="var(--border)" />
                   <PolarAngleAxis
                     dataKey="axis"
-                    tick={{ fill: 'var(--text)', fontSize: 10.5, fontWeight: 600 }}
+                    tick={{ fill: 'var(--text)', fontSize: 10, fontWeight: 600 }}
                   />
                   <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar
@@ -975,113 +838,134 @@ export default function PlayerStyleTab({
             </div>
 
             {/* Radar Legend */}
-            <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '1rem', fontSize: '0.66rem', marginTop: '-0.2rem', marginBottom: '0.55rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '1rem', fontSize: '0.65rem', marginTop: '-0.25rem', marginBottom: '0.5rem' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: selectedProfile.color, fontWeight: '600' }}>
                 <span style={{ width: '10px', height: '3px', background: selectedProfile.color, borderRadius: '2px' }} />
-                {selectedProfile.playerName} (0–100 ב{timeframeLabel})
+                {selectedProfile.playerName}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)' }}>
                 <span style={{ width: '10px', height: '0px', borderTop: '2px dashed var(--text-muted)' }} />
-                {t('graphs.groupAverage')} ({timeframeLabel})
+                {t('graphs.groupAverage')}
               </span>
             </div>
 
-            {/* Spider / Radar Explanation & Mobile-Friendly 5-Axis Real Numbers Breakdown */}
-            {showRadarHelp && (
-              <div style={{
-                padding: '0.5rem 0.6rem',
-                marginBottom: '0.6rem',
+            {/* 5-Axis Period Score & Data Breakdown (Clean RTL alignment, period game counts) */}
+            <div
+              dir="rtl"
+              style={{
+                padding: '0.45rem 0.55rem',
+                marginBottom: '0.5rem',
                 background: 'var(--surface)',
                 borderRadius: '8px',
                 border: '1px solid var(--border)',
-              }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.4rem', lineHeight: 1.4 }}>
-                  💡 <strong>איך קוראים את העכביש?</strong> כל קודקוד מדרג את השחקן מ-<strong>0 עד 100</strong> על בסיס ביצועיו ב<strong>{timeframeLabel}</strong>. ככל שהצורה הצבעונית יוצאת החוצה מעבר לקו המקווקו (ממוצע השולחן בתקופה), השחקן בולט יותר באותו ממד:
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  {radarBreakdownRows.map((row, i) => (
-                    <div
-                      key={i}
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.28rem',
+                textAlign: 'right',
+              }}
+            >
+              {radarBreakdownRows.map((row, i) => (
+                <div
+                  key={i}
+                  dir="rtl"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.26rem 0.38rem',
+                    borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.02)',
+                    textAlign: 'right',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.06rem', minWidth: 0, flex: 1, textAlign: 'right' }}>
+                    <span style={{ fontWeight: '700', color: 'var(--text)', fontSize: '0.65rem' }}>
+                      {row.label}
+                    </span>
+                    <span style={{ fontSize: '0.61rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                      {row.realVal}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.1rem',
+                      flexShrink: 0,
+                      minWidth: '52px',
+                    }}
+                  >
+                    <span
                       style={{
-                        padding: '0.28rem 0.4rem',
-                        borderRadius: '6px',
-                        background: 'rgba(255,255,255,0.02)',
+                        fontWeight: '700',
+                        fontSize: '0.62rem',
+                        padding: '0.08rem 0.38rem',
+                        borderRadius: '5px',
+                        background: row.score >= row.groupScore ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.12)',
+                        color: row.score >= row.groupScore ? '#34d399' : 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
                       }}
                     >
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        flexWrap: 'wrap',
-                      }}>
-                        <span style={{ fontWeight: '700', color: 'var(--text)', fontSize: '0.66rem' }}>
-                          {row.label}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', direction: 'ltr', unicodeBidi: 'isolate' }}>
-                            {row.realVal}
-                          </span>
-                          <span style={{
-                            fontWeight: '700',
-                            fontSize: '0.64rem',
-                            padding: '0.06rem 0.35rem',
-                            borderRadius: '4px',
-                            background: row.score >= row.groupScore ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.12)',
-                            color: row.score >= row.groupScore ? '#34d399' : 'var(--text-muted)',
-                            direction: 'ltr',
-                          }}>
-                            {row.score}
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '0.08rem', lineHeight: 1.3 }}>
-                        {row.explain}
-                      </div>
-                    </div>
-                  ))}
+                      ציון {row.score}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.53rem',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      קבוצה: {row.groupScore}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
 
-            {/* 4 Deep Personalized Proof Bullets */}
+            {/* 3 Natural, Pleasant-to-Read Period Insights */}
             <div style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.38rem',
-              padding: '0.6rem 0.65rem',
+              gap: '0.36rem',
+              padding: '0.55rem 0.62rem',
               background: 'var(--surface)',
               borderRadius: '8px',
               border: '1px solid var(--border)',
             }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text)', marginBottom: '0.1rem' }}>
-                📊 הוכחות ומספרים מאחורי האבחנה של {selectedProfile.playerName} ({timeframeLabel}):
-              </div>
-              {selectedProfile.traits.map((trait, idx) => (
-                <div key={idx} style={{ fontSize: '0.71rem', color: 'var(--text)', display: 'flex', gap: '0.38rem', alignItems: 'baseline', lineHeight: 1.42 }}>
-                  <span style={{ color: selectedProfile.color, fontWeight: '700', flexShrink: 0 }}>{idx + 1}.</span>
-                  <span>{trait}</span>
-                </div>
-              ))}
+              {selectedProfile.traits.map((trait, idx) => {
+                const colonIdx = trait.indexOf(':');
+                const hasLead = colonIdx > 0 && colonIdx <= 38;
+                return (
+                  <div key={idx} style={{ fontSize: '0.71rem', color: 'var(--text)', display: 'flex', gap: '0.38rem', alignItems: 'baseline', lineHeight: 1.45 }}>
+                    <span style={{ color: selectedProfile.color, fontWeight: '700', flexShrink: 0 }}>•</span>
+                    <span>
+                      {hasLead ? (
+                        <>
+                          <strong style={{ color: '#f8fafc', fontWeight: 700 }}>{trait.slice(0, colonIdx + 1)}</strong>
+                          {trait.slice(colonIdx + 1)}
+                        </>
+                      ) : (
+                        trait
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Share buttons for Selected Player Card */}
-          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.5rem', marginTop: '-0.4rem', marginBottom: '0.6rem' }}>
+          {/* Single Identical Image Share Button below Spider Card */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.35rem', marginBottom: '0.6rem' }}>
             <button
               type="button"
               onClick={() => handleShareImage(playerCardRef, setIsSharingPlayer, `poker-style-${selectedProfile.playerName}`)}
               disabled={isSharingPlayer}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.72rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+              style={shareBtnStyle}
             >
-              {isSharingPlayer ? t('common.capturing') : `📸 שתף כרטיס (${selectedProfile.playerName})`}
-            </button>
-            <button
-              type="button"
-              onClick={handleWhatsAppSharePlayer}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.72rem', padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
-            >
-              📲 שתף פרופיל בוואטסאפ
+              {isSharingPlayer ? t('common.capturing') : t('common.share')}
             </button>
           </div>
         </>

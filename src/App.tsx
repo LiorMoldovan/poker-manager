@@ -7,7 +7,7 @@ import { logActivity, updateSessionActivity, getScreenName, resetSession } from 
 import { setObserverMode } from './auth/observerMode';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
-import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, flushAllPendingSyncs } from './database/supabaseCache';
+import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, isPushSubscriptionStored, flushAllPendingSyncs } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import { getAllPlayers } from './database/storage';
 // Side-effect import: attaches `window.previewAllScheduleEmails(email)`
@@ -707,11 +707,13 @@ function SupabaseApp() {
   }, []);
 
   // Push notification subscription — only when permission is already granted
+  const lastPushSyncRef = useRef<number>(0);
   const subscribeToPush = useCallback(async () => {
     if (!groupId || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (Notification.permission !== 'granted') return;
 
     const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
+    const LAST_SAVED_ENDPOINT_KEY = 'poker_last_push_endpoint';
     const isDead = (ep: string) => ep.includes('permanently-removed') || ep.includes('.invalid');
     // A subscription minted against a different VAPID key can't be decrypted
     // by our sender, so it has to be replaced rather than reused.
@@ -725,16 +727,28 @@ function SupabaseApp() {
     };
     try {
       let reg = await navigator.serviceWorker.ready;
+      reg.update().catch(() => {});
       const existing = await reg.pushManager.getSubscription();
 
-      // Reuse a healthy registration instead of tearing it down. This used to
-      // unsubscribe unconditionally and mint a fresh endpoint on every single
-      // app load, which meant the stored endpoint was only ever as good as the
-      // last successful save — and the save is best-effort. Reusing keeps a
-      // device's endpoint stable for its whole lifetime.
+      // Reuse a healthy registration instead of tearing it down, UNLESS the
+      // browser's cached endpoint was previously saved by this device and then
+      // purged by the server after a 404/410 Gone from FCM/APNs. In that case,
+      // the browser is holding a zombie PushSubscription that FCM already
+      // invalidated — we must unsubscribe and mint a fresh token.
       if (existing && !isDead(existing.endpoint) && matchesOurVapidKey(existing)) {
-        await savePushSubscription(groupId, playerName, existing);
-        return;
+        let prevSavedEndpoint: string | null = null;
+        try { prevSavedEndpoint = localStorage.getItem(LAST_SAVED_ENDPOINT_KEY); } catch {}
+
+        const wasPurgedByServer =
+          prevSavedEndpoint === existing.endpoint &&
+          !(await isPushSubscriptionStored(groupId, existing.endpoint));
+
+        if (!wasPurgedByServer) {
+          await savePushSubscription(groupId, playerName, existing);
+          try { localStorage.setItem(LAST_SAVED_ENDPOINT_KEY, existing.endpoint); } catch {}
+          lastPushSyncRef.current = Date.now();
+          return;
+        }
       }
       if (existing) {
         deletePushSubscription(existing.endpoint);
@@ -765,6 +779,8 @@ function SupabaseApp() {
       }
 
       await savePushSubscription(groupId, playerName, sub);
+      try { localStorage.setItem(LAST_SAVED_ENDPOINT_KEY, sub.endpoint); } catch {}
+      lastPushSyncRef.current = Date.now();
     } catch (err) {
       console.warn('Push subscription failed — this device will not receive notifications:', err);
     }
@@ -773,6 +789,27 @@ function SupabaseApp() {
   useEffect(() => {
     if (!dataReady) return;
     subscribeToPush();
+
+    // Mobile PWAs stay alive in the background for days without remounting.
+    // Re-verify the push subscription when returning to the foreground so a
+    // rotated or 410-purged endpoint self-heals immediately.
+    const PUSH_RESYNC_COOLDOWN_MS = 10 * 60 * 1000;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastPushSyncRef.current > PUSH_RESYNC_COOLDOWN_MS) {
+        subscribeToPush();
+      }
+    };
+    const onSwMessage = (ev: MessageEvent) => {
+      if (ev.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+        subscribeToPush();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    navigator.serviceWorker?.addEventListener('message', onSwMessage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+    };
   }, [dataReady, subscribeToPush]);
 
   const handleEnablePush = useCallback(async () => {

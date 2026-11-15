@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.42.1';
+export const APP_VERSION = '6.43.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.43.0',
+    date: '2026-11-15',
+    changes: [
+      '🧠 מנוע תובנות דינמי וייחודי לכל שחקן בעכביש',
+      '🔄 שקלול ריבאיים מול ממוצע הקבוצה במפת הסגנון',
+      '📊 הצגת ממוצע ניצחון מול הפסד וציון הקבוצה',
+      '🔔 שיפור אמינות התראות פוש וסגירת סקרים',
+    ],
+  },
   {
     version: '6.42.1',
     date: '2026-11-12',

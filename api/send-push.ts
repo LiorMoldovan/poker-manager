@@ -336,10 +336,11 @@ export default async function handler(req: Request): Promise<Response> {
       );
       details.push(result);
       if (result.ok) sent++;
+      // Only purge subscriptions when the push service explicitly reports
+      // 404 Not Found or 410 Gone. Never purge on transient network/timeout
+      // exceptions (typeof result.status === 'string'), which previously
+      // permanently unregistered active devices on a single fetch hiccup.
       if (!result.ok && typeof result.status === 'number' && [404, 410].includes(result.status)) {
-        gone.push(sub.endpoint);
-      }
-      if (!result.ok && typeof result.status === 'string') {
         gone.push(sub.endpoint);
       }
     }

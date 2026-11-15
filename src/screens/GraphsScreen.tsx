@@ -1175,7 +1175,10 @@ const GraphsScreen = () => {
                 <button
                   key={String(opt.val)}
                   type="button"
-                  onClick={() => setRecentLimit(opt.val)}
+                  onClick={() => {
+                    setRecentLimit(opt.val);
+                    if (opt.val === null) setShowTimePeriod(true);
+                  }}
                   style={{
                     flex: 1,
                     padding: '0.32rem 0.4rem',
@@ -3960,10 +3963,8 @@ const GraphsScreen = () => {
       {viewMode === 'style' && filteredGames.length > 0 && (
         <PlayerStyleTab
           games={filteredGames}
-          allGames={allGames}
           players={players}
           selectedPlayers={selectedPlayers}
-          onTogglePlayer={togglePlayer}
           gamePlayersByGameId={gamePlayersByGameId}
           getPlayerColor={getPlayerColor}
           timeframeLabel={getTimeframeLabel()}

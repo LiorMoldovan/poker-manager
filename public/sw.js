@@ -1,4 +1,5 @@
-var CACHE_VERSION = 'v4';
+var CACHE_VERSION = 'v5';
+var VAPID_PUBLIC_KEY = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
 
 self.addEventListener('install', function(event) {
   self.skipWaiting();
@@ -31,7 +32,7 @@ self.addEventListener('push', function(event) {
     body: payload.body || '',
     icon: '/poker.svg',
     badge: '/poker.svg',
-    tag: payload.tag || 'poker-notification',
+    tag: payload.tag || ('poker-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
     data: { url: payload.url || '/' },
     dir: 'rtl',
     vibrate: [200, 100, 200],
@@ -41,6 +42,21 @@ self.addEventListener('push', function(event) {
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('pushsubscriptionchange', function(event) {
+  event.waitUntil(
+    self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: VAPID_PUBLIC_KEY,
+    }).then(function() {
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        clientList[i].postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+      }
+    }).catch(function() {})
+  );
 });
 
 self.addEventListener('notificationclick', function(event) {

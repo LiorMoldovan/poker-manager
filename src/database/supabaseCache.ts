@@ -2538,49 +2538,62 @@ export async function linkPollToGameRpc(pollId: string, gameId: string): Promise
 
 // ─── Push Notification Subscriptions ───
 
+export async function isPushSubscriptionStored(
+  groupId: string,
+  endpoint: string
+): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data, error } = await supabase
+    .from('push_subscriptions')
+    .select('id')
+    .eq('group_id', groupId)
+    .eq('user_id', user.id)
+    .eq('endpoint', endpoint)
+    .maybeSingle();
+  if (error) return true; // On transient network error, assume stored so we don't churn
+  return !!data;
+}
+
 export async function savePushSubscription(
   groupId: string,
   playerName: string | null,
   subscription: PushSubscription
 ): Promise<void> {
-  // In super-admin observer mode the active group_id is one the user
-  // isn't a member of. Auto-registering their browser into that
-  // group's push roster would (a) leak their presence and (b) cause
-  // them to receive every notification the target group ever sends
-  // until they remember to unsubscribe. Bail before any Supabase write.
   if (isObserverMode()) return;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const keys = subscription.toJSON().keys;
   if (!keys?.p256dh || !keys?.auth) return;
 
-  // Upsert the current subscription. The unique key (user_id, endpoint)
-  // collapses re-saves of the SAME endpoint, but browsers/FCM mint a new
-  // endpoint on every permission re-grant, SW reinstall, cache clear,
-  // etc. Without the cleanup below those stale rows pile up forever
-  // (in production we saw users with 30–46 dead endpoints, and Sefi had
-  // both "ספי" and "ספי טורס" rows from a rename) — every push send
-  // then targets all of them.
-  const { error: upsertError } = await supabase.from('push_subscriptions').upsert({
-    group_id: groupId,
-    user_id: user.id,
-    player_name: playerName,
-    endpoint: subscription.endpoint,
-    keys_p256dh: keys.p256dh,
-    keys_auth: keys.auth,
-  }, { onConflict: 'user_id,endpoint' });
-  if (upsertError) {
-    console.warn('Failed to save push subscription:', upsertError);
-    return;
-  }
+  // Use the server-side RPC to upsert for the active group AND sync the
+  // device endpoint across all other groups where the user is a member.
+  // Previously, upserting on (user_id, endpoint) moved a multi-group user's
+  // row to whichever group they viewed last, breaking pushes in their
+  // primary group.
+  const { error: rpcError } = await supabase.rpc('sync_user_push_subscription', {
+    p_group_id: groupId,
+    p_player_name: playerName,
+    p_endpoint: subscription.endpoint,
+    p_keys_p256dh: keys.p256dh,
+    p_keys_auth: keys.auth,
+  });
 
-  // Deliberately no prune here. This used to delete every other row for
-  // (user_id, group_id), justified by "the browser only has one live push
-  // subscription per origin at a time, so the others are guaranteed dead" —
-  // true per browser profile, false per person. Anyone using a phone and a
-  // PC had one device silently unregistered every time they opened the app
-  // on the other. Dead endpoints are cleaned up where they can actually be
-  // identified as dead: send-push deletes on a 404/410 from the push service.
+  if (rpcError) {
+    const { error: upsertError } = await supabase.from('push_subscriptions').upsert({
+      group_id: groupId,
+      user_id: user.id,
+      player_name: playerName,
+      endpoint: subscription.endpoint,
+      keys_p256dh: keys.p256dh,
+      keys_auth: keys.auth,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'group_id,user_id,endpoint' });
+    if (upsertError) {
+      console.warn('Failed to save push subscription:', upsertError);
+      return;
+    }
+  }
 }
 
 export async function deletePushSubscription(endpoint: string): Promise<void> {
