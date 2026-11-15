@@ -8,7 +8,7 @@ import { generateGameComic, MAX_REGENERATIONS_PER_GAME, ComicStageError } from '
 import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf, formatChips } from '../utils/calculations';
-import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
+import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName, buildForecastSummaryInsight } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory, formatTimeAttribution, formatHebrewNames } from '../utils/comboHistory';
 import { isCareerGameMilestone } from '../utils/milestones';
 import { detectGameNightRecords } from '../utils/gameRecords';
@@ -1201,6 +1201,7 @@ const GameSummaryScreen = () => {
         locationInsights: summaryLocInsights,
         periodMarkers: resolvedPeriodMarkers,
         comboHistoryText: combo.totalGamesWithCombo > 1 ? buildComboHistoryText(combo) : undefined,
+        forecastInsightText: buildForecastSummaryInsight(game.forecasts, aiTonightResults),
       };
 
       setAiSummaryError(null);

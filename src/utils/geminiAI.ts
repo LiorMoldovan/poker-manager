@@ -3407,6 +3407,7 @@ export interface GameNightSummaryPayload {
   locationInsights?: string;
   periodMarkers?: PeriodMarkers;
   comboHistoryText?: string;
+  forecastInsightText?: string;
 }
 
 export interface AiGenerationMeta {
@@ -3485,13 +3486,50 @@ const ensureSummaryMentionsAllPlayers = async (
   }
 };
 
+/**
+ * Distills pre-game forecast accuracy and highlights into a punchy context
+ * for the AI game night summary chronicle.
+ */
+export const buildForecastSummaryInsight = (
+  forecasts: { playerName: string; expectedProfit: number; isSurprise?: boolean }[] | undefined,
+  tonight: { name: string; profit: number; rank: number }[]
+): string | undefined => {
+  if (!forecasts || forecasts.length < 4) return undefined;
+  type ForecastComp = { name: string; exp: number; act: number; gap: number; dirMatch: boolean; isSurprise?: boolean };
+  const comps: ForecastComp[] = [];
+  for (const f of forecasts) {
+    const act = tonight.find(t => t.name === f.playerName);
+    if (!act) continue;
+    const gap = Math.abs(act.profit - f.expectedProfit);
+    const dirMatch = (f.expectedProfit >= 0 && act.profit >= 0) || (f.expectedProfit < 0 && act.profit < 0);
+    comps.push({ name: f.playerName, exp: f.expectedProfit, act: act.profit, gap, dirMatch, isSurprise: f.isSurprise });
+  }
+
+  if (comps.length < 4) return undefined;
+
+  const dirHits = comps.filter(c => c.dirMatch).length;
+  const total = comps.length;
+  comps.sort((a, b) => a.gap - b.gap);
+  const bullseye = comps[0].gap <= 30 ? comps[0] : null;
+  const biggestBust = [...comps].sort((a, b) => b.gap - a.gap)[0];
+
+  const lines = [`דיוק כיוון כללי: ${dirHits}/${total} שחקנים.`];
+  if (bullseye) {
+    lines.push(`פגיעה מדויקת: ${bullseye.name} (נחזה ${bullseye.exp >= 0 ? '+' : ''}${bullseye.exp}, בפועל ${bullseye.act >= 0 ? '+' : ''}${bullseye.act}, פער ${bullseye.gap} ₪).`);
+  }
+  if (biggestBust && biggestBust.gap >= 120) {
+    lines.push(`הפספוס הגדול של הבינה: ${biggestBust.name} (נחזה ${biggestBust.exp >= 0 ? '+' : ''}${biggestBust.exp}, בפועל ${biggestBust.act >= 0 ? '+' : ''}${biggestBust.act}, פער ${biggestBust.gap} ₪).`);
+  }
+  return lines.join('\n');
+};
+
 export const generateGameNightSummary = async (
   payload: GameNightSummaryPayload
 ): Promise<AiSummaryResult> => {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod, locationInsights: summaryLocationInsights, periodMarkers: summaryPeriodMarkers, comboHistoryText } = payload;
+  const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod, locationInsights: summaryLocationInsights, periodMarkers: summaryPeriodMarkers, comboHistoryText, forecastInsightText } = payload;
 
   if (tonight.length === 0) throw new Error('No players in tonight results');
 
@@ -3546,6 +3584,9 @@ export const generateGameNightSummary = async (
   }
   if (summaryLocationInsights) {
     contextSections.push(summaryLocationInsights);
+  }
+  if (forecastInsightText) {
+    contextSections.push(`🎯 מבחן התחזית מול המציאות:\n${forecastInsightText}`);
   }
 
   const contextBlock = contextSections.length > 0
@@ -3610,6 +3651,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
   אסור בשום אופן להשמיט אף שחקן — כולם שיחקו הערב, וכולם חייבים להופיע בסיכום!
   מי שסיים גבוה או נמוך במיוחד מקבל יותר מאזכור חולף, ומי שבאמצע משתלב עם תוצאתו או חלקו במשחק.
   בצע בדיקה עצמית לפני סיום לוודא שאין אף שחקן מהרשימה שהושמט!
+• מבחן התחזית: אם מופיע נתון תחת "🎯 מבחן התחזית מול המציאות", מותר (ובסגנונות המתאימים אף מומלץ) לשלב משפט שנון קצר (עקיצה על פספוס מהדהד של הבינה או מחמאה על פגיעה מדויקת), תוך שמירה על הומור וזרימה טבעית של הסיפור.
 • המארח כשחקן פוקר מן המניין: אם אחד המשתתפים אירח את המשחק הערב${payload.location ? ` (אצל ${payload.location})` : ''}, התייחס אליו בסיכום כשחקן פוקר מלא על פי תוצאתו (רווח/הפסד, קניות, מהלכים והשפעה על הטבלה) בדיוק כמו שאר השחקנים! אסור להסתפק בציון עובדת היותו המארח כסיכום של חלקו במשחק.
 
 מבנה ואורך:
