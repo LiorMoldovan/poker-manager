@@ -346,12 +346,13 @@ export default function PlayerStyleTab({
   const handleShareImage = async (
     ref: React.RefObject<HTMLDivElement | null>,
     setSharing: (v: boolean) => void,
-    fileName: string
+    fileName: string,
+    options?: { maxSliceHeight?: number }
   ) => {
     if (!ref.current) return;
     setSharing(true);
     try {
-      const files = await captureAndSplit(ref.current, fileName);
+      const files = await captureAndSplit(ref.current, fileName, options);
       await shareFiles(files, 'Poker Style Profile');
     } catch { /* */ } finally {
       setSharing(false);
@@ -853,6 +854,7 @@ export default function PlayerStyleTab({
 
             {/* 5-Axis Period Score & Data Breakdown (Clean RTL alignment, period game counts) */}
             <div
+              data-share-split="true"
               dir="rtl"
               style={{
                 padding: '0.45rem 0.55rem',
@@ -866,6 +868,25 @@ export default function PlayerStyleTab({
                 textAlign: 'right',
               }}
             >
+              {/* Context header for Part 2 when split during screenshot share */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingBottom: '0.3rem',
+                marginBottom: '0.25rem',
+                borderBottom: '1px solid var(--border)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ fontSize: '0.95rem' }}>{selectedProfile.archetype.emoji}</span>
+                  <span style={{ fontSize: '0.78rem', fontWeight: '700', color: selectedProfile.color }}>
+                    {selectedProfile.playerName} · פירוט ממדי המשחק
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  {timeframeLabel}
+                </span>
+              </div>
               {radarBreakdownRows.map((row, i) => (
                 <div
                   key={i}
@@ -963,7 +984,7 @@ export default function PlayerStyleTab({
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.35rem', marginBottom: '0.6rem' }}>
             <button
               type="button"
-              onClick={() => handleShareImage(playerCardRef, setIsSharingPlayer, `poker-style-${selectedProfile.playerName}`)}
+              onClick={() => handleShareImage(playerCardRef, setIsSharingPlayer, `poker-style-${selectedProfile.playerName}`, { maxSliceHeight: 520 })}
               disabled={isSharingPlayer}
               style={shareBtnStyle}
             >

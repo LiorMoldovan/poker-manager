@@ -436,17 +436,28 @@ const GraphsScreen = () => {
     return counts;
   }, [filteredGames, gamePlayers]);
 
-  // Active players in the currently filtered period (played at least 1 game in filteredGames).
-  // Category-neutral: includes permanent, regular guests, and occasional guests equally.
+  // Active player threshold = at least 33% of total games in period (standard across StatisticsScreen & PeriodRecap)
+  const activeThreshold = useMemo(() => Math.max(1, Math.ceil(filteredGames.length * 0.33)), [filteredGames.length]);
+
+  // Active players in the currently filtered period (gamesPlayed >= activeThreshold).
+  // Category-neutral: includes permanent, regular guests, and occasional guests equally based on activity.
   const activePeriodPlayerIds = useMemo(() => {
     const set = new Set<string>();
     for (const p of players) {
-      if ((periodGamesByPlayerId.get(p.id) || 0) > 0) {
+      if ((periodGamesByPlayerId.get(p.id) || 0) >= activeThreshold) {
         set.add(p.id);
       }
     }
+    // Fallback: if strict 33% threshold yields fewer than 3 players, relax to all who played in period
+    if (set.size < 3) {
+      for (const p of players) {
+        if ((periodGamesByPlayerId.get(p.id) || 0) > 0) {
+          set.add(p.id);
+        }
+      }
+    }
     return set;
-  }, [players, periodGamesByPlayerId]);
+  }, [players, periodGamesByPlayerId, activeThreshold]);
 
   // Style view effective selected players: defaults to all active players in the period,
   // or user's explicit manual selection if they interacted with the filter in style mode.
@@ -1472,13 +1483,13 @@ const GraphsScreen = () => {
             .filter(p => p.type === 'guest' && ((periodGamesByPlayerId.get(p.id) || 0) > 0 || currentSelected.has(p.id)))
             .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
 
-          // In style view, all players active in the period are presented by default regardless of category
+          // In style view, active players meet the 33% threshold (regardless of permanent / guest category)
           const styleActiveList = players
-            .filter(p => (periodGamesByPlayerId.get(p.id) || 0) > 0)
+            .filter(p => activePeriodPlayerIds.has(p.id))
             .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0));
           const styleInactiveList = players
-            .filter(p => (periodGamesByPlayerId.get(p.id) || 0) === 0)
-            .sort((a, b) => a.name.localeCompare(b.name));
+            .filter(p => !activePeriodPlayerIds.has(p.id))
+            .sort((a, b) => (periodGamesByPlayerId.get(b.id) || 0) - (periodGamesByPlayerId.get(a.id) || 0) || a.name.localeCompare(b.name));
 
           const selectedPermCount = permanentList.filter(p => currentSelected.has(p.id)).length;
           const selectedGuestCount = players.filter(p => (p.type || 'permanent') !== 'permanent' && currentSelected.has(p.id)).length;
@@ -1543,7 +1554,7 @@ const GraphsScreen = () => {
               >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
                   {isStyle
-                    ? `${currentSelected.size} מתוך ${activePeriodPlayerIds.size} שחקנים פעילים בתקופה`
+                    ? `${currentSelected.size} מתוך ${activePeriodPlayerIds.size} שחקנים פעילים (${activeThreshold}+ משחקים)`
                     : selectedGuestCount > 0
                     ? t('graphs.filterPlayersWithGuests', {
                         selected: selectedPermCount,
@@ -1586,7 +1597,7 @@ const GraphsScreen = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
-                              setStyleSelectedPlayers(new Set(players.filter(p => (p.type || 'permanent') === 'permanent' && (periodGamesByPlayerId.get(p.id) || 0) > 0).map(p => p.id)));
+                              setStyleSelectedPlayers(new Set(players.filter(p => (p.type || 'permanent') === 'permanent' && activePeriodPlayerIds.has(p.id)).map(p => p.id)));
                             }}
                             style={{
                               padding: '0.25rem 0.5rem',
@@ -1627,7 +1638,7 @@ const GraphsScreen = () => {
                         {styleActiveList.map(player => renderPlayerPill(player, true))}
                       </div>
 
-                      {/* Inactive players in this period (collapsible) */}
+                      {/* Inactive or sub-threshold players in this period (collapsible) */}
                       {styleInactiveList.length > 0 && (
                         <div style={{ marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
                           <button
@@ -1647,7 +1658,7 @@ const GraphsScreen = () => {
                             }}
                           >
                             <span style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                              לא שיחקו בתקופה ({styleInactiveList.length})
+                              מתחת לסף פעילות / לא שיחקו ({styleInactiveList.length})
                             </span>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                               {showInactiveInStyleSelector ? '▲' : '▼'}
@@ -1655,7 +1666,7 @@ const GraphsScreen = () => {
                           </button>
                           {showInactiveInStyleSelector && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                              {styleInactiveList.map(player => renderPlayerPill(player, false))}
+                              {styleInactiveList.map(player => renderPlayerPill(player, true))}
                             </div>
                           )}
                         </div>

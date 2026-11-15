@@ -223,7 +223,13 @@ export function hideForCapture(...elements: (HTMLElement | null | undefined)[]):
 export const captureAndSplit = async (
   element: HTMLElement,
   baseName: string,
-  options?: { scale?: number; backgroundColor?: string; width?: number; windowWidth?: number }
+  options?: {
+    scale?: number;
+    backgroundColor?: string;
+    width?: number;
+    windowWidth?: number;
+    maxSliceHeight?: number;
+  }
 ): Promise<File[]> => {
   const { default: html2canvas } = await import('html2canvas');
   const scale = options?.scale ?? 2;
@@ -245,15 +251,16 @@ export const captureAndSplit = async (
     restore();
   }
 
+  const maxSlice = options?.maxSliceHeight ?? MAX_SLICE_HEIGHT;
   const realHeight = canvas.height / scale;
-  if (realHeight <= MAX_SLICE_HEIGHT) {
+  if (realHeight <= maxSlice) {
     const blob = await new Promise<Blob>((resolve) => {
       canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
     });
     return [new File([blob], `${baseName}.png`, { type: 'image/png' })];
   }
 
-  const sliceCount = Math.ceil(canvas.height / (MAX_SLICE_HEIGHT * scale));
+  const sliceCount = Math.ceil(canvas.height / (maxSlice * scale));
   const sliceH = Math.ceil(canvas.height / sliceCount);
 
   // Boundary-aware slicing: if the captured DOM has marked semantic
@@ -265,7 +272,7 @@ export const captureAndSplit = async (
   // (monotonic) and refuses any snap that would shrink the previous
   // OR next slice below MIN_SLICE_HEIGHT_CANVAS, avoiding slivers.
   const anchors = collectSplitAnchorsCanvas(element, scale);
-  const sliceTolerance = sliceH * SPLIT_SNAP_TOLERANCE;
+  const sliceTolerance = anchors.length > 0 ? sliceH * 0.45 : sliceH * SPLIT_SNAP_TOLERANCE;
   const boundaries: number[] = [0];
   for (let i = 1; i < sliceCount; i++) {
     const natural = i * sliceH;

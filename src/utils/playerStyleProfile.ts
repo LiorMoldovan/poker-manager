@@ -217,9 +217,9 @@ export function computeGroupStyleProfiles(
   const includePermGuests = options?.includePermanentGuests ?? true;
   const includeOccGuests = options?.includeOccasionalGuests ?? true;
 
-  // Active player in period: participated in at least 1 game in the selected period.
-  // Full edge-case protection for beginning of a new period (1–3 games):
-  // Every player who played even 1 game in the new period is included, regardless of category (permanent, regular guest, occasional guest).
+  // Agreed project logic for Active Player in period: at least 33% of games in the period (min 1 game)
+  // For beginning of a new period (1–3 games), Math.ceil(n * 0.33) is strictly 1.
+  const activeThreshold = Math.max(1, Math.ceil(games.length * 0.33));
   const periodTrackingMap = buildTrackingMap(games, gamePlayersByGameId);
 
   const allPositiveProfits: number[] = [];
@@ -242,7 +242,9 @@ export function computeGroupStyleProfiles(
     }
 
     const nights = collectPlayerNights(p.id, games, gamePlayersByGameId, periodTrackingMap);
-    if (nights.length < 1) continue;
+    // When user explicitly selects players in filter, allow >= 1 game; when defaulting, require agreed active threshold
+    const minReq = selectedIds ? 1 : activeThreshold;
+    if (nights.length < minReq) continue;
 
     eligiblePlayers.push({ player: p, nights });
 
@@ -250,6 +252,27 @@ export function computeGroupStyleProfiles(
       if (r.profit > 0) allPositiveProfits.push(r.profit);
       if (r.profit < 0) allNegativeProfitsAbs.push(Math.abs(r.profit));
       if (r.extraRebuys !== null) allTrackedExtraRebuys.push(r.extraRebuys);
+    }
+  }
+
+  // Fallback: if strict activeThreshold produced fewer than 3 players, relax to >= 1 game
+  if (eligiblePlayers.length < 3 && !selectedIds) {
+    eligiblePlayers.length = 0;
+    allPositiveProfits.length = 0;
+    allNegativeProfitsAbs.length = 0;
+    allTrackedExtraRebuys.length = 0;
+    for (const p of players) {
+      const pType = (p.type || 'permanent') as 'permanent' | 'permanent_guest' | 'guest';
+      if (pType === 'permanent_guest' && !includePermGuests) continue;
+      if (pType === 'guest' && !includeOccGuests) continue;
+      const nights = collectPlayerNights(p.id, games, gamePlayersByGameId, periodTrackingMap);
+      if (nights.length < 1) continue;
+      eligiblePlayers.push({ player: p, nights });
+      for (const r of nights) {
+        if (r.profit > 0) allPositiveProfits.push(r.profit);
+        if (r.profit < 0) allNegativeProfitsAbs.push(Math.abs(r.profit));
+        if (r.extraRebuys !== null) allTrackedExtraRebuys.push(r.extraRebuys);
+      }
     }
   }
 

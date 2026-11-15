@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.44.1';
+export const APP_VERSION = '6.44.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.44.2',
+    date: '2026-11-15',
+    changes: [
+      '👥 סף שחקן פעיל לפי 33% ממשחקי התקופה',
+      '✂️ פיצול תמונת שיתוף עכביש ל-2 חלקים',
+      '🔍 סלקטור שחקנים מותאם לפי סף פעילות',
+    ],
+  },
   {
     version: '6.44.1',
     date: '2026-11-15',
