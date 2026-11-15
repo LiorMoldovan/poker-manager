@@ -810,6 +810,7 @@ export const savePendingForecast = (playerIds: string[], forecasts: GameForecast
     createdAt: new Date().toISOString(),
     playerIds,
     forecasts,
+    published: true, // Immediately publish to group upon generation
     ...(preGameTeaser && { preGameTeaser }),
     ...(aiModel && { aiModel }),
     ...(location && { location }),

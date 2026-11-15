@@ -1428,19 +1428,49 @@ export const generateAIForecasts = async (
     }
   }
 
-  // Realistic scale (0.88x) — ensures authentic poker night magnitudes (winners +190..+240, losers -150..-200)
-  // while preventing extreme freak outliers (e.g. +460)
-  const REALISTIC_SCALE = 0.88;
-  let template = consensusShape.map(v => Math.round(v * REALISTIC_SCALE));
-  const templateMean = template.reduce((s, v) => s + v, 0) / n;
-  template = template.map(v => Math.round(v - templateMean));
-  const residualSum = template.reduce((s, v) => s + v, 0);
-  if (residualSum !== 0) {
-    template[Math.floor(n / 2)] -= residualSum;
-  }
-  template.sort((a, b) => b - a);
+  const groupScale = Math.max(50, Math.abs(consensusShape[0]) || 80);
 
-  const groupScale = Math.max(50, Math.abs(template[0]) || 80);
+  // Dynamic Learning: Calculate empirical situational factors from the group's historical games
+  // Self-calibrating without code changes: as new games are completed, host advantage and rust penalties auto-adapt!
+  let empiricalHostAdvantage = 0.15; // default +15% of group scale (~+20₪)
+  let empiricalHostProbBonus = 0.05; // default +5% win probability
+  try {
+    const storedGames = getAllGames().filter(g => g.status === 'completed');
+    const storedGPs = getAllGamePlayers();
+    if (storedGames.length >= 10 && storedGPs.length >= 50) {
+      const pHistMap = new Map<string, number[]>();
+      for (const gp of storedGPs) {
+        if (!pHistMap.has(gp.playerName)) pHistMap.set(gp.playerName, []);
+        pHistMap.get(gp.playerName)!.push(gp.profit);
+      }
+      const pAvgMap = new Map<string, number>();
+      for (const [name, profits] of pHistMap) {
+        pAvgMap.set(name, profits.reduce((a, b) => a + b, 0) / profits.length);
+      }
+
+      const hostDeltas: number[] = [];
+      let hostWins = 0;
+      for (const g of storedGames) {
+        if (!g.location) continue;
+        const gGps = storedGPs.filter(gp => gp.gameId === g.id);
+        for (const gp of gGps) {
+          if (isHostPlayer(gp.playerName, g.location)) {
+            const base = pAvgMap.get(gp.playerName) ?? 0;
+            hostDeltas.push(gp.profit - base);
+            if (gp.profit > 0) hostWins++;
+          }
+        }
+      }
+      if (hostDeltas.length >= 5) {
+        const avgHostDelta = hostDeltas.reduce((a, b) => a + b, 0) / hostDeltas.length;
+        empiricalHostAdvantage = Math.max(0.05, Math.min(0.25, (avgHostDelta / groupScale)));
+        const hostWinRate = hostWins / hostDeltas.length;
+        empiricalHostProbBonus = Math.max(0.01, Math.min(0.08, (hostWinRate - 0.45) * 0.5));
+      }
+    }
+  } catch {
+    // Keep calibrated defaults if storage is unavailable
+  }
 
   // STEP 3: Holistic Bayesian Evaluation for each player
   const playerEvals = players.map(p => {
@@ -1478,10 +1508,10 @@ export const generateAIForecasts = async (
       ? (halfWins + shrunkCareerWinRate * 5) / (halfGames.length + 5)
       : shrunkCareerWinRate;
 
-    // Situational Context 1: Host Advantage (+21₪ historical empirical bonus)
+    // Situational Context 1: Dynamically calibrated Host Advantage
     const isHost = isHostPlayer(p.name, location);
-    const hostBonus = isHost ? 0.15 * groupScale : 0;
-    const hostProbBonus = isHost ? 0.05 : 0;
+    const hostBonus = isHost ? empiricalHostAdvantage * groupScale : 0;
+    const hostProbBonus = isHost ? empiricalHostProbBonus : 0;
 
     // Situational Context 2: Absence / Rust Penalty (>30 days away = -13₪ on average)
     const rustPenalty = p.daysSinceLastGame > 30 ? -0.10 * groupScale : p.daysSinceLastGame > 14 ? -0.04 * groupScale : 0;
@@ -1541,6 +1571,22 @@ export const generateAIForecasts = async (
       careerAvg,
     };
   });
+
+  // STEP 3b: Dynamic Roster Volatility Scaling
+  // An aggressive lineup with high-volatility players naturally produces wider profit/loss spreads,
+  // while a cautious, conservative lineup produces tighter spreads.
+  // Dynamically scales the consensus distribution based on the participating players' recent variance.
+  const rosterAvgVol = playerEvals.reduce((s, pe) => s + pe.volatility, 0) / (n || 1);
+  const dynamicScale = Math.max(0.75, Math.min(1.05, 0.88 * Math.sqrt(rosterAvgVol / 115)));
+
+  let template = consensusShape.map(v => Math.round(v * dynamicScale));
+  const templateMean = template.reduce((s, v) => s + v, 0) / n;
+  template = template.map(v => Math.round(v - templateMean));
+  const residualSum = template.reduce((s, v) => s + v, 0);
+  if (residualSum !== 0) {
+    template[Math.floor(n / 2)] -= residualSum;
+  }
+  template.sort((a, b) => b - a);
 
   // STEP 4: Calibrated Stochastic Assignment (Controlled Variance)
   // Each player's position is sampled using their Logit(winProb) + controlled logistic noise (tau=0.28).

@@ -703,7 +703,7 @@ function detectPeriodRecords(
   const consolidated: PeriodRecordHighlight[] = [];
   for (const [, pRecs] of playerRecordsMap.entries()) {
     // If a player has substantive positive milestones, filter out pure volatility (rollercoaster)
-    const substantive = pRecs.filter(r => !r.id.startsWith('rollercoaster') && r.type !== 'rollercoaster');
+    const substantive = pRecs.filter(r => !r.id.startsWith('rollercoaster') && (r.type as string) !== 'rollercoaster');
     const validRecs = substantive.length > 0 ? substantive : pRecs;
 
     if (validRecs.length === 1) {
