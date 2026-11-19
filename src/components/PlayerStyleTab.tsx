@@ -497,6 +497,7 @@ export default function PlayerStyleTab({
                 domain={[xMinDomain, xMaxDomain]}
                 ticks={xTicks}
                 allowDataOverflow
+                tickMargin={8}
                 stroke="var(--text-muted)"
                 fontSize={10}
                 tickLine={false}
@@ -508,9 +509,10 @@ export default function PlayerStyleTab({
                 domain={[yMinDomain, yMaxDomain]}
                 ticks={yTicks}
                 allowDataOverflow
+                tickMargin={6}
                 stroke="var(--text-muted)"
                 fontSize={10}
-                width={38}
+                width={42}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => cleanNumber(v)}
@@ -872,10 +874,26 @@ export default function PlayerStyleTab({
                     <div style={{ marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
                       <div style={{ width: '100%', height: '145px', direction: 'ltr' }}>
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={evo.points} margin={{ top: 8, right: 14, bottom: 4, left: -16 }}>
+                          <LineChart data={evo.points} margin={{ top: 8, right: 14, bottom: 8, left: 2 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.35} />
-                            <XAxis dataKey="periodLabel" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} stroke="var(--border)" />
-                            <YAxis domain={[0, 100]} ticks={[25, 50, 75]} tick={{ fill: 'var(--text-muted)', fontSize: 9 }} stroke="var(--border)" />
+                            <XAxis
+                              dataKey="periodLabel"
+                              padding={{ left: 18, right: 18 }}
+                              tickMargin={8}
+                              tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                              stroke="var(--border)"
+                              tickLine={false}
+                            />
+                            <YAxis
+                              domain={[0, 100]}
+                              ticks={[25, 50, 75]}
+                              width={32}
+                              tickMargin={6}
+                              tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
+                              stroke="var(--border)"
+                              tickLine={false}
+                              axisLine={false}
+                            />
                             <ReferenceLine y={50} stroke="var(--text-muted)" strokeDasharray="4 4" strokeOpacity={0.5} />
                             <Tooltip
                               contentStyle={{

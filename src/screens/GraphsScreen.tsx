@@ -2011,12 +2011,12 @@ const GraphsScreen = () => {
               <div style={{ 
                 width: '100%', 
                 height: '320px',
-                marginLeft: '-10px',
+                direction: 'ltr',
               }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart 
                     data={cumulativeData} 
-                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
+                    margin={{ top: 10, right: 14, left: 4, bottom: 12 }}
                     onMouseMove={(state) => {
                       const rawIdx = state?.activeTooltipIndex;
                       const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
@@ -2031,12 +2031,15 @@ const GraphsScreen = () => {
                       dataKey="gameIndex" 
                       ticks={cumulativeXAxisTicks}
                       tickFormatter={(idx) => cumulativeData[Number(idx) - 1]?.shortDate || ''}
-                      padding={{ left: 8, right: 8 }}
+                      padding={{ left: 18, right: 14 }}
+                      tickMargin={8}
                       stroke="var(--text-muted)" 
                       fontSize={10}
                       tickLine={false}
                     />
                     <YAxis 
+                      width={44}
+                      tickMargin={6}
                       stroke="var(--text-muted)" 
                       fontSize={10}
                       tickFormatter={(value) => cleanNumber(value)}
@@ -2754,12 +2757,12 @@ const GraphsScreen = () => {
               <div style={{ 
                 width: '100%', 
                 height: '280px',
-                marginLeft: '-10px',
+                direction: 'ltr',
               }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart 
                     data={headToHeadData.cumulativeComparison} 
-                    margin={{ top: 10, right: 12, left: 0, bottom: 10 }}
+                    margin={{ top: 10, right: 14, left: 4, bottom: 12 }}
                     onMouseMove={(state) => {
                       const rawIdx = state?.activeTooltipIndex;
                       const idx = typeof rawIdx === 'number' ? rawIdx : typeof rawIdx === 'string' ? parseInt(rawIdx, 10) : NaN;
@@ -2774,12 +2777,15 @@ const GraphsScreen = () => {
                       dataKey="gameIndex" 
                       ticks={h2hXAxisTicks}
                       tickFormatter={(idx) => headToHeadData.cumulativeComparison[Number(idx) - 1]?.shortDate || ''}
-                      padding={{ left: 8, right: 8 }}
+                      padding={{ left: 18, right: 14 }}
+                      tickMargin={8}
                       stroke="var(--text-muted)" 
                       fontSize={10}
                       tickLine={false}
                     />
                     <YAxis 
+                      width={44}
+                      tickMargin={6}
                       stroke="var(--text-muted)" 
                       fontSize={10}
                       tickFormatter={(value) => cleanNumber(value)}
