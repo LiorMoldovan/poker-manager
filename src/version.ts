@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.44.8';
+export const APP_VERSION = '6.44.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.44.9',
+    date: '2026-11-19',
+    changes: [
+      '⚡ האצת הפקת תחזית וקיצור זמני חשיבה',
+      '🛡️ שרשרת גיבוי חסינה לעומסי שרתי גוגל',
+      '⏱️ מניעת נפילת תחזית בטיימאאוט רשת',
+    ],
+  },
   {
     version: '6.44.8',
     date: '2026-11-19',

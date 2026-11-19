@@ -32,28 +32,18 @@ import type { TranslationKey } from '../i18n/translations';
 // now surfaces it explicitly.
 export const TEXT_PRIMARY = 'gemini-3.8-flash';
 
-// Long-term anchor directly behind the primary. Google guarantees it to
-// at least 2027-05-19, so however the short-term releases above churn,
-// the chain always has a supported model one step down.
-export const TEXT_SECONDARY = 'gemini-3.5-flash';
+// Direct resilient fallback: known-good against Hebrew poker prompts,
+// fast response times (10-14s), and unaffected by 3.5 outage.
+export const TEXT_SECONDARY = 'gemini-3-flash-preview';
 
-// Third slot, and the model everything ran on until v6.28.0. Kept
-// because it is known-good against these specific Hebrew prompts: if a
-// newer model reads worse, this is the voice we are comparing against.
-// Deprecated by Google but with no announced shutdown date. Doubles as
-// the chip-count model — see CHIP_COUNT_MODEL below, same id, different
-// reason, deliberately separate constants so one can move without the
-// other.
-export const TEXT_FALLBACK_PREVIEW = 'gemini-3-flash-preview';
+// Independent TPU cluster fallback (2.5 family): rock-solid, separate quota pool,
+// answers in ~6s even when the entire 3.x cluster is under peak-hour demand.
+export const TEXT_FALLBACK_25 = 'gemini-2.5-flash-lite';
 
-// Independent generation fallback (2.5 cluster). When the entire 3.x
-// cluster experiences a 503 demand spike or hang, 2.5-flash runs on a
-// separate backend pool and keeps full Flash-quality Hebrew generation alive.
-export const TEXT_FALLBACK_25 = 'gemini-2.5-flash';
+// Full 2.5 Flash fallback
+export const TEXT_FALLBACK_PREVIEW = 'gemini-2.5-flash';
 
-// Last-ditch. Weakest of the chain, but a thin forecast beats no
-// forecast when everything above is rate-limited. GA, retires
-// 2027-05-07 (successor: gemini-3.5-flash-lite).
+// Last-ditch lightweight 3.x fallback.
 export const TEXT_FALLBACK_LITE = 'gemini-3.1-flash-lite';
 
 // Chip counting from a photo. Deliberately a single model with no

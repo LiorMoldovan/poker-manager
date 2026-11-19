@@ -64,6 +64,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-3.5-flash': '3.5 Flash',
   'gemini-3.5-flash-lite': '3.5 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
+  'gemini-2.5-flash-lite': '2.5 Flash-Lite',
   'gemini-2.5-pro': '2.5 Pro',
   // Comic image provider — Pollinations (anonymous, free).
   'pollinations/flux': 'FLUX',
@@ -2283,12 +2284,10 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         generationConfig: {
           maxOutputTokens: 16384,
           responseMimeType: 'application/json',
-          // Cap thinking at 1536 tokens so Flash models don't burn 6,000+
-          // thinking tokens (~30s+) over-analyzing before emitting the ~1.4k
-          // JSON output. 1536 tokens is plenty for 8-player planning and cuts
-          // generation latency from ~35s to ~12-16s.
+          // Cap thinking at 512 tokens: speeds up Flash generation by ~3x (down to 6-12s)
+          // while leaving plenty of reasoning space for 8-player planning.
           thinkingConfig: {
-            thinkingBudget: 1536,
+            thinkingBudget: 512,
           },
         }
       });

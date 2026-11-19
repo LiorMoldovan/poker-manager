@@ -140,12 +140,12 @@ export default async function handler(
     const modelPath = model.startsWith('models/') ? model : `models/${model}`;
     const url = `https://generativelanguage.googleapis.com/${version}/${modelPath}:generateContent?key=${apiKey}`;
 
-    // Per-attempt upstream timeout (24s): Node.js Fluid Compute gives 120s maxDuration
-    // for the whole request, while a single healthy Flash call with thinkingBudget=1536
-    // finishes in ~12-18s. Aborting a hung upstream model at 24s lets the client's
-    // 5-model fallback chain cascade quickly instead of waiting 65s+ on a stuck model.
+    // Per-attempt upstream timeout (45s): Node.js Fluid Compute gives 120s maxDuration
+    // for the whole request. 45s gives thinking models (especially Gemini 3 with
+    // thinkingBudget) plenty of room to reason and output 8-player forecasts without
+    // getting killed mid-flight.
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 24000);
+    const timer = setTimeout(() => ctrl.abort(), 45000);
     let upstream: Response;
     try {
       upstream = await fetch(url, {

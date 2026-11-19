@@ -1834,10 +1834,11 @@ const NewGameScreen = () => {
           const reason = err.message.replace('FORECAST_FAILED:', '').trim();
           setAiError(`${t('forecast.keyRejected')}${reason ? ` (${reason})` : ''}`);
           setCachedForecasts(generateForecasts());
-        } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
-          // Start countdown timer for rate limit
-          setAiError('⏳ Rate limit reached. Retry countdown starting...');
-          setRetryCountdown(60); // Start 60 second countdown
+        } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable') || err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('timed out')) {
+          // Start countdown timer for rate limit or transient Google overload
+          const is503 = err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('timed out');
+          setAiError(is503 ? '⏳ שרתי גוגל בעומס רגעי. ספירה לאחור לניסיון חוזר...' : '⏳ Rate limit reached. Retry countdown starting...');
+          setRetryCountdown(is503 ? 15 : 60);
 
           // Clear any existing timer
           if (retryTimerRef.current) clearInterval(retryTimerRef.current);
@@ -1847,7 +1848,7 @@ const NewGameScreen = () => {
             setRetryCountdown(prev => {
               if (prev === null || prev <= 1) {
                 if (retryTimerRef.current) clearInterval(retryTimerRef.current);
-                setAiError('✅ Ready to retry! Click the forecast button again.');
+                setAiError('✅ מוכן לניסיון חוזר! לחץ שוב על כפתור התחזית.');
                 return null;
               }
               return prev - 1;
