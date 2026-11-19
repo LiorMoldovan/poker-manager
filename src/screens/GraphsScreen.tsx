@@ -4143,6 +4143,7 @@ const GraphsScreen = () => {
       {viewMode === 'style' && filteredGames.length > 0 && (
         <PlayerStyleTab
           games={filteredGames}
+          allGames={allGames}
           players={players}
           selectedPlayers={effectiveStylePlayers}
           gamePlayersByGameId={gamePlayersByGameId}

@@ -13,15 +13,23 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
+  LineChart,
+  Line,
+  Tooltip,
 } from 'recharts';
 import { Game, GamePlayer, Player } from '../types';
 import { cleanNumber } from '../utils/calculations';
-import { computeGroupStyleProfiles, PlayerStyleMetrics } from '../utils/playerStyleProfile';
+import {
+  computeGroupStyleProfiles,
+  computeGroupStyleEvolution,
+  PlayerStyleMetrics,
+} from '../utils/playerStyleProfile';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { useTranslation } from '../i18n';
 
 interface PlayerStyleTabProps {
   games: Game[];
+  allGames?: Game[];
   players: Player[];
   selectedPlayers: Set<string>;
   gamePlayersByGameId: Map<string, Map<string, GamePlayer>>;
@@ -176,6 +184,7 @@ function computeSmartScatterPoints(
 
 export default function PlayerStyleTab({
   games,
+  allGames,
   players,
   selectedPlayers,
   gamePlayersByGameId,
@@ -186,6 +195,7 @@ export default function PlayerStyleTab({
 
   const [showMapHelp, setShowMapHelp] = useState(false);
   const [showRadarHelp, setShowRadarHelp] = useState(false);
+  const [showEvolutionGraph, setShowEvolutionGraph] = useState(false);
 
   const analysis = useMemo(
     () =>
@@ -193,6 +203,17 @@ export default function PlayerStyleTab({
         selectedPlayerIds: selectedPlayers,
       }),
     [games, players, gamePlayersByGameId, getPlayerColor, selectedPlayers]
+  );
+
+  const evolutionMap = useMemo(
+    () =>
+      computeGroupStyleEvolution(
+        allGames && allGames.length > 0 ? allGames : games,
+        players,
+        gamePlayersByGameId,
+        getPlayerColor
+      ),
+    [allGames, games, players, gamePlayersByGameId, getPlayerColor]
   );
 
   const [selectedId, setSelectedId] = useState<string>('');
@@ -347,7 +368,7 @@ export default function PlayerStyleTab({
     ref: React.RefObject<HTMLDivElement | null>,
     setSharing: (v: boolean) => void,
     fileName: string,
-    options?: { maxSliceHeight?: number }
+    options?: { maxSliceHeight?: number; splitOnAnchors?: boolean }
   ) => {
     if (!ref.current) return;
     setSharing(true);
@@ -431,13 +452,13 @@ export default function PlayerStyleTab({
             }}
           >
             <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
-              <strong style={{ color: 'var(--text)' }}>ציר X (מדד אגרסיביות וריבאיים 0–100):</strong> מבוסס בעיקר על כמות הריבאיים למשחק ביחס לממוצע הקבוצה וגודל הקופות (ימינה = ריבאיים ואקשן גבוהים יותר)
+              <strong style={{ color: 'var(--text)' }}>ציר X (מדד סיכון, אקשן וקופות 0–100):</strong> משלב הון בסיכון וריבאיים יחסיים בשולחן, תנודתיות רווח וערמות סיום, גודל זכיות, סיום בקצוות השולחן ומסנן פסיביות (0–32 שמרן ושקט · 33–49 מחושב/סלקטיבי · 50–68 אגרסיבי · 69+ אקשן קיצוני)
             </div>
             <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
               <strong style={{ color: 'var(--text)' }}>ציר Y (ממוצע ב-₪):</strong> רווח או הפסד ממוצע למשחק בתקופה
             </div>
             <div style={{ color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-              <strong style={{ color: 'var(--text)' }}>הקווים המקווקווים:</strong> אופקי (0₪) = גבול רווח/הפסד · אנכי (50) = ממוצע הריבאיים והאקשן של השולחן
+              <strong style={{ color: 'var(--text)' }}>הקווים המקווקווים:</strong> אופקי (0₪) = גבול רווח/הפסד · אנכי (50) = ממוצע האקשן והסיכון של השולחן
             </div>
             <div style={{
               display: 'grid',
@@ -447,16 +468,16 @@ export default function PlayerStyleTab({
               direction: 'ltr',
             }}>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה:</strong> מרוויח וסולידי
+                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה:</strong> מרוויח ומחושב (סלקטיבי / TAG)
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה:</strong> מרוויח ואגרסיבי
+                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה:</strong> מרוויח ואגרסיבי / אקשן
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(148, 163, 184, 0.08)', border: '1px solid var(--border)', textAlign: 'right' }}>
-                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה:</strong> מופסד וסולידי
+                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה:</strong> מופסד (שמרן / משוחרר-פסיבי)
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה:</strong> מופסד ואגרסיבי
+                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה:</strong> מופסד ומשוחרר-אגרסיבי
               </div>
             </div>
           </div>
@@ -576,9 +597,9 @@ export default function PlayerStyleTab({
           border: '1px solid var(--border)',
           direction: 'ltr',
         }}>
-          <span>← סולידי</span>
-          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: מדד אגרסיביות · ציר Y: ממוצע ₪</span>
-          <span>אגרסיבי →</span>
+          <span>← שמרן / מחושב</span>
+          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: סיכון ואקשן · ציר Y: ממוצע ₪</span>
+          <span>אגרסיבי / אקשן →</span>
         </div>
 
         {/* Tappable Player Pills */}
@@ -744,6 +765,144 @@ export default function PlayerStyleTab({
                 </div>
               </div>
             </div>
+
+            {/* Historical Style Evolution across Half-Years (Compact Strip + Toggleable Trend Chart) */}
+            {(() => {
+              const evo = evolutionMap.get(selectedProfile.playerId);
+              if (!evo || evo.points.length < 2) return null;
+              const stripPts = evo.points.slice(-4);
+              return (
+                <div
+                  dir="rtl"
+                  style={{
+                    padding: '0.45rem 0.55rem',
+                    marginBottom: '0.5rem',
+                    background: 'var(--surface)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    textAlign: 'right',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', marginBottom: '0.32rem' }}>
+                    <span style={{ fontSize: '0.67rem', fontWeight: '700', color: 'var(--text)' }}>
+                      📈 התפתחות אופי לאורך חציונים — {selectedProfile.playerName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowEvolutionGraph(v => !v)}
+                      style={{
+                        fontSize: '0.6rem',
+                        padding: '0.12rem 0.42rem',
+                        borderRadius: '999px',
+                        border: '1px solid var(--border)',
+                        background: 'rgba(255,255,255,0.03)',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {showEvolutionGraph ? 'הסתר גרף ▲' : 'גרף מגמה ▼'}
+                    </button>
+                  </div>
+
+                  {/* Compact Horizontal Half-Year Strip (up to 4 most recent half-years) */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${stripPts.length}, minmax(0, 1fr))`,
+                      gap: '0.28rem',
+                      marginBottom: '0.32rem',
+                    }}
+                  >
+                    {stripPts.map((pt, idx) => {
+                      const isLast = idx === stripPts.length - 1;
+                      const styleColor =
+                        pt.shortStyle === 'משוחרר-פסיבי'
+                          ? '#F59E0B'
+                          : pt.volatility >= 50
+                            ? '#38BDF8'
+                            : '#34D399';
+                      return (
+                        <div
+                          key={pt.periodKey}
+                          style={{
+                            padding: '0.26rem 0.25rem',
+                            borderRadius: '6px',
+                            background: isLast ? `${selectedProfile.color}16` : 'rgba(255,255,255,0.02)',
+                            border: isLast ? `1px solid ${selectedProfile.color}66` : '1px solid var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '0.1rem',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <span style={{ fontSize: '0.55rem', fontWeight: '700', color: isLast ? selectedProfile.color : 'var(--text-muted)' }}>
+                            {pt.periodLabel} ({pt.gamesPlayed})
+                          </span>
+                          <span style={{ fontSize: '0.57rem', fontWeight: '700', color: styleColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                            {pt.shortStyle}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.22rem', fontSize: '0.54rem', color: 'var(--text-muted)' }}>
+                            <span>X:{pt.volatility}</span>
+                            <span>·</span>
+                            <span style={{ color: pt.avgProfit >= 0 ? '#10B981' : '#EF4444', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                              {fmtSigned(pt.avgProfit)}₪
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 1-Line Data-Driven Evolution Summary */}
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.38 }}>
+                    {evo.summary}
+                  </div>
+
+                  {/* Optional Collapsible Dual-Metric Trend Chart across all half-years */}
+                  {showEvolutionGraph && (
+                    <div style={{ marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ width: '100%', height: '145px', direction: 'ltr' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={evo.points} margin={{ top: 8, right: 14, bottom: 4, left: -16 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.35} />
+                            <XAxis dataKey="periodLabel" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} stroke="var(--border)" />
+                            <YAxis domain={[0, 100]} ticks={[25, 50, 75]} tick={{ fill: 'var(--text-muted)', fontSize: 9 }} stroke="var(--border)" />
+                            <ReferenceLine y={50} stroke="var(--text-muted)" strokeDasharray="4 4" strokeOpacity={0.5} />
+                            <Tooltip
+                              contentStyle={{
+                                background: '#0f172a',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                fontSize: '0.65rem',
+                                direction: 'rtl',
+                                textAlign: 'right',
+                              }}
+                              formatter={(val?: number | string) => [
+                                `${val ?? 0} / 100`,
+                                'מדד סיכון ואקשן (X)',
+                              ]}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="volatility"
+                              stroke={selectedProfile.color}
+                              strokeWidth={2.5}
+                              dot={{ r: 4, fill: selectedProfile.color }}
+                              isAnimationActive={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.1rem' }}>
+                        קו מקווקו (50) = גבול מחושב ↔ אגרסיבי · נקודות = ציון ציר X בכל חציון
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Spider / Radar Header + Collapsible Explanation Toggle (matching Style Map) */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
@@ -949,15 +1108,39 @@ export default function PlayerStyleTab({
             </div>
 
             {/* 3 Natural, Pleasant-to-Read Period Insights */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.36rem',
-              padding: '0.55rem 0.62rem',
-              background: 'var(--surface)',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-            }}>
+            <div
+              data-share-split="true"
+              dir="rtl"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.36rem',
+                padding: '0.55rem 0.62rem',
+                background: 'var(--surface)',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                textAlign: 'right',
+              }}
+            >
+              {/* Context header for Part 3 when split during screenshot share */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingBottom: '0.3rem',
+                marginBottom: '0.25rem',
+                borderBottom: '1px solid var(--border)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ fontSize: '0.95rem' }}>{selectedProfile.archetype.emoji}</span>
+                  <span style={{ fontSize: '0.78rem', fontWeight: '700', color: selectedProfile.color }}>
+                    {selectedProfile.playerName} · תובנות ודפוסי משחק
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  {timeframeLabel}
+                </span>
+              </div>
               {selectedProfile.traits.map((trait, idx) => {
                 const colonIdx = trait.indexOf(':');
                 const hasLead = colonIdx > 0 && colonIdx <= 38;
@@ -984,7 +1167,12 @@ export default function PlayerStyleTab({
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.35rem', marginBottom: '0.6rem' }}>
             <button
               type="button"
-              onClick={() => handleShareImage(playerCardRef, setIsSharingPlayer, `poker-style-${selectedProfile.playerName}`, { maxSliceHeight: 520 })}
+              onClick={() => handleShareImage(
+                playerCardRef,
+                setIsSharingPlayer,
+                `poker-style-${selectedProfile.playerName}`,
+                { splitOnAnchors: true, maxSliceHeight: 520 }
+              )}
               disabled={isSharingPlayer}
               style={shareBtnStyle}
             >

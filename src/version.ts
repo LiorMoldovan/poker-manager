@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.44.3';
+export const APP_VERSION = '6.44.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.44.4',
+    date: '2026-11-19',
+    changes: [
+      '🔔 התראת הקפצה אישית מרשימת המתנה',
+      '🔄 פוש ועדכון קבוצתי בשינוי הרכב',
+      '🔮 התראה וזיהוי אי-התאמה בתחזית',
+      '⏱️ הגדלת זמן המתנה ל-AI מ-25 ל-120 שניות',
+      '🎯 מנוע אפיון סגנון רב-ממדי מבוסס נתונים',
+      '📈 ציר וגרף התפתחות אופי לאורך חציונים',
+      '✂️ חיתוך סמנטי מושלם לשיתוף כרטיס שחקן',
+    ],
+  },
   {
     version: '6.44.3',
     date: '2026-11-15',

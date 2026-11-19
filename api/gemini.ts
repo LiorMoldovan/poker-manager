@@ -1,12 +1,12 @@
 import { verifySupabaseAuth } from './_auth';
 
-export const config = { runtime: 'edge' };
+// Run on Vercel Node.js Function (Fluid Compute) rather than Edge runtime:
+// Edge functions enforce a hard 25s initial-response timeout, which kills
+// Gemini 3.x thinking models on large 8-player forecast/summary prompts.
+// Node.js Functions on Fluid Compute support up to 300s even on Hobby.
+export const maxDuration = 120;
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
-
+export async function POST(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
@@ -59,11 +59,31 @@ export default async function handler(req: Request): Promise<Response> {
     const modelPath = model.startsWith('models/') ? model : `models/${model}`;
     const url = `https://generativelanguage.googleapis.com/${version}/${modelPath}:generateContent?key=${apiKey}`;
 
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // Per-attempt upstream timeout (24s): Node.js Fluid Compute gives 120s maxDuration
+    // for the whole request, while a single healthy Flash call with thinkingBudget=1536
+    // finishes in ~12-18s. Aborting a hung upstream model at 24s lets the client's
+    // 5-model fallback chain cascade quickly instead of waiting 65s+ on a stuck model.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 24000);
+    let upstream: Response;
+    try {
+      upstream = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      const isAbort = fetchErr instanceof Error && fetchErr.name === 'AbortError';
+      return new Response(JSON.stringify({
+        error: { message: isAbort ? `Model ${model} timed out after 24s` : (fetchErr instanceof Error ? fetchErr.message : 'Upstream fetch failed') },
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    clearTimeout(timer);
 
     const data = await upstream.text();
     return new Response(data, {

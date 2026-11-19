@@ -5,6 +5,11 @@
       "supabase-migration": true
     }
   },
+  "functions": {
+    "api/gemini.ts": {
+      "maxDuration": 120
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

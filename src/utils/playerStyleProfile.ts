@@ -80,6 +80,25 @@ export interface StyleProfileOptions {
   selectedPlayerIds?: Set<string>;
   includePermanentGuests?: boolean;
   includeOccasionalGuests?: boolean;
+  minGamesOverride?: number;
+}
+
+export interface PlayerEvolutionPoint {
+  periodKey: string;
+  periodLabel: string;
+  gamesPlayed: number;
+  volatility: number;
+  avgProfit: number;
+  avgRebuys: number;
+  shortStyle: string;
+  isProfitable: boolean;
+}
+
+export interface PlayerStyleEvolution {
+  points: PlayerEvolutionPoint[];
+  summary: string;
+  prevPoint: PlayerEvolutionPoint | null;
+  latestPoint: PlayerEvolutionPoint | null;
 }
 
 const fmtSigned = (n: number): string => {
@@ -164,6 +183,9 @@ function buildTrackingMap(
 interface NightRecord {
   profit: number;
   extraRebuys: number | null;
+  relRebuy: number | null;
+  capitalRisked: number | null;
+  finalValue: number | null;
   isTableTopWinner: boolean;
   isTableWorstLoser: boolean;
 }
@@ -180,18 +202,39 @@ function collectPlayerNights(
     const gp = byPlayer?.get(playerId);
     if (!gp || !byPlayer) continue;
     const tracked = trackingMap.get(g.id) ?? false;
-    const extraRebuys = tracked ? Math.max(0, (gp.rebuys || 1) - 1) : null;
+    const totalRebuys = Math.max(1, gp.rebuys || 1);
+    const extraRebuys = tracked ? Math.max(0, totalRebuys - 1) : null;
 
     let maxProfit = -Infinity;
     let minProfit = Infinity;
+    let tableTotalRebuysSum = 0;
+    let tableCount = 0;
+    let tableHasFinalVal = false;
     byPlayer.forEach(p => {
       if (p.profit > maxProfit) maxProfit = p.profit;
       if (p.profit < minProfit) minProfit = p.profit;
+      tableTotalRebuysSum += Math.max(1, p.rebuys || 1);
+      tableCount += 1;
+      if ((p.finalValue || 0) > 0) tableHasFinalVal = true;
     });
+    const tableAvgRebuys = tableCount > 0 ? tableTotalRebuysSum / tableCount : 1;
+    const relRebuy = tracked && tableAvgRebuys > 0 ? totalRebuys / tableAvgRebuys : null;
+    const rawFinalVal = Math.max(0, gp.finalValue || 0);
+    const finalValue = tableHasFinalVal ? rawFinalVal : null;
+    const capitalRisked = tracked && tableHasFinalVal ? Math.max(0, rawFinalVal - gp.profit) : null;
+
     const isTableTopWinner = gp.profit > 0 && Math.abs(gp.profit - maxProfit) < 0.05;
     const isTableWorstLoser = gp.profit < 0 && Math.abs(gp.profit - minProfit) < 0.05;
 
-    nights.push({ profit: gp.profit, extraRebuys, isTableTopWinner, isTableWorstLoser });
+    nights.push({
+      profit: gp.profit,
+      extraRebuys,
+      relRebuy,
+      capitalRisked,
+      finalValue,
+      isTableTopWinner,
+      isTableWorstLoser,
+    });
   }
   return nights;
 }
@@ -219,7 +262,7 @@ export function computeGroupStyleProfiles(
 
   // Agreed project logic for Active Player in period: at least 33% of games in the period (min 1 game)
   // For beginning of a new period (1–3 games), Math.ceil(n * 0.33) is strictly 1.
-  const activeThreshold = Math.max(1, Math.ceil(games.length * 0.33));
+  const activeThreshold = options?.minGamesOverride ?? Math.max(1, Math.ceil(games.length * 0.33));
   const periodTrackingMap = buildTrackingMap(games, gamePlayersByGameId);
 
   const allPositiveProfits: number[] = [];
@@ -484,6 +527,22 @@ export function computeGroupStyleProfiles(
       comebackLabel = `שמר על 0–2 ריבאיים בכל ${rebuyPoolTxt} ללא ערבי 3+ ריבאיים`;
     }
 
+    const trackedCapNights = nights.filter(x => x.capitalRisked !== null);
+    const avgCapitalRisked = trackedCapNights.length > 0
+      ? meanOf(trackedCapNights.map(x => x.capitalRisked as number))
+      : 0;
+    const trackedRelNights = nights.filter(x => x.relRebuy !== null);
+    const relRebuy = trackedRelNights.length > 0
+      ? meanOf(trackedRelNights.map(x => x.relRebuy as number))
+      : 1;
+    const trackedFinalVals = nights.filter(x => x.finalValue !== null).map(x => x.finalValue as number);
+    const finalStd = trackedFinalVals.length > 1 ? stdDevOf(trackedFinalVals) : stdDev;
+    const quietThreshold = Math.max(60, Math.round(bigSwingThreshold * 0.5));
+    const nonQuietRate = nights.filter(x => Math.abs(x.profit) > quietThreshold).length / n;
+    const top1Rate = tableTopWins / n;
+    const bot1Rate = tableBottomLosses / n;
+    const extremeScore = 0.55 * top1Rate + 0.45 * bot1Rate;
+
     return {
       player,
       gamesPlayed: n,
@@ -499,6 +558,13 @@ export function computeGroupStyleProfiles(
       stdRebuys,
       maxRebuys,
       trackedRebuyGames,
+      avgCapitalRisked,
+      relRebuy,
+      finalStd,
+      nonQuietRate,
+      top1Rate,
+      bot1Rate,
+      extremeScore,
       avgAbsSwing,
       avgWinSize,
       avgLossSize,
@@ -593,6 +659,22 @@ export function computeGroupStyleProfiles(
     payoffStd: stdDevOf(baseStats.map(s => s.payoffRatio)),
     rebuyMean: meanOf(baseStats.map(s => s.avgRebuys)),
     rebuyStd: stdDevOf(baseStats.map(s => s.avgRebuys)),
+    stdRebuyMean: meanOf(baseStats.map(s => s.stdRebuys)),
+    stdRebuyStd: stdDevOf(baseStats.map(s => s.stdRebuys)),
+    capMean: meanOf(baseStats.map(s => s.avgCapitalRisked)),
+    capStd: stdDevOf(baseStats.map(s => s.avgCapitalRisked)),
+    relRebuyMean: meanOf(baseStats.map(s => s.relRebuy)),
+    relRebuyStd: stdDevOf(baseStats.map(s => s.relRebuy)),
+    finalStdMean: meanOf(baseStats.map(s => s.finalStd)),
+    finalStdStd: stdDevOf(baseStats.map(s => s.finalStd)),
+    swingRateMean: meanOf(baseStats.map(s => s.bigWinRate + s.bigLossRate)),
+    swingRateStd: stdDevOf(baseStats.map(s => s.bigWinRate + s.bigLossRate)),
+    nonQuietMean: meanOf(baseStats.map(s => s.nonQuietRate)),
+    nonQuietStd: stdDevOf(baseStats.map(s => s.nonQuietRate)),
+    extremeMean: meanOf(baseStats.map(s => s.extremeScore)),
+    extremeStd: stdDevOf(baseStats.map(s => s.extremeScore)),
+    bot1Mean: meanOf(baseStats.map(s => s.bot1Rate)),
+    bot1Std: stdDevOf(baseStats.map(s => s.bot1Rate)),
     highRebuyShareMean: meanOf(baseStats.map(s => s.highRebuyShare)),
     highRebuyShareStd: stdDevOf(baseStats.map(s => s.highRebuyShare)),
     medPlusRebuyShareMean: meanOf(baseStats.map(s => s.medPlusRebuyShare)),
@@ -621,17 +703,19 @@ export function computeGroupStyleProfiles(
     const zBigLoss = zScore(s.bigLossRate, grp.bigLossRateMean, grp.bigLossRateStd);
     const zBounceBack = zScore(s.bounceBackRate, grp.bounceBackMean, grp.bounceBackStd);
 
-    // ─── Credible Rebuy-Centric Style & Archetype Classification (Anchored to Group Average Rebuys) ───
+    // ─── Multi-Factor Style & Archetype Classification (Purely Data-Driven) ───
     const isProfitable = s.totalProfit > 0;
 
-    // Passive-bleed rebuyer detection: buys more rebuys than table average (`avgRebuys > grp.rebuyMean`),
-    // yet doesn't build big winning pots (`bigWins === 0` or small `avgWinSize` relative to group).
+    // Loose-passive / chip-bleed rebuyer detection: risks above-average rebuys relative to table,
+    // yet doesn't build big winning pots (`bigWins === 0` or tiny big-win rate vs big losses, low `avgWinSize`) and rarely converts 3+ rebuys to wins.
+    const hasVeryFewBigWins = s.bigWins === 0 || (s.bigWinRate <= 0.10 && s.bigLosses >= s.bigWins * 2);
     const isPassiveRebuyBleeder =
       rebuysTracked &&
       !isProfitable &&
-      s.avgRebuys > grp.rebuyMean &&
-      (s.bigWins === 0 || (s.bigWins === 1 && s.gamesPlayed >= 15)) &&
-      s.avgWinSize < Math.max(95, grp.avgWinMean * 0.78);
+      s.relRebuy > 1.0 &&
+      hasVeryFewBigWins &&
+      s.avgWinSize < Math.max(100, grp.avgWinMean * 0.85) &&
+      (s.medPlusComebackRate === null || s.medPlusComebackRate < 28);
 
     // Bipolar / Rollercoaster check within selected period: negative profit player who is profitable in 0–2 rebuys and crashes in 3+/4+ rebuys
     const isBipolarRollercoaster =
@@ -647,41 +731,74 @@ export function computeGroupStyleProfiles(
     const halfDelta = s.secondHalfAvg - s.firstHalfAvg;
     const hasSecondHalfSurge = s.gamesPlayed >= 6 && halfDelta >= 45 && s.secondHalfAvg > 0;
 
-    // ─── X-Axis Volatility & Aggression Score (0..100, with 50 = Group Rebuy & Action Average) ───
-    // Crucial principle: Losing money (`downsideDev`, `bigLosses`) NEVER makes a player "aggressive".
-    // When rebuys are tracked, X-axis is 80% driven by rebuys relative to the group average (`grp.rebuyMean`)
-    // and 20% by offensive big-pot action (`upStd` / `avgAbsSwing`), with 50 anchored to `grp.rebuyMean`.
+    // ─── X-Axis Style & Action Spectrum (0..100, 50 = Table Action Center) ───
+    // 4-Pillar objective model:
+    //   1) Capital-at-Risk & Rebuy Escalation (35%): exact ₪ risked (`finalValue - profit`), table-relative rebuy share, rebuy stdDev
+    //   2) Two-Way Variance & Stack Swings (30%): net profit stdDev, gross final-stack stdDev, big-swing rate, non-quiet rate
+    //   3) Downside Exposure / Pot Control (15%): downside semideviation + last-place rate (separates pot-controlling TAGs from LAGs)
+    //   4) Offensive Pot Building & Table Extremes (20%): avgWinSize + 1st/Last table extremes
+    //   + Passive-Bleed Damping + Small-Loss Conservative Filter + Comeback Confirmation Bonus
     let volatility = 50;
+    const zSwingRate = zScore(s.bigWinRate + s.bigLossRate, grp.swingRateMean, grp.swingRateStd);
+    const zNonQuiet = zScore(s.nonQuietRate, grp.nonQuietMean, grp.nonQuietStd);
+    const zExtreme = zScore(s.extremeScore, grp.extremeMean, grp.extremeStd);
+    const zBot1 = zScore(s.bot1Rate, grp.bot1Mean, grp.bot1Std);
+    const zFinalStd = zScore(s.finalStd, grp.finalStdMean, grp.finalStdStd);
+
+    const smallLossDamp =
+      s.winRate < 40 && Math.abs(s.avgLossSize) < grp.avgLossAbsMean * 0.95 && s.stdDev < grp.stdDevMean * 0.85
+        ? -0.35
+        : 0;
+
     if (rebuysTracked && s.trackedRebuyGames > 0) {
-      const rebuyDiff = s.avgRebuys - grp.rebuyMean;
-      const highShareDiff = s.highRebuyShare - grp.highRebuyShareMean;
-      const rebuyComponent = 50 + rebuyDiff * 15.5 + highShareDiff * 24;
+      const zCap = zScore(s.avgCapitalRisked, grp.capMean, grp.capStd);
+      const zRelReb = zScore(s.relRebuy, grp.relRebuyMean, grp.relRebuyStd);
+      const zStdReb = zScore(s.stdRebuys, grp.stdRebuyMean, grp.stdRebuyStd);
 
-      // Secondary offensive action component (only boosts players who actually buy above-average rebuys AND play big pots)
-      const swingVsGroup = grp.stdDevMean > 0 ? (s.avgAbsSwing - grp.stdDevMean * 0.8) / Math.max(40, grp.stdDevMean) : 0;
-      const actionBonus =
-        rebuyDiff >= 0
-          ? Math.max(-4, Math.min(10, swingVsGroup * 9 + (s.bigWins >= 3 ? 3 : isPassiveRebuyBleeder ? -3 : 0)))
-          : Math.min(0, swingVsGroup * 4);
+      const pCapital = 0.55 * zCap + 0.25 * zRelReb + 0.20 * zStdReb;
+      const pVariance = 0.35 * zStd + 0.30 * zFinalStd + 0.20 * zSwingRate + 0.15 * zNonQuiet;
+      const pExposure = 0.65 * zDownStd + 0.35 * zBot1;
+      const pOffense = 0.55 * zAvgWin + 0.45 * zExtreme;
 
-      volatility = Math.round(Math.max(12, Math.min(95, rebuyComponent + actionBonus)));
+      const effCapital = isPassiveRebuyBleeder ? Math.min(pCapital, -0.35) : pCapital;
+      const effExposure = isPassiveRebuyBleeder ? Math.min(pExposure, 0.0) : pExposure;
 
-      // Strict alignment with the group average rebuy dividing line (`grp.rebuyMean`)
-      if (s.avgRebuys < grp.rebuyMean - 0.05 && volatility >= 49) {
-        volatility = Math.min(47, Math.round(46 - (grp.rebuyMean - s.avgRebuys) * 8));
-      } else if (s.avgRebuys > grp.rebuyMean + 0.05 && volatility <= 51) {
-        volatility = Math.max(53, Math.round(52 + (s.avgRebuys - grp.rebuyMean) * 8));
+      // Positive-only comeback confirmation for players who convert 3+ rebuy nights into wins
+      const cbRate = s.medPlusGames >= 2 && s.medPlusComebackRate !== null ? s.medPlusComebackRate / 100 : null;
+      const cbBonus = cbRate !== null && cbRate >= 0.30 ? (cbRate - 0.25) * 0.45 : 0;
+
+      let compositeZ =
+        0.35 * effCapital +
+        0.30 * pVariance +
+        0.15 * effExposure +
+        0.20 * pOffense +
+        cbBonus +
+        smallLossDamp;
+
+      // TAG protection: a player with strong offensive pot-building (`avgWinSize >= groupMean * 0.95` & `bigWins >= 3`)
+      // who exercises strict pot control (low rebuys & low downside) belongs in the 38–48 TAG zone, not the <33 passive-nit zone.
+      if (isProfitable && s.avgWinSize >= grp.avgWinMean * 0.95 && s.bigWins >= 3 && s.winRate >= 65 && compositeZ < -0.52) {
+        compositeZ = -0.52;
       }
+
+      volatility = Math.round(Math.max(10, Math.min(94, 50 + compositeZ * 22)));
     } else {
-      // Historical periods without rebuy tracking: use overall swing size & upside pot size (never penalizing losses alone)
-      const zSwing = zScore(s.avgAbsSwing, meanOf(baseStats.map(b => b.avgAbsSwing)), stdDevOf(baseStats.map(b => b.avgAbsSwing)));
-      const isLowRiskWinner = isProfitable && s.bigLosses <= 1 && s.downsideDev < grp.downStdMean * 0.85;
-      const rawZ = isLowRiskWinner ? Math.min(-0.35, zSwing * 0.3) : 0.65 * zSwing + 0.35 * zUpStd;
-      volatility = zToScore(rawZ, 18, 88);
+      // Historical periods without rebuy tracking: variance, stack/pot swings, offensive power & extremes
+      const pVariance = 0.45 * zStd + 0.30 * zSwingRate + 0.25 * zNonQuiet;
+      const pExposure = 0.65 * zDownStd + 0.35 * zBot1;
+      const pOffense = 0.55 * zAvgWin + 0.45 * zExtreme;
+      const compositeZ = 0.45 * pVariance + 0.20 * pExposure + 0.35 * pOffense + smallLossDamp;
+      volatility = Math.round(Math.max(12, Math.min(92, 50 + compositeZ * 20)));
     }
 
     const isClassifiedSolid = volatility < 50;
     const isClassifiedAggressive = !isClassifiedSolid;
+    const isTagSniper =
+      isProfitable &&
+      isClassifiedSolid &&
+      volatility >= 33 &&
+      s.avgWinSize >= grp.avgWinMean * 0.96 &&
+      (s.finalStd >= grp.finalStdMean * 0.98 || (s.bigWins >= 3 && s.payoffRatio >= 1.25));
 
     let emoji = '🎯';
     let title = '';
@@ -689,10 +806,10 @@ export function computeGroupStyleProfiles(
     if (isProfitable) {
       if (profitRank === 1 && s.winRate >= 68 && isClassifiedSolid) {
         emoji = '👑';
-        title = 'השליט המחושב של השולחן';
+        title = isTagSniper ? 'השליט המחושב-תוקפני של השולחן' : 'השליט המחושב של השולחן';
       } else if (isClassifiedSolid && s.avgRebuys <= 1.5 && rebuysTracked) {
         emoji = '🎯';
-        title = 'אלוף המשחק בכניסה בודדת';
+        title = isTagSniper ? 'צלף מבוקר עם שיניים' : 'אלוף המשחק בכניסה בודדת';
       } else if (isClassifiedSolid && s.winRate >= 70 && s.bigWins >= 3) {
         emoji = '🎯';
         title = 'הצלף הקטלני של השולחן';
@@ -708,6 +825,15 @@ export function computeGroupStyleProfiles(
       } else if (isClassifiedSolid) {
         emoji = '⚖️';
         title = 'הטקטיקן המאוזן של השולחן';
+      } else if (volatility >= 69 || (s.top1Rate + s.bot1Rate >= 0.35 && s.bigLosses >= 2)) {
+        emoji = '🦈';
+        title = 'שחקן הקצוות והקופות הגדולות';
+      } else if (s.relRebuy >= 1.35 && rebuysTracked) {
+        emoji = '🔥';
+        title = 'מנוע הריבאיים והאקשן';
+      } else if (s.bigLosses === 0 && s.bigWins >= 3) {
+        emoji = '⚡';
+        title = 'תוקפן חד עם בקרת נזקים';
       } else if (s.avgRebuys >= grp.rebuyMean + 0.5 || s.bigWins >= 3) {
         emoji = '🦈';
         title = 'כריש הקופות והאקשן';
@@ -716,11 +842,16 @@ export function computeGroupStyleProfiles(
         title = s.gamesPlayed >= 100 ? 'מרתוניסט האקשן הדו-כיווני' : 'שחקן הקופות הדו-כיווני';
       }
     } else {
-      if (isClassifiedAggressive) {
-        if (isPassiveRebuyBleeder) {
+      if (isPassiveRebuyBleeder) {
+        if (s.bigLosses >= 3) {
           emoji = '📉';
-          title = 'ריבאיים משחיקה ללא קופות ענק';
-        } else if (s.avgRebuys >= grp.rebuyMean + 1.5 || (rebuyRank === totalPlayersInGroup && s.avgRebuys >= 4.2)) {
+          title = 'משוחרר-פסיבי · שחיקה בערבי קניות';
+        } else {
+          emoji = '🫧';
+          title = 'משוחרר-פסיבי · קניות ללא פריצה';
+        }
+      } else if (isClassifiedAggressive) {
+        if (s.avgRebuys >= grp.rebuyMean + 1.5 || (rebuyRank === totalPlayersInGroup && s.avgRebuys >= 4.2)) {
           emoji = '🎰';
           title = 'שיאן הריבאיים והאקשן';
         } else if (isBipolarRollercoaster) {
@@ -728,36 +859,45 @@ export function computeGroupStyleProfiles(
           title = s.highRebuyGames >= 5 ? 'רכבת הרים בערבי 4+ ריבאיים' : 'מצוין ברגוע ונשחק בריבאיים';
         } else if (s.winsCount <= 2 && s.gamesPlayed >= 5) {
           emoji = '📉';
-          title = 'קניות מעל הממוצע מול מיעוט ניצחונות';
+          title = 'אקשן וקניות מול מיעוט ניצחונות';
         } else {
           emoji = '🔥';
-          title = 'אקשן גבוה ושחיקה בערבי ריבאיים';
+          title = 'משוחרר ואגרסיבי בערבי קניות';
         }
       } else {
-        if (s.winsCount > 0 && s.avgWinSize >= Math.abs(s.avgLossSize) * 0.90 && s.winRate <= 42) {
+        if (volatility < 33 && s.bigWins === 0 && s.avgWinSize < 95) {
+          emoji = '🔒';
+          title = 'שמרן ושקט עם תקרת זכייה נמוכה';
+        } else if (s.winsCount > 0 && s.avgWinSize >= Math.abs(s.avgLossSize) * 0.90 && s.winRate <= 42) {
           emoji = '🏹';
           title = 'משמעת קניות בתקופת יובש';
-        } else if (s.bigWins === 0 && s.avgWinSize < 95) {
-          emoji = '🔒';
-          title = 'שמרן מבוקר עם תקרת זכייה נמוכה';
         } else {
           emoji = '🛡️';
-          title = 'מבוקר בקניות שמחפש התפוצצות';
+          title = 'מאוזן בקניות שמחפש פריצה';
         }
       }
     }
 
-    // Crisp quadrant badge that matches the 4-Quadrant Map and distinguishes passive chip-bleed rebuyers from true aggressive players
-    const styleBadge =
-      isProfitable && volatility < 50
-        ? 'מרוויח וסולידי'
-        : isProfitable
-          ? 'מרוויח ואגרסיבי'
+    // 4-Zone high-resolution badge matching the Style Map X-axis & distinguishing TAGs and Loose-Passive bleeders
+    const styleBadge = isProfitable
+      ? volatility < 33
+        ? 'מרוויח · שמרן ושקט'
+        : volatility < 50
+          ? isTagSniper
+            ? 'מרוויח · מחושב-תוקפני'
+            : 'מרוויח · מחושב וסלקטיבי'
+          : volatility < 69
+            ? 'מרוויח · אגרסיבי'
+            : 'מרוויח · אקשן קיצוני'
+      : isPassiveRebuyBleeder
+        ? 'מופסד · משוחרר-פסיבי'
+        : volatility < 33
+          ? 'מופסד · שמרן ושקט'
           : volatility < 50
-            ? 'מופסד וסולידי'
-            : isPassiveRebuyBleeder
-              ? 'מופסד · עתיר ריבאיים'
-              : 'מופסד ואגרסיבי';
+            ? 'מופסד · מאוזן / ביניים'
+            : volatility < 69
+              ? 'מופסד · משוחרר ואגרסיבי'
+              : 'מופסד · אקשן קיצוני';
 
     // ─── 5 Period-Responsive Radar Axes (0..100) ───
     const radarWinRate = Math.round(Math.max(5, Math.min(98, s.winRate)));
@@ -884,29 +1024,42 @@ export function computeGroupStyleProfiles(
         description = `מייצר רווחיות עקבית בזכות יציבות גבוהה — מנצח ב-${Math.round(s.winRate)}% מ-${s.gamesPlayed} המשחקים בתקופה שמחזיקים אותו בפלוס מצטבר של ${fmtSigned(s.totalProfit)}₪.`;
       }
     } else if (isProfitable) {
-      // Top-Right Quadrant: Profitable & Aggressive (above-average rebuys)
-      if (s.avgRebuys >= grp.rebuyMean + 0.5) {
+      // Top-Right Quadrant: Profitable & Aggressive / High-Action
+      const extremePct = Math.round((s.top1Rate + s.bot1Rate) * 100);
+      if (s.top1Rate + s.bot1Rate >= 0.35 && s.bigLosses >= 2) {
+        description = `מכתיב את התנודות החדות ביותר בשולחן — מסיים במקום הראשון או האחרון ב-${extremePct}% מהערבים, ונע בין שפל של ${fmtSigned(s.worstLoss)}₪ לשיא של ${fmtSigned(s.bestWin)}₪ תוך שהוא שומר על מאזן חיובי.`;
+      } else if (s.relRebuy >= 1.35 && s.avgCapitalRisked > 0) {
+        description = `מנוע האקשן של השולחן בקניות — משקיע בממוצע ${Math.round(s.avgCapitalRisked)}₪ לערב (${s.avgRebuys.toFixed(1)} ריבאיים מול ${grp.rebuyMean.toFixed(1)} בשולחן), נכנס שוב ושוב לקופות ובזכות חזרה לרווח מערבי ריבאיים מסיים בפלוס.`;
+      } else if (s.bigLosses === 0) {
+        description = `שחקן אקשן דומיננטי שלא מפחד מקופות עמוקות — עם ${bigWinsTxt}, שיא של ${fmtSigned(s.bestWin)}₪ וללא אף הפסד כבד בתקופה, הוא מכתיב קצב תוקפני ומסיים ביתרון מרשים.`;
+      } else if (s.avgRebuys >= grp.rebuyMean + 0.5) {
         description = `חי על קופות ענק ומשחק ללא פחד — מוכן לספוג ערבים קשים כדי לתפוס את ערבי ההתפוצצות שלו, שבהם הוא מנפק רווח ממוצע של ${fmtSigned(s.avgWinSize)}₪ לניצחון ועד שיא של ${fmtSigned(s.bestWin)}₪.`;
       } else {
         description = `שחקן אקשן דומיננטי שמייצר תנועה רבה סביב השולחן — למרות ${bigLossesTxt} בתקופה, ${bigWinsTxt} וערב שיא של ${fmtSigned(s.bestWin)}₪ משאירים אותו בטריטוריה החיובית.`;
       }
+    } else if (isPassiveRebuyBleeder) {
+      // Loose-Passive / Chip-Bleed Rebuyer (damped out of Aggressive zone)
+      const winSummary = s.winsCount === 0
+        ? 'וטרם הצליח לרשום ערב חיובי בתקופה'
+        : `וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע`;
+      if (s.bigLosses >= 3) {
+        description = `קצב הקניות הגבוה שלו (${s.avgRebuys.toFixed(1)} ריבאיים למשחק מול ${grp.rebuyMean.toFixed(1)} בשולחן) מתורגם לשחיקה ולא לאגרסיביות — ${bigLossesTxt} ללא אף זכייה גדולה מראים שהוא נגרר לקופות מפסידות בלי למקסם רווחים כשהוא פוגע.`;
+      } else {
+        const quietPct = Math.round((1 - s.nonQuietRate) * 100);
+        description = `למרות ממוצע של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק, רוב הערבים שלו שקטים יחסית (${quietPct}% בטווח צר) — ${winSummary}, מה שמעיד על סגנון משוחרר-פסיבי של השוואות בלי בניית קופות ענק.`;
+      }
     } else if (isClassifiedSolid) {
-      // Bottom-Left Quadrant: Negative & Solid (below-average rebuys)
+      // Bottom-Left Quadrant: Negative & Solid / Conservative
       if (s.winsCount > 0 && s.avgWinSize >= Math.abs(s.avgLossSize) * 0.90) {
         description = `שומר על משמעת טובה ואינו מתפרע בקניות, אך חווה תקופת יובש — בערבי ניצחון הוא מרוויח יפה עם ${fmtSigned(s.avgWinSize)}₪ בממוצע, כך שהמינוס נובע בעיקר מבצורת של ${winsTxt} בלבד ב-${s.gamesPlayed} משחקים.`;
       } else if (s.winsCount === 0) {
-        description = `מתקשה להיכנס לקצב בתקופה — טרם רשם ערב חיובי ב-${s.gamesPlayed} משחקים, עם הפסד ממוצע של ${fmtSigned(s.avgLossSize)}₪ למשחק.`;
+        description = `משחק בקו שמרני ושקט אך טרם רשם ערב חיובי ב-${s.gamesPlayed} משחקים, עם הפסד ממוצע מתון של ${fmtSigned(s.avgLossSize)}₪ למשחק ותנודתיות נמוכה.`;
       } else {
         description = `שומר על משחק זהיר ונמנע מנפילות כבדות, אך מתקשה לייצר פריצות דרך — רווח צנוע של ${fmtSigned(s.avgWinSize)}₪ ${inWinsTxt} אינו מספיק כדי לקזז את ההפסדים המצטברים.`;
       }
     } else {
-      // Bottom-Right Quadrant: Negative & Above-Average Rebuys
-      if (isPassiveRebuyBleeder) {
-        const winSummary = s.winsCount === 0
-          ? 'וטרם הצליח לרשום ערב חיובי בתקופה'
-          : `וגם ${inWinsTxt} בתקופה הסתפק ב-${fmtSigned(s.avgWinSize)}₪ בממוצע`;
-        description = `קצב הקניות שלו (${s.avgRebuys.toFixed(1)} ריבאיים למשחק לעומת ${grp.rebuyMean.toFixed(1)} בשולחן) משקף שחיקה הדרגתית ולא משחק אגרסיבי — הוא כמעט לא בונה קופות ענק, ${winSummary}, כך שהריבאיים מגיעים מניסיון להישאר במשחק תוך איבוד צ'יפים מתמשך.`;
-      } else if (isBipolarRollercoaster) {
+      // Bottom-Right Quadrant: Negative & Loose-Aggressive
+      if (isBipolarRollercoaster) {
         description = `שחקן של שני קצוות — יודע לדרוס את השולחן עם זכיות של עד ${fmtSigned(s.bestWin)}₪, אך מתקשה לעצור בערבים שמשתבשים ונגרר לריבאיים מרובים עד שיא של ${s.maxRebuys} כניסות בערב.`;
       } else if (s.avgRebuys >= grp.rebuyMean + 1.2) {
         description = `מכתיב קצב משחק סוער עם ממוצע של ${s.avgRebuys.toFixed(1)} ריבאיים למשחק (מול ${grp.rebuyMean.toFixed(1)} בשולחן) — משחק ללא מעצורים שיוצר ערבי שיא מלהיבים, אך סופג בורות עמוקים מדי לסגירה בערבים שבהם הקלפים לא מתחברים.`;
@@ -1438,4 +1591,109 @@ export function computeGroupStyleProfiles(
     groupAvgLossSize: -grp.avgLossAbsMean,
     groupAvgRadar,
   };
+}
+
+/**
+ * Computes chronological half-year style evolution (`24 א׳`, `24 ב׳`, `25 א׳`, `25 ב׳`, `26 א׳`, `26 ב׳`)
+ * for every player across all historical games so the user can see how a player's character evolved over time.
+ */
+export function computeGroupStyleEvolution(
+  allGames: Game[],
+  players: Player[],
+  gamePlayersByGameId: Map<string, Map<string, GamePlayer>>,
+  getPlayerColor: (id: string) => string
+): Map<string, PlayerStyleEvolution> {
+  const result = new Map<string, PlayerStyleEvolution>();
+  if (allGames.length === 0) return result;
+
+  // Bucket games into chronological half-years (YYYY-H1, YYYY-H2)
+  const sortedGames = [...allGames].sort((a, b) => a.date.localeCompare(b.date));
+  const buckets = new Map<string, { key: string; label: string; games: Game[] }>();
+  for (const g of sortedGames) {
+    const yearFull = g.date.slice(0, 4);
+    const month = parseInt(g.date.slice(5, 7), 10) || 1;
+    const isH1 = month <= 6;
+    const key = `${yearFull}-${isH1 ? 'H1' : 'H2'}`;
+    const shortYear = yearFull.slice(2, 4);
+    const label = `${shortYear} ${isH1 ? 'א׳' : 'ב׳'}`;
+    let b = buckets.get(key);
+    if (!b) {
+      b = { key, label, games: [] };
+      buckets.set(key, b);
+    }
+    b.games.push(g);
+  }
+
+  // Keep recent half-years that have at least 3 games (up to last 6 half-years = 3 years)
+  const validBuckets = Array.from(buckets.values())
+    .filter(b => b.games.length >= 3)
+    .slice(-6);
+
+  const pointsByPlayer = new Map<string, PlayerEvolutionPoint[]>();
+
+  for (const b of validBuckets) {
+    const minReq = Math.max(3, Math.ceil(b.games.length * 0.18));
+    const analysis = computeGroupStyleProfiles(b.games, players, gamePlayersByGameId, getPlayerColor, {
+      minGamesOverride: minReq,
+    });
+    for (const p of analysis.profiles) {
+      const shortStyle = p.archetype.styleBadge.includes(' · ')
+        ? p.archetype.styleBadge.split(' · ')[1]
+        : p.archetype.styleBadge;
+      const arr = pointsByPlayer.get(p.playerId) ?? [];
+      arr.push({
+        periodKey: b.key,
+        periodLabel: b.label,
+        gamesPlayed: p.gamesPlayed,
+        volatility: p.volatility,
+        avgProfit: Math.round(p.avgProfit),
+        avgRebuys: +p.avgRebuys.toFixed(1),
+        shortStyle,
+        isProfitable: p.totalProfit > 0,
+      });
+      pointsByPlayer.set(p.playerId, arr);
+    }
+  }
+
+  for (const [playerId, pts] of pointsByPlayer.entries()) {
+    if (pts.length === 0) continue;
+    const latest = pts[pts.length - 1];
+    const prev = pts.length >= 2 ? pts[pts.length - 2] : null;
+    const first = pts[0];
+
+    let summary = '';
+    if (pts.length === 1) {
+      summary = `פעיל בחציון ${latest.periodLabel} (${latest.gamesPlayed} משחקים) בסגנון ${latest.shortStyle} עם ממוצע ${fmtSigned(latest.avgProfit)}₪ למשחק.`;
+    } else {
+      const priorPts = pts.slice(0, -1);
+      const priorAvgX = Math.round(meanOf(priorPts.map(x => x.volatility)));
+      const priorAvgReb = +meanOf(priorPts.map(x => x.avgRebuys)).toFixed(1);
+      const dxFromPrior = latest.volatility - priorAvgX;
+      const dxFromPrev = prev ? latest.volatility - prev.volatility : dxFromPrior;
+      const rebDelta = +(latest.avgRebuys - priorAvgReb).toFixed(1);
+
+      if (latest.shortStyle === 'משוחרר-פסיבי' && first.shortStyle.includes('שמרן')) {
+        summary = `שינוי סגנון בולט: עבר ממשחק שמרן ושקט (${first.periodLabel}: ${first.avgRebuys} ריב׳) לסגנון משוחרר-פסיבי (${latest.periodLabel}: ${latest.avgRebuys} ריב׳, ${fmtSigned(latest.avgProfit)}₪/מש׳).`;
+      } else if (dxFromPrior >= 12 || (dxFromPrev >= 14 && latest.volatility >= 50)) {
+        summary = `פתיחת משחק ועלייה באקשן: מדד האגרסיביות עלה מ-${priorAvgX} בממוצע קודם ל-${latest.volatility} (${latest.shortStyle}) בחציון ${latest.periodLabel} עם ${fmtSigned(latest.avgProfit)}₪ למשחק.`;
+      } else if ((dxFromPrior <= -12 || dxFromPrev <= -12) && latest.volatility < 50) {
+        summary = `הידוק משמעת ושליטה בקופה: התמתן ממדד אקשן ${priorAvgX} לסגנון ${latest.shortStyle} (${latest.volatility}) בחציון ${latest.periodLabel} (${latest.avgRebuys} ריב׳ למשחק).`;
+      } else if (rebDelta >= 0.9) {
+        summary = `עלייה בקצב הקניות: ממוצע הריבאיים עלה מ-${priorAvgReb} בחציונים קודמים ל-${latest.avgRebuys} בחציון ${latest.periodLabel} (${latest.shortStyle}).`;
+      } else if (rebDelta <= -0.7) {
+        summary = `ירידה חדה בריבאיים: צמצם קניות מ-${priorAvgReb} בממוצע קודם ל-${latest.avgRebuys} בלבד בחציון ${latest.periodLabel} (${fmtSigned(latest.avgProfit)}₪/מש׳).`;
+      } else {
+        summary = `יציבות סגנונית לאורך ${pts.length} חציונים: שומר על קו ${latest.shortStyle} עקבי (מדד ${latest.volatility} בחציון ${latest.periodLabel} מול ממוצע היסטורי ${priorAvgX}).`;
+      }
+    }
+
+    result.set(playerId, {
+      points: pts,
+      summary,
+      prevPoint: prev,
+      latestPoint: latest,
+    });
+  }
+
+  return result;
 }

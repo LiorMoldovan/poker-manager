@@ -21,7 +21,7 @@
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GamePlayer, PlayerStats, TrainingPlayerData } from '../types';
-import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, getSettings, linkPollToGame } from '../database/storage';
+import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers, getSettings, linkPollToGame, getPendingForecast } from '../database/storage';
 import { computeNextScheduledTrigger } from './ScheduleTab';
 import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { fetchTrainingAnswers } from '../database/trainingData';
@@ -1417,8 +1417,50 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
     // competing with it on indigo.
     const accent: 'warning' | 'success' = missingSeats > 0 ? 'warning' : 'success';
 
-    const accessory = (countdown || missingSeats > 0) ? (
+    const pendingForecast = getPendingForecast();
+    let forecastStatusChip: React.ReactNode = null;
+    if (pendingForecast && pendingForecast.published && !pendingForecast.linkedGameId && pendingForecast.playerIds && opts.dateId) {
+      const yesPlayerIds = poll.votes.filter(v => v.dateId === opts.dateId && v.response === 'yes').map(v => v.playerId);
+      const fSet = new Set(pendingForecast.playerIds);
+      const isMismatch = yesPlayerIds.some(id => !fSet.has(id)) || pendingForecast.playerIds.some(id => !yesPlayerIds.includes(id));
+      forecastStatusChip = isMismatch ? (
+        <span style={{
+          fontSize: '0.66rem',
+          fontWeight: 700,
+          color: '#f87171',
+          background: 'rgba(239, 68, 68, 0.12)',
+          border: '1px solid rgba(239, 68, 68, 0.35)',
+          padding: '0.1rem 0.45rem',
+          borderRadius: '6px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.2rem',
+          whiteSpace: 'nowrap',
+        }}>
+          {t('home.schedule.forecastMismatchChip')}
+        </span>
+      ) : (
+        <span style={{
+          fontSize: '0.66rem',
+          fontWeight: 600,
+          color: '#c084fc',
+          background: 'rgba(168, 85, 247, 0.12)',
+          border: '1px solid rgba(168, 85, 247, 0.3)',
+          padding: '0.1rem 0.45rem',
+          borderRadius: '6px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.2rem',
+          whiteSpace: 'nowrap',
+        }}>
+          {t('home.schedule.forecastReadyChip')}
+        </span>
+      );
+    }
+
+    const accessory = (countdown || missingSeats > 0 || forecastStatusChip) ? (
       <>
+        {forecastStatusChip}
         {countdown && <Pill text={countdown} tone="success" />}
         {missingSeats > 0 && (
           <Pill

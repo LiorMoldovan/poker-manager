@@ -128,13 +128,6 @@ const MAX_SLICE_HEIGHT = 1900;
 // 300 canvas px ≈ 150 CSS px at the default scale of 2.
 const MIN_SLICE_HEIGHT_CANVAS = 300;
 
-// Boundary-snap tolerance: an anchor is only considered if it sits within
-// ±15% of the natural slice height of the slot it's snapping into. Beyond
-// that we fall back to the natural boundary (current behavior) instead of
-// distorting slice sizes. 15% balances "prefer clean cuts" against "don't
-// pile content into one slice and starve another".
-const SPLIT_SNAP_TOLERANCE = 0.15;
-
 // Gather y-offsets (in canvas px, top-edge of each splittable child)
 // declared by the caller via `data-share-split="true"`. Returned values
 // are relative to `root`, sorted ascending, with anchors at 0 or
@@ -150,7 +143,17 @@ function collectSplitAnchorsCanvas(root: HTMLElement, scale: number): number[] {
   const els = root.querySelectorAll<HTMLElement>('[data-share-split="true"]');
   for (const el of els) {
     const rect = el.getBoundingClientRect();
-    const offsetCss = rect.top - rootTop;
+    let offsetCss = rect.top - rootTop;
+    // If there is a preceding sibling with a gap, cut in the middle of the gap
+    // so both adjacent slices get visual margin/padding instead of cutting right on the border!
+    const prevEl = el.previousElementSibling as HTMLElement | null;
+    if (prevEl) {
+      const prevRect = prevEl.getBoundingClientRect();
+      const gap = rect.top - prevRect.bottom;
+      if (gap > 0) {
+        offsetCss = (prevRect.bottom - rootTop) + Math.round(gap / 2);
+      }
+    }
     // Only interior anchors are useful — top (0) and below-bottom anchors
     // wouldn't change any slice boundary.
     if (offsetCss <= 0 || offsetCss >= rootHeightCss) continue;
@@ -220,6 +223,30 @@ export function hideForCapture(...elements: (HTMLElement | null | undefined)[]):
   return () => { for (const r of restorers) r(); };
 }
 
+async function sliceCanvasByBoundaries(
+  canvas: HTMLCanvasElement,
+  boundaries: number[],
+  baseName: string
+): Promise<File[]> {
+  const sliceCount = boundaries.length - 1;
+  const files: File[] = [];
+  for (let i = 0; i < sliceCount; i++) {
+    const y = boundaries[i];
+    const h = boundaries[i + 1] - y;
+    const slice = document.createElement('canvas');
+    slice.width = canvas.width;
+    slice.height = h;
+    const ctx = slice.getContext('2d')!;
+    ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+    const blob = await new Promise<Blob>((resolve) => {
+      slice.toBlob((b) => resolve(b!), 'image/png', 1.0);
+    });
+    const suffix = sliceCount > 1 ? `-${i + 1}` : '';
+    files.push(new File([blob], `${baseName}${suffix}.png`, { type: 'image/png' }));
+  }
+  return files;
+}
+
 export const captureAndSplit = async (
   element: HTMLElement,
   baseName: string,
@@ -229,6 +256,7 @@ export const captureAndSplit = async (
     width?: number;
     windowWidth?: number;
     maxSliceHeight?: number;
+    splitOnAnchors?: boolean;
   }
 ): Promise<File[]> => {
   const { default: html2canvas } = await import('html2canvas');
@@ -253,6 +281,24 @@ export const captureAndSplit = async (
 
   const maxSlice = options?.maxSliceHeight ?? MAX_SLICE_HEIGHT;
   const realHeight = canvas.height / scale;
+
+  // Boundary-aware slicing: if the captured DOM has marked semantic
+  // split points (data-share-split="true"), prefer cutting at those
+  // boundaries over the naive evenly-spaced ones.
+  const anchors = collectSplitAnchorsCanvas(element, scale);
+
+  // If caller explicitly asked to split on semantic anchors and valid anchors exist:
+  if (options?.splitOnAnchors && anchors.length > 0) {
+    const valid = anchors.filter((a, idx) => {
+      const prev = idx === 0 ? 0 : anchors[idx - 1];
+      const next = idx === anchors.length - 1 ? canvas.height : anchors[idx + 1];
+      return a - prev >= MIN_SLICE_HEIGHT_CANVAS && next - a >= MIN_SLICE_HEIGHT_CANVAS;
+    });
+    if (valid.length > 0) {
+      return sliceCanvasByBoundaries(canvas, [0, ...valid, canvas.height], baseName);
+    }
+  }
+
   if (realHeight <= maxSlice) {
     const blob = await new Promise<Blob>((resolve) => {
       canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
@@ -261,37 +307,46 @@ export const captureAndSplit = async (
   }
 
   const sliceCount = Math.ceil(canvas.height / (maxSlice * scale));
-  const sliceH = Math.ceil(canvas.height / sliceCount);
 
-  // Boundary-aware slicing: if the captured DOM has marked semantic
-  // split points (data-share-split="true"), prefer cutting at those
-  // boundaries over the naive evenly-spaced ones. We snap interior
-  // boundaries only — the first slice always starts at y=0 and the
-  // last always ends at canvas.height. Snaps left-to-right so each
-  // candidate is checked against the previously-accepted boundary
-  // (monotonic) and refuses any snap that would shrink the previous
-  // OR next slice below MIN_SLICE_HEIGHT_CANVAS, avoiding slivers.
-  const anchors = collectSplitAnchorsCanvas(element, scale);
-  const sliceTolerance = anchors.length > 0 ? sliceH * 0.45 : sliceH * SPLIT_SNAP_TOLERANCE;
+  // If the number of anchors matches the needed interior slices (sliceCount - 1),
+  // and all anchors are valid (spaced >= MIN_SLICE_HEIGHT_CANVAS), use them directly!
+  if (anchors.length > 0 && anchors.length === sliceCount - 1) {
+    let allValid = true;
+    for (let i = 0; i < anchors.length; i++) {
+      const prev = i === 0 ? 0 : anchors[i - 1];
+      const next = i === anchors.length - 1 ? canvas.height : anchors[i + 1];
+      if (anchors[i] - prev < MIN_SLICE_HEIGHT_CANVAS || next - anchors[i] < MIN_SLICE_HEIGHT_CANVAS) {
+        allValid = false;
+        break;
+      }
+    }
+    if (allValid) {
+      return sliceCanvasByBoundaries(canvas, [0, ...anchors, canvas.height], baseName);
+    }
+  }
+
+  const sliceH = Math.ceil(canvas.height / sliceCount);
   const boundaries: number[] = [0];
   for (let i = 1; i < sliceCount; i++) {
     const natural = i * sliceH;
     const prev = boundaries[i - 1];
     let chosen = natural;
     if (anchors.length > 0) {
-      // Pick the closest anchor to the natural boundary, then accept
-      // it only if all three guards hold (tolerance + monotonic +
-      // both adjacent slices stay above MIN_SLICE_HEIGHT_CANVAS).
-      let best: number | null = null;
-      let bestDist = Infinity;
-      for (const a of anchors) {
-        const d = Math.abs(a - natural);
-        if (d < bestDist) { bestDist = d; best = a; }
-      }
-      if (best !== null
-        && bestDist <= sliceTolerance
-        && best - prev >= MIN_SLICE_HEIGHT_CANVAS
-        && canvas.height - best >= MIN_SLICE_HEIGHT_CANVAS) {
+      // Find candidate anchors that respect minimum slice height and leave room for remaining slices
+      const validCandidates = anchors.filter(a =>
+        a - prev >= MIN_SLICE_HEIGHT_CANVAS &&
+        canvas.height - a >= (sliceCount - i) * MIN_SLICE_HEIGHT_CANVAS
+      );
+      if (validCandidates.length > 0) {
+        let best = validCandidates[0];
+        let bestDist = Math.abs(best - natural);
+        for (const a of validCandidates) {
+          const d = Math.abs(a - natural);
+          if (d < bestDist) {
+            bestDist = d;
+            best = a;
+          }
+        }
         chosen = best;
       }
     }
@@ -299,23 +354,7 @@ export const captureAndSplit = async (
   }
   boundaries.push(canvas.height);
 
-  const files: File[] = [];
-  for (let i = 0; i < sliceCount; i++) {
-    const y = boundaries[i];
-    const h = boundaries[i + 1] - y;
-    const slice = document.createElement('canvas');
-    slice.width = canvas.width;
-    slice.height = h;
-    const ctx = slice.getContext('2d')!;
-    ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-    const blob = await new Promise<Blob>((resolve) => {
-      slice.toBlob((b) => resolve(b!), 'image/png', 1.0);
-    });
-    const suffix = sliceCount > 1 ? `-${i + 1}` : '';
-    files.push(new File([blob], `${baseName}${suffix}.png`, { type: 'image/png' }));
-  }
-
-  return files;
+  return sliceCanvasByBoundaries(canvas, boundaries, baseName);
 };
 
 /**

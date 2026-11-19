@@ -69,7 +69,9 @@ type Kind =
   // needed; the recipient list is built client-side (poll voters ∪
   // permanent members) and passed via `recipient_player_names`.
   | 'date_excluded'
-  | 'waitlist_promoted';
+  | 'waitlist_promoted'
+  | 'roster_change'
+  | 'forecast_mismatch';
 
 interface Job {
   id: string;
@@ -394,6 +396,26 @@ async function superAdminPlayerNamesInGroup(groupId: string): Promise<string[]> 
   const { data, error } = await sb.rpc('get_super_admin_player_names_in_group', { p_group_id: groupId });
   if (error || !data) return [];
   return data as string[];
+}
+
+async function allAdminPlayerNamesInGroup(groupId: string): Promise<string[]> {
+  const sb = db();
+  const { data: members } = await sb
+    .from('group_members')
+    .select('role, player_id')
+    .eq('group_id', groupId)
+    .eq('role', 'admin');
+  const pIds = (members || []).map(m => (m as { player_id?: string }).player_id).filter(Boolean) as string[];
+  const names = new Set<string>();
+  if (pIds.length > 0) {
+    const { data: players } = await sb.from('players').select('name').in('id', pIds);
+    for (const p of (players || []) as Array<{ name?: string }>) {
+      if (p.name) names.add(p.name);
+    }
+  }
+  const supers = await superAdminPlayerNamesInGroup(groupId);
+  for (const s of supers) names.add(s);
+  return Array.from(names);
 }
 
 // ─── Message builders (one per kind) ───────────────────────────────────────
@@ -729,6 +751,42 @@ function buildVoteChangeMessage(
   };
 }
 
+function buildRosterChangeMessage(
+  ctx: PollCtx,
+  payload: Record<string, unknown>,
+): BuiltMessage | null {
+  const dateId = (typeof payload.date_id === 'string' ? payload.date_id : null) || ctx.poll.confirmed_date_id;
+  const dateRow = ctx.dates.find(d => d.id === dateId);
+  if (!dateRow) return null;
+  const loc = dateRow.location || ctx.poll.default_location;
+  const dateCompact = formatHebrewDateTime(dateRow.proposed_date, dateRow.proposed_time);
+  const dateVerbose = formatHebrewDateTimeVerbose(dateRow.proposed_date, dateRow.proposed_time);
+  const promotedName = String(payload.promoted_player_name || 'שחקן');
+  const droppedName = payload.dropped_player_name ? String(payload.dropped_player_name) : null;
+  const changePhrase = droppedName
+    ? `${promotedName} נכנס להרכב במקום ${droppedName}`
+    : `${promotedName} נכנס להרכב המשחק`;
+  const yesNames = yesVoterNamesOnPinnedDate(ctx);
+  const yesCount = yesNames.length;
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const cta = `\n\n${I}👉 לפרטים: ${emailVoteLink(ctx.poll.share_slug || ctx.poll.id)}`;
+
+  return {
+    pushTitle: '🔄 עדכון הרכב למשחק',
+    pushBody: `${changePhrase} — ${dateCompact}${loc ? ` · ${loc}` : ''}`,
+    emailSubject: '🔄 עדכון הרכב לערב הפוקר 🃏',
+    emailBody:
+      'התעדכן הרכב השחקנים לערב הפוקר 🎯\n\n' +
+      `${I}📅 ${dateVerbose}\n` +
+      locLine +
+      `${I}🔄 ${changePhrase}\n` +
+      `${I}👥 ${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.\n` +
+      cta +
+      '\n\nנתראה על השולחן! 🃏',
+    url: deepLinkUrl(ctx.poll.id),
+  };
+}
+
 function buildTriviaReportFiledMessage(payload: Record<string, unknown>): BuiltMessage {
   const reporter = String(payload.reporter_name || 'שחקן');
   const reason   = String(payload.reason || 'other');
@@ -860,7 +918,7 @@ async function obsolescenceCheck(job: Job): Promise<Obsolete | null> {
   if (kind !== 'creation' && kind !== 'expanded' && kind !== 'confirmed'
       && kind !== 'target_filled' && kind !== 'vote_change'
       && kind !== 'reminder_no_vote' && kind !== 'reminder_maybe'
-      && kind !== 'waitlist_promoted') {
+      && kind !== 'waitlist_promoted' && kind !== 'roster_change') {
     return null;
   }
 
@@ -871,12 +929,20 @@ async function obsolescenceCheck(job: Job): Promise<Obsolete | null> {
     .maybeSingle();
   if (!data) return null;
   const pollCheck = data as { status: string };
+  if (kind === 'roster_change') {
+    if (pollCheck.status === 'cancelled') {
+      return { reason: 'poll was cancelled before roster_change notice went out', reopen: false };
+    }
+    return null;
+  }
   if (kind === 'waitlist_promoted') {
     if (pollCheck.status === 'cancelled') {
       return { reason: 'poll was cancelled before waitlist_promoted notice went out', reopen: false };
     }
     const promoDateId = typeof job.payload?.date_id === 'string' ? job.payload.date_id : null;
-    const promoPlayerId = typeof job.payload?.player_id === 'string' ? job.payload.player_id : null;
+    const promoPlayerId = typeof job.payload?.player_id === 'string'
+      ? job.payload.player_id
+      : (typeof job.payload?.recipient_player_id === 'string' ? job.payload.recipient_player_id : null);
     if (promoDateId && promoPlayerId) {
       const { data: vRow } = await sb.from('game_poll_votes')
         .select('response')
@@ -984,6 +1050,7 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
     || kind === 'training_report_resolved'
     || kind === 'training_milestone'
     || kind === 'waitlist_promoted'
+    || kind === 'forecast_mismatch'
       ? true
       : (emailKinds as Record<string, boolean | undefined>)[kind] !== false;
   // Email is also gated to the owner group at the network layer; mirror
@@ -995,6 +1062,7 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
   if (poll_id && (
     kind === 'creation' || kind === 'expanded' || kind === 'confirmed'
     || kind === 'cancellation' || kind === 'target_filled' || kind === 'vote_change'
+    || kind === 'roster_change'
   )) {
     const ctx = await loadPollCtx(poll_id);
     if (!ctx) return [];
@@ -1058,6 +1126,13 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
       // stays on the yes-voters so we don't re-email the whole roster.
       recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
       pushToWholeGroup = true;
+    } else if (kind === 'roster_change') {
+      message = buildRosterChangeMessage(ctx, payload);
+      recipientPlayerNames = yesVoterNamesOnPinnedDate(ctx);
+      pushToWholeGroup = true;
+      const closedGameEmailOn = (emailKinds as Record<string, boolean | undefined>).confirmed !== false
+        || (emailKinds as Record<string, boolean | undefined>).target_filled !== false;
+      pushOnly = !emailAllowedForGroup || !closedGameEmailOn;
     } else if (kind === 'cancellation') {
       message = buildCancellationMessage(ctx);
       recipientPlayerNames = allParticipantNames(ctx);
@@ -1124,12 +1199,64 @@ async function planForJob(job: Job): Promise<DispatchPlan[]> {
     }];
   }
 
+  // ── Forecast mismatch alert (pings all group admins) ──
+  if (kind === 'forecast_mismatch') {
+    const adminTargets = await allAdminPlayerNamesInGroup(group_id);
+    const dateId = typeof payload.date_id === 'string' ? payload.date_id : null;
+    let dateStr = '';
+    if (poll_id) {
+      const ctx = await loadPollCtx(poll_id);
+      if (ctx) {
+        const dRow = ctx.dates.find(d => d.id === dateId) || (ctx.poll.confirmed_date_id ? ctx.dates.find(d => d.id === ctx.poll.confirmed_date_id) : null);
+        if (dRow) {
+          dateStr = ` (${formatHebrewDateTime(dRow.proposed_date, dRow.proposed_time)})`;
+        }
+      }
+    }
+    const promotedName = String(payload.promoted_player_name || 'שחקן');
+    const droppedName = payload.dropped_player_name ? String(payload.dropped_player_name) : null;
+    const changePhrase = droppedName
+      ? `${promotedName} במקום ${droppedName}`
+      : `${promotedName} נכנס להרכב`;
+
+    return [{
+      message: {
+        pushTitle: '🔮 נדרש עדכון תחזית',
+        pushBody: `הרכב המשחק${dateStr} השתנה (${changePhrase}) — יש לעדכן את התחזית.`,
+        emailSubject: `🔮 נדרש עדכון תחזית לערב הפוקר`,
+        emailBody: `הרכב השחקנים למשחק הקרוב${dateStr} השתנה:\n${changePhrase}.\n\nהתחזית המפורסמת אינה תואמת עוד את הרכב השחקנים ויש לרענן אותה במסך פתיחת המשחק.\n\n👉 לכניסה לאפליקציה: ${resolvePublicOrigin()}/new-game`,
+        url: '/new-game',
+      },
+      recipientPlayerNames: adminTargets,
+      groupId: group_id,
+      kind,
+      pushOnly: !emailAllowedForGroup,
+      emailOnly,
+    }];
+  }
+
   // ── Reminder, training_*, anything else: payload IS the message ──
   const message = buildFromPayload(payload);
   if (!message) return [];
-  const recipientNames = Array.isArray(payload.recipient_player_names)
+  let recipientNames = Array.isArray(payload.recipient_player_names)
     ? (payload.recipient_player_names as string[])
     : [];
+
+  if (recipientNames.length === 0) {
+    if (typeof payload.recipient_player_name === 'string' && payload.recipient_player_name.trim()) {
+      recipientNames = [payload.recipient_player_name.trim()];
+    } else if (typeof payload.recipient_player_id === 'string' && payload.recipient_player_id) {
+      const { data: pRow } = await sb.from('players').select('name').eq('id', payload.recipient_player_id).maybeSingle();
+      if (pRow?.name) {
+        recipientNames = [pRow.name];
+      }
+    } else if (typeof payload.player_id === 'string' && payload.player_id) {
+      const { data: pRow } = await sb.from('players').select('name').eq('id', payload.player_id).maybeSingle();
+      if (pRow?.name) {
+        recipientNames = [pRow.name];
+      }
+    }
+  }
 
   // Special handling for reminder_no_vote:
   // Regulars who have push subscriptions receive push only (preserves EmailJS quota).

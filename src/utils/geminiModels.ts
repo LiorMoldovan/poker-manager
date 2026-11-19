@@ -46,7 +46,12 @@ export const TEXT_SECONDARY = 'gemini-3.5-flash';
 // other.
 export const TEXT_FALLBACK_PREVIEW = 'gemini-3-flash-preview';
 
-// Last-ditch. Weakest of the four, but a thin forecast beats no
+// Independent generation fallback (2.5 cluster). When the entire 3.x
+// cluster experiences a 503 demand spike or hang, 2.5-flash runs on a
+// separate backend pool and keeps full Flash-quality Hebrew generation alive.
+export const TEXT_FALLBACK_25 = 'gemini-2.5-flash';
+
+// Last-ditch. Weakest of the chain, but a thin forecast beats no
 // forecast when everything above is rate-limited. GA, retires
 // 2027-05-07 (successor: gemini-3.5-flash-lite).
 export const TEXT_FALLBACK_LITE = 'gemini-3.1-flash-lite';

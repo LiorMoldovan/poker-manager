@@ -273,6 +273,21 @@ const NewGameScreen = () => {
     if (!publishedForecast?.playerIds || publishedForecast.playerIds.length === 0) return null;
     return getComboHistory(publishedForecast.playerIds);
   }, [publishedForecast]);
+
+  const forecastMismatch = useMemo(() => {
+    if (!publishedForecast?.playerIds || publishedForecast.playerIds.length === 0) return null;
+    const currentIds = Array.from(selectedIds);
+    if (currentIds.length === 0) return null;
+    const fSet = new Set(publishedForecast.playerIds);
+    const cSet = new Set(currentIds);
+    const missingFromForecast = currentIds.filter(id => !fSet.has(id));
+    const missingFromCurrent = publishedForecast.playerIds.filter(id => !cSet.has(id));
+    if (missingFromForecast.length === 0 && missingFromCurrent.length === 0) return null;
+    return {
+      added: missingFromForecast.map(id => players.find(p => p.id === id)?.name || id),
+      removed: missingFromCurrent.map(id => players.find(p => p.id === id)?.name || id),
+    };
+  }, [publishedForecast, selectedIds, players]);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Holds the source poll id (if user came here via "Start Scheduled Game")
@@ -2611,6 +2626,37 @@ const NewGameScreen = () => {
       {/* Published Forecast - visible to all roles when published, admin can see hidden */}
       {publishedForecast && !publishedForecast.linkedGameId && (
         <div className="card" style={{ padding: '1rem', marginTop: '0.5rem', opacity: publishedForecast.published ? 1 : 0.7 }}>
+          {/* Mismatch warning banner */}
+          {forecastMismatch && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.6rem',
+              padding: '0.6rem 0.8rem',
+              marginBottom: '0.75rem',
+              borderRadius: '8px',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: '#fca5a5',
+              fontSize: '0.8rem',
+              textAlign: isRTL ? 'right' : 'left',
+            }}>
+              <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⚠️</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, color: '#f87171', marginBottom: '0.2rem' }}>
+                  {t('newGame.forecastMismatchWarning')}
+                </div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.9, lineHeight: 1.4 }}>
+                  {forecastMismatch.removed.length > 0 && <div><strong>{t('newGame.removed')}</strong> {forecastMismatch.removed.join(', ')}</div>}
+                  {forecastMismatch.added.length > 0 && <div><strong>{t('newGame.joined')}</strong> {forecastMismatch.added.join(', ')}</div>}
+                </div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.75, marginTop: '0.2rem' }}>
+                  {t('newGame.forecastMismatchDesc')}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Hidden state banner for admin */}
           {!publishedForecast.published && isAdmin && (
             <div style={{
@@ -2767,18 +2813,19 @@ const NewGameScreen = () => {
                 {t('common.share')}
               </button>
               <button
-                onClick={() => handleShowForecast(new Set(publishedForecast!.playerIds), publishedForecast!.location)}
+                onClick={() => handleShowForecast(forecastMismatch && selectedIds.size > 0 ? selectedIds : new Set(publishedForecast!.playerIds), publishedForecast!.location)}
                 style={{
                   padding: '0.4rem 0.8rem',
                   borderRadius: '6px',
-                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                  background: 'rgba(139, 92, 246, 0.1)',
-                  color: '#a78bfa',
+                  border: forecastMismatch ? '1px solid #ef4444' : '1px solid rgba(139, 92, 246, 0.3)',
+                  background: forecastMismatch ? 'rgba(239, 68, 68, 0.15)' : 'rgba(139, 92, 246, 0.1)',
+                  color: forecastMismatch ? '#f87171' : '#a78bfa',
                   fontSize: '0.75rem',
+                  fontWeight: forecastMismatch ? 700 : 500,
                   cursor: 'pointer',
                 }}
               >
-                {t('newGame.refresh')}
+                {forecastMismatch ? `🔄 ${t('newGame.refresh')}` : t('newGame.refresh')}
               </button>
               {publishedForecast.published ? (
                 <button

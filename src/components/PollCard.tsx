@@ -47,7 +47,7 @@ import {
   shareBtn,
 } from './ScheduleTab';
 import type { PollCardProps, DateStat } from './ScheduleTab';
-import { getAllPolls, setPollVotingLock, setPollPreferredDate, getSettings } from '../database/storage';
+import { getAllPolls, setPollVotingLock, setPollPreferredDate, getSettings, getPendingForecast } from '../database/storage';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { buildWazeUrl, openWaze } from '../utils/waze';
 import type { TranslationKey } from '../i18n/translations';
@@ -533,6 +533,28 @@ export default function PollCard(props: PollCardProps) {
           <span>{t('schedule.votingLockedBadge')}</span>
         </div>
       )}
+
+      {/* Forecast mismatch banner if a published forecast exists for confirmed game */}
+      {poll.confirmedDateId && (() => {
+        const pf = getPendingForecast();
+        if (!pf || !pf.published || pf.linkedGameId || !pf.playerIds) return null;
+        const confirmedIds = confirmedPlayers.map(p => p.id);
+        const fSet = new Set(pf.playerIds);
+        const isMismatch = confirmedIds.some(id => !fSet.has(id)) || pf.playerIds.some(id => !confirmedIds.includes(id));
+        if (!isMismatch) return null;
+        return (
+          <div style={{
+            marginBottom: 10, padding: '6px 10px', borderRadius: 6,
+            background: 'rgba(239, 68, 68, 0.10)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#f87171', fontSize: 12, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span aria-hidden>⚠️</span>
+            <span>{t('newGame.forecastMismatchWarning')}</span>
+          </div>
+        );
+      })()}
 
       {/* Why the RSVP buttons below are dead. Only the two reasons a viewer
           can actually act on (or wait out) get a banner — a cancelled poll
