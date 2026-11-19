@@ -44,6 +44,16 @@ export const API_CONFIGS = [
   { version: 'v1beta', model: TEXT_FALLBACK_LITE },
 ];
 
+// 3-minute in-memory cooldown for models that return 503 / timeout so retries
+// and back-to-back calls skip a temporarily overloaded model instead of waiting.
+const modelCooldownUntil = new Map<string, number>();
+function getOrderedApiConfigs() {
+  const now = Date.now();
+  const ready = API_CONFIGS.filter(c => (modelCooldownUntil.get(c.model) || 0) <= now);
+  const cooled = API_CONFIGS.filter(c => (modelCooldownUntil.get(c.model) || 0) > now);
+  return [...ready, ...cooled];
+}
+
 // Friendly display names for UI badge. Retired models stay listed: stored
 // records (forecast.aiModel, chip-count modelUsed) still name them, and a
 // game from last spring should not start rendering a raw model id.
@@ -118,7 +128,7 @@ const trimToCompleteSentence = (text: string): string => {
  * Returns { text, model } on success, throws on total failure.
  */
 const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: string; model: string; usage?: Record<string, number> }> => {
-  if (!navigator.onLine) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
   }
   // No default temperature. Google's guidance for the whole Gemini 3.x
@@ -138,7 +148,7 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
   // error screen.
   let bestPartial: { text: string; model: string; usage?: Record<string, number> } | null = null;
 
-  for (const config of API_CONFIGS) {
+  for (const config of getOrderedApiConfigs()) {
     for (let attempt = 0; attempt < TOKEN_ESCALATION.length; attempt++) {
       const budget = Math.min(maxOutputTokens * TOKEN_ESCALATION[attempt], MAX_OUTPUT_TOKEN_CEILING);
       // Already at the ceiling — a retry would send the identical request.
@@ -186,7 +196,10 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
             if (!fallbackFrom) fallbackFrom = config.model;
             break;
           }
-          if (response.status === 404 || response.status === 503) {
+          if (response.status === 404 || response.status === 503 || response.status === 504) {
+            if (response.status === 503 || response.status === 504) {
+              modelCooldownUntil.set(config.model, Date.now() + 3 * 60_000);
+            }
             if (!fallbackFrom) fallbackFrom = config.model;
             break;
           }
@@ -1762,6 +1775,7 @@ export const generateAIForecasts = async (
   };
 
   const playerAngles: { name: string; angle: AngleType; angleHint: string; tone: ToneType; toneHint: string }[] = [];
+  const tonightNamesSet = new Set(players.map(p => p.name));
 
   playersWithYearStats.forEach(p => {
     const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
@@ -1863,14 +1877,22 @@ export const generateAIForecasts = async (
           ? `התאוששות מרצף של ${Math.abs(p.currentStreak)} הפסדים — זיהוי הזדמנות לשבירת הבצורת וחזרה למסלול הנצחונות`
           : `המשך לחץ ושחיקה מרצף של ${Math.abs(p.currentStreak)} הפסדים — המומנטום השלילי והיריבים הקשים צפויים להמשיך לגבות מחיר כספי בשולחן, כשהמאבק הוא על זהירות מרבית והגבלת הפסדים מול שולחן מאתגר ללא שום הבטחה לשבירת בצורת`);
       }
+    } else if (isPositive && gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
+      const abovePresence = tonightNamesSet.has(nb.above.name) ? '' : ' (שלא משתתף במשחק הקרוב)';
+      assign('ranking_battle', `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name}${abovePresence} (פער של ${gapToAbove} שקלים בלבד) — עמדת תקיפה נחושה לעקיפה וטיפוס`);
+    } else if (!isPositive && gapToBelow <= 150 && gapToBelow > 0 && nb?.below && canUse('defending')) {
+      const belowPresence = tonightNamesSet.has(nb.below.name) ? '' : ' (שלא משתתף במשחק הקרוב)';
+      assign('defending', `הגנה שברירית על מקום ${halfRank} (יתרון של ${gapToBelow} שקלים בלבד על ${nb.below.name}${belowPresence}) — לחץ הגנתי כבד וסכנת הידרדרות`);
     } else if (gapToAbove <= 150 && gapToAbove > 0 && halfRank > 1 && nb?.above && canUse('ranking_battle')) {
+      const abovePresence = tonightNamesSet.has(nb.above.name) ? '' : ' (שלא משתתף במשחק הקרוב)';
       assign('ranking_battle', isPositive
-        ? `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name} (פער של ${gapToAbove} שקלים בלבד) — עמדת תקיפה נחושה לעקיפה וטיפוס`
-        : `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name} (פער של ${gapToAbove} שקלים) — קושי לצמצם את המרחק מול הגנה עיקשת של יריבו`);
+        ? `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name}${abovePresence} (פער של ${gapToAbove} שקלים בלבד) — עמדת תקיפה נחושה לעקיפה וטיפוס`
+        : `קרב צמוד על מקום ${halfRank - 1} מול ${nb.above.name}${abovePresence} (פער של ${gapToAbove} שקלים) — קושי לצמצם את המרחק תחת לחץ השולחן`);
     } else if (gapToBelow <= 150 && gapToBelow > 0 && nb?.below && canUse('defending')) {
+      const belowPresence = tonightNamesSet.has(nb.below.name) ? '' : ' (שלא משתתף במשחק הקרוב)';
       assign('defending', isPositive
-        ? `הגנה על מקום ${halfRank} ביתרון של ${gapToBelow} שקלים מעל ${nb.below.name} — שליטה בשולחן ועמדת הובלה שמבצרת את מעמדו`
-        : `הגנה שברירית על מקום ${halfRank} (יתרון של ${gapToBelow} שקלים בלבד על ${nb.below.name}) — לחץ הגנתי כבד וסכנת הידרדרות`);
+        ? `הגנה על מקום ${halfRank} ביתרון של ${gapToBelow} שקלים מעל ${nb.below.name}${belowPresence} — שליטה בשולחן ועמדת הובלה שמבצרת את מעמדו`
+        : `הגנה שברירית על מקום ${halfRank} (יתרון של ${gapToBelow} שקלים בלבד על ${nb.below.name}${belowPresence}) — לחץ הגנתי כבד וסכנת הידרדרות`);
     } else if (topRivalry && canUse('rivalry')) {
       assign('rivalry', isPositive ? topRivalry.descPositive : topRivalry.descNegative);
     } else if (nearMilestone && canUse('milestone')) {
@@ -2070,17 +2092,19 @@ export const generateAIForecasts = async (
       }
 
       if (nb?.above && nb.above.gap > 0) {
+        const aboveNote = tonightNamesSet.has(nb.above.name) ? '' : ' — לא בשולחן הפעם';
         if (nb.above.gap <= 80) {
-          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name}) (⚔️ קרב עקיפה ריאלי: פיגור קטן של ${nb.above.gap} שקלים בלבד — ניצחון הערב עשוי לחולל עקיפה מיידית וטיפוס בדירוג!)`);
+          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name}${aboveNote}) (⚔️ קרב עקיפה ריאלי: פיגור קטן של ${nb.above.gap} שקלים בלבד — ניצחון במשחק הקרוב עשוי לחולל עקיפה מיידית וטיפוס בדירוג!)`);
         } else {
-          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name})`);
+          lines.push(`פער בטבלת ${periodLabel}: ${nb.above.gap} מאחורי מקום ${nb.rank - 1} (${nb.above.name}${aboveNote})`);
         }
       }
       if (nb?.below && nb.below.gap > 0) {
+        const belowNote = tonightNamesSet.has(nb.below.name) ? '' : ' — לא בשולחן הפעם';
         if (nb.below.gap <= 80) {
-          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name}) (🛡️ הגנה שברירית על מקום ${nb.rank}: יתרון של ${nb.below.gap} שקלים בלבד — סכנת עקיפה מיידית כבר הערב!)`);
+          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name}${belowNote}) (🛡️ הגנה שברירית על מקום ${nb.rank}: יתרון של ${nb.below.gap} שקלים בלבד — סכנת עקיפה מיידית!)`);
         } else {
-          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name})`);
+          lines.push(`יתרון בטבלת ${periodLabel}: ${nb.below.gap} על מקום ${nb.rank + 1} (${nb.below.name}${belowNote})`);
         }
       }
       if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900) {
@@ -2182,16 +2206,14 @@ export const generateAIForecasts = async (
   const rosterImpactText = buildTonightRosterImpactLines(players.map(p => p.name));
   const traitBlock = buildTraitBlock(players.map(p => p.name));
 
-  const prompt = `אתה ${chosenStyle}. אתה כותב את הטקסט שפותח ערב פוקר בין חברים ותיקים.
+  const prompt = `אתה ${chosenStyle}. אתה כותב את הטקסט שפותח מפגש פוקר בין חברים ותיקים.
 המטרה: כל אחד מ-${players.length} השחקנים יקרא על עצמו משהו שהוא לא ידע, ויבין מה מונח על הפרק עבורו הפעם.
 כל הסכומים בשקלים — כסף אמיתי. כתוב "שקל/שקלים" ליד סכום, ורק ליד סכום.
-
-🎯 הערב הזה: ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${periodContextText ? `\n${periodContextText}` : ''}
-
+${periodContextText ? `\n🎯 הקשר תקופתי:\n${periodContextText}\n` : ''}
 📊 כרטיסי שחקנים (${players.length} שחקנים):
 ${playerDataText}
-${participantHighlightsText ? `\n🏅 מצטייני הערב (סטטיסטיקות מבין המשתתפים בלבד — לא שיאי קבוצה; הדירוג הכללי האמיתי מופיע בכרטיס כל שחקן):\n${participantHighlightsText}` : ''}${scaleText}
-${storylinesText ? `\n📖 סיפורי הערב - יריבויות, נקמות, קשרים מעניינים:\n${storylinesText}` : ''}
+${participantHighlightsText ? `\n🏅 מצטייני השולחן (סטטיסטיקות מבין המשתתפים בלבד — לא שיאי קבוצה; הדירוג הכללי האמיתי מופיע בכרטיס כל שחקן):\n${participantHighlightsText}` : ''}${scaleText}
+${storylinesText ? `\n📖 סיפורי השולחן - יריבויות, נקמות, קשרים מעניינים:\n${storylinesText}` : ''}
 ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${milestonesText}` : ''}
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
 ${comboHistoryText ? `\n${comboHistoryText}` : ''}
