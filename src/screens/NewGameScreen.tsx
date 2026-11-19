@@ -1898,18 +1898,82 @@ const NewGameScreen = () => {
           const joinVerb = diffPlayers.length > 1
             ? (diffPlayers.every(n => isPlayerFemale(n)) ? 'מצטרפות' : 'מצטרפים')
             : (diffPlayers.length === 1 && isPlayerFemale(diffPlayers[0]) ? 'מצטרפת' : 'מצטרף');
-          const formattedDiffering = diffPlayers.length === 2
-            ? `${diffPlayers[0]} ו${diffPlayers[1]}`
-            : diffPlayers.length > 2
-              ? `${diffPlayers.slice(0, -1).join(', ')} ו${diffPlayers[diffPlayers.length - 1]}`
-              : diffPlayers.join(', ');
+          const formattedCore = formatHebrewNames(nc.corePlayerNames);
+          const formattedDiffering = formatHebrewNames(diffPlayers);
+          const ncTimeStr = formatTimeAttribution(
+            nc.gamesPlayedTogether,
+            nc.gamesThisYear,
+            nc.gamesThisHalf,
+            nc.lastPlayedDateStr,
+            nc.monthsSinceLastPlayed
+          );
+          const formatRelDaysAgo = (dateVal: string) => {
+            const daysAgo = Math.round((Date.now() - new Date(dateVal).getTime()) / (1000 * 60 * 60 * 24));
+            return daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
+          };
+          const cs = nc.coreStats;
           return (
             <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
               <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
               <strong style={{ color: '#60a5fa' }}>גרעין שולחן ותיק ({nc.coreCount} מתוך {ch.playerCount} שחקנים)</strong>
               <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                {nc.corePlayerNames.join(', ')} שיחקו יחד {nc.gamesPlayedTogether} פעמים בכל הזמנים {nc.gamesThisYear === 0 ? `(אף לא פעם אחת ב-${new Date().getFullYear()}! פעם אחרונה: ${nc.lastPlayedDateStr})` : `(מתוכם ${nc.gamesThisYear} ב-${new Date().getFullYear()})`}, כשאליהם {joinVerb} הערב {formattedDiffering}.
+                {formattedCore} שיחקו יחד {ncTimeStr}, כשאליהם {joinVerb} הפעם {formattedDiffering}.
               </div>
+              {cs && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.32rem',
+                  marginTop: '0.5rem',
+                  padding: '0.48rem 0.6rem',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  fontSize: '0.78rem',
+                }}>
+                  <div style={{ color: '#e2e8f0' }}>
+                    👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל בגרעין ({nc.coreCount}):</span>{' '}
+                    {cs.leader.playerName}{' '}
+                    <span style={{ color: cs.leader.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
+                      ({cs.leader.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(cs.leader.totalProfit)})
+                    </span>
+                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                      {' '}ממוצע {cs.leader.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(cs.leader.avgProfit)} • {cs.leader.profitableGames}/{nc.gamesPlayedTogether} ברווח{cs.leader.firstPlaces > 0 ? ` • ${cs.leader.firstPlaces}x מקום 1` : ''}
+                    </span>
+                  </div>
+                  <div style={{ color: '#e2e8f0' }}>
+                    📉 <span style={{ fontWeight: 600 }}>בתחתית הגרעין:</span>{' '}
+                    {cs.bottom.playerName}{' '}
+                    <span style={{ color: '#f87171' }}>
+                      ({cs.bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(cs.bottom.totalProfit)})
+                    </span>
+                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                      {' '}ממוצע {cs.bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(cs.bottom.avgProfit)} • {cs.bottom.lossGames}/{nc.gamesPlayedTogether} בהפסד
+                    </span>
+                  </div>
+                  {cs.alwaysProfitNames.length > 0 && (
+                    <div style={{ color: '#4ade80', fontSize: '0.75rem' }}>
+                      ⭐ תמיד ברווח בגרעין הזה: {cs.alwaysProfitNames.join(', ')} ({nc.gamesPlayedTogether}/{nc.gamesPlayedTogether})
+                    </div>
+                  )}
+                  {cs.lastGame && (() => {
+                    const lastDateStr = (() => { try { return new Date(cs.lastGame.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return cs.lastGame.date; } })();
+                    return (
+                      <div style={{
+                        marginTop: '0.15rem',
+                        paddingTop: '0.32rem',
+                        borderTop: '1px solid rgba(255,255,255,0.06)',
+                        fontSize: '0.75rem',
+                        color: '#94a3b8',
+                      }}>
+                        <span style={{ color: '#64748b' }}>מפגש אחרון של הגרעין ({lastDateStr}, {formatRelDaysAgo(cs.lastGame.date)}):</span>{' '}
+                        <span style={{ color: '#4ade80' }}>👑 {cs.lastGame.winnerName} ({'\u200E'}+{Math.round(cs.lastGame.winnerProfit)})</span>
+                        {'  '}
+                        <span style={{ color: '#f87171' }}>💀 {cs.lastGame.loserName} ({'\u200E'}{Math.round(cs.lastGame.loserProfit)})</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
               {nc.almostFullMatch && (() => {
                 const afm = nc.almostFullMatch;
                 const afmDiff = formatHebrewNames(afm.differingPlayerNames);
@@ -1920,6 +1984,7 @@ const NewGameScreen = () => {
                   afm.lastPlayedDateStr,
                   afm.monthsSinceLastPlayed
                 );
+                const afmCs = afm.coreStats;
                 return (
                   <div style={{
                     fontSize: '0.78rem',
@@ -1928,10 +1993,29 @@ const NewGameScreen = () => {
                     borderTop: '1px solid rgba(59, 130, 246, 0.2)',
                     paddingTop: '0.4rem',
                   }}>
-                    💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {ch.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
+                    <div>
+                      💡 <strong>בנוסף:</strong> {afm.coreCount} מתוך {ch.playerCount} השחקנים (ללא {afmDiff}) כבר שיחקו יחד {afmTimeStr}.
+                    </div>
+                    {afmCs && afm.gamesPlayedTogether >= 2 && (
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                        במפגשי ה-{afm.coreCount}:{' '}
+                        <span style={{ color: '#4ade80' }}>👑 מוביל {afmCs.leader.playerName} ({afmCs.leader.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(afmCs.leader.totalProfit)}, {afmCs.leader.profitableGames}/{afm.gamesPlayedTogether} ברווח)</span>
+                        {' • '}
+                        <span style={{ color: '#f87171' }}>📉 בתחתית {afmCs.bottom.playerName} ({'\u200E'}{Math.round(afmCs.bottom.totalProfit)})</span>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
+              <div style={{
+                fontSize: '0.76rem',
+                color: '#4ade80',
+                marginTop: '0.4rem',
+                borderTop: '1px solid rgba(59, 130, 246, 0.2)',
+                paddingTop: '0.35rem',
+              }}>
+                🆕 <strong>הרכב מלא חדש:</strong> בדיוק {ch.playerCount} השחקנים האלה יושבים יחד בפעם הראשונה.
+              </div>
             </div>
           );
         })() : (
@@ -1951,7 +2035,7 @@ const NewGameScreen = () => {
             </div>
             <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '0.2rem' }}>
               {t('newGame.comboTimes', { count: ch.totalGamesWithCombo + 1, players: ch.playerCount })}{' '}
-              ({ch.totalGamesWithCombo} פעמים בכל הזמנים{ch.gamesThisYear > 0 ? `, מתוכם ${ch.gamesThisYear} ב-${new Date().getFullYear()}` : ch.lastPlayedDateStr ? `, פעם אחרונה: ${ch.lastPlayedDateStr}` : ''})
+              ({formatTimeAttribution(ch.totalGamesWithCombo, ch.gamesThisYear, ch.gamesThisHalf, ch.lastPlayedDateStr, ch.monthsSinceLastPlayed)})
             </div>
             {ch.largerCore && (() => {
               const lc = ch.largerCore;
@@ -1971,7 +2055,7 @@ const NewGameScreen = () => {
                   borderTop: '1px solid rgba(251, 191, 36, 0.2)',
                   paddingTop: '0.35rem',
                 }}>
-                  💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {ch.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.
+                  💡 <strong>עומק היסטורי:</strong> {lc.coreCount} מתוך {ch.playerCount} השחקנים (ללא {lcDiff}) שיחקו יחד עוד יותר — {lcTimeStr}.
                 </div>
               );
             })()}
@@ -2044,7 +2128,9 @@ const NewGameScreen = () => {
                       <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
                         ({top.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.totalProfit)})
                       </span>
-                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {top.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.avgProfit)} • {top.wins}/{ch.totalGamesWithCombo} נצחונות</span>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                        {' '}ממוצע {top.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.avgProfit)} • {top.wins}/{ch.totalGamesWithCombo} ברווח{top.firstPlaces > 0 ? ` • ${top.firstPlaces}x מקום 1` : ''}
+                      </span>
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
                       📉 <span style={{ fontWeight: 600 }}>{t('newGame.comboBottom')}</span>{' '}
@@ -2052,25 +2138,33 @@ const NewGameScreen = () => {
                       <span style={{ color: '#f87171' }}>
                         ({bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.totalProfit)})
                       </span>
-                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.avgProfit)}</span>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                        {' '}ממוצע {bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.avgProfit)} • {bottom.losses}/{ch.totalGamesWithCombo} בהפסד
+                      </span>
                     </div>
                   </div>
                 );
               })()}
 
               {/* Patterns */}
-              {(ch.playerStats.some(p => p.alwaysWon) || ch.playerStats.some(p => p.alwaysLost) || (ch.uniqueWinners.length === ch.totalGamesWithCombo) || ch.repeatWinners.length > 0) && (
+              {(ch.playerStats.some(p => p.alwaysWon) || ch.playerStats.some(p => p.alwaysLost) || (ch.totalGamesWithCombo === 2 && ch.playerStats.some(p => p.wins === 2)) || (ch.uniqueWinners.length === ch.totalGamesWithCombo) || ch.repeatWinners.length > 0) && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', textAlign: isRTL ? 'right' : 'left' }}>
                   {ch.playerStats.filter(p => p.alwaysWon).length > 0 && (
                     <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
                       {t('newGame.alwaysProfit')}{' '}
-                      {ch.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${ch.totalGamesWithCombo})`).join(', ')}
+                      {ch.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${ch.totalGamesWithCombo} ברווח)`).join(', ')}
+                    </div>
+                  )}
+                  {ch.totalGamesWithCombo === 2 && ch.playerStats.filter(p => p.wins === 2).length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
+                      📈 2/2 ברווח בהרכב הזה:{' '}
+                      {ch.playerStats.filter(p => p.wins === 2).map(p => p.playerName).join(', ')}
                     </div>
                   )}
                   {ch.playerStats.filter(p => p.alwaysLost).length > 0 && (
                     <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
                       {t('newGame.alwaysLoss')}{' '}
-                      {ch.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
+                      {ch.playerStats.filter(p => p.alwaysLost).map(p => `${p.playerName} (${p.losses}/${ch.totalGamesWithCombo} בהפסד)`).join(', ')}
                     </div>
                   )}
                   {ch.uniqueWinners.length === ch.totalGamesWithCombo && (
@@ -2109,16 +2203,18 @@ const NewGameScreen = () => {
                 );
               })()}
 
-              {/* Previous games */}
+              {/* Previous games (newest first) */}
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', textAlign: isRTL ? 'right' : 'left' }}>
                 {t('newGame.previousGames')}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
-                {ch.previousGames.slice(-3).map((game, i) => {
+                {[...ch.previousGames].slice(-3).reverse().map((game, i) => {
                   const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                  const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
+                  const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
                   return (
                     <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', textAlign: isRTL ? 'right' : 'left' }}>
-                      <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
+                      <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr} ({timeAgoStr})</div>
                       <div>
                         <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
                         {'  '}

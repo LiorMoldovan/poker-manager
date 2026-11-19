@@ -196,6 +196,7 @@ export default function PlayerStyleTab({
   const [showMapHelp, setShowMapHelp] = useState(false);
   const [showRadarHelp, setShowRadarHelp] = useState(false);
   const [showEvolutionGraph, setShowEvolutionGraph] = useState(false);
+  const [showAllEvoPeriods, setShowAllEvoPeriods] = useState(false);
 
   const analysis = useMemo(
     () =>
@@ -455,14 +456,18 @@ export default function PlayerStyleTab({
               textAlign: 'right',
             }}
           >
-            <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
-              <strong style={{ color: 'var(--text)' }}>ציר X (מדד סיכון, אקשן וקופות 0–100):</strong> משלב הון בסיכון וריבאיים יחסיים בשולחן, תנודתיות רווח וערמות סיום, גודל זכיות, סיום בקצוות השולחן ומסנן פסיביות (0–32 שמרן ושקט · 33–49 מחושב/סלקטיבי · 50–68 אגרסיבי · 69+ אקשן קיצוני)
+            <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+              <strong style={{ color: 'var(--text)' }}>ציר X (מדד סיכון, אקשן וקופות 0–100):</strong> מחושב משילוב 5 מרכיבים אובייקטיביים בנתונים (0–32 שמרן ושקט · 33–49 מחושב/סלקטיבי · 50–68 אגרסיבי · 69+ אקשן קיצוני):
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.16rem', marginBottom: '0.32rem', paddingRight: '0.35rem', borderRight: '2px solid var(--border)', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+              <div><strong style={{ color: 'var(--text)' }}>1. הון בסיכון וקניות (35%):</strong> סכום ההשקעה לערב (ערמת סיום פחות רווח), נתח ריבאיים יחסי מתוך סך הקניות בשולחן באותו ערב, ופיזור ריבאיים.</div>
+              <div><strong style={{ color: 'var(--text)' }}>2. תנודתיות וערמות סיום (30%):</strong> סטיית תקן של הרווח (₪±), סטיית תקן של ערמת הצ&apos;יפים בסיום, שיעור ערבי קיצון (±{analysis.bigSwingThreshold}₪+) ומיעוט ערבים שקטים.</div>
+              <div><strong style={{ color: 'var(--text)' }}>3. כוח התקפי וקצוות השולחן (20%):</strong> גודל זכייה ממוצע ביחס לשולחן ושיעור סיום במקום ה-1 או האחרון בערב.</div>
+              <div><strong style={{ color: 'var(--text)' }}>4. בקרת קופה מול חשיפה (15%):</strong> עומק נפילות ושיעור מקום אחרון — מפריד בין שחקן מחושב-תוקפני (TAG) שמגביל קופה לבין משוחרר-אגרסיבי (LAG).</div>
+              <div><strong style={{ color: 'var(--text)' }}>5. מסנני דיוק (פסיביות וקאמבק):</strong> ריבאיים גבוהים ללא זכיות ענק וקאמבקים מזוהים כמשוחרר-פסיבי (לא אגרסיבי); אחוז הפסד גבוה בסכומים קטנים משאיר בצד השמרן; קאמבקים מ-3+ ריבאיים מחזקים סיווג אגרסיבי.</div>
             </div>
             <div style={{ color: 'var(--text-muted)', marginBottom: '0.22rem' }}>
-              <strong style={{ color: 'var(--text)' }}>ציר Y (ממוצע ב-₪):</strong> רווח או הפסד ממוצע למשחק בתקופה
-            </div>
-            <div style={{ color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-              <strong style={{ color: 'var(--text)' }}>הקווים המקווקווים:</strong> אופקי (0₪) = גבול רווח/הפסד · אנכי (50) = ממוצע האקשן והסיכון של השולחן
+              <strong style={{ color: 'var(--text)' }}>ציר Y (ממוצע ב-₪):</strong> רווח או הפסד ממוצע למשחק בתקופה · <strong style={{ color: 'var(--text)' }}>קווים מקווקווים:</strong> אופקי (0₪) · אנכי (50 = ממוצע השולחן)
             </div>
             <div style={{
               display: 'grid',
@@ -772,11 +777,13 @@ export default function PlayerStyleTab({
               </div>
             </div>
 
-            {/* Historical Style Evolution across Half-Years (Compact Strip + Toggleable Trend Chart) */}
+            {/* Historical Style Evolution across Half-Years (Mobile-Fitted 3-Col Grid + Toggleable Full History & Trend Chart) */}
             {(() => {
               const evo = evolutionMap.get(selectedProfile.playerId);
               if (!evo || evo.points.length < 2) return null;
-              const stripPts = evo.points.slice(-4);
+              const hasMorePeriods = evo.points.length > 6;
+              const stripPts = showAllEvoPeriods ? evo.points : evo.points.slice(-6);
+              const colsCount = Math.min(3, stripPts.length);
               return (
                 <div
                   dir="rtl"
@@ -789,35 +796,52 @@ export default function PlayerStyleTab({
                     textAlign: 'right',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', marginBottom: '0.32rem' }}>
-                    <span style={{ fontSize: '0.67rem', fontWeight: '700', color: 'var(--text)' }}>
-                      📈 התפתחות אופי לאורך חציונים — {selectedProfile.playerName}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.32rem' }}>
+                    <span style={{ fontSize: '0.66rem', fontWeight: '700', color: 'var(--text)' }}>
+                      📈 התפתחות אופי לאורך חציונים ({evo.points.length})
                     </span>
-                    <button
-                      type="button"
-                      data-hide-on-share="true"
-                      onClick={() => setShowEvolutionGraph(v => !v)}
-                      style={{
-                        fontSize: '0.6rem',
-                        padding: '0.12rem 0.42rem',
-                        borderRadius: '999px',
-                        border: '1px solid var(--border)',
-                        background: 'rgba(255,255,255,0.03)',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {showEvolutionGraph ? 'הסתר גרף ▲' : 'גרף מגמה ▼'}
-                    </button>
+                    <div data-hide-on-share="true" style={{ display: 'flex', alignItems: 'center', gap: '0.28rem', flexShrink: 0 }}>
+                      {hasMorePeriods && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllEvoPeriods(v => !v)}
+                          style={{
+                            fontSize: '0.58rem',
+                            padding: '0.12rem 0.4rem',
+                            borderRadius: '999px',
+                            border: '1px solid var(--border)',
+                            background: showAllEvoPeriods ? `${selectedProfile.color}20` : 'rgba(255,255,255,0.03)',
+                            color: showAllEvoPeriods ? selectedProfile.color : 'var(--text-muted)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {showAllEvoPeriods ? '6 אחרונים ▲' : `כל ${evo.points.length} התקופות ▼`}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowEvolutionGraph(v => !v)}
+                        style={{
+                          fontSize: '0.58rem',
+                          padding: '0.12rem 0.4rem',
+                          borderRadius: '999px',
+                          border: '1px solid var(--border)',
+                          background: showEvolutionGraph ? `${selectedProfile.color}20` : 'rgba(255,255,255,0.03)',
+                          color: showEvolutionGraph ? selectedProfile.color : 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showEvolutionGraph ? 'הסתר גרף ▲' : 'גרף מגמה ▼'}
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Compact Horizontal Half-Year Strip (LTR chronological: Oldest on Left -> Latest on Right, matching the LineChart) */}
+                  {/* Mobile-Safe 3-Column Half-Year Grid (LTR chronological: Oldest on Left -> Latest on Right, matching the LineChart) */}
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: `repeat(${stripPts.length}, minmax(0, 1fr))`,
-                      gap: '0.28rem',
+                      gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))`,
+                      gap: '0.3rem',
                       marginBottom: '0.32rem',
                       direction: 'ltr',
                     }}
@@ -835,24 +859,26 @@ export default function PlayerStyleTab({
                           key={pt.periodKey}
                           dir="rtl"
                           style={{
-                            padding: '0.26rem 0.2rem',
+                            padding: '0.3rem 0.25rem',
                             borderRadius: '6px',
                             background: isLast ? `${selectedProfile.color}16` : 'rgba(255,255,255,0.02)',
                             border: isLast ? `1px solid ${selectedProfile.color}66` : '1px solid var(--border)',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
+                            justifyContent: 'center',
                             gap: '0.12rem',
                             textAlign: 'center',
+                            minWidth: 0,
                           }}
                         >
-                          <span style={{ fontSize: '0.55rem', fontWeight: '700', color: isLast ? selectedProfile.color : 'var(--text-muted)', lineHeight: 1.2 }}>
+                          <span style={{ fontSize: '0.56rem', fontWeight: '700', color: isLast ? selectedProfile.color : 'var(--text-muted)', lineHeight: 1.2 }}>
                             {pt.periodLabel} ({pt.gamesPlayed})
                           </span>
-                          <span style={{ fontSize: '0.54rem', fontWeight: '700', color: styleColor, lineHeight: 1.25 }}>
+                          <span style={{ fontSize: '0.57rem', fontWeight: '700', color: styleColor, lineHeight: 1.25, wordBreak: 'keep-all' }}>
                             {pt.shortStyle}
                           </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.53rem', color: 'var(--text-muted)', lineHeight: 1.2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.54rem', color: 'var(--text-muted)', lineHeight: 1.2 }}>
                             <span>X:{pt.volatility}</span>
                             <span>·</span>
                             <span style={{ color: pt.avgProfit >= 0 ? '#10B981' : '#EF4444', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
@@ -878,6 +904,7 @@ export default function PlayerStyleTab({
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.35} />
                             <XAxis
                               dataKey="periodLabel"
+                              interval="preserveStartEnd"
                               padding={{ left: 18, right: 18 }}
                               tickMargin={8}
                               tick={{ fill: 'var(--text-muted)', fontSize: 10 }}

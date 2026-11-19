@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '6.44.5';
+export const APP_VERSION = '6.44.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '6.44.6',
+    date: '2026-11-19',
+    changes: [
+      '🔮 שדרוג איכות, מהירות ודיוק תחזית ה-AI',
+      '🔄 מאזן מוביל, תחתית ומפגש אחרון בגרעין ותיק',
+      '📊 הפרדה מדויקת בין סיום ברווח למקום 1 בהרכב',
+      '🎯 כיול צירי ואחוזוני סגנון שחקן',
+    ],
+  },
   {
     version: '6.44.5',
     date: '2026-11-19',

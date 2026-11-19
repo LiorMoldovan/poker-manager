@@ -2272,7 +2272,7 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
   // key surfaces as a misleading "rate limit, try again later" countdown.
   let lastForecastError = '';
   let lastForecastStatus = 0;
-  for (const config of API_CONFIGS) {
+  for (const config of getOrderedApiConfigs()) {
     console.log(`   Trying: ${config.version}/${config.model}...`);
     
     try {
@@ -2329,9 +2329,15 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
           lastForecastStatus = 429;
           continue;
         }
-        if (response.status === 404) {
+        if (response.status === 404 || response.status === 503 || response.status === 504) {
+          if (response.status === 503 || response.status === 504) {
+            modelCooldownUntil.set(config.model, Date.now() + 3 * 60_000);
+          }
           if (!forecastFallbackFrom) forecastFallbackFrom = config.model;
-          if (!lastForecastError) { lastForecastError = errorMsg; lastForecastStatus = 404; }
+          if (!lastForecastError || response.status !== 404) {
+            lastForecastError = errorMsg;
+            lastForecastStatus = response.status;
+          }
           continue;
         }
         lastForecastError = errorMsg;
@@ -2433,6 +2439,22 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         if (supplements.length > 0) console.log(`✅ Retry filled ${supplements.filter(s => !needsText(s)).length} player(s)`);
       }
 
+      const sanitizeTimeNeutral = (str: string): string =>
+        str
+          .replace(/\s*ב-?\d{1,2}\s+ב(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)(?:\s+\d{4})?/g, '')
+          .replace(/כבר\s+הערב/g, 'כבר במשחק הקרוב')
+          .replace(/יריבי\s+הערב/g, 'יריבי השולחן')
+          .replace(/שחקני\s+הערב/g, 'שחקני השולחן')
+          .replace(/מצטייני\s+הערב/g, 'מצטייני השולחן')
+          .replace(/(^|[\s,.;:!?()"'־-])הערב(?=$|[\s,.;:!?()"'־-])/g, '$1הפעם')
+          .replace(/(^|[\s,.;:!?()"'־-])הלילה(?=$|[\s,.;:!?()"'־-])/g, '$1במשחק הקרוב')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      if (preGameTeaser) {
+        preGameTeaser = sanitizeTimeNeutral(preGameTeaser);
+      }
+
       let forecasts: ForecastResult[] = players.map(p => {
         const aiEntry = aiOutput.find(a => a.name === p.name);
         const suggestion = playerSuggestions.find(s => s.name === p.name);
@@ -2440,7 +2462,7 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
           name: p.name,
           expectedProfit: suggestion?.suggested || 0,
           highlight: aiEntry?.highlight || '',
-          sentence: aiEntry?.sentence || '',
+          sentence: aiEntry?.sentence ? sanitizeTimeNeutral(aiEntry.sentence) : '',
           isSurprise: surpriseNames.has(p.name),
           preGameTeaser: '',
         };
@@ -2523,16 +2545,18 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         }
         
         // ========== 2. FIX RANKING ERRORS ==========
-        // Check if sentence claims #1 but player isn't #1 tonight
-        if ((correctedSentence.includes('מוביל') || correctedSentence.includes('בראש') || correctedSentence.includes('מקום ראשון') || correctedSentence.includes('מקום 1') || correctedSentence.includes('#1')) && rankTonight !== 1) {
+        // Check if sentence claims #1 table leader but player isn't #1 tonight.
+        // Avoid matching "מקום 13" (via (?![0-9])) or "מוביל ב-34 שקלים על יריבו".
+        const claimsTableFirst = /(?:מוביל|בראש)\s+את\s+ה?(?:טבלה|דירוג)|בראש\s+ה?(?:טבלה|דירוג)|מקום\s+ראשון|מקום\s+1(?![0-9])|#1(?![0-9])/.test(correctedSentence);
+        if (claimsTableFirst && rankTonight !== 1) {
           errorDetails.push(`rank: claimed #1 but actually #${rankTonight}`);
 
           correctedSentence = correctedSentence
             .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
             .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
             .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
-            .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
-            .replace(/#1\b/g, `#${rankTonight}`);
+            .replace(/מקום 1(?![0-9])/g, `מקום ${rankTonight}`)
+            .replace(/#1(?![0-9])/g, `#${rankTonight}`);
         }
         
         // Fix "king/ruler of rankings" for non-#1 players
@@ -2546,15 +2570,16 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         }
         
         // ========== 2b. FIX RANKING ERRORS IN HIGHLIGHT ==========
-        if ((correctedHighlight.includes('מוביל') || correctedHighlight.includes('בראש') || correctedHighlight.includes('מקום ראשון') || correctedHighlight.includes('מקום 1') || correctedHighlight.includes('#1')) && rankTonight !== 1) {
+        const claimsHighlightFirst = /(?:מוביל|בראש)\s+את\s+ה?(?:טבלה|דירוג)|בראש\s+ה?(?:טבלה|דירוג)|מקום\s+ראשון|מקום\s+1(?![0-9])|#1(?![0-9])/.test(correctedHighlight);
+        if (claimsHighlightFirst && rankTonight !== 1) {
           errorDetails.push(`highlight rank: claimed #1 but actually #${rankTonight}`);
 
           correctedHighlight = correctedHighlight
             .replace(/מוביל את הטבלה/g, `מקום ${rankTonight} בטבלה`)
             .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
             .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
-            .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
-            .replace(/#1\b/g, `#${rankTonight}`);
+            .replace(/מקום 1(?![0-9])/g, `מקום ${rankTonight}`)
+            .replace(/#1(?![0-9])/g, `#${rankTonight}`);
         }
         
         // Fix "king/ruler" in highlight for non-#1
@@ -2568,16 +2593,15 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         }
         
         // ========== 3. FIX LAST GAME ERRORS ==========
-        // Contradictions about last game → drop AI sentence (fallback is direction-aware)
-        if (wonLastGame && correctedSentence.includes('הפסד') && /אחרון|אחרונה|קודם|שעבר/.test(correctedSentence)) {
+        // Contradictions about last game (scoped to the same clause as "במשחק האחרון/הקודם",
+        // not anywhere in the 55-word paragraph) → drop AI sentence.
+        const claimedLastGameLoss = /(?:הפסיד|הפסד(?:ו)?)\s+(?:קשה\s+|כואב\s+|צורב\s+)?במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)|במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)\s+[^.,;]{0,25}(?:הפסיד|ספג\s+הפסד)|לאחר\s+הפסד\s+(?:קשה\s+|כואב\s+)?במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)/.test(correctedSentence);
+        const claimedLastGameWin = /(?:ניצח|נצח|ניצחון|נצחון)\s+(?:מרשים\s+|גדול\s+)?במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)|במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)\s+[^.,;]{0,25}(?:ניצח|נצח|רשם\s+ניצחון)|לאחר\s+(?:ניצחון|נצחון)\s+במשחק(?:ו)?\s+ה?(?:אחרון|קודם|שעבר)/.test(correctedSentence);
+        if (wonLastGame && claimedLastGameLoss) {
           errorDetails.push('last_game: claimed loss but actually won');
           correctedSentence = '';
         }
-        if (
-          lostLastGame &&
-          /אחרון|אחרונה|קודם|שעבר/.test(correctedSentence) &&
-          /(נצחון|ניצחון|ניצח\b|נצח\b)/.test(correctedSentence)
-        ) {
+        if (lostLastGame && claimedLastGameWin) {
           errorDetails.push('last_game: claimed win but actually lost');
           correctedSentence = '';
         }
@@ -2729,6 +2753,7 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
         const optimisticWords = [
           'ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה', 'שולט', 'דומיננטי',
           'הצלחה', 'גלים', 'רוכב', 'בפסגה', 'שורף', 'בוער', 'כובש', 'דומיננט', 'מלכות', 'מבריק', 'זינוק', 'עלייה חדה',
+          'יתרון', 'עליונות', 'הזדמנות', 'פריצה', 'לפרוץ', 'חיובי', 'ביטחון', 'ניצחון', 'מומנטום',
         ];
         const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה', 'ייאוש', 'טובע'];
         // One map, rather than a word list plus a parallel replace chain that
@@ -2821,21 +2846,23 @@ ${hasMajorPeriod ? `• 📅 אירוע תקופתי (פסקה קצרה נוספ
           if (predictedProfit < 0) {
             if (actualStreak >= 2) return `רצף ${actualStreak} בסכנה`;
             if (actualStreak <= -3) return `מאבק שחיקה ובלימה`;
-            if (nbH?.below && nbH.below.gap > 0) return `מגן על מקום ${rankTonight}`;
-            if (nbH?.above && nbH.above.gap > 0) return `פער מ${nbH.above.name}`;
-            return `מבחן קשה הערב`;
+            if (nbH?.below && nbH.below.gap > 0 && nbH.below.gap <= 150) return `מגן על מקום ${rankTonight}`;
+            return `מבחן הגנתי בשולחן`;
           } else {
             if (actualStreak >= 2) return `רצף ${actualStreak} נמשך`;
-            if (nbH?.above && nbH.above.gap > 0) return `במרחק ${nbH.above.gap} מ${nbH.above.name}`;
-            if (actualStreak <= -3) return `מחפש לשבור את הרצף`;
-            return `הזדמנות לעלייה`;
+            if (nbH?.above && nbH.above.gap > 0 && nbH.above.gap <= 150 && tonightNamesSet.has(nbH.above.name)) {
+              return `במרחק ${nbH.above.gap} מ${nbH.above.name}`;
+            }
+            if (actualStreak <= -2) return `הזדמנות לשינוי מגמה`;
+            return `עמדת תקיפה בשולחן`;
           }
         };
 
+        const isBreakingLossesHighlight = /(?:שבירת|לשבור|עצירת|לעצור|סיום|קטיעת)\s+(?:רצף\s+)?ה?(?:הפסדים|בצורת|מגמה)/.test(hl);
         if (predictedProfit < 0 && (successImageryInHighlight.some(m => hl.includes(m)) || /(?:בצורת|שבירת|קאמבק|מהפך|שינוי\s*כיוון)/.test(hl))) {
           errorDetails.push(`highlight_sign: success or turnaround imagery with negative prediction (${predictedProfit})`);
           correctedHighlight = stakeHighlight();
-        } else if (predictedProfit > 0 && doomImageryInHighlight.some(m => hl.includes(m))) {
+        } else if (predictedProfit > 0 && !isBreakingLossesHighlight && doomImageryInHighlight.some(m => hl.includes(m))) {
           errorDetails.push(`highlight_sign: doom imagery with positive prediction (+${predictedProfit})`);
           correctedHighlight = stakeHighlight();
         }

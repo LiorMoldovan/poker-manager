@@ -8,6 +8,7 @@ export interface ComboPlayerStat {
   avgProfit: number;
   wins: number;
   losses: number;
+  firstPlaces: number;
   winRate: number;
   bestResult: number;
   worstResult: number;
@@ -15,6 +16,34 @@ export interface ComboPlayerStat {
   avgRebuys: number;
   alwaysWon: boolean;
   alwaysLost: boolean;
+}
+
+export interface ComboCoreStats {
+  leader: {
+    playerName: string;
+    totalProfit: number;
+    avgProfit: number;
+    profitableGames: number;
+    firstPlaces: number;
+  };
+  bottom: {
+    playerName: string;
+    totalProfit: number;
+    avgProfit: number;
+    lossGames: number;
+  };
+  lastGame?: {
+    date: string;
+    winnerName: string;
+    winnerProfit: number;
+    loserName: string;
+    loserProfit: number;
+    totalRebuys: number;
+  };
+  alwaysProfitNames: string[];
+  alwaysLossNames: string[];
+  repeatFirstPlace: { name: string; count: number }[];
+  avgRebuys: number;
 }
 
 export interface ComboGameResult {
@@ -37,6 +66,7 @@ export interface ComboAlmostFullMatch {
   gamesThisHalf: number;
   lastPlayedDateStr?: string;
   monthsSinceLastPlayed?: number;
+  coreStats?: ComboCoreStats;
 }
 
 export interface ComboNearMatch {
@@ -48,6 +78,7 @@ export interface ComboNearMatch {
   gamesThisHalf: number;
   lastPlayedDateStr?: string;
   monthsSinceLastPlayed?: number;
+  coreStats?: ComboCoreStats;
   almostFullMatch?: ComboAlmostFullMatch;
 }
 
@@ -133,6 +164,101 @@ function computeTimeBreakdown(games: { date: string }[], refDate: Date = new Dat
   };
 }
 
+function computeCoreStats(
+  games: Game[],
+  coreIds: string[],
+  gpByGame: Record<string, GamePlayer[]>
+): ComboCoreStats | undefined {
+  if (!games || games.length === 0 || coreIds.length < 2) return undefined;
+  const sortedGames = [...games].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const coreSet = new Set(coreIds);
+  const profitsByPlayer: Record<string, number[]> = {};
+  const firstPlacesByPlayer: Record<string, number> = {};
+  let totalCoreRebuys = 0;
+  let lastGame: ComboCoreStats['lastGame'] = undefined;
+
+  for (const g of sortedGames) {
+    const gps = gpByGame[g.id];
+    if (!gps || gps.length === 0) continue;
+    const allSorted = [...gps].sort((a, b) => b.profit - a.profit);
+    const coreGps = gps.filter(gp => coreSet.has(gp.playerId));
+    if (coreGps.length === 0) continue;
+
+    const tableWinner = allSorted[0];
+    if (tableWinner && coreSet.has(tableWinner.playerId)) {
+      firstPlacesByPlayer[tableWinner.playerName] = (firstPlacesByPlayer[tableWinner.playerName] || 0) + 1;
+    }
+
+    for (const gp of coreGps) {
+      if (!profitsByPlayer[gp.playerName]) profitsByPlayer[gp.playerName] = [];
+      profitsByPlayer[gp.playerName].push(gp.profit);
+      totalCoreRebuys += gp.rebuys || 0;
+    }
+
+    if (g.id === sortedGames[sortedGames.length - 1].id) {
+      const coreSorted = [...coreGps].sort((a, b) => b.profit - a.profit);
+      const topCore = coreSorted[0];
+      const bottomCore = coreSorted[coreSorted.length - 1];
+      lastGame = {
+        date: g.date,
+        winnerName: topCore.playerName,
+        winnerProfit: topCore.profit,
+        loserName: bottomCore.playerName,
+        loserProfit: bottomCore.profit,
+        totalRebuys: gps.reduce((s, gp) => s + (gp.rebuys || 0), 0),
+      };
+    }
+  }
+
+  const numGames = sortedGames.length;
+  const stats = Object.entries(profitsByPlayer)
+    .map(([name, profits]) => {
+      const totalProfit = profits.reduce((s, p) => s + p, 0);
+      const profitableGames = profits.filter(p => p > 0).length;
+      const lossGames = profits.filter(p => p < 0).length;
+      return {
+        playerName: name,
+        totalProfit,
+        avgProfit: totalProfit / profits.length,
+        profitableGames,
+        lossGames,
+        firstPlaces: firstPlacesByPlayer[name] || 0,
+        alwaysProfit: numGames >= 3 && profits.length === numGames && profits.every(p => p > 0),
+        alwaysLoss: numGames >= 3 && profits.length === numGames && profits.every(p => p < 0),
+      };
+    })
+    .sort((a, b) => b.totalProfit - a.totalProfit);
+
+  if (stats.length < 2) return undefined;
+  const top = stats[0];
+  const bottom = stats[stats.length - 1];
+  const repeatFirstPlace = Object.entries(firstPlacesByPlayer)
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
+
+  return {
+    leader: {
+      playerName: top.playerName,
+      totalProfit: top.totalProfit,
+      avgProfit: top.avgProfit,
+      profitableGames: top.profitableGames,
+      firstPlaces: top.firstPlaces,
+    },
+    bottom: {
+      playerName: bottom.playerName,
+      totalProfit: bottom.totalProfit,
+      avgProfit: bottom.avgProfit,
+      lossGames: bottom.lossGames,
+    },
+    lastGame,
+    alwaysProfitNames: stats.filter(s => s.alwaysProfit).map(s => s.playerName),
+    alwaysLossNames: stats.filter(s => s.alwaysLoss).map(s => s.playerName),
+    repeatFirstPlace,
+    avgRebuys: Math.round(totalCoreRebuys / numGames),
+  };
+}
+
 export function formatTimeAttribution(
   allTimeCount: number,
   gamesThisYear: number,
@@ -177,11 +303,12 @@ export function getComboHistory(
   const sortedIds = [...currentPlayerIds].sort();
   const comboKey = sortedIds.join('|');
 
-  const allGames = getAllGames().filter(g => g.status === 'completed' && g.id !== excludeGameId);
+  const rawGames = getAllGames();
+  const excludedGame = excludeGameId ? rawGames.find(g => g.id === excludeGameId) : undefined;
+  const allGames = rawGames.filter(g => g.status === 'completed' && g.id !== excludeGameId);
   const allGP = getAllGamePlayers();
   const allPlayers = getAllPlayers();
 
-  const excludedGame = excludeGameId ? allGames.find(g => g.id === excludeGameId) : undefined;
   const refDate = referenceDate ? new Date(referenceDate) : (excludedGame?.date ? new Date(excludedGame.date) : new Date());
 
   const playerMap: Record<string, string> = {};
@@ -269,6 +396,7 @@ export function getComboHistory(
             gamesThisHalf: timeBd1.gamesThisHalf,
             lastPlayedDateStr: timeBd1.lastPlayedDateStr,
             monthsSinceLastPlayed: timeBd1.monthsSinceLastPlayed,
+            coreStats: computeCoreStats(bestNMinus1.games, bestNMinus1.coreIds, gpByGame),
           };
         }
         nearCombo = {
@@ -280,6 +408,7 @@ export function getComboHistory(
           gamesThisHalf: timeBd2.gamesThisHalf,
           lastPlayedDateStr: timeBd2.lastPlayedDateStr,
           monthsSinceLastPlayed: timeBd2.monthsSinceLastPlayed,
+          coreStats: computeCoreStats(bestNMinus2.games, bestNMinus2.coreIds, gpByGame),
           almostFullMatch,
         };
       } else if (hasN1 && bestNMinus1) {
@@ -293,6 +422,7 @@ export function getComboHistory(
           gamesThisHalf: timeBd.gamesThisHalf,
           lastPlayedDateStr: timeBd.lastPlayedDateStr,
           monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
+          coreStats: computeCoreStats(bestNMinus1.games, bestNMinus1.coreIds, gpByGame),
         };
       } else if (hasN2 && bestNMinus2) {
         const timeBd2 = computeTimeBreakdown(bestNMinus2.games, refDate);
@@ -305,6 +435,7 @@ export function getComboHistory(
           gamesThisHalf: timeBd2.gamesThisHalf,
           lastPlayedDateStr: timeBd2.lastPlayedDateStr,
           monthsSinceLastPlayed: timeBd2.monthsSinceLastPlayed,
+          coreStats: computeCoreStats(bestNMinus2.games, bestNMinus2.coreIds, gpByGame),
         };
       }
     }
@@ -373,32 +504,6 @@ export function getComboHistory(
     }
   }
 
-  const numGames = matchingGames.length;
-  const playerStats: ComboPlayerStat[] = Object.entries(profitByPlayer)
-    .map(([name, profits]) => {
-      const rebuys = rebuysByPlayer[name] || [];
-      const totalProfit = profits.reduce((s, p) => s + p, 0);
-      const totalRebuys = rebuys.reduce((s, r) => s + r, 0);
-      const wins = profits.filter(p => p > 0).length;
-      const losses = profits.filter(p => p < 0).length;
-      return {
-        playerId: sortedIds.find(id => playerMap[id] === name) || '',
-        playerName: name,
-        totalProfit,
-        avgProfit: totalProfit / numGames,
-        wins,
-        losses,
-        winRate: (wins / numGames) * 100,
-        bestResult: Math.max(...profits),
-        worstResult: Math.min(...profits),
-        totalRebuys,
-        avgRebuys: totalRebuys / numGames,
-        alwaysWon: profits.every(p => p > 0),
-        alwaysLost: profits.every(p => p < 0),
-      };
-    })
-    .sort((a, b) => b.totalProfit - a.totalProfit);
-
   const uniqueWinners = [...new Set(winnerNames)];
 
   const winnerCounts: Record<string, number> = {};
@@ -412,6 +517,34 @@ export function getComboHistory(
   const repeatLosers = Object.entries(loserCounts)
     .filter(([, c]) => c > 1)
     .map(([name, count]) => ({ name, count }));
+
+  const numGames = matchingGames.length;
+  const playerStats: ComboPlayerStat[] = Object.entries(profitByPlayer)
+    .map(([name, profits]) => {
+      const rebuys = rebuysByPlayer[name] || [];
+      const totalProfit = profits.reduce((s, p) => s + p, 0);
+      const totalRebuys = rebuys.reduce((s, r) => s + r, 0);
+      const wins = profits.filter(p => p > 0).length;
+      const losses = profits.filter(p => p < 0).length;
+      const firstPlaces = winnerCounts[name] || 0;
+      return {
+        playerId: sortedIds.find(id => playerMap[id] === name) || '',
+        playerName: name,
+        totalProfit,
+        avgProfit: totalProfit / numGames,
+        wins,
+        losses,
+        firstPlaces,
+        winRate: (wins / numGames) * 100,
+        bestResult: Math.max(...profits),
+        worstResult: Math.min(...profits),
+        totalRebuys,
+        avgRebuys: totalRebuys / numGames,
+        alwaysWon: numGames >= 3 && profits.every(p => p > 0),
+        alwaysLost: numGames >= 3 && profits.every(p => p < 0),
+      };
+    })
+    .sort((a, b) => b.totalProfit - a.totalProfit);
 
   const dates = matchingGames.map(m => new Date(m.game.date).getTime());
   const spanDays = Math.round((Math.max(...dates) - Math.min(...dates)) / (1000 * 60 * 60 * 24));
@@ -452,6 +585,7 @@ export function getComboHistory(
         gamesThisHalf: timeBd.gamesThisHalf,
         lastPlayedDateStr: timeBd.lastPlayedDateStr,
         monthsSinceLastPlayed: timeBd.monthsSinceLastPlayed,
+        coreStats: computeCoreStats(bestNMinus1.games, bestNMinus1.coreIds, gpByGame),
       };
     }
   }
@@ -500,6 +634,16 @@ export function getJoinVerb(names: string[]): string {
  * Build a Hebrew text block describing combo history for AI prompts.
  */
 export function buildComboHistoryText(combo: ComboHistory): string {
+  const formatCoreStatsLine = (cs: ComboCoreStats, totalGames: number, label: string) => {
+    const parts: string[] = [];
+    parts.push(`מוביל ב${label}: ${cs.leader.playerName} (${cs.leader.totalProfit >= 0 ? '+' : ''}${Math.round(cs.leader.totalProfit)}, ממוצע ${cs.leader.avgProfit >= 0 ? '+' : ''}${Math.round(cs.leader.avgProfit)}, ${cs.leader.profitableGames}/${totalGames} ברווח${cs.leader.firstPlaces > 0 ? `, ${cs.leader.firstPlaces}x מקום 1` : ''})`);
+    parts.push(`בתחתית ה${label}: ${cs.bottom.playerName} (${cs.bottom.totalProfit >= 0 ? '+' : ''}${Math.round(cs.bottom.totalProfit)}, ממוצע ${cs.bottom.avgProfit >= 0 ? '+' : ''}${Math.round(cs.bottom.avgProfit)}, ${cs.bottom.lossGames}/${totalGames} בהפסד)`);
+    if (cs.lastGame) {
+      parts.push(`מפגש אחרון של ה${label} (${formatComboDate(cs.lastGame.date)}): בלט ${cs.lastGame.winnerName} (+${Math.round(cs.lastGame.winnerProfit)}), בתחתית ${cs.lastGame.loserName} (${Math.round(cs.lastGame.loserProfit)})`);
+    }
+    return parts.join(' | ');
+  };
+
   if (combo.isFirstTime) {
     if (combo.nearCombo) {
       const nc = combo.nearCombo;
@@ -514,9 +658,17 @@ export function buildComboHistoryText(combo: ComboHistory): string {
         nc.monthsSinceLastPlayed
       );
       if (nc.coreCount === combo.playerCount - 1) {
-        return `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}. חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השולחן נפגש לפני ${nc.monthsSinceLastPlayed ? `${nc.monthsSinceLastPlayed} חודשים` : 'תקופה זו'} — היסטוריית המפגשים שייכת אך ורק לשלד של ${nc.coreCount} השחקנים.`;
+        let text = `🔄 גרעין שולחן ותיק (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} שיחקו יחד ${timeStr}, כשאליהם ${joinVerb} הפעם ${diffNames}.`;
+        if (nc.coreStats) {
+          text += `\n  📊 מאזן הגרעין (${nc.coreCount} שחקנים): ${formatCoreStatsLine(nc.coreStats, nc.gamesPlayedTogether, 'גרעין')}.`;
+        }
+        text += `\n  ⚠️ חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השולחן נפגש לפני ${nc.monthsSinceLastPlayed ? `${nc.monthsSinceLastPlayed} חודשים` : 'תקופה זו'} — היסטוריית המפגשים שייכת אך ורק לשלד של ${nc.coreCount} השחקנים.`;
+        return text;
       } else {
-        let text = `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הערב ${diffNames}.`;
+        let text = `🔄 שלד משותף מנוסה (${nc.coreCount} מתוך ${combo.playerCount} שחקנים): ${coreNames} חלקו ${timeStr}, כשאליהם ${joinVerb} הפעם ${diffNames}.`;
+        if (nc.coreStats) {
+          text += `\n  📊 מאזן השלד (${nc.coreCount} שחקנים): ${formatCoreStatsLine(nc.coreStats, nc.gamesPlayedTogether, 'שלד')}.`;
+        }
         if (nc.almostFullMatch) {
           const afm = nc.almostFullMatch;
           const afmDiff = formatHebrewNames(afm.differingPlayerNames);
@@ -527,9 +679,12 @@ export function buildComboHistoryText(combo: ComboHistory): string {
             afm.lastPlayedDateStr,
             afm.monthsSinceLastPlayed
           );
-          text += ` בנוסף: ${afm.coreCount} מתוך ${combo.playerCount} השחקנים (כולם למעט ${afmDiff}) כבר שיחקו יחד ${afmTimeStr}.`;
+          text += `\n  💡 בנוסף: ${afm.coreCount} מתוך ${combo.playerCount} השחקנים (כולם למעט ${afmDiff}) כבר שיחקו יחד ${afmTimeStr}.`;
+          if (afm.coreStats && afm.gamesPlayedTogether >= 2) {
+            text += `\n  📊 מאזן ה-${afm.coreCount} (ללא ${afmDiff}): ${formatCoreStatsLine(afm.coreStats, afm.gamesPlayedTogether, 'גרעין ה-' + afm.coreCount)}.`;
+          }
         }
-        text += ` חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השחקנים או כל השולחן נפגשו בעבר.`;
+        text += `\n  ⚠️ חשוב: בדיוק ${combo.playerCount} השחקנים האלה מעולם לא ישבו יחד בהרכב מלא! אסור לטעון שכל השחקנים או כל השולחן נפגשו בעבר.`;
         return text;
       }
     }
@@ -557,36 +712,39 @@ export function buildComboHistoryText(combo: ComboHistory): string {
       lc.monthsSinceLastPlayed
     );
     lines.push(`  💡 עומק היסטורי: ${lc.coreCount} מתוך ${combo.playerCount} השחקנים (כולם למעט ${lcDiff}) שיחקו יחד עוד יותר — ${lcTimeStr}.`);
+    if (lc.coreStats) {
+      lines.push(`  📊 מאזן גרעין ה-${lc.coreCount} (ללא ${lcDiff}): ${formatCoreStatsLine(lc.coreStats, lc.gamesPlayedTogether, 'גרעין')}.`);
+    }
   }
 
-  for (const game of combo.previousGames) {
+  for (const game of [...combo.previousGames].reverse()) {
     const dateStr = formatComboDate(game.date);
     lines.push(`  • ${dateStr}: מנצח ${game.winnerName} (\u200E+${Math.round(game.winnerProfit)}), מפסיד ${game.loserName} (${Math.round(game.loserProfit)})`);
   }
 
-  if (combo.totalGamesWithCombo >= 2) {
+  if (combo.totalGamesWithCombo >= 3) {
     const alwaysWon = combo.playerStats.filter(p => p.alwaysWon);
     const alwaysLost = combo.playerStats.filter(p => p.alwaysLost);
 
     if (alwaysWon.length > 0) {
-      lines.push(`  ⭐ תמיד ברווח בהרכב הזה: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${combo.totalGamesWithCombo})`).join(', ')}`);
+      lines.push(`  ⭐ תמיד ברווח בהרכב הזה: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${combo.totalGamesWithCombo} ברווח)`).join(', ')}`);
     }
     if (alwaysLost.length > 0) {
-      lines.push(`  ⚠️ תמיד בהפסד בהרכב הזה: ${alwaysLost.map(p => p.playerName).join(', ')}`);
+      lines.push(`  ⚠️ תמיד בהפסד בהרכב הזה: ${alwaysLost.map(p => `${p.playerName} (${p.losses}/${combo.totalGamesWithCombo} בהפסד)`).join(', ')}`);
     }
   }
 
   const topPlayer = combo.playerStats[0];
   const bottomPlayer = combo.playerStats[combo.playerStats.length - 1];
-  lines.push(`  📊 מוביל בהרכב: ${topPlayer.playerName} (סה"כ ${topPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(topPlayer.totalProfit)}, ממוצע ${topPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(topPlayer.avgProfit)})`);
-  lines.push(`  📊 בתחתית ההרכב: ${bottomPlayer.playerName} (סה"כ ${bottomPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.totalProfit)}, ממוצע ${bottomPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.avgProfit)})`);
+  lines.push(`  📊 מוביל בהרכב: ${topPlayer.playerName} (סה"כ ${topPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(topPlayer.totalProfit)}, ממוצע ${topPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(topPlayer.avgProfit)}, ${topPlayer.wins}/${combo.totalGamesWithCombo} ברווח${topPlayer.firstPlaces > 0 ? `, ${topPlayer.firstPlaces}x מקום 1` : ''})`);
+  lines.push(`  📊 בתחתית ההרכב: ${bottomPlayer.playerName} (סה"כ ${bottomPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.totalProfit)}, ממוצע ${bottomPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.avgProfit)}, ${bottomPlayer.losses}/${combo.totalGamesWithCombo} בהפסד)`);
 
   if (combo.repeatWinners.length > 0) {
-    lines.push(`  👑 ניצחו יותר מפעם: ${combo.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}`);
+    lines.push(`  👑 סיימו מקום 1 יותר מפעם בהרכב הזה: ${combo.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}`);
   }
 
   if (combo.uniqueWinners.length === combo.totalGamesWithCombo) {
-    lines.push(`  🎲 מנצח אחר בכל משחק!`);
+    lines.push(`  🎲 מנצח (מקום 1) אחר בכל משחק!`);
   }
 
   return lines.join('\n');

@@ -1624,10 +1624,8 @@ export function computeGroupStyleEvolution(
     b.games.push(g);
   }
 
-  // Keep recent half-years that have at least 3 games (up to last 6 half-years = 3 years)
-  const validBuckets = Array.from(buckets.values())
-    .filter(b => b.games.length >= 3)
-    .slice(-6);
+  // Keep all half-years that have at least 3 games across the group's entire history
+  const validBuckets = Array.from(buckets.values()).filter(b => b.games.length >= 3);
 
   const pointsByPlayer = new Map<string, PlayerEvolutionPoint[]>();
 
