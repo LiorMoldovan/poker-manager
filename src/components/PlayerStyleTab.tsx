@@ -477,16 +477,16 @@ export default function PlayerStyleTab({
               direction: 'ltr',
             }}>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה:</strong> מרוויח ומחושב (סלקטיבי / TAG)
+                <strong style={{ color: '#34d399' }}>🎯 שמאל-למעלה:</strong> מרוויח ומחושב
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה:</strong> מרוויח ואגרסיבי / אקשן
+                <strong style={{ color: '#10B981' }}>🦈 ימין-למעלה:</strong> מרוויח ואגרסיבי
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(148, 163, 184, 0.08)', border: '1px solid var(--border)', textAlign: 'right' }}>
-                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה:</strong> מופסד (שמרן / משוחרר-פסיבי)
+                <strong style={{ color: 'var(--text)' }}>🛡️ שמאל-למטה:</strong> מופסד ושמרן/פסיבי
               </div>
               <div dir="rtl" style={{ padding: '0.22rem 0.35rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', textAlign: 'right' }}>
-                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה:</strong> מופסד ומשוחרר-אגרסיבי
+                <strong style={{ color: '#F59E0B' }}>🎢 ימין-למטה:</strong> מופסד ואגרסיבי
               </div>
             </div>
           </div>
@@ -599,18 +599,19 @@ export default function PlayerStyleTab({
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '0.25rem',
-          fontSize: '0.58rem',
+          fontSize: '0.56rem',
           color: 'var(--text-muted)',
-          padding: '0.22rem 0.45rem',
+          padding: '0.22rem 0.38rem',
           marginTop: '0.2rem',
           background: 'var(--surface)',
           borderRadius: '6px',
           border: '1px solid var(--border)',
           direction: 'ltr',
+          whiteSpace: 'nowrap',
         }}>
           <span>← שמרן / מחושב</span>
-          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: סיכון ואקשן · ציר Y: ממוצע ₪</span>
-          <span>אגרסיבי / אקשן →</span>
+          <span style={{ fontWeight: '600', color: 'var(--text)' }}>ציר X: אקשן וסיכון · ציר Y: ממוצע ₪</span>
+          <span>אגרסיבי →</span>
         </div>
 
         {/* Tappable Player Pills */}

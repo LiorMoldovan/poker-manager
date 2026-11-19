@@ -1418,49 +1418,51 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
     const accent: 'warning' | 'success' = missingSeats > 0 ? 'warning' : 'success';
 
     const pendingForecast = getPendingForecast();
-    let forecastStatusChip: React.ReactNode = null;
+    let forecastNotice: React.ReactNode = null;
     if (pendingForecast && pendingForecast.published && !pendingForecast.linkedGameId && pendingForecast.playerIds && opts.dateId) {
       const yesPlayerIds = poll.votes.filter(v => v.dateId === opts.dateId && v.response === 'yes').map(v => v.playerId);
       const fSet = new Set(pendingForecast.playerIds);
       const isMismatch = yesPlayerIds.some(id => !fSet.has(id)) || pendingForecast.playerIds.some(id => !yesPlayerIds.includes(id));
-      forecastStatusChip = isMismatch ? (
-        <span style={{
-          fontSize: '0.66rem',
-          fontWeight: 700,
-          color: '#f87171',
+      forecastNotice = isMismatch ? (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.45rem',
+          padding: '0.35rem 0.6rem',
+          borderRadius: '8px',
           background: 'rgba(239, 68, 68, 0.12)',
           border: '1px solid rgba(239, 68, 68, 0.35)',
-          padding: '0.1rem 0.45rem',
-          borderRadius: '6px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.2rem',
-          whiteSpace: 'nowrap',
-        }}>
-          {t('home.schedule.forecastMismatchChip')}
-        </span>
-      ) : (
-        <span style={{
-          fontSize: '0.66rem',
+          color: '#f87171',
+          fontSize: '0.72rem',
           fontWeight: 600,
-          color: '#c084fc',
-          background: 'rgba(168, 85, 247, 0.12)',
-          border: '1px solid rgba(168, 85, 247, 0.3)',
-          padding: '0.1rem 0.45rem',
-          borderRadius: '6px',
+          lineHeight: 1.4,
+        }}>
+          <span aria-hidden style={{ fontSize: '0.85rem', flexShrink: 0 }}>⚠️</span>
+          <span style={{ minWidth: 0, flex: 1 }}>{t('home.schedule.forecastMismatchChip')}</span>
+        </div>
+      ) : (
+        <div style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '0.2rem',
-          whiteSpace: 'nowrap',
+          gap: '0.35rem',
+          padding: '0.2rem 0.5rem',
+          borderRadius: '6px',
+          background: 'rgba(168, 85, 247, 0.12)',
+          border: '1px solid rgba(168, 85, 247, 0.28)',
+          color: '#c084fc',
+          fontSize: '0.68rem',
+          fontWeight: 600,
+          lineHeight: 1.35,
+          alignSelf: 'flex-start',
         }}>
-          {t('home.schedule.forecastReadyChip')}
-        </span>
+          <span aria-hidden style={{ fontSize: '0.78rem', flexShrink: 0 }}>🔮</span>
+          <span>{t('home.schedule.forecastReadyChip')}</span>
+        </div>
       );
     }
 
-    const accessory = (countdown || missingSeats > 0 || forecastStatusChip) ? (
+    const accessory = (countdown || missingSeats > 0) ? (
       <>
-        {forecastStatusChip}
         {countdown && <Pill text={countdown} tone="success" />}
         {missingSeats > 0 && (
           <Pill
@@ -1560,12 +1562,13 @@ function ScheduleCard({ order, step, t, poll, additionalPolls, myPlayerId, playe
     // list or empty-state fallback) keeps its own borderTop and the
     // footer adds its own — they read as two stacked footnotes
     // rather than a single visual block.
-    const finalBody = (comingBody || locationDetailsBody || extraPollsFooter) ? (
-      <>
+    const finalBody = (forecastNotice || comingBody || locationDetailsBody || extraPollsFooter) ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+        {forecastNotice}
         {comingBody}
         {locationDetailsBody}
         {extraPollsFooter}
-      </>
+      </div>
     ) : null;
 
     return (
