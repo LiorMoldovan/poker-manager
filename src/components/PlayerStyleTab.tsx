@@ -24,7 +24,7 @@ import {
   computeGroupStyleEvolution,
   PlayerStyleMetrics,
 } from '../utils/playerStyleProfile';
-import { captureAndSplit, shareFiles } from '../utils/sharing';
+import { captureAndSplit, hideForCapture, shareFiles } from '../utils/sharing';
 import { useTranslation } from '../i18n';
 
 interface PlayerStyleTabProps {
@@ -372,10 +372,13 @@ export default function PlayerStyleTab({
   ) => {
     if (!ref.current) return;
     setSharing(true);
+    const toHide = Array.from(ref.current.querySelectorAll<HTMLElement>('[data-hide-on-share="true"]'));
+    const restoreHidden = hideForCapture(...toHide);
     try {
       const files = await captureAndSplit(ref.current, fileName, options);
       await shareFiles(files, 'Poker Style Profile');
     } catch { /* */ } finally {
+      restoreHidden();
       setSharing(false);
     }
   };
@@ -417,6 +420,7 @@ export default function PlayerStyleTab({
           <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.styleMapTitle')}</h2>
           <button
             type="button"
+            data-hide-on-share="true"
             onClick={() => setShowMapHelp(v => !v)}
             style={{
               fontSize: '0.65rem',
@@ -789,6 +793,7 @@ export default function PlayerStyleTab({
                     </span>
                     <button
                       type="button"
+                      data-hide-on-share="true"
                       onClick={() => setShowEvolutionGraph(v => !v)}
                       style={{
                         fontSize: '0.6rem',
@@ -805,13 +810,14 @@ export default function PlayerStyleTab({
                     </button>
                   </div>
 
-                  {/* Compact Horizontal Half-Year Strip (up to 4 most recent half-years) */}
+                  {/* Compact Horizontal Half-Year Strip (LTR chronological: Oldest on Left -> Latest on Right, matching the LineChart) */}
                   <div
                     style={{
                       display: 'grid',
                       gridTemplateColumns: `repeat(${stripPts.length}, minmax(0, 1fr))`,
                       gap: '0.28rem',
                       marginBottom: '0.32rem',
+                      direction: 'ltr',
                     }}
                   >
                     {stripPts.map((pt, idx) => {
@@ -825,25 +831,26 @@ export default function PlayerStyleTab({
                       return (
                         <div
                           key={pt.periodKey}
+                          dir="rtl"
                           style={{
-                            padding: '0.26rem 0.25rem',
+                            padding: '0.26rem 0.2rem',
                             borderRadius: '6px',
                             background: isLast ? `${selectedProfile.color}16` : 'rgba(255,255,255,0.02)',
                             border: isLast ? `1px solid ${selectedProfile.color}66` : '1px solid var(--border)',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '0.1rem',
+                            gap: '0.12rem',
                             textAlign: 'center',
                           }}
                         >
-                          <span style={{ fontSize: '0.55rem', fontWeight: '700', color: isLast ? selectedProfile.color : 'var(--text-muted)' }}>
+                          <span style={{ fontSize: '0.55rem', fontWeight: '700', color: isLast ? selectedProfile.color : 'var(--text-muted)', lineHeight: 1.2 }}>
                             {pt.periodLabel} ({pt.gamesPlayed})
                           </span>
-                          <span style={{ fontSize: '0.57rem', fontWeight: '700', color: styleColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                          <span style={{ fontSize: '0.54rem', fontWeight: '700', color: styleColor, lineHeight: 1.25 }}>
                             {pt.shortStyle}
                           </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.22rem', fontSize: '0.54rem', color: 'var(--text-muted)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.53rem', color: 'var(--text-muted)', lineHeight: 1.2 }}>
                             <span>X:{pt.volatility}</span>
                             <span>·</span>
                             <span style={{ color: pt.avgProfit >= 0 ? '#10B981' : '#EF4444', fontWeight: '700', direction: 'ltr', unicodeBidi: 'isolate' }}>
@@ -896,7 +903,7 @@ export default function PlayerStyleTab({
                         </ResponsiveContainer>
                       </div>
                       <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.1rem' }}>
-                        קו מקווקו (50) = גבול מחושב ↔ אגרסיבי · נקודות = ציון ציר X בכל חציון
+                        קו מקווקו (50) = גבול מחושב ↔ אגרסיבי · כיוון: שמאל (ישן) ➔ ימין (חדש)
                       </div>
                     </div>
                   )}
@@ -911,6 +918,7 @@ export default function PlayerStyleTab({
               </span>
               <button
                 type="button"
+                data-hide-on-share="true"
                 onClick={() => setShowRadarHelp(v => !v)}
                 style={{
                   fontSize: '0.65rem',
